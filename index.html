@@ -15,7 +15,6 @@
 </head>
 <body class="text-slate-100 min-h-screen flex flex-col">
 
-    <!-- PORTAL DE ACCESO SEGURO -->
     <div id="auth-screen" class="flex-1 flex items-center justify-center p-4">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md space-y-6 shadow-2xl">
             <div class="flex flex-col items-center bg-white p-2 rounded-xl border border-slate-700 w-32 mx-auto">
@@ -42,7 +41,6 @@
         </div>
     </div>
 
-    <!-- ENTORNO DE TRABAJO PRINCIPAL -->
     <div id="main-workspace" class="hidden flex-1 flex flex-col">
         <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
             <div class="flex items-center gap-4">
@@ -64,16 +62,13 @@
             </div>
         </header>
 
-        <!-- SECTOR DE PESTAÑAS -->
         <div id="tabs-bar" class="bg-slate-950 px-6 py-2 border-b border-slate-900 flex gap-2">
             <button id="btn-tab-finanzas" onclick="switchTab('finanzas')" class="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950">💰 Modelos y Finanzas Red</button>
             <button id="btn-tab-agenda" onclick="switchTab('agenda')" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 bg-slate-900/50 border border-slate-800">📅 Mi Agenda Operativa</button>
         </div>
 
         <main class="flex-1 p-6 space-y-6">
-            <!-- PESTAÑA FINANZAS -->
             <section id="view-finanzas" class="space-y-6">
-                <!-- DASHBOARD GLOBAL -->
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
                         <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Facturación Bruta Red</h3>
@@ -93,7 +88,6 @@
                     </div>
                 </div>
 
-                <!-- SECCIÓN SEDES -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[240px]">
                         <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
@@ -126,7 +120,6 @@
                     </div>
                 </div>
 
-                <!-- SECCIÓN ENTRENADORES -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[520px]">
                         <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
@@ -173,7 +166,6 @@
                                 <label for="chk-pacto-especial" class="text-xs font-bold text-amber-400 cursor-pointer">Activar Tarifa Especial de Facturación Fija (500 € fijos + 100 € por bloque extra de 500 €)</label>
                             </div>
 
-                            <!-- CUADRANTE DE REPARTO MARGINAL FIJADO ACUMULATIVO -->
                             <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
                                 <div class="text-[11px] uppercase font-bold text-slate-400 border-b border-slate-800 pb-1">REPARTO PROGRESIVO POR TRAMOS (CÁLCULO MARGINAL ORIGINAL):</div>
                                 <div class="space-y-1 text-xs font-mono">
@@ -186,13 +178,35 @@
                                     <span id="lbl-total-profile-sum" class="text-emerald-400 font-mono">PT: 0.00 € | BS: 0.00 €</span>
                                 </div>
                             </div>
+
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-center">
+                                <div class="bg-slate-950 p-2 rounded border border-slate-800">
+                                    <span class="text-[9px] uppercase font-bold text-slate-400">Fact. Bruta</span>
+                                    <div id="calc-fact-bruta" class="text-xs font-mono font-bold text-white">0.00 €</div>
+                                </div>
+                                <div class="bg-slate-950 p-2 rounded border border-slate-800">
+                                    <span class="text-[9px] uppercase font-bold text-slate-400">Tramo Base</span>
+                                    <div id="calc-tramo-base" class="text-xs font-mono font-bold text-amber-500">0.00 €</div>
+                                </div>
+                                <div class="bg-slate-950 p-2 rounded border border-slate-800">
+                                    <span class="text-[9px] uppercase font-bold text-slate-400">Excedentes</span>
+                                    <div id="calc-tramo-excedente" class="text-xs font-mono font-bold text-purple-400">0.00 €</div>
+                                </div>
+                                <div class="bg-slate-950 p-2 rounded border border-slate-800">
+                                    <span class="text-[9px] uppercase font-bold text-slate-400">Aporte Clientes</span>
+                                    <div id="calc-aporte-clientes" class="text-xs font-mono font-bold text-emerald-400">0.00 €</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center bg-slate-950/40 p-2 rounded border border-slate-800 text-[10px] text-slate-400">
+                            <span>Última Firma Auditoría: <span id="kpi-auditoria-firma" class="text-amber-500 font-mono font-bold">---</span></span>
+                            <button onclick="limpiarTodaLaAgenda()" class="text-red-500 font-bold uppercase tracking-tight bg-slate-950 border border-slate-800 px-2 py-0.5 rounded hover:bg-red-950 transition">Borrar Agenda</button>
                         </div>
                         <button id="btn-save-ficha" onclick="guardarRegistroPT()" class="hidden w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2 rounded-lg uppercase tracking-wider">Guardar Ficha Técnica</button>
                     </div>
                 </div>
             </section>
 
-            <!-- PESTAÑA AGENDA -->
             <section id="view-agenda" class="hidden space-y-6">
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
@@ -241,7 +255,6 @@
                                 </div>
                             </div>
                             
-                            <!-- MATRÍCULA AVANZADA CONDICIONAL CON MUESTRA VISUAL DE COLOR -->
                             <div class="p-3 bg-slate-950 border border-slate-800 rounded-lg space-y-2.5">
                                 <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Matrícula de Turno</span>
                                 <div id="wrapper-grupo-id" class="hidden">
@@ -291,7 +304,6 @@
                     </div>
                 </div>
 
-                <!-- CUADRANTE COMPLETO 07:00 A 22:00 -->
                 <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 overflow-x-auto">
                     <table class="w-full text-left text-xs border-collapse min-w-[950px]">
                         <thead>
@@ -373,7 +385,7 @@
                 "c2": { id: "c2", nombre: "Lagunillas", canonFijo: 1000, canonPt: 0 }
             };
             entrenadoresPorCentro = JSON.parse(localStorage.getItem('bs_v9_pts')) || {
-                "pt-1": { id: "pt-1", centroId: "c1", nombre: "Carmen", pass: "carmen123", clientes: 25, sesiones Medias: 8, precioSesion: 30, pactoEspecial: true, aporteIndividualCliente: 1 },
+                "pt-1": { id: "pt-1", centroId: "c1", nombre: "Carmen", pass: "carmen123", clientes: 25, sesionesMedias: 8, precioSesion: 30, pactoEspecial: true, aporteIndividualCliente: 1 },
                 "pt-2": { id: "pt-2", centroId: "c1", nombre: "Juan Carlos", pass: "jc2026", clientes: 20, sesionesMedias: 8, precioSesion: 30, pactoEspecial: false, aporteIndividualCliente: 1 }
             };
             agendaMatriz = JSON.parse(localStorage.getItem('bs_v9_agenda')) || {};
@@ -389,7 +401,6 @@
             localStorage.setItem('bs_v9_firma', firmaAuditoria);
         }
 
-        // MOTOR DE AUTENTICACIÓN FIJADO CONTRA FALLOS DE COMPILACIÓN (image_7eb746.png)
         function ejecutarLogin() {
             const user = document.getElementById('login-user').value.trim().toLowerCase();
             const pass = document.getElementById('login-pass').value.trim();
@@ -433,7 +444,6 @@
             if(tab === 'agenda') { inyectarSelectoresAgenda(); alternarCamposAgendaCondicionales(); renderCuadranteAgendaCompleto(); }
         }
 
-        // --- SISTEMA FINANCIERO CORE CON ARQUEO ACUMULADO ---
         function renderCentros() {
             const container = document.getElementById('center-selector-list'); container.innerHTML = '';
             Object.keys(centrosDeportivos).forEach(key => {
@@ -581,7 +591,6 @@
             document.getElementById('kpi-auditoria-firma').innerText = firmaAuditoria;
         }
 
-        // --- SISTEMA AGENDA HUB ---
         function pincharPaletaSelectoresColores() {
             const el = document.getElementById('select-agenda-color'); el.innerHTML = '';
             Object.keys(PALETA_20_COLORES).forEach(k => {
