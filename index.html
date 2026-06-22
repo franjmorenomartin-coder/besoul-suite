@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BESOUL Fit - Enterprise Suite v7.0</title>
+    <title>BESOUL Fit - Enterprise Suite v7.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -15,7 +15,6 @@
 </head>
 <body class="text-slate-100 min-h-screen flex flex-col">
 
-    <!-- PORTAL DE AUTENTICACIÓN CENTRALIZADO -->
     <div id="auth-screen" class="flex-1 flex items-center justify-center p-4">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md space-y-6 shadow-2xl">
             <div class="flex flex-col items-center bg-white p-2 rounded-xl border border-slate-700 w-32 mx-auto">
@@ -23,7 +22,7 @@
                 <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
             </div>
             <div class="text-center">
-                <h2 class="text-base font-bold text-white tracking-tight">Acceso Seguro al Ecosistema v7.0</h2>
+                <h2 class="text-base font-bold text-white tracking-tight">Acceso Seguro al Ecosistema v7.1</h2>
                 <p class="text-xs text-slate-400 mt-1">Introduce tus credenciales autorizadas corporativas</p>
             </div>
             <div class="space-y-3 text-xs">
@@ -42,7 +41,6 @@
         </div>
     </div>
 
-    <!-- ENTORNO DE TRABAJO PRINCIPAL (OCULTO ANTES DEL LOGIN) -->
     <div id="main-workspace" class="hidden flex-1 flex flex-col">
         <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
             <div class="flex items-center gap-4">
@@ -50,7 +48,7 @@
                     <div class="text-amber-500 font-extrabold text-sm tracking-tighter italic font-serif">besoul</div>
                 </div>
                 <div>
-                    <h1 class="text-base font-extrabold text-white tracking-tight">BESOUL Enterprise <span class="text-amber-500 font-medium text-xs">v7.0 Core</span></h1>
+                    <h1 class="text-base font-extrabold text-white tracking-tight">BESOUL Enterprise <span class="text-amber-500 font-medium text-xs">v7.1 Core</span></h1>
                     <p class="text-[11px] text-slate-400">Usuario Activo: <span id="lbl-usuario-logeado" class="text-amber-400 font-bold uppercase">---</span> | Rol: <span id="lbl-rol-logeado" class="text-slate-300 font-bold">---</span></p>
                 </div>
             </div>
@@ -64,7 +62,6 @@
             </div>
         </header>
 
-        <!-- SECTOR DE PESTAÑAS -->
         <div id="tabs-bar" class="bg-slate-950 px-6 py-2 border-b border-slate-900 flex gap-2">
             <button id="btn-tab-finanzas" onclick="switchTab('finanzas')" class="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950">💰 Modelos y Finanzas Red</button>
             <button id="btn-tab-agenda" onclick="switchTab('agenda')" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 bg-slate-900/50 border border-slate-800">📅 Mi Agenda Operativa</button>
@@ -72,11 +69,10 @@
         </div>
 
         <main class="flex-1 p-6 space-y-6">
-            <!-- PESTAÑA FINANZAS (SÓLO ADMÍN) -->
             <section id="view-finanzas" class="space-y-6">
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
-                        <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Facturación Bruta</h3>
+                        <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Facturación Bruta Red</h3>
                         <div id="kpi-fact-total" class="text-base font-black text-white mt-1">0.00 €</div>
                     </div>
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
@@ -96,8 +92,8 @@
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[240px]">
                         <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
-                            <h2 class="text-xs font-bold uppercase text-amber-400 tracking-wider">Centros Deportivos</h2>
-                            <button onclick="agregarCentro()" class="bg-amber-500 text-slate-950 px-2 py-0.5 rounded font-bold text-[10px] hover:bg-amber-600 transition">+ Añadir</button>
+                            <h2 class="text-xs font-bold uppercase text-amber-400 tracking-wider">Centros Deportivos (Sedes)</h2>
+                            <button onclick="agregarCentro()" class="bg-amber-500 text-slate-950 px-2 py-0.5 rounded font-bold text-[10px] hover:bg-amber-600 transition">+ Añadir Centro</button>
                         </div>
                         <div id="center-selector-list" class="flex-1 overflow-y-auto space-y-1.5 pr-1"></div>
                     </div>
@@ -105,7 +101,7 @@
                     <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-4 h-[240px] flex flex-col justify-between">
                         <div>
                             <div class="border-b border-slate-800 pb-2 mb-3">
-                                <h2 id="center-profile-title" class="text-xs font-bold uppercase text-slate-300">Selecciona un centro base</h2>
+                                <h2 id="center-profile-title" class="text-xs font-bold uppercase text-slate-300">Selecciona una sede para configurar</h2>
                             </div>
                             <div id="center-inputs-area" class="hidden grid grid-cols-1 md:grid-cols-3 gap-3">
                                 <div class="flex flex-col gap-1">
@@ -113,11 +109,11 @@
                                     <input type="text" id="input-center-name" class="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" oninput="actualizarVariablesCentro()">
                                 </div>
                                 <div class="flex flex-col gap-1">
-                                    <label class="text-[11px] text-slate-400">Canon Fijo (€/mes)</label>
+                                    <label class="text-[11px] text-slate-400">Canon Fijo Sede (€/mes)</label>
                                     <input type="number" id="input-center-canon-fijo" class="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" oninput="actualizarVariablesCentro()">
                                 </div>
                                 <div class="flex flex-col gap-1">
-                                    <label class="text-[11px] text-slate-400">Canon por PT (€/mes)</label>
+                                    <label class="text-[11px] text-slate-400">Canon Variable por PT (€/mes)</label>
                                     <input type="number" id="input-center-canon-pt" class="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" oninput="actualizarVariablesCentro()">
                                 </div>
                             </div>
@@ -126,85 +122,102 @@
                 </div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[480px]">
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[520px]">
                         <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
-                            <h2 class="text-xs font-bold uppercase text-amber-400 tracking-wider">Entrenadores Activos</h2>
-                            <button onclick="agregarEntrenador()" class="bg-amber-500 text-slate-950 px-2 py-0.5 rounded font-bold text-[10px] hover:bg-amber-600 transition">+ Añadir PT</button>
+                            <h2 class="text-xs font-bold uppercase text-amber-400 tracking-wider">Entrenadores en esta Sede</h2>
+                            <button onclick="agregarEntrenador()" class="bg-amber-500 text-slate-950 px-2 py-0.5 rounded font-bold text-[10px] hover:bg-amber-600 transition">+ Añadir Entrenador</button>
                         </div>
                         <div id="trainer-selector-list" class="flex-1 overflow-y-auto space-y-1.5 pr-1"></div>
                     </div>
 
-                    <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between h-[480px]">
-                        <div id="profile-inputs-area" class="hidden space-y-4">
+                    <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between h-[520px]">
+                        <div id="profile-inputs-area" class="hidden space-y-4 overflow-y-auto pr-1">
                             <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                                 <div>
-                                    <label class="text-[11px] text-slate-400 block mb-1">Nombre Comercial PT</label>
+                                    <label class="text-[11px] text-slate-400 block mb-1">Nombre Comercial</label>
                                     <input type="text" id="input-nombre-pt" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" oninput="actualizarNombreEnVivo()">
                                 </div>
                                 <div>
-                                    <label class="text-[11px] text-slate-400 block mb-1">Clave de Acceso Agenda</label>
+                                    <label class="text-[11px] text-slate-400 block mb-1">Clave Acceso Agenda</label>
                                     <input type="text" id="input-pass-pt" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white tracking-widest font-mono">
                                 </div>
                                 <div>
-                                    <label class="text-[11px] text-slate-400 block mb-1">Nº Clientes</label>
+                                    <label class="text-[11px] text-slate-400 block mb-1">Nº Clientes Activos</label>
                                     <input type="number" id="input-clientes" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white font-bold" oninput="calcularTramosEnTiempoReal()">
                                 </div>
                                 <div>
-                                    <label class="text-[11px] text-slate-400 block mb-1">Precio Sesión (€)</label>
+                                    <label class="text-[11px] text-slate-400 block mb-1">Precio Sesión Medio (€)</label>
                                     <input type="number" id="input-precio-sesion" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white font-bold" oninput="calcularTramosEnTiempoReal()">
                                 </div>
                             </div>
 
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div>
-                                    <label class="text-[11px] text-slate-400 block mb-1">Sesiones Medias Mensuales</label>
+                                    <label class="text-[11px] text-slate-400 block mb-1">Sesiones Medias Mensuales / Cliente</label>
                                     <input type="number" id="input-sesiones-medias" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" oninput="calcularTramosEnTiempoReal()">
                                 </div>
                                 <div>
-                                    <label class="text-[11px] text-amber-400 block mb-1 font-bold">Aporte Variable por Cliente Activo (€)</label>
+                                    <label class="text-[11px] text-amber-400 block mb-1 font-bold">Aporte Fijo Directo por Cliente Activo (€)</label>
                                     <input type="number" id="input-pt-aporte-individual" class="w-full bg-slate-950 border border-amber-500/30 rounded p-2 text-xs text-amber-400 font-bold" oninput="calcularTramosEnTiempoReal()">
                                 </div>
                             </div>
 
-                            <!-- IMAGEN image_72c3be.png DESPERSONALIZADA PARA PRESENTACIONES -->
                             <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 flex items-center gap-3">
                                 <input type="checkbox" id="chk-pacto-especial" class="w-4 h-4 rounded accent-amber-500 cursor-pointer" onchange="calcularTramosEnTiempoReal()">
-                                <label for="chk-pacto-especial" class="text-xs font-bold text-amber-400 cursor-pointer">Activar Pacto Especial de Facturación Fija (500 € fijos + 100 € por cada bloque extra de 500 €)</label>
+                                <label for="chk-pacto-especial" class="text-xs font-bold text-amber-400 cursor-pointer">Activar Tarifa Especial de Facturación Fija (500 € fijos + 100 € por cada bloque extra de 500 €)</label>
                             </div>
 
-                            <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
-                                <div class="flex justify-between text-xs font-bold text-slate-300">
-                                    <span>Simulación de Liquidación Marginal de este Perfil:</span>
-                                    <span id="lbl-total-aporte-bs" class="text-emerald-400 font-mono">PT: 0.00 € | BS: 0.00 €</span>
+                            <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
+                                <div class="text-[11px] uppercase font-bold text-slate-400 border-b border-slate-800 pb-1">Desglose de Imputación por Tramos (Lógica Original Abierta):</div>
+                                <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                                    <div class="bg-slate-900 p-2 rounded">
+                                        <span class="text-slate-500 block text-[10px]">Facturación Bruta Perfil:</span>
+                                        <span id="calc-fact-bruta" class="font-bold text-white">0.00 €</span>
+                                    </div>
+                                    <div class="bg-slate-900 p-2 rounded">
+                                        <span class="text-slate-500 block text-[10px]">Tramo Base (Hasta 1400€ al 50%):</span>
+                                        <span id="calc-tramo-base" class="font-bold text-slate-300">0.00 €</span>
+                                    </div>
+                                    <div class="bg-slate-900 p-2 rounded">
+                                        <span class="text-slate-500 block text-[10px]">Tramo Excedente (Al 100% PT):</span>
+                                        <span id="calc-tramo-excedente" class="font-bold text-slate-300">0.00 €</span>
+                                    </div>
+                                    <div class="bg-slate-900 p-2 rounded">
+                                        <span class="text-slate-500 block text-[10px]">Aporte por Clientes Activos:</span>
+                                        <span id="calc-aporte-clientes" class="font-bold text-amber-400">0.00 €</span>
+                                    </div>
+                                    <div class="bg-slate-900 p-2 rounded col-span-2">
+                                        <span class="text-slate-500 block text-[10px]">Liquidación Estimada Neta:</span>
+                                        <span id="lbl-total-aporte-bs" class="font-mono font-bold text-emerald-400">PT: 0.00 € | BS: 0.00 €</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <button id="btn-save-ficha" onclick="guardarRegistroPT()" class="hidden w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2 rounded-lg uppercase tracking-wider">Guardar y Confirmar en Ficha Central</button>
+                        <button id="btn-save-ficha" onclick="guardarRegistroPT()" class="hidden w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2.5 rounded-lg uppercase tracking-wider">Guardar y Confirmar Cambios en Ficha Maestro</button>
                     </div>
                 </div>
             </section>
 
-            <!-- PESTAÑA AGENDA (FILTRADO AUTOMÁTICO DE PRIVACIDAD) -->
             <section id="view-agenda" class="hidden space-y-6">
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
                         <div class="border-b border-slate-800 pb-2">
-                            <h2 class="text-xs font-bold uppercase text-amber-400 tracking-wider">Asignación Manual de Sesiones</h2>
+                            <h2 class="text-xs font-bold uppercase text-amber-400 tracking-wider">Asignación de Sesiones Operativas</h2>
                         </div>
                         <div class="space-y-3 text-xs">
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
-                                    <label class="text-[11px] text-slate-400 block mb-1">Sede</label>
+                                    <label class="text-[11px] text-slate-400 block mb-1">Sede / Centro</label>
                                     <select id="select-agenda-centro" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" onchange="actualizarSelectEntrenadoresAgenda()"></select>
                                 </div>
                                 <div>
-                                    <label class="text-[11px] text-slate-400 block mb-1">Entrenador Responsable</label>
+                                    <label class="text-[11px] text-slate-400 block mb-1">Entrenador / PT</label>
                                     <select id="select-agenda-pt" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" onchange="calcularPrecioAgendaDinámico()"></select>
                                 </div>
                             </div>
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
-                                    <label class="text-[11px] text-slate-400 block mb-1">Día de la Semana</label>
+                                    <label class="text-[11px] text-slate-400 block mb-1">Día Semanal</label>
                                     <select id="select-agenda-dia" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
                                         <option value="Lunes">Lunes</option> <option value="Martes">Martes</option> <option value="Miércoles">Miércoles</option>
                                         <option value="Jueves">Jueves</option> <option value="Viernes">Viernes</option> <option value="Sábado">Sábado</option>
@@ -221,15 +234,15 @@
                             </div>
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
-                                    <label class="text-[11px] text-slate-400 block mb-1">Atleta / Identificador</label>
+                                    <label class="text-[11px] text-slate-400 block mb-1">Nombre Atleta / Grupo</label>
                                     <input type="text" id="input-agenda-cliente" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="Ej: Atleta CrossFit">
                                 </div>
                                 <div>
-                                    <label class="text-[11px] text-slate-400 block mb-1">Valor Imputado/Hora</label>
+                                    <label class="text-[11px] text-slate-400 block mb-1">Valor Imputado Implícito</label>
                                     <div id="lbl-agenda-precio-calc" class="bg-slate-950 border border-slate-800 rounded p-2 text-emerald-400 font-bold text-center">0.00 €</div>
                                 </div>
                             </div>
-                            <button onclick="guardarSesionEnCuadrante()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2 rounded-lg uppercase tracking-wider">
+                            <button onclick="guardarSesionEnCuadrante()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2.5 rounded-lg uppercase tracking-wider">
                                 Confirmar y Bloquear Turno
                             </button>
                         </div>
@@ -246,11 +259,11 @@
                                     <div id="kpi-agenda-num" class="text-xl font-black text-white mt-1">0</div>
                                 </div>
                                 <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 text-center">
-                                    <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Facturación Auditada</span>
+                                    <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Facturación Semanal</span>
                                     <div id="kpi-agenda-fact" class="text-xl font-black text-emerald-400 mt-1">0.00 €</div>
                                 </div>
                                 <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 text-center">
-                                    <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Ratio Ocupación</span>
+                                    <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Ocupación Relativa</span>
                                     <div id="kpi-agenda-ratio" class="text-xl font-black text-amber-400 mt-1">0.0 %</div>
                                 </div>
                             </div>
@@ -259,7 +272,7 @@
                 </div>
 
                 <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 overflow-x-auto">
-                    <table class="w-full text-left text-xs border-collapse min-w-[900px]">
+                    <table class="w-full text-left text-xs border-collapse min-w-[950px]">
                         <thead>
                             <tr class="border-b border-slate-800 text-slate-400 font-bold bg-slate-950">
                                 <th class="py-3 px-2 border border-slate-800 w-24 text-center">Horario</th>
@@ -273,7 +286,6 @@
                 </div>
             </section>
 
-            <!-- PESTAÑA HISTÓRICO -->
             <section id="view-historico" class="hidden text-xs">
                 <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 text-center text-slate-400">
                     Historial consolidado disponible exclusivamente para consultas de cierre del equipo de dirección.
@@ -283,7 +295,7 @@
     </div>
 
     <script>
-        // CONFIGURACIÓN DE ACCESOS CORPORATIVOS REQUERIDOS
+        // CREDENCIALES FIJAS SOLICITADAS POR EL ADMIN
         const ADMIN_CREDENTIALS = {
             "fran": "bs2026admin",
             "soraya": "bs2026soraya",
@@ -313,7 +325,6 @@
             "nut_val": { nombre: "Nutrición - Valoración", valorSesion: 60.00 }
         };
 
-        // RANGO SOLICITADO AMPLIADO DE 07:00 A 22:00
         const HORARIOS_COMPLETOS = ["07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00"];
         const DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
@@ -359,7 +370,7 @@
             const enc = btoa(encodeURIComponent(JSON.stringify(pack)));
             const url = window.location.origin + window.location.pathname + "?data=" + enc;
             navigator.clipboard.writeText(url).then(() => {
-                alert("Ecosistema v7.0 Sincronizado. Enlace seguro copiado.");
+                alert("Ecosistema v7.1 Sincronizado Completamente. Enlace copiado al portapapeles.");
             });
         }
 
@@ -377,7 +388,7 @@
                 currentUser = ptMatch.nombre; currentRol = "pt";
                 activarWorkspace(); return;
             }
-            alert("Credenciales incorrectas o usuario no dado de alta.");
+            alert("Credenciales incorrectas o usuario no dado de alta en la plataforma.");
         }
 
         function activarWorkspace() {
@@ -406,13 +417,13 @@
             document.getElementById('view-finanzas').className = tab === 'finanzas' ? 'space-y-6' : 'hidden';
             document.getElementById('view-agenda').className = tab === 'agenda' ? 'space-y-6' : 'hidden';
             
-            document.getElementById('btn-tab-finanzas').className = tab === 'finanzas' ? "px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-500 text-slate-950" : "px-3 py-1.5 text-xs font-bold rounded-lg text-slate-400 bg-slate-900/50 border border-slate-800";
-            document.getElementById('btn-tab-agenda').className = tab === 'agenda' ? "px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-500 text-slate-950" : "px-3 py-1.5 text-xs font-bold rounded-lg text-slate-400 bg-slate-900/50 border border-slate-800";
+            document.getElementById('btn-tab-finanzas').className = tab === 'finanzas' ? "px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950" : "px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 bg-slate-900/50 border border-slate-800";
+            document.getElementById('btn-tab-agenda').className = tab === 'agenda' ? "px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950" : "px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 bg-slate-900/50 border border-slate-800";
             
             if(tab === 'agenda') { inyectarSelectoresAgenda(); renderCuadranteAgendaCompleto(); }
         }
 
-        // --- GESTIÓN FINANZAS CORE ---
+        // --- MODELO FINANCIERO CON PRESERVACIÓN TOTAL DE TRAMOS ORIGINALES ---
         function renderCentros() {
             const container = document.getElementById('center-selector-list'); container.innerHTML = '';
             Object.keys(centrosDeportivos).forEach(key => {
@@ -443,7 +454,7 @@
 
         function agregarCentro() {
             const id = "c-" + Date.now();
-            centrosDeportivos[id] = { id: id, nombre: "Nueva Sede Añadida", canonFijo: 300, canonPt: 200 };
+            centrosDeportivos[id] = { id: id, nombre: "Sede Nueva Añadida", canonFijo: 300, canonPt: 200 };
             saveToLocal(); renderCentros();
         }
 
@@ -452,7 +463,7 @@
             const filtrados = Object.values(entrenadoresPorCentro).filter(p => p.centroId === idCentroSeleccionado);
             filtrados.forEach(p => {
                 const btn = document.createElement('div');
-                btn.className = `p-2.5 rounded border text-xs cursor-pointer ${idPTSeleccionado === p.id ? 'border-amber-500 text-amber-400' : 'border-slate-800'}`;
+                btn.className = `p-2.5 rounded border text-xs cursor-pointer ${idPTSeleccionado === p.id ? 'border-amber-500 text-amber-400 bg-amber-500/5' : 'border-slate-800 text-slate-300'}`;
                 btn.onclick = () => abrirPerfilPT(p.id);
                 btn.innerText = p.nombre; container.appendChild(btn);
             });
@@ -481,14 +492,41 @@
             const pacto = document.getElementById('chk-pacto-especial').checked;
             const variableCli = parseFloat(document.getElementById('input-pt-aporte-individual').value) || 0;
 
+            // FÓRMULA DE FACTURACIÓN ORIGINAL RECONSTRUIDA
             const F = clientes * sesiones * precio;
             let bs = 0;
+            let tramoBase = 0;
+            let tramoExcedente = 0;
+
             if(pacto) {
-                bs = 500; if (F > 500) bs += Math.floor((F - 500) / 500) * 100;
+                // Lógica de Tarifa Especial Fija
+                bs = 500; 
+                if (F > 500) {
+                    bs += Math.floor((F - 500) / 500) * 100;
+                }
+                tramoBase = bs;
+                tramoExcedente = 0;
             } else {
-                bs = Math.min(F, 1400) * 0.5;
+                // Lógica de Tramos Estándar Abierta original
+                if (F <= 1400) {
+                    tramoBase = F * 0.5;
+                } else {
+                    tramoBase = 1400 * 0.5; // 700€ fijos para BS
+                    tramoExcedente = F - 1400; // El resto va íntegro para el PT
+                }
+                bs = tramoBase;
             }
-            bs += (clientes * variableCli);
+
+            // Sumamos el aporte directo de clientes activos solicitado
+            const aporteClientesTotal = clientes * variableCli;
+            bs += aporteClientesTotal;
+
+            // Inyectar desgloses en vivo
+            document.getElementById('calc-fact-bruta').innerText = `${F.toFixed(2)} €`;
+            document.getElementById('calc-tramo-base').innerText = `${tramoBase.toFixed(2)} €`;
+            document.getElementById('calc-tramo-excedente').innerText = `${tramoExcedente.toFixed(2)} €`;
+            document.getElementById('calc-aporte-clientes').innerText = `${aporteClientesTotal.toFixed(2)} €`;
+            
             document.getElementById('lbl-total-aporte-bs').innerText = `PT Net: ${(F - bs).toFixed(2)} € | BS Net: ${bs.toFixed(2)} €`;
         }
 
@@ -504,13 +542,13 @@
             p.aporteIndividualCliente = parseFloat(document.getElementById('input-pt-aporte-individual').value) || 0;
 
             firmaAuditoria = currentUser; saveToLocal(); renderEntrenadores(); recalcularFinanzasGlobales();
-            alert("Ficha actualizada en el Core.");
+            alert("Información consolidada de forma segura en la base de datos.");
         }
 
         function agregarEntrenador() {
             if(!idCentroSeleccionado) return;
             const id = "pt-" + Date.now();
-            entrenadoresPorCentro[id] = { id: id, centroId: idCentroSeleccionado, nombre: "Nuevo Coach", pass: "bs2026", clientes: 0, sesionesMedias: 0, precioSesion: 0, pactoEspecial: false, aporteIndividualCliente: 1 };
+            entrenadoresPorCentro[id] = { id: id, centroId: idCentroSeleccionado, nombre: "Nuevo Instructor", pass: "bs2026", clientes: 0, sesionesMedias: 0, precioSesion: 0, pactoEspecial: false, aporteIndividualCliente: 1 };
             saveToLocal(); renderEntrenadores();
         }
 
@@ -518,7 +556,12 @@
             let totalF = 0, totalPT = 0, totalBS = 0;
             Object.values(entrenadoresPorCentro).forEach(p => {
                 const F = p.clientes * p.sesionesMedias * p.precioSesion;
-                let bs = p.pactoEspecial ? 500 : Math.min(F, 1400) * 0.5;
+                let bs = 0;
+                if(p.pactoEspecial) {
+                    bs = 500; if(F > 500) bs += Math.floor((F - 500) / 500) * 100;
+                } else {
+                    bs = F <= 1400 ? F * 0.5 : 700;
+                }
                 bs += (p.clientes * (p.aporteIndividualCliente || 0));
                 totalF += F; totalBS += bs; totalPT += (F - bs);
             });
@@ -528,7 +571,7 @@
             document.getElementById('kpi-auditoria-firma').innerText = firmaAuditoria;
         }
 
-        // --- CONFIGURACIÓN AGENDA CON PRIVACIDAD INTEGRADA ---
+        // --- LÓGICA DE AGENDAS CON PRIVACIDAD INTEGRADA ---
         function inyectarSelectoresAgenda() {
             const hSel = document.getElementById('select-agenda-hora'); hSel.innerHTML = '';
             HORARIOS_COMPLETOS.forEach(h => { hSel.innerHTML += `<option value="${h}">${h}</option>`; });
@@ -547,7 +590,6 @@
             const staff = Object.values(entrenadoresPorCentro).filter(p => p.centroId === cId);
             
             staff.forEach(p => {
-                // REGLA DE PRIVACIDAD: Si es rol PT, solo se añade a sí mismo al selector
                 if (currentRol === "pt" && p.nombre !== currentUser) return;
                 ptSel.innerHTML += `<option value="${p.nombre}">${p.nombre}</option>`;
             });
@@ -567,13 +609,13 @@
             const tk = document.getElementById('select-agenda-tarifa').value;
             const client = document.getElementById('input-agenda-cliente').value || "Atleta";
 
-            if(!pt) { alert("Operación no autorizada para tu perfil."); return; }
+            if(!pt) { alert("Acceso no autorizado."); return; }
 
             const celdaId = `${dia}_${hora}`;
             if(!agendaMatriz[celdaId]) agendaMatriz[celdaId] = [];
 
             const solapado = agendaMatriz[celdaId].find(s => s.pt === pt);
-            if(solapado) { alert("Conflicto de horarios para este entrenador."); return; }
+            if(solapado) { alert("Este entrenador ya está asignado a esta hora."); return; }
 
             agendaMatriz[celdaId].push({
                 centro: cText, pt: pt, cliente: client,
@@ -584,8 +626,8 @@
 
         function borrarSesion(celdaId, index) {
             const sesion = agendaMatriz[celdaId][index];
-            if (currentRol === "pt" && sesion.pt !== currentUser) { alert("No tienes permisos sobre esta sesión."); return; }
-            if (confirm("¿Remover sesión?")) {
+            if (currentRol === "pt" && sesion.pt !== currentUser) { alert("Permisos denegados."); return; }
+            if (confirm("¿Eliminar bloque del cuadrante?")) {
                 agendaMatriz[celdaId].splice(index, 1);
                 if(agendaMatriz[celdaId].length === 0) delete agendaMatriz[celdaId];
                 saveToLocal(); renderCuadranteAgendaCompleto();
@@ -602,13 +644,12 @@
 
                 DIAS_SEMANA.forEach(dia => {
                     const celdaId = `${dia}_${hora}`;
-                    let html = `<td class="p-1 border border-slate-800/50 align-top min-w-[130px] space-y-1">`;
+                    let html = `<td class="p-1 border border-slate-800/50 align-top min-w-[135px] space-y-1">`;
 
                     if(agendaMatriz[celdaId]) {
                         agendaMatriz[celdaId].forEach((s, idx) => {
-                            // FILTRO CRÍTICO DE PRIVACIDAD: El PT solo visualiza sus bloques de entrenamiento
                             if (currentRol === "pt" && s.pt !== currentUser) {
-                                html += `<div class="bg-slate-950/40 p-1.5 rounded text-[10px] text-slate-700 italic border border-slate-900/30">Bloqueado</div>`;
+                                html += `<div class="bg-slate-950/40 p-1.5 rounded text-[10px] text-slate-700 italic border border-slate-900/10 text-center">Ocupado</div>`;
                                 return;
                             }
                             totalS++; totalF += s.tarifa.valor;
