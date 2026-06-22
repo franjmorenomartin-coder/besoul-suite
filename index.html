@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BESOUL Fit - Enterprise Core v9.2</title>
+    <title>BESOUL Fit - Enterprise Core v9.5</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -15,6 +15,7 @@
 </head>
 <body class="text-slate-100 min-h-screen flex flex-col">
 
+    <!-- PORTAL DE ACCESO SEGURO -->
     <div id="auth-screen" class="flex-1 flex items-center justify-center p-4">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md space-y-6 shadow-2xl">
             <div class="flex flex-col items-center bg-white p-2 rounded-xl border border-slate-700 w-32 mx-auto">
@@ -22,7 +23,7 @@
                 <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
             </div>
             <div class="text-center">
-                <h2 class="text-base font-bold text-white tracking-tight">Acceso Corporativo Seguro v9.2</h2>
+                <h2 class="text-base font-bold text-white tracking-tight">Acceso Corporativo Seguro v9.5</h2>
                 <p class="text-xs text-slate-400 mt-1">Fran, Soraya, Bea o Credenciales PT Autorizadas</p>
             </div>
             <div class="space-y-3 text-xs">
@@ -41,6 +42,7 @@
         </div>
     </div>
 
+    <!-- ENTORNO DE TRABAJO PRINCIPAL -->
     <div id="main-workspace" class="hidden flex-1 flex flex-col">
         <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
             <div class="flex items-center gap-4">
@@ -48,7 +50,7 @@
                     <div class="text-amber-500 font-extrabold text-sm tracking-tighter italic font-serif">besoul</div>
                 </div>
                 <div>
-                    <h1 class="text-base font-extrabold text-white tracking-tight">BESOUL Enterprise <span class="text-amber-500 font-medium text-xs">v9.2 Core Hub</span></h1>
+                    <h1 class="text-base font-extrabold text-white tracking-tight">BESOUL Enterprise <span class="text-amber-500 font-medium text-xs">v9.5 Core Hub</span></h1>
                     <p class="text-[11px] text-slate-400">Usuario Activo: <span id="lbl-usuario-logeado" class="text-amber-400 font-bold uppercase">---</span> | Rol: <span id="lbl-rol-logeado" class="text-slate-300 font-bold">---</span></p>
                 </div>
             </div>
@@ -62,13 +64,16 @@
             </div>
         </header>
 
+        <!-- SECTOR DE PESTAÑAS -->
         <div id="tabs-bar" class="bg-slate-950 px-6 py-2 border-b border-slate-900 flex gap-2">
             <button id="btn-tab-finanzas" onclick="switchTab('finanzas')" class="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950">💰 Modelos y Finanzas Red</button>
             <button id="btn-tab-agenda" onclick="switchTab('agenda')" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 bg-slate-900/50 border border-slate-800">📅 Mi Agenda Operativa</button>
         </div>
 
         <main class="flex-1 p-6 space-y-6">
+            <!-- PESTAÑA FINANZAS -->
             <section id="view-finanzas" class="space-y-6">
+                <!-- DASHBOARD GLOBAL -->
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
                         <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Facturación Bruta Red</h3>
@@ -88,6 +93,7 @@
                     </div>
                 </div>
 
+                <!-- SECCIÓN SEDES -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[240px]">
                         <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
@@ -120,6 +126,7 @@
                     </div>
                 </div>
 
+                <!-- SECCIÓN ENTRENADORES -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[520px]">
                         <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
@@ -166,8 +173,9 @@
                                 <label for="chk-pacto-especial" class="text-xs font-bold text-amber-400 cursor-pointer">Activar Tarifa Especial de Facturación Fija (500 € fijos + 100 € por bloque extra de 500 €)</label>
                             </div>
 
+                            <!-- CUADRANTE DE REPARTO MARGINAL FIJADO ACUMULATIVO -->
                             <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
-                                <div class="text-[11px] uppercase font-bold text-slate-400 border-b border-slate-800 pb-1">REPARTO PROGRESIVO POR TRAMOS (SISTEMA CORRECTO CORREGIDO):</div>
+                                <div class="text-[11px] uppercase font-bold text-slate-400 border-b border-slate-800 pb-1">REPARTO PROGRESIVO POR TRAMOS (CÁLCULO MARGINAL ORIGINAL):</div>
                                 <div class="space-y-1 text-xs font-mono">
                                     <div class="flex justify-between"><span>Tramo 1 (0 € a 1.400 €) | Reparto 50% / 50%:</span><span id="lbl-t1-val" class="text-slate-300">PT: 0.00 € | BS: 0.00 €</span></div>
                                     <div class="flex justify-between"><span>Tramo 2-3 (1.400 € a 2.400 €) | Salto de Techo Escalado al 80% / 20%:</span><span id="lbl-t23-val" class="text-slate-300">PT: 0.00 € | BS: 0.00 €</span></div>
@@ -179,11 +187,12 @@
                                 </div>
                             </div>
                         </div>
-                        <button id="btn-save-ficha" onclick="guardarRegistroPT()" class="hidden w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2.5 rounded-lg uppercase tracking-wider">Guardar Ficha Técnica</button>
+                        <button id="btn-save-ficha" onclick="guardarRegistroPT()" class="hidden w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2 rounded-lg uppercase tracking-wider">Guardar Ficha Técnica</button>
                     </div>
                 </div>
             </section>
 
+            <!-- PESTAÑA AGENDA -->
             <section id="view-agenda" class="hidden space-y-6">
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
@@ -232,6 +241,7 @@
                                 </div>
                             </div>
                             
+                            <!-- MATRÍCULA AVANZADA CONDICIONAL CON MUESTRA VISUAL DE COLOR -->
                             <div class="p-3 bg-slate-950 border border-slate-800 rounded-lg space-y-2.5">
                                 <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Matrícula de Turno</span>
                                 <div id="wrapper-grupo-id" class="hidden">
@@ -281,6 +291,7 @@
                     </div>
                 </div>
 
+                <!-- CUADRANTE COMPLETO 07:00 A 22:00 -->
                 <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 overflow-x-auto">
                     <table class="w-full text-left text-xs border-collapse min-w-[950px]">
                         <thead>
@@ -299,7 +310,12 @@
     </div>
 
     <script>
-        const ADMIN_CREDENTIALS = { "fran": "bs2026admin", "soraya": "bs2026soraya", "bea": "bs2026bea" };
+        // CREDENCIALES FIJAS REQUERIDAS DE ACCESO (ADMINISTRADORES EN MINÚSCULAS)
+        const ADMIN_CREDENTIALS = {
+            "fran": "bs2026admin",
+            "soraya": "bs2026soraya",
+            "bea": "bs2026bea"
+        };
 
         const PALETA_20_COLORES = {
             "c_azul": { css: "bg-blue-950 border-blue-600 text-blue-200", label: "🟦 Azul Cobalto" },
@@ -357,7 +373,7 @@
                 "c2": { id: "c2", nombre: "Lagunillas", canonFijo: 1000, canonPt: 0 }
             };
             entrenadoresPorCentro = JSON.parse(localStorage.getItem('bs_v9_pts')) || {
-                "pt-1": { id: "pt-1", centroId: "c1", nombre: "Carmen", pass: "carmen123", clientes: 25, sesionesMedias: 8, precioSesion: 30, pactoEspecial: true, aporteIndividualCliente: 1 },
+                "pt-1": { id: "pt-1", centroId: "c1", nombre: "Carmen", pass: "carmen123", clientes: 25, sesiones Medias: 8, precioSesion: 30, pactoEspecial: true, aporteIndividualCliente: 1 },
                 "pt-2": { id: "pt-2", centroId: "c1", nombre: "Juan Carlos", pass: "jc2026", clientes: 20, sesionesMedias: 8, precioSesion: 30, pactoEspecial: false, aporteIndividualCliente: 1 }
             };
             agendaMatriz = JSON.parse(localStorage.getItem('bs_v9_agenda')) || {};
@@ -373,6 +389,7 @@
             localStorage.setItem('bs_v9_firma', firmaAuditoria);
         }
 
+        // MOTOR DE AUTENTICACIÓN FIJADO CONTRA FALLOS DE COMPILACIÓN (image_7eb746.png)
         function ejecutarLogin() {
             const user = document.getElementById('login-user').value.trim().toLowerCase();
             const pass = document.getElementById('login-pass').value.trim();
@@ -380,11 +397,12 @@
             if (ADMIN_CREDENTIALS[user] && ADMIN_CREDENTIALS[user] === pass) {
                 currentUser = user; currentRol = "admin"; activarWorkspace(); return;
             }
+            
             const ptMatch = Object.values(entrenadoresPorCentro).find(p => p.nombre.toLowerCase() === user && p.pass === pass);
             if (ptMatch) {
                 currentUser = ptMatch.nombre; currentRol = "pt"; activarWorkspace(); return;
             }
-            alert("Credenciales incorrectas.");
+            alert("Credenciales incorrectas o perfil inexistente.");
         }
 
         function activarWorkspace() {
@@ -400,17 +418,10 @@
                 document.getElementById('btn-tab-finanzas').classList.remove('hidden');
                 switchTab('finanzas');
             }
-            renderCentros(); pincharPaletaSelectoresColores(); recolcularCuadroMandoGlobal();
+            renderCentros(); pincharPaletaSelectoresColores(); recalcularCuadroMandoGlobal();
         }
 
         function logout() { window.location.reload(); }
-
-        function copiarEnlaceSincronizado() {
-            const pack = { centros: centrosDeportivos, pts: entrenadoresPorCentro, agenda: agendaMatriz, historico: historicoCierres, firma: firmaAuditoria };
-            const enc = btoa(encodeURIComponent(JSON.stringify(pack)));
-            const url = window.location.origin + window.location.pathname + "?data=" + enc;
-            navigator.clipboard.writeText(url).then(() => { alert("Ecosistema v9.2 Sincronizado."); });
-        }
 
         function switchTab(tab) {
             document.getElementById('view-finanzas').className = tab === 'finanzas' ? 'space-y-6' : 'hidden';
@@ -422,6 +433,7 @@
             if(tab === 'agenda') { inyectarSelectoresAgenda(); alternarCamposAgendaCondicionales(); renderCuadranteAgendaCompleto(); }
         }
 
+        // --- SISTEMA FINANCIERO CORE CON ARQUEO ACUMULADO ---
         function renderCentros() {
             const container = document.getElementById('center-selector-list'); container.innerHTML = '';
             Object.keys(centrosDeportivos).forEach(key => {
@@ -451,7 +463,7 @@
         }
 
         function agregarCentro() {
-            const id = "c-" + Date.now(); centrosDeportivos[id] = { id: id, nombre: "Sede Nueva Añadida", canonFijo: 300, canonPt: 200 };
+            const id = "c-" + Date.now(); centrosDeportivos[id] = { id: id, nombre: "Sede Añadida", canonFijo: 300, canonPt: 200 };
             saveToLocal(); renderCentros();
         }
 
@@ -533,11 +545,12 @@
             p.aporteIndividualCliente = parseFloat(document.getElementById('input-pt-aporte-individual').value) || 0;
 
             firmaAuditoria = currentUser; saveToLocal(); renderEntrenadoresDelCentro(); recalcularCuadroMandoGlobal();
-            alert("Guardado.");
+            alert("Ficha guardada.");
         }
 
         function recalcularCuadroMandoGlobal() {
             let totalF = 0, totalPT = 0, totalBS = 0;
+            
             Object.values(entrenadoresPorCentro).forEach(p => {
                 const F = p.clientes * p.sesionesMedias * p.precioSesion;
                 let bs = 0, rem = F;
@@ -568,6 +581,7 @@
             document.getElementById('kpi-auditoria-firma').innerText = firmaAuditoria;
         }
 
+        // --- SISTEMA AGENDA HUB ---
         function pincharPaletaSelectoresColores() {
             const el = document.getElementById('select-agenda-color'); el.innerHTML = '';
             Object.keys(PALETA_20_COLORES).forEach(k => {
@@ -577,7 +591,7 @@
 
         function inyectarSelectoresAgenda() {
             const hSel = document.getElementById('select-agenda-hora'); hSel.innerHTML = '';
-            HORARIOS_COMPLETOS.forEach(h => { hSel.innerHTML += `<option value="${h}">${h}</option>`; });
+            HORARIOS_COMPLETOS.forEach(h => { hSel.innerHTML += `<option value="${h}">${h}:00</option>`; });
 
             const cSel = document.getElementById('select-agenda-centro'); cSel.innerHTML = '';
             Object.keys(centrosDeportivos).forEach(id => { cSel.innerHTML += `<option value="${id}">${centrosDeportivos[id].nombre}</option>`; });
