@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BESOUL Fit - Scheduler Suite v1.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0B0F17; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen flex flex-col">
+
+    <!-- PORTAL DE ACCESO SEGURO -->
+    <div id="auth-screen" class="flex-1 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md space-y-6 shadow-2xl">
+            <div class="flex flex-col items-center bg-white p-2 rounded-xl border border-slate-700 w-32 mx-auto">
+                <div class="text-amber-500 font-extrabold text-xl tracking-tighter italic font-serif">besoul</div>
+                <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
+            </div>
+            <div class="text-center">
+                <h2 class="text-base font-bold text-white tracking-tight">Scheduler Enterprise v1.0</h2>
+                <p class="text-xs text-slate-400 mt-1">Fran, Soraya, Bea o Credenciales PT Autorizadas</p>
+            </div>
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="text-slate-400 block mb-1">Identificador de Usuario / PT</label>
+                    <input type="text" id="login-user" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="Ej: fran">
+                </div>
+                <div>
+                    <label class="text-slate-400 block mb-1">Contraseña de Seguridad</label>
+                    <input type="password" id="login-pass" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="••••••••">
+                </div>
+                <button onclick="ejecutarLogin()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-lg transition uppercase tracking-wider mt-2">
+                    Validar e Ingresar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ENTORNO DE TRABAJO PRINCIPAL (OCULTO ANTES DEL LOGIN) -->
+    <div id="main-workspace" class="hidden flex-1 flex flex-col">
+        <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-4">
+                <div class="flex flex-col items-center bg-white p-1.5 rounded-lg border border-slate-700 w-24">
+                    <div class="text-amber-500 font-extrabold text-sm tracking-tighter italic font-serif">besoul</div>
+                </div>
+                <div>
+                    <h1 class="text-base font-extrabold text-white tracking-tight">BESOUL Agenda <span class="text-amber-500 font-medium text-xs">v1.0 Multi-Sede</span></h1>
+                    <p class="text-[11px] text-slate-400">Usuario Activo: <span id="lbl-usuario-logeado" class="text-amber-400 font-bold uppercase">---</span> | Rol: <span id="lbl-rol-logeado" class="text-slate-300 font-bold">---</span></p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="copiarEnlaceSincronizado()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-500 hover:bg-emerald-600 text-slate-950 transition">
+                    🔗 Sincronizar Calendarios Cloud
+                </button>
+                <button onclick="logout()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-400 border border-slate-800 hover:text-white transition">
+                    Salir
+                </button>
+            </div>
+        </header>
+
+        <main class="flex-1 p-6 space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- PANEL DE ASIGNACIÓN DE CLASES -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                    <div class="border-b border-slate-800 pb-2">
+                        <h2 class="text-xs font-bold uppercase text-amber-400 tracking-wider">Planificación de Turnos</h2>
+                    </div>
+                    <div class="space-y-3 text-xs">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">Sede / Centro</label>
+                                <select id="select-agenda-centro" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" onchange="actualizarSelectEntrenadoresAgenda()"></select>
+                            </div>
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">Entrenador Responsable</label>
+                                <select id="select-agenda-pt" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">Modalidad</label>
+                                <select id="select-agenda-modalidad" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" onchange="alternarCamposAgendaCondicionales()">
+                                    <option value="ind">Individual</option>
+                                    <option value="par">Pareja</option>
+                                    <option value="tri">Trío</option>
+                                    <option value="red">Grupo Reducido</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">Frecuencia Mensual</label>
+                                <select id="select-agenda-frecuencia" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" onchange="calcularPrecioAgendaDinámico()">
+                                    <option value="1">1 día/semana</option>
+                                    <option value="2">2 días/semana</option>
+                                    <option value="3">3 días/semana</option>
+                                    <option value="4">4 días/semana</option>
+                                    <option value="5">5 días/semana</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">Día de la Semana</label>
+                                <select id="select-agenda-dia" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+                                    <option value="Lunes">Lunes</option> <option value="Martes">Martes</option> <option value="Miércoles">Miércoles</option>
+                                    <option value="Jueves">Jueves</option> <option value="Viernes">Viernes</option> <option value="Sábado">Sábado</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">Franja Horaria</label>
+                                <select id="select-agenda-hora" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+                            </div>
+                        </div>
+                        
+                        <!-- CONTENEDOR INPUTS DINÁMICOS POR MODALIDAD -->
+                        <div class="p-3 bg-slate-950 border border-slate-800 rounded-lg space-y-2.5">
+                            <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Matrícula de Integrantes</span>
+                            
+                            <div id="wrapper-grupo-id" class="hidden">
+                                <label class="text-[11px] text-slate-400 block mb-0.5">Identificador del Grupo</label>
+                                <input type="text" id="input-agenda-grupo" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white font-bold" placeholder="Ej: Grupo Mañana / Team CrossFit">
+                            </div>
+                            
+                            <div>
+                                <label id="lbl-nombres-dinamico" class="text-[11px] text-slate-400 block mb-0.5">Nombre Atleta</label>
+                                <textarea id="input-agenda-nombres" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-xs h-16 resize-none" placeholder="Ej: Pepe Medina, Marta, Lourdes"></textarea>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2">
+                                <div id="wrapper-num-personas" class="hidden">
+                                    <label class="text-[11px] text-slate-400 block mb-0.5">Nº Integrantes Presentes</label>
+                                    <input type="number" id="input-agenda-num-personas" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-center font-bold" value="1" oninput="calcularPrecioAgendaDinámico()">
+                                </div>
+                                <div id="wrapper-selector-color" class="hidden">
+                                    <label class="text-[11px] text-slate-400 block mb-0.5">Color en Agenda (Exclusivo)</label>
+                                    <select id="select-agenda-color" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-xs font-bold"></select>
+                                </div>
+                            </div>
+
+                            <div class="bg-slate-900 p-2 rounded border border-slate-800 text-center">
+                                <span class="text-[10px] text-slate-500 block uppercase">Facturación de la Franja Operativa</span>
+                                <div id="lbl-agenda-precio-calc" class="text-base font-black text-emerald-400">0.00 €</div>
+                            </div>
+                        </div>
+
+                        <button onclick="guardarSesionEnCuadrante()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2.5 rounded-lg uppercase tracking-wider">
+                            Bloquear y Confirmar Franja
+                        </button>
+                    </div>
+                </div>
+
+                <!-- AUDITORÍA DE AGENDA -->
+                <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
+                    <div>
+                        <div class="border-b border-slate-800 pb-2 mb-4">
+                            <h2 class="text-xs font-bold uppercase text-slate-300">Auditoría Operativa de Sesiones Semanales Activas</h2>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 text-center">
+                                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Turnos Totales</span>
+                                <div id="kpi-agenda-num" class="text-2xl font-black text-white mt-1">0</div>
+                            </div>
+                            <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 text-center">
+                                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Facturación Semanal Agenda</span>
+                                <div id="kpi-agenda-fact" class="text-2xl font-black text-emerald-400 mt-1">0.00 €</div>
+                            </div>
+                            <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 text-center">
+                                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Ratio de Ocupación Sede</span>
+                                <div id="kpi-agenda-ratio" class="text-2xl font-black text-amber-400 mt-1">0.0 %</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="admin-management-tools" class="hidden flex justify-between pt-4 border-t border-slate-800/80">
+                        <span class="text-[11px] text-slate-500 italic">Módulo de Dirección Full habilitado.</span>
+                        <button onclick="limpiarTodaLaAgenda()" class="text-red-400 text-xs font-bold uppercase tracking-tight bg-red-950/20 px-2 py-1 rounded border border-red-900/40 hover:underline">Limpiar Cuadrante Completo</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CUADRANTE SEMANAL CONSOLIDADO 07:00 A 22:00 -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 overflow-x-auto">
+                <table class="w-full text-left text-xs border-collapse min-w-[950px]">
+                    <thead>
+                        <tr class="border-b border-slate-800 text-slate-400 font-bold bg-slate-950">
+                            <th class="py-3 px-2 border border-slate-800 w-24 text-center">Horario</th>
+                            <th class="py-3 px-2 border border-slate-800">Lunes</th> <th class="py-3 px-2 border border-slate-800">Martes</th>
+                            <th class="py-3 px-2 border border-slate-800">Miércoles</th> <th class="py-3 px-2 border border-slate-800">Jueves</th>
+                            <th class="py-3 px-2 border border-slate-800">Viernes</th> <th class="py-3 px-2 border border-slate-800">Sábado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="grid-agenda-cuerpo" class="divide-y divide-slate-800 text-slate-300"></tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const ADMIN_CREDENTIALS = { "fran": "bs2026admin", "soraya": "bs2026soraya", "bea": "bs2026bea" };
+
+        // PALETA REQUERIDA DE 20 COLORES CORPORATIVOS EXCLUSIVOS CON MUESTRA VISUAL (Emojis)
+        const PALETA_20_COLORES = {
+            "c_azul": { css: "bg-blue-950 border-blue-600 text-blue-200", label: "🟦 Azul Cobalto" },
+            "c_purpura": { css: "bg-purple-950 border-purple-600 text-purple-200", label: "🟪 Púrpura Imperial" },
+            "c_cian": { css: "bg-cyan-950 border-cyan-600 text-cyan-200", label: "🔷 Turquesa" },
+            "c_emerald": { css: "bg-emerald-950 border-emerald-600 text-emerald-200", label: "🟢 Esmeralda" },
+            "c_oro": { css: "bg-yellow-950 border-amber-600 text-amber-200", label: "🟨 Oro" },
+            "c_fucsia": { css: "bg-fuchsia-950 border-fuchsia-600 text-fuchsia-200", label: "💗 Fucsia" },
+            "c_indigo": { css: "bg-indigo-950 border-indigo-600 text-indigo-200", label: "🌀 Índigo" },
+            "c_teal": { css: "bg-teal-950 border-teal-600 text-teal-200", label: "🟩 Teja" },
+            "c_rose": { css: "bg-rose-950 border-rose-600 text-rose-200", label: "🌸 Rosa Pastel" },
+            "c_sky": { css: "bg-sky-950 border-sky-600 text-sky-200", label: "🌐 Celeste" },
+            "c_red": { css: "bg-red-950 border-red-600 text-red-200", label: "🟥 Carmesí" },
+            "c_orange": { css: "bg-orange-950 border-orange-600 text-orange-200", label: "🟧 Naranja" },
+            "c_lime": { css: "bg-lime-950 border-lime-600 text-lime-200", label: "🔋 Lima" },
+            "c_amber": { css: "bg-amber-950 border-amber-600 text-amber-200", label: "🔶 Ámbar" },
+            "c_violet": { css: "bg-violet-950 border-violet-600 text-violet-200", label: "🔮 Violeta" },
+            "c_zinc": { css: "bg-zinc-800 border-zinc-500 text-zinc-200", label: "🔘 Gris Cinc" },
+            "c_stone": { css: "bg-stone-800 border-stone-500 text-stone-200", label: "🔲 Piedra" },
+            "c_slate": { css: "bg-slate-800 border-slate-500 text-slate-200", label: "🕶️ Pizarra" },
+            "c_neutral": { css: "bg-neutral-800 border-neutral-500 text-neutral-200", label: "🖤 Oscuro" },
+            "c_carbon": { css: "bg-gray-900 border-gray-700 text-gray-300", label: "🔌 Carbón" }
+        };
+
+        const TARIFAS_BASE_HORA = {
+            "ind": { "1": 30.00, "2": 26.25, "3": 25.00, "4": 23.75, "5": 22.50 },
+            "par": { "1": 22.50, "2": 20.00, "3": 17.50, "4": 16.87, "5": 15.00 },
+            "tri": { "1": 17.50, "2": 15.00, "3": 12.50, "4": 10.62, "5": 10.00 },
+            "red": { "1": 11.25, "2": 10.00, "3": 9.16,  "4": 8.12,  "5": 7.50 }
+        };
+
+        const HORARIOS_COMPLETOS = ["07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00"];
+        const DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+
+        let centrosDeportivos, entrenadoresPorCentro, agendaMatriz;
+        let currentUser = null, currentRol = "pt";
+
+        function loadCoreDataBases() {
+            // Sincronizado nativamente con los 4 clubes y staff configurados en tu app de finanzas principal
+            centrosDeportivos = JSON.parse(localStorage.getItem('besoul_v5_centros')) || {
+                "c1": { id: "c1", nombre: "Alfa Prime Málaga" },
+                "c2": { id: "c2", nombre: "Lagunillas" },
+                "c3": { id: "c3", nombre: "Inacua" },
+                "c4": { id: "c4", nombre: "Fantasy" }
+            };
+            entrenadoresPorCentro = JSON.parse(localStorage.getItem('besoul_v5_pts')) || {
+                "pt-1": { id: "pt-1", centroId: "c1", nombre: "Carmen", pass: "carmen123" },
+                "pt-2": { id: "pt-2", centroId: "c1", nombre: "Juan Carlos", pass: "jc2026" },
+                "pt-3": { id: "pt-3", centroId: "c2", nombre: "Lillo", pass: "lillo12" },
+                "pt-4": { id: "pt-4", centroId: "c2", nombre: "Rubén", pass: "ruben12" },
+                "pt-5": { id: "pt-5", centroId: "c4", nombre: "Miguel", pass: "miguel12" }
+            };
+            agendaMatriz = JSON.parse(localStorage.getItem('bs_scheduler_matriz')) || {};
+        }
+
+        function checkUrlCloud() {
+            const params = new URLSearchParams(window.location.search);
+            const data = params.get('data');
+            if (data) {
+                try {
+                    agendaMatriz = JSON.parse(decodeURIComponent(atob(data)));
+                    localStorage.setItem('bs_scheduler_matriz', JSON.stringify(agendaMatriz));
+                } catch(e) { console.log("Carga cloud fallida"); }
+            }
+        }
+
+        function ejecutarLogin() {
+            const user = document.getElementById('login-user').value.trim().toLowerCase();
+            const pass = document.getElementById('login-pass').value.trim();
+
+            if (ADMIN_CREDENTIALS[user] && ADMIN_CREDENTIALS[user] === pass) {
+                currentUser = user; currentRol = "admin"; arrancarWorkspace(); return;
+            }
+            const ptMatch = Object.values(entrenadoresPorCentro).find(p => p.nombre.toLowerCase() === user && p.pass === pass);
+            if (ptMatch) {
+                currentUser = ptMatch.nombre; currentRol = "pt"; arrancarWorkspace(); return;
+            }
+            alert("Acceso denegado: Credenciales corporativas no válidas.");
+        }
+
+        function arrancarWorkspace() {
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('main-workspace').classList.remove('hidden');
+            document.getElementById('lbl-usuario-logeado').innerText = currentUser;
+            document.getElementById('lbl-rol-logeado').innerText = currentRol === 'admin' ? "Dirección (Full)" : "PT Staff";
+
+            if(currentRol === 'admin') { document.getElementById('admin-management-tools').classList.remove('hidden'); }
+            
+            inyectarSelectoresBase();
+            alternarCamposAgendaCondicionales();
+            renderCuadranteAgendaCompleto();
+            runClock();
+        }
+
+        function pincharPaletaSelectoresColores() {
+            const el = document.getElementById('select-agenda-color'); el.innerHTML = '';
+            Object.keys(PALETA_20_COLORES).forEach(k => {
+                el.innerHTML += `<option value="${k}">${PALETA_20_COLORES[k].label}</option>`;
+            });
+        }
+
+        function inyectarSelectoresBase() {
+            const hSel = document.getElementById('select-agenda-hora'); hSel.innerHTML = '';
+            HORARIOS_COMPLETOS.forEach(h => { hSel.innerHTML += `<option value="${h}">${h}:00</option>`; });
+
+            const cSel = document.getElementById('select-agenda-centro'); cSel.innerHTML = '';
+            Object.keys(centrosDeportivos).forEach(id => { cSel.innerHTML += `<option value="${id}">${centrosDeportivos[id].nombre}</option>`; });
+            
+            pincharPaletaSelectoresColores();
+            actualizarSelectEntrenadoresAgenda();
+        }
+
+        function alternarCamposAgendaCondicionales() {
+            const mod = document.getElementById('select-agenda-modalidad').value;
+            const wrapperGrupoId = document.getElementById('wrapper-grupo-id');
+            const wrapperNumPersonas = document.getElementById('wrapper-num-personas');
+            const wrapperSelectorColor = document.getElementById('wrapper-selector-color');
+            const lblNombres = document.getElementById('lbl-nombres-dinamico');
+
+            if (mod === "ind") {
+                wrapperGrupoId.classList.add('hidden'); wrapperNumPersonas.classList.add('hidden'); wrapperSelectorColor.classList.add('hidden');
+                lblNombres.innerText = "Nombre del Atleta Individual";
+                document.getElementById('input-agenda-num-personas').value = 1;
+            } else {
+                wrapperGrupoId.classList.remove('hidden'); wrapperNumPersonas.classList.remove('hidden'); wrapperSelectorColor.classList.remove('hidden');
+                lblNombres.innerText = "Nombres de los Alumnos (Separados por comas)";
+            }
+            calcularPrecioAgendaDinámico();
+        }
+
+        function actualizarSelectEntrenadoresAgenda() {
+            const cId = document.getElementById('select-agenda-centro').value;
+            const ptSel = document.getElementById('select-agenda-pt'); ptSel.innerHTML = '';
+            const staff = Object.values(entrenadoresPorCentro).filter(p => p.centroId === cId);
+            staff.forEach(p => {
+                if (currentRol === "pt" && p.nombre !== currentUser) return;
+                ptSel.innerHTML += `<option value="${p.nombre}">${p.nombre}</option>`;
+            });
+            calcularPrecioAgendaDinámico();
+        }
+
+        function calcularPrecioAgendaDinámico() {
+            const mod = document.getElementById('select-agenda-modalidad').value;
+            const frec = document.getElementById('select-agenda-frecuencia').value;
+            const numPersonas = parseInt(document.getElementById('input-agenda-num-personas').value) || 1;
+            
+            const tarifaBasePersona = TARIFAS_BASE_HORA[mod][frec] || 0;
+            const rentabilidadHoraTotal = tarifaBasePersona * numPersonas;
+            
+            document.getElementById('lbl-agenda-precio-calc').innerText = `${rentabilidadHoraTotal.toFixed(2)} €`;
+        }
+
+        function guardarSesionEnCuadrante() {
+            const cId = document.getElementById('select-agenda-centro').value;
+            const cText = centrosDeportivos[cId].nombre;
+            const pt = document.getElementById('select-agenda-pt').value;
+            const dia = document.getElementById('select-agenda-dia').value;
+            const hora = document.getElementById('select-agenda-hora').value;
+            const mod = document.getElementById('select-agenda-modalidad').value;
+            const frec = document.getElementById('select-agenda-frecuencia').value;
+            
+            const grupoId = mod === 'ind' ? 'Clase Individual' : document.getElementById('input-agenda-grupo').value.trim();
+            const listaNombres = document.getElementById('input-agenda-nombres').value.trim() || "Atleta";
+            const numPersonas = parseInt(document.getElementById('input-agenda-num-personas').value) || 1;
+            const colorElegido = mod === 'ind' ? 'ind_color' : document.getElementById('select-agenda-color').value;
+
+            if(!pt) return;
+
+            const celdaId = `${dia}_${hora}`;
+            if(!agendaMatriz[celdaId]) agendaMatriz[celdaId] = [];
+
+            if(agendaMatriz[celdaId].find(s => s.pt === pt)) { alert("Operación Bloqueada: El PT ya está ocupado."); return; }
+
+            const tarifaBasePersona = TARIFAS_BASE_HORA[mod][frec] || 0;
+            const valorTotalHora = tarifaBasePersona * numPersonas;
+
+            agendaMatriz[celdaId].push({
+                centro: cText, pt: pt, grupo: grupoId, nombres: listaNombres, num: numPersonas, colorKey: colorElegido,
+                tarifa: { valor: valorTotalHora, desc: `${mod.toUpperCase()} (${frec}d/sem)` }
+            });
+            
+            localStorage.setItem('bs_scheduler_matriz', JSON.stringify(agendaMatriz));
+            renderCuadranteAgendaCompleto();
+        }
+
+        function borrarSesionAgenda(celdaId, index) {
+            const s = agendaMatriz[celdaId][index];
+            if (currentRol === "pt" && s.pt !== currentUser) { alert("Acción Restringida."); return; }
+            if (confirm("¿Remover Turno de la agenda?")) {
+                agendaMatriz[celdaId].splice(index, 1);
+                if(agendaMatriz[celdaId].length === 0) delete agendaMatriz[celdaId];
+                localStorage.setItem('bs_scheduler_matriz', JSON.stringify(agendaMatriz));
+                renderCuadranteAgendaCompleto();
+            }
+        }
+
+        function limpiarTodaLaAgenda() {
+            if(confirm("¿Vaciar por completo toda la agenda de la red?")) {
+                agendaMatriz = {}; localStorage.setItem('bs_scheduler_matriz', JSON.stringify(agendaMatriz));
+                renderCuadranteAgendaCompleto();
+            }
+        }
+
+        function renderCuadranteAgendaCompleto() {
+            const tbody = document.getElementById('grid-agenda-cuerpo'); tbody.innerHTML = '';
+            let totalS = 0, totalF = 0;
+
+            HORARIOS_COMPLETOS.forEach(hora => {
+                const tr = document.createElement('tr'); tr.className = "border-b border-slate-800/40";
+                tr.innerHTML = `<td class="py-4 px-2 text-center font-bold border border-slate-800 bg-slate-950/40 text-slate-500">${hora}</td>`;
+
+                DIAS_SEMANA.forEach(dia => {
+                    const celdaId = `${dia}_${hora}`;
+                    let html = `<td class="p-1 border border-slate-800/50 align-top min-w-[145px] space-y-1">`;
+
+                    if(agendaMatriz[celdaId]) {
+                        agendaMatriz[celdaId].forEach((s, idx) => {
+                            if (currentRol === "pt" && s.pt !== currentUser) {
+                                html += `<div class="bg-slate-950/40 p-2 rounded text-[10px] text-slate-700 italic border border-slate-900/10 text-center">Ocupado</div>`;
+                                return;
+                            }
+                            totalS++; totalF += s.tarifa.valor;
+                            const colorClase = s.colorKey === 'ind_color' ? 'bg-slate-900 border-slate-700 text-slate-200' : (PALETA_20_COLORES[s.colorKey]?.css || 'bg-slate-950');
+                            
+                            html += `
+                                <div class="${colorClase} border p-2 rounded relative group shadow space-y-0.5">
+                                    <button onclick="borrarSesionAgenda('${celdaId}', ${idx})" class="absolute top-0.5 right-1 text-red-500 text-[9px] font-bold opacity-0 group-hover:opacity-100">[X]</button>
+                                    <div class="text-[9px] font-black uppercase text-amber-400 leading-none">${s.pt}</div>
+                                    <div class="text-[11px] font-bold truncate text-white leading-tight">${s.grupo}</div>
+                                    <div class="text-[10px] opacity-90 truncate font-semibold text-slate-200">${s.nombres}</div>
+                                    <div class="text-[9px] opacity-70 leading-none">${s.tarifa.desc} [${s.num} Pax]</div>
+                                    <div class="text-[10px] font-black text-emerald-400 mt-1">${s.tarifa.valor.toFixed(2)} €/h</div>
+                                </div>
+                            `;
+                        });
+                    }
+                    html += `</td>`; tr.innerHTML += html;
+                });
+                tbody.appendChild(tr);
+            });
+            document.getElementById('kpi-agenda-num').innerText = totalS;
+            document.getElementById('kpi-agenda-fact').innerText = `${totalF.toFixed(2)} €`;
+            document.getElementById('kpi-agenda-ratio').innerText = `${((totalS / (HORARIOS_COMPLETOS.length * DIAS_SEMANA.length)) * 100).toFixed(1)} %`;
+        }
+
+        function copiarEnlaceSincronizado() {
+            const enc = btoa(encodeURIComponent(JSON.stringify(agendaMatriz)));
+            const url = window.location.origin + window.location.pathname + "?data=" + enc;
+            navigator.clipboard.writeText(url).then(() => { alert("¡Enlace de Agenda Sincronizado!"); });
+        }
+
+        function runClock() {
+            const el = document.getElementById('live-clock');
+            const ref = () => { const f = new Date(); el.innerText = f.toLocaleDateString('es-ES', { weekday: 'long', hour: '2-digit', minute: '2-digit' }).toUpperCase(); };
+            setInterval(ref, 60000); ref();
+        }
+
+        function logout() { window.location.reload(); }
+
+        window.onload = function() { loadCoreDataBases(); checkUrlCloud(); };
+    </script>
+</body>
+</html>
