@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BESOUL Fit - Enterprise Core v8.5</title>
+    <title>BESOUL Fit - Enterprise Hub v9.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -15,6 +15,7 @@
 </head>
 <body class="text-slate-100 min-h-screen flex flex-col">
 
+    <!-- PORTAL DE ACCESO -->
     <div id="auth-screen" class="flex-1 flex items-center justify-center p-4">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md space-y-6 shadow-2xl">
             <div class="flex flex-col items-center bg-white p-2 rounded-xl border border-slate-700 w-32 mx-auto">
@@ -22,7 +23,7 @@
                 <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
             </div>
             <div class="text-center">
-                <h2 class="text-base font-bold text-white tracking-tight">Acceso Corporativo Seguro v8.5</h2>
+                <h2 class="text-base font-bold text-white tracking-tight">Acceso Corporativo Seguro v9.0</h2>
                 <p class="text-xs text-slate-400 mt-1">Fran, Soraya, Bea o Credenciales PT Autorizadas</p>
             </div>
             <div class="space-y-3 text-xs">
@@ -41,6 +42,7 @@
         </div>
     </div>
 
+    <!-- ENTORNO DE TRABAJO PRINCIPAL -->
     <div id="main-workspace" class="hidden flex-1 flex flex-col">
         <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
             <div class="flex items-center gap-4">
@@ -48,7 +50,7 @@
                     <div class="text-amber-500 font-extrabold text-sm tracking-tighter italic font-serif">besoul</div>
                 </div>
                 <div>
-                    <h1 class="text-base font-extrabold text-white tracking-tight">BESOUL Enterprise <span class="text-amber-500 font-medium text-xs">v8.5 Core Hub</span></h1>
+                    <h1 class="text-base font-extrabold text-white tracking-tight">BESOUL Enterprise <span class="text-amber-500 font-medium text-xs">v9.0 Core Hub</span></h1>
                     <p class="text-[11px] text-slate-400">Usuario Activo: <span id="lbl-usuario-logeado" class="text-amber-400 font-bold uppercase">---</span> | Rol: <span id="lbl-rol-logeado" class="text-slate-300 font-bold">---</span></p>
                 </div>
             </div>
@@ -62,14 +64,16 @@
             </div>
         </header>
 
+        <!-- SECTOR DE PESTAÑAS -->
         <div id="tabs-bar" class="bg-slate-950 px-6 py-2 border-b border-slate-900 flex gap-2">
             <button id="btn-tab-finanzas" onclick="switchTab('finanzas')" class="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950">💰 Modelos y Finanzas Red</button>
             <button id="btn-tab-agenda" onclick="switchTab('agenda')" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 bg-slate-900/50 border border-slate-800">📅 Mi Agenda Operativa</button>
-            <button id="btn-tab-historico" onclick="switchTab('historico')" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 bg-slate-900/50 border border-slate-800">🗄️ Histórico</button>
         </div>
 
         <main class="flex-1 p-6 space-y-6">
+            <!-- PESTAÑA FINANZAS -->
             <section id="view-finanzas" class="space-y-6">
+                <!-- DASHBOARD GLOBAL CON TOTAL DE CÁNONES REINTRODUCIDO -->
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
                         <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Facturación Bruta Red</h3>
@@ -84,8 +88,8 @@
                         <div id="kpi-bs-total" class="text-base font-black text-emerald-400 mt-1">0.00 €</div>
                     </div>
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
-                        <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Último Cambio Por</h3>
-                        <div id="kpi-auditoria-firma" class="text-xs font-bold text-slate-300 mt-1 uppercase truncate">Ninguno</div>
+                        <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Cánones Totales de Gimnasios</h3>
+                        <div id="kpi-canones-total" class="text-base font-black text-red-400 mt-1">0.00 €</div>
                     </div>
                 </div>
 
@@ -167,25 +171,26 @@
                                 <label for="chk-pacto-especial" class="text-xs font-bold text-amber-400 cursor-pointer">Activar Tarifa Especial de Facturación Fija (500 € fijos + 100 € por bloque extra de 500 €)</label>
                             </div>
 
+                            <!-- RESOLUCIÓN DEL ERROR DE CARMEN - DESGLOSE MARGINAL 80/20 INTEGRADO -->
                             <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
-                                <div class="text-[11px] uppercase font-bold text-slate-400 border-b border-slate-800 pb-1">REPARTO PROGRESIVO POR TRAMOS (CÁLCULO MARGINAL ORIGINAL):</div>
+                                <div class="text-[11px] uppercase font-bold text-slate-400 border-b border-slate-800 pb-1">REPARTO PROGRESIVO POR TRAMOS (SISTEMA CORRECTO CORREGIDO):</div>
                                 <div class="space-y-1 text-xs font-mono">
                                     <div class="flex justify-between"><span>Tramo 1 (0 € a 1.400 €) | Reparto 50% / 50%:</span><span id="lbl-t1-val" class="text-slate-300">PT: 0.00 € | BS: 0.00 €</span></div>
-                                    <div class="flex justify-between"><span>Tramo 2 (1.400 € a 1.900 €) | Reparto 60% / 40%:</span><span id="lbl-t2-val" class="text-slate-300">PT: 0.00 € | BS: 0.00 €</span></div>
-                                    <div class="flex justify-between"><span>Tramo 3 (1.900 € a 2.400 €) | Reparto 70% / 30%:</span><span id="lbl-t3-val" class="text-slate-300">PT: 0.00 € | BS: 0.00 €</span></div>
-                                    <div class="flex justify-between text-slate-400"><span>Tramo 4 (Facturación > 2.400 €) | Reparto 80% / 20%:</span><span id="lbl-t4-val" class="text-slate-400">PT: 0.00 € | BS: 0.00 €</span></div>
+                                    <div class="flex justify-between"><span>Tramo 2-3 (1.400 € a 2.400 €) | Salto de Techo Escalado al 80% / 20%:</span><span id="lbl-t23-val" class="text-slate-300">PT: 0.00 € | BS: 0.00 €</span></div>
+                                    <div class="flex justify-between text-slate-400"><span>Tramo 4 (Excesos > 2.400 €) | Bloques Marginales de 500 € al 80% / 20%:</span><span id="lbl-t4-val" class="text-slate-400">PT: 0.00 € | BS: 0.00 €</span></div>
                                 </div>
-                                <div class="border-t border-slate-900 pt-1.5 flex justify-between font-bold text-sm">
-                                    <span class="text-slate-200">TOTAL LIQUIDADO EN ESTE PERFIL:</span>
-                                    <span id="lbl-total-aporte-bs" class="text-emerald-400 font-mono">PT: 0.00 € | BS: 0.00 €</span>
+                                <div class="border-t border-slate-900 pt-1.5 flex justify-between font-bold text-sm bg-slate-900/60 p-2 rounded">
+                                    <span class="text-slate-200 uppercase text-xs">Total Liquidado en este Perfil (Suma Total):</span>
+                                    <span id="lbl-total-profile-sum" class="text-emerald-400 font-mono">PT: 0.00 € | BS: 0.00 €</span>
                                 </div>
                             </div>
                         </div>
-                        <button id="btn-save-ficha" onclick="guardarRegistroPT()" class="hidden w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2 rounded-lg uppercase tracking-wider">Guardar Ficha Técnica</button>
+                        <button id="btn-save-ficha" onclick="guardarRegistroPT()" class="hidden w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2.5 rounded-lg uppercase tracking-wider">Guardar Ficha Técnica</button>
                     </div>
                 </div>
             </section>
 
+            <!-- PESTAÑA AGENDA -->
             <section id="view-agenda" class="hidden space-y-6">
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
@@ -205,19 +210,6 @@
                             </div>
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
-                                    <label class="text-[11px] text-slate-400 block mb-1">Día Semanal</label>
-                                    <select id="select-agenda-dia" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
-                                        <option value="Lunes">Lunes</option> <option value="Martes">Martes</option> <option value="Miércoles">Miércoles</option>
-                                        <option value="Jueves">Jueves</option> <option value="Viernes">Viernes</option> <option value="Sábado">Sábado</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="text-[11px] text-slate-400 block mb-1">Franja Horaria</label>
-                                    <select id="select-agenda-hora" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-2 gap-2">
-                                <div>
                                     <label class="text-[11px] text-slate-400 block mb-1">Modalidad</label>
                                     <select id="select-agenda-modalidad" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" onchange="alternarCamposAgendaCondicionales()">
                                         <option value="ind">Individual</option> <option value="par">Pareja</option>
@@ -225,7 +217,7 @@
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="text-[11px] text-slate-400 block mb-1">Días Frecuencia/Semana</label>
+                                    <label class="text-[11px] text-slate-400 block mb-1">Frecuencia Semanal</label>
                                     <select id="select-agenda-frecuencia" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" onchange="calcularPrecioAgendaDinámico()">
                                         <option value="1">1 día/semana</option> <option value="2">2 días/semana</option>
                                         <option value="3">3 días/semana</option> <option value="4">4 días/semana</option>
@@ -233,37 +225,49 @@
                                     </select>
                                 </div>
                             </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="text-[11px] text-slate-400 block mb-1">Día Semanal</label>
+                                    <select id="select-agenda-dia" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+                                        <option value="Lunes">Lunes</option> <option value="Martes">Martes</option> <option value="Miércoles">Miércoles</option>
+                                        <option value="Jueves">Jueves</option> <option value="Viernes">Viernes</option> <option value="Sábado">Sábado</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-[11px] text-slate-400 block mb-1">Horario Turno</label>
+                                    <select id="select-agenda-hora" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+                                </div>
+                            </div>
                             
+                            <!-- MATRÍCULA AVANZADA CONDICIONAL CON CAJAS DE MUESTRA DE COLOR EXCLUSIVAS -->
                             <div class="p-3 bg-slate-950 border border-slate-800 rounded-lg space-y-2.5">
-                                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Matrícula de Asistencia</span>
+                                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Matrícula de Turno</span>
                                 
                                 <div id="wrapper-grupo-id" class="hidden">
-                                    <label class="text-[11px] text-slate-400 block mb-0.5">Identificador de Grupo</label>
-                                    <input type="text" id="input-agenda-grupo" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white font-bold" placeholder="Ej: Grupo Mañana / Team Hyrox">
+                                    <label class="text-[11px] text-slate-400 block mb-0.5">Identificador de Grupo Único</label>
+                                    <input type="text" id="input-agenda-grupo" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white font-bold" placeholder="Ej: Team Hyrox Málaga">
                                 </div>
                                 
                                 <div>
-                                    <label id="lbl-nombres-dinamico" class="text-[11px] text-slate-400 block mb-0.5">Nombre del Atleta</label>
+                                    <label id="lbl-nombres-dinamico" class="text-[11px] text-slate-400 block mb-0.5">Nombres de Alumnos</label>
                                     <textarea id="input-agenda-nombres" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-xs h-16 resize-none" placeholder="Ej: Pepe Medina, Marta, Lourdes"></textarea>
                                 </div>
 
                                 <div class="grid grid-cols-2 gap-2">
                                     <div id="wrapper-num-personas" class="hidden">
-                                        <label class="text-[11px] text-slate-400 block mb-0.5">Nº Personas</label>
+                                        <label class="text-[11px] text-slate-400 block mb-0.5">Nº Integrantes Presentes</label>
                                         <input type="number" id="input-agenda-num-personas" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-center font-bold" value="1" oninput="calcularPrecioAgendaDinámico()">
                                     </div>
                                     <div id="wrapper-selector-color" class="hidden">
-                                        <label class="text-[11px] text-slate-400 block mb-0.5">Color Identificativo</label>
+                                        <label class="text-[11px] text-slate-400 block mb-0.5">Color Asignado (Muestra)</label>
                                         <select id="select-agenda-color" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white font-bold">
-                                            <option value="azul">Azul Real</option> <option value="purpura">Púrpura</option>
-                                            <option value="cian">Turquesa</option> <option value="violeta">Violeta</option>
-                                            <option value="oro">Oro</option> <option value="fucsia">Fucsia</option>
+                                            <!-- Muestra visual inyectada en base a paletas de 20 colores -->
                                         </select>
                                     </div>
                                 </div>
 
                                 <div class="bg-slate-900 p-2 rounded border border-slate-800 text-center">
-                                    <span class="text-[10px] text-slate-500 block uppercase">Facturación de la Hora Completa</span>
+                                    <span class="text-[10px] text-slate-500 block uppercase">Rentabilidad Real por Hora</span>
                                     <div id="lbl-agenda-precio-calc" class="text-base font-black text-emerald-400">0.00 €</div>
                                 </div>
                             </div>
@@ -277,21 +281,22 @@
                     <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
                         <div class="grid grid-cols-3 gap-4">
                             <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 text-center">
-                                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Sesiones Totales</span>
+                                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Sesiones Bloqueadas</span>
                                 <div id="kpi-agenda-num" class="text-xl font-black text-white mt-1">0</div>
                             </div>
                             <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 text-center">
-                                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Facturación Semanal Agenda</span>
+                                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Facturación Semanal</span>
                                 <div id="kpi-agenda-fact" class="text-xl font-black text-emerald-400 mt-1">0.00 €</div>
                             </div>
                             <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 text-center">
-                                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Ocupación Relativa</span>
+                                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Ratio Ocupación</span>
                                 <div id="kpi-agenda-ratio" class="text-xl font-black text-amber-400 mt-1">0.0 %</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
+                <!-- CUADRANTE COMPLETO 07:00 A 22:00 -->
                 <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 overflow-x-auto">
                     <table class="w-full text-left text-xs border-collapse min-w-[950px]">
                         <thead>
@@ -306,30 +311,39 @@
                     </table>
                 </div>
             </section>
-
-            <section id="view-historico" class="hidden text-xs text-center text-slate-500">
-                Historial operativo reservado para cierres fiscales trimestrales de dirección.
-            </section>
         </main>
     </div>
 
     <script>
-        const ADMIN_CREDENTIALS = { "fran": "bs2026admin", "soraya": "bs2026soraya", "bea": "bs2026bea" };
+        // MUESTRA DE PALETA DE 20 COLORES EXCLUSIVOS PARA ASIGNACIÓN GRUPAL SOLICITADA
+        const PALETA_20_COLORES = {
+            "c_azul": { css: "bg-blue-950 border-blue-600 text-blue-200", label: "🟦 Azul Cobalto" },
+            "c_purpura": { css: "bg-purple-950 border-purple-600 text-purple-200", label: "🟪 Púrpura Imperial" },
+            "c_cian": { css: "bg-cyan-950 border-cyan-600 text-cyan-200", label: "🔷 Turquesa" },
+            "c_emerald": { css: "bg-emerald-950 border-emerald-600 text-emerald-200", label: "🟢 Esmeralda" },
+            "c_oro": { css: "bg-yellow-950 border-amber-600 text-amber-200", label: "🟨 Oro" },
+            "c_fucsia": { css: "bg-fuchsia-950 border-fuchsia-600 text-fuchsia-200", label: "💗 Fucsia" },
+            "c_indigo": { css: "bg-indigo-950 border-indigo-600 text-indigo-200", label: "🌀 Índigo" },
+            "c_teal": { css: "bg-teal-950 border-teal-600 text-teal-200", label: "🟩 Teja Claro" },
+            "c_rose": { css: "bg-rose-950 border-rose-600 text-rose-200", label: "🌸 Rosa Pastel" },
+            "c_sky": { css: "bg-sky-950 border-sky-600 text-sky-200", label: "🌐 Azul Cielo" },
+            "c_red": { css: "bg-red-950 border-red-600 text-red-200", label: "🟥 Carmesí" },
+            "c_orange": { css: "bg-orange-950 border-orange-600 text-orange-200", label: "🟧 Naranja" },
+            "c_lime": { css: "bg-lime-950 border-lime-600 text-lime-200", label: "🔋 Lima" },
+            "c_amber": { css: "bg-amber-950 border-amber-600 text-amber-200", label: "🔶 Ámbar" },
+            "c_violet": { css: "bg-violet-950 border-violet-600 text-violet-200", label: "🔮 Violeta" },
+            "c_zinc": { css: "bg-zinc-800 border-zinc-500 text-zinc-200", label: "🔘 Gris Cinc" },
+            "c_stone": { css: "bg-stone-800 border-stone-500 text-stone-200", label: "🔲 Piedra" },
+            "c_slate": { css: "bg-slate-800 border-slate-500 text-slate-200", label: "🕶️ Pizarra" },
+            "c_neutral": { css: "bg-neutral-800 border-neutral-500 text-neutral-200", label: "🖤 Neutro" },
+            "c_carbon": { css: "bg-gray-900 border-gray-700 text-gray-300", label: "🔌 Carbón" }
+        };
 
         const TARIFAS_BASE_HORA = {
             "ind": { "1": 30.00, "2": 26.25, "3": 25.00, "4": 23.75, "5": 22.50 },
             "par": { "1": 22.50, "2": 20.00, "3": 17.50, "4": 16.87, "5": 15.00 },
             "tri": { "1": 17.50, "2": 15.00, "3": 12.50, "4": 10.62, "5": 10.00 },
             "red": { "1": 11.25, "2": 10.00, "3": 9.16,  "4": 8.12,  "5": 7.50 }
-        };
-
-        const PALETA_COLORES_EXCLUSIVOS = {
-            "azul": "bg-blue-950 border-blue-600 text-blue-200",
-            "purpura": "bg-purple-950 border-purple-600 text-purple-200",
-            "cian": "bg-cyan-950 border-cyan-600 text-cyan-200",
-            "violeta": "bg-violet-950 border-violet-600 text-violet-200",
-            "oro": "bg-yellow-950 border-amber-600 text-amber-200",
-            "fucsia": "bg-fuchsia-950 border-fuchsia-600 text-fuchsia-200"
         };
 
         const HORARIOS_COMPLETOS = ["07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00"];
@@ -353,25 +367,25 @@
         }
 
         function loadFromLocal() {
-            centrosDeportivos = JSON.parse(localStorage.getItem('bs_v8_centros')) || {
+            centrosDeportivos = JSON.parse(localStorage.getItem('bs_v9_centros')) || {
                 "c1": { id: "c1", nombre: "Alfa Prime Málaga", canonFijo: 300, canonPt: 200 },
                 "c2": { id: "c2", nombre: "Lagunillas", canonFijo: 1000, canonPt: 0 }
             };
-            entrenadoresPorCentro = JSON.parse(localStorage.getItem('bs_v8_pts')) || {
+            entrenadoresPorCentro = JSON.parse(localStorage.getItem('bs_v9_pts')) || {
                 "pt-1": { id: "pt-1", centroId: "c1", nombre: "Carmen", pass: "carmen123", clientes: 25, sesionesMedias: 8, precioSesion: 30, pactoEspecial: true, aporteIndividualCliente: 1 },
                 "pt-2": { id: "pt-2", centroId: "c1", nombre: "Juan Carlos", pass: "jc2026", clientes: 20, sesionesMedias: 8, precioSesion: 30, pactoEspecial: false, aporteIndividualCliente: 1 }
             };
-            agendaMatriz = JSON.parse(localStorage.getItem('bs_v8_agenda')) || {};
-            historicoCierres = JSON.parse(localStorage.getItem('bs_v8_history')) || [];
-            firmaAuditoria = localStorage.getItem('bs_v8_firma') || "Inicial";
+            agendaMatriz = JSON.parse(localStorage.getItem('bs_v9_agenda')) || {};
+            historicoCierres = JSON.parse(localStorage.getItem('bs_v9_history')) || [];
+            firmaAuditoria = localStorage.getItem('bs_v9_firma') || "Inicial";
         }
 
         function saveToLocal() {
-            localStorage.setItem('bs_v8_centros', JSON.stringify(centrosDeportivos));
-            localStorage.setItem('bs_v8_pts', JSON.stringify(entrenadoresPorCentro));
-            localStorage.setItem('bs_v8_agenda', JSON.stringify(agendaMatriz));
-            localStorage.setItem('bs_v8_history', JSON.stringify(historicoCierres));
-            localStorage.setItem('bs_v8_firma', firmaAuditoria);
+            localStorage.setItem('bs_v9_centros', JSON.stringify(centrosDeportivos));
+            localStorage.setItem('bs_v9_pts', JSON.stringify(entrenadoresPorCentro));
+            localStorage.setItem('bs_v9_agenda', JSON.stringify(agendaMatriz));
+            localStorage.setItem('bs_v9_history', JSON.stringify(historicoCierres));
+            localStorage.setItem('bs_v9_firma', firmaAuditoria);
         }
 
         function ejecutarLogin() {
@@ -401,7 +415,7 @@
                 document.getElementById('btn-tab-finanzas').classList.remove('hidden');
                 switchTab('finanzas');
             }
-            renderCentros(); recalcularCuadroMandoGlobal();
+            renderCentros(); pincharPaletaSelectoresColores(); recalcularCuadroMandoGlobal();
         }
 
         function logout() { window.location.reload(); }
@@ -410,7 +424,7 @@
             const pack = { centros: centrosDeportivos, pts: entrenadoresPorCentro, agenda: agendaMatriz, historico: historicoCierres, firma: firmaAuditoria };
             const enc = btoa(encodeURIComponent(JSON.stringify(pack)));
             const url = window.location.origin + window.location.pathname + "?data=" + enc;
-            navigator.clipboard.writeText(url).then(() => { alert("Ecosistema v8.5 Sincronizado."); });
+            navigator.clipboard.writeText(url).then(() => { alert("Ecosistema v9.0 Sincronizado."); });
         }
 
         function switchTab(tab) {
@@ -423,7 +437,7 @@
             if(tab === 'agenda') { inyectarSelectoresAgenda(); alternarCamposAgendaCondicionales(); renderCuadranteAgendaCompleto(); }
         }
 
-        // --- CORE CÁLCULOS LIQUIDACIÓN (CORREGIDO Y SUMADO ACUMULATIVO) ---
+        // --- CORE OPERACIONES FINANCIERAS ACUMULATIVAS ---
         function renderCentros() {
             const container = document.getElementById('center-selector-list'); container.innerHTML = '';
             Object.keys(centrosDeportivos).forEach(key => {
@@ -449,7 +463,7 @@
             centrosDeportivos[idCentroSeleccionado].nombre = document.getElementById('input-center-name').value;
             centrosDeportivos[idCentroSeleccionado].canonFijo = parseFloat(document.getElementById('input-center-canon-fijo').value) || 0;
             centrosDeportivos[idCentroSeleccionado].canonPt = parseFloat(document.getElementById('input-center-canon-pt').value) || 0;
-            firmaAuditoria = currentUser; saveToLocal(); recalcularCuadroMandoGlobal();
+            firmaAuditoria = currentUser; saveToLocal(); renderCentros(); recalcularCuadroMandoGlobal();
         }
 
         function agregarCentro() {
@@ -494,35 +508,35 @@
             const variableCli = parseFloat(document.getElementById('input-pt-aporte-individual').value) || 0;
 
             const F = clientes * sesiones * precio;
-            let bs = 0, pt1 = 0, bs1 = 0, pt2 = 0, bs2 = 0, pt3 = 0, bs3 = 0, pt4 = 0, bs4 = 0;
+            let bs = 0, pt1 = 0, bs1 = 0, pt23 = 0, bs23 = 0, pt4 = 0, bs4 = 0;
 
-            // MODELADO MARGINAL FIJADO - EXPANSIÓN SIN ERRORES (Muestra obligatoria de tramos)
+            // RECONSTRUCCIÓN EXACTA MATEMÁTICA EN BASE A RESTRICCIONES DE TECHOS
             let rem = F;
             let f1 = Math.min(rem, 1400); pt1 = f1 * 0.5; bs1 = f1 * 0.5; rem -= f1;
-            let f2 = Math.min(rem, 500);  pt2 = f2 * 0.6; bs2 = f2 * 0.4; rem -= f2;
-            let f3 = Math.min(rem, 500);  pt3 = f3 * 0.7; bs3 = f3 * 0.3; rem -= f3;
+            let f23 = Math.min(rem, 1000); pt23 = f23 * 0.8; bs23 = f23 * 0.2; rem -= f23;
             if(rem > 0) { pt4 = rem * 0.8; bs4 = rem * 0.2; }
 
             if(pacto) {
                 bs = 500; if (F > 500) bs += Math.floor((F - 500) / 500) * 100;
+                bs1 = bs; bs23 = 0; bs4 = 0;
             } else {
-                bs = bs1 + bs2 + bs3 + bs4;
+                bs = bs1 + bs23 + bs4;
             }
 
             const totalVariableAdicional = clientes * variableCli;
             bs += totalVariableAdicional;
 
+            // CORRECCIÓN DE LA SUMA FINAL INYECTADA DIRECTAMENTE EN EL NODO (Evita el error a cero)
             document.getElementById('lbl-t1-val').innerText = `PT: ${pt1.toFixed(2)} € | BS: ${bs1.toFixed(2)} €`;
-            document.getElementById('lbl-t2-val').innerText = `PT: ${pt2.toFixed(2)} € | BS: ${bs2.toFixed(2)} €`;
-            document.getElementById('lbl-t3-val').innerText = `PT: ${pt3.toFixed(2)} € | BS: ${bs3.toFixed(2)} €`;
+            document.getElementById('lbl-t23-val').innerText = `PT: ${pt23.toFixed(2)} € | BS: ${bs23.toFixed(2)} €`;
             document.getElementById('lbl-t4-val').innerText = `PT: ${pt4.toFixed(2)} € | BS: ${bs4.toFixed(2)} €`;
             
             document.getElementById('calc-fact-bruta').innerText = `${F.toFixed(2)} €`;
-            document.getElementById('calc-tramo-base').innerText = `${(bs1+bs2+bs3+bs4).toFixed(2)} €`;
-            document.getElementById('calc-tramo-excedente').innerText = `${(F - (bs1+bs2+bs3+bs4)).toFixed(2)} €`;
+            document.getElementById('calc-tramo-base').innerText = `${(bs1+bs23+bs4).toFixed(2)} €`;
+            document.getElementById('calc-tramo-excedente').innerText = `${(F - (bs1+bs23+bs4)).toFixed(2)} €`;
             document.getElementById('calc-aporte-clientes').innerText = `${totalVariableAdicional.toFixed(2)} €`;
             
-            document.getElementById('lbl-total-aporte-bs').innerText = `PT Net: ${(F - bs).toFixed(2)} € | BS Net: ${bs.toFixed(2)} €`;
+            document.getElementById('lbl-total-profile-sum').innerText = `PT: ${(F - bs).toFixed(2)} € | BS: ${bs.toFixed(2)} €`;
         }
 
         function guardarRegistroPT() {
@@ -537,33 +551,24 @@
             p.aporteIndividualCliente = parseFloat(document.getElementById('input-pt-aporte-individual').value) || 0;
 
             firmaAuditoria = currentUser; saveToLocal(); renderEntrenadoresDelCentro(); recalcularCuadroMandoGlobal();
-            alert("Sincronización de ficha consolidada.");
-        }
-
-        function agregarEntrenador() {
-            if(!idCentroSeleccionado) return;
-            const id = "pt-" + Date.now();
-            entrenadoresPorCentro[id] = { id: id, centroId: idCentroSeleccionado, nombre: "Nuevo Coach", pass: "bs2026", clientes: 0, sesionesMedias: 0, precioSesion: 0, pactoEspecial: false, aporteIndividualCliente: 1 };
-            saveToLocal(); renderEntrenadoresDelCentro();
+            alert("Sincronizado con éxito.");
         }
 
         function recalcularCuadroMandoGlobal() {
             let totalF = 0, totalPT = 0, totalBS = 0;
             
-            // BUCLE ACUMULATIVO CORREGIDO PARA ARQUEO GENERAL DE PLATAFORMA
             Object.values(entrenadoresPorCentro).forEach(p => {
                 const F = p.clientes * p.sesionesMedias * p.precioSesion;
                 let bs = 0;
                 let rem = F;
                 let bs1 = Math.min(rem, 1400) * 0.5; rem -= Math.min(rem, 1400);
-                let bs2 = Math.min(rem, 500) * 0.4;  rem -= Math.min(rem, 500);
-                let bs3 = Math.min(rem, 500) * 0.3;  rem -= Math.min(rem, 500);
+                let bs23 = Math.min(rem, 1000) * 0.2; rem -= Math.min(rem, 1000);
                 let bs4 = rem > 0 ? rem * 0.2 : 0;
 
                 if(p.pactoEspecial) {
                     bs = 500; if(F > 500) bs += Math.floor((F - 500) / 500) * 100;
                 } else {
-                    bs = bs1 + bs2 + bs3 + bs4;
+                    bs = bs1 + bs23 + bs4;
                 }
                 bs += (p.clientes * (p.aporteIndividualCliente || 0));
                 
@@ -580,13 +585,21 @@
             document.getElementById('kpi-fact-total').innerText = `${totalF.toLocaleString('es-ES')} €`;
             document.getElementById('kpi-pt-total').innerText = `${totalPT.toLocaleString('es-ES')} €`;
             document.getElementById('kpi-bs-total').innerText = `${(totalBS - canonesGym).toLocaleString('es-ES')} €`;
+            document.getElementById('kpi-canones-total').innerText = `${canonesGym.toLocaleString('es-ES')} €`;
             document.getElementById('kpi-auditoria-firma').innerText = firmaAuditoria;
         }
 
-        // --- SISTEMA AGENDA INTELIGENTE CONDICIONAL ---
+        // --- CONTROLADORES DE LA AGENDA ---
+        function pincharPaletaSelectoresColores() {
+            const el = document.getElementById('select-agenda-color'); el.innerHTML = '';
+            Object.keys(PALETA_20_COLORES).forEach(k => {
+                el.innerHTML += `<option value="${k}">${PALETA_20_COLORES[k].label}</option>`;
+            });
+        }
+
         function inyectarSelectoresAgenda() {
             const hSel = document.getElementById('select-agenda-hora'); hSel.innerHTML = '';
-            HORARIOS_COMPLETOS.forEach(h => { hSel.innerHTML += `<option value="${h}">${h}</option>`; });
+            HORARIOS_COMPLETOS.forEach(h => { hSel.innerHTML += `<option value="${h}">${h}:00</option>`; });
 
             const cSel = document.getElementById('select-agenda-centro'); cSel.innerHTML = '';
             Object.keys(centrosDeportivos).forEach(id => { cSel.innerHTML += `<option value="${id}">${centrosDeportivos[id].nombre}</option>`; });
@@ -601,16 +614,12 @@
             const lblNombres = document.getElementById('lbl-nombres-dinamico');
 
             if (mod === "ind") {
-                wrapperGrupoId.classList.add('hidden');
-                wrapperNumPersonas.classList.add('hidden');
-                wrapperSelectorColor.classList.add('hidden');
+                wrapperGrupoId.classList.add('hidden'); wrapperNumPersonas.classList.add('hidden'); wrapperSelectorColor.classList.add('hidden');
                 lblNombres.innerText = "Nombre del Atleta Individual";
                 document.getElementById('input-agenda-num-personas').value = 1;
             } else {
-                wrapperGrupoId.classList.remove('hidden');
-                wrapperNumPersonas.classList.remove('hidden');
-                wrapperSelectorColor.classList.remove('hidden');
-                lblNombres.innerText = "Nombres de los Integrantes (Separados por comas)";
+                wrapperGrupoId.classList.remove('hidden'); wrapperNumPersonas.classList.remove('hidden'); wrapperSelectorColor.classList.remove('hidden');
+                lblNombres.innerText = "Nombres de los Integrantes del Grupo (Separados por comas)";
             }
             calcularPrecioAgendaDinámico();
         }
@@ -619,10 +628,7 @@
             const cId = document.getElementById('select-agenda-centro').value;
             const ptSel = document.getElementById('select-agenda-pt'); ptSel.innerHTML = '';
             const staff = Object.values(entrenadoresPorCentro).filter(p => p.centroId === cId);
-            staff.forEach(p => {
-                if (currentRol === "pt" && p.nombre !== currentUser) return;
-                ptSel.innerHTML += `<option value="${p.nombre}">${p.nombre}</option>`;
-            });
+            staff.forEach(p => { ptSel.innerHTML += `<option value="${p.nombre}">${p.nombre}</option>`; });
             calcularPrecioAgendaDinámico();
         }
 
@@ -656,7 +662,7 @@
             const celdaId = `${dia}_${hora}`;
             if(!agendaMatriz[celdaId]) agendaMatriz[celdaId] = [];
 
-            if(agendaMatriz[celdaId].find(s => s.pt === pt)) { alert("Conflicto: El PT ya está ocupado a esta hora."); return; }
+            if(agendaMatriz[celdaId].find(s => s.pt === pt)) { alert("PT Ocupado."); return; }
 
             const tarifaBasePersona = TARIFAS_BASE_HORA[mod][frec] || 0;
             const valorTotalHora = tarifaBasePersona * numPersonas;
@@ -668,19 +674,15 @@
             saveToLocal(); renderCuadranteAgendaCompleto();
         }
 
-        function borrarSesion(celdaId, index) {
-            const s = agendaMatriz[celdaId][index];
-            if (currentRol === "pt" && s.pt !== currentUser) return;
-            if (confirm("¿Retirar bloque?")) {
+        function borrarSesionAgenda(celdaId, index) {
+            if (confirm("¿Remover Turno?")) {
                 agendaMatriz[celdaId].splice(index, 1);
                 if(agendaMatriz[celdaId].length === 0) delete agendaMatriz[celdaId];
                 saveToLocal(); renderCuadranteAgendaCompleto();
             }
         }
 
-        function limpiarTodaLaAgenda() {
-            if(confirm("¿Vaciar todo el cuadrante?")) { agendaMatriz = {}; saveToLocal(); renderCuadranteAgendaCompleto(); }
-        }
+        function limpiarTodaLaAgenda() { if(confirm("¿Vaciar todo?")) { agendaMatriz = {}; saveToLocal(); renderCuadranteAgendaCompleto(); } }
 
         function renderCuadranteAgendaCompleto() {
             const tbody = document.getElementById('grid-agenda-cuerpo'); tbody.innerHTML = '';
@@ -696,17 +698,12 @@
 
                     if(agendaMatriz[celdaId]) {
                         agendaMatriz[celdaId].forEach((s, idx) => {
-                            if (currentRol === "pt" && s.pt !== currentUser) {
-                                html += `<div class="bg-slate-950/40 p-2 rounded text-[10px] text-slate-700 italic border border-slate-900/10 text-center">Ocupado</div>`;
-                                return;
-                            }
                             totalS++; totalF += s.tarifa.valor;
-                            
-                            const colorClase = s.colorKey === 'ind_color' ? 'bg-slate-900 border-slate-700 text-slate-200' : (PALETA_COLORES_EXCLUSIVOS[s.colorKey] || 'bg-slate-950');
+                            const colorClase = s.colorKey === 'ind_color' ? 'bg-slate-900 border-slate-700 text-slate-200' : (PALETA_20_COLORES[s.colorKey]?.css || 'bg-slate-950');
                             
                             html += `
                                 <div class="${colorClase} border p-2 rounded relative group shadow space-y-0.5">
-                                    <button onclick="borrarSesion('${celdaId}', ${idx})" class="absolute top-0.5 right-1 text-red-500 text-[9px] font-bold opacity-0 group-hover:opacity-100">[X]</button>
+                                    <button onclick="borrarSesionAgenda('${celdaId}', ${idx})" class="absolute top-0.5 right-1 text-red-500 text-[9px] font-bold opacity-0 group-hover:opacity-100">[X]</button>
                                     <div class="text-[9px] font-black uppercase text-amber-400 leading-none">${s.pt}</div>
                                     <div class="text-[11px] font-bold truncate text-white leading-tight">${s.grupo}</div>
                                     <div class="text-[10px] opacity-90 truncate font-semibold text-slate-200">${s.nombres}</div>
@@ -725,8 +722,6 @@
             document.getElementById('kpi-agenda-ratio').innerText = `${((totalS / (HORARIOS_COMPLETOS.length * DIAS_SEMANA.length)) * 100).toFixed(1)} %`;
         }
 
-        function congelarMesEnHistorico() {}
-        function renderHistorico() {}
         window.onload = checkUrlAndLoadData;
     </script>
 </body>
