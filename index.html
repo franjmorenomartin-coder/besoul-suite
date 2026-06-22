@@ -1,9 +1,9 @@
-<<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BESOUL Suite - Core v8.0 Enterprise</title>
+    <title>BESOUL Fit - Enterprise Core v8.5</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -22,7 +22,7 @@
                 <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
             </div>
             <div class="text-center">
-                <h2 class="text-base font-bold text-white tracking-tight">Acceso Corporativo Seguro v8.0</h2>
+                <h2 class="text-base font-bold text-white tracking-tight">Acceso Corporativo Seguro v8.5</h2>
                 <p class="text-xs text-slate-400 mt-1">Fran, Soraya, Bea o Credenciales PT Autorizadas</p>
             </div>
             <div class="space-y-3 text-xs">
@@ -48,7 +48,7 @@
                     <div class="text-amber-500 font-extrabold text-sm tracking-tighter italic font-serif">besoul</div>
                 </div>
                 <div>
-                    <h1 class="text-base font-extrabold text-white tracking-tight">BESOUL Enterprise <span class="text-amber-500 font-medium text-xs">v8.0 Core System</span></h1>
+                    <h1 class="text-base font-extrabold text-white tracking-tight">BESOUL Enterprise <span class="text-amber-500 font-medium text-xs">v8.5 Core Hub</span></h1>
                     <p class="text-[11px] text-slate-400">Usuario Activo: <span id="lbl-usuario-logeado" class="text-amber-400 font-bold uppercase">---</span> | Rol: <span id="lbl-rol-logeado" class="text-slate-300 font-bold">---</span></p>
                 </div>
             </div>
@@ -146,7 +146,7 @@
                                     <input type="number" id="input-clientes" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white font-bold" oninput="calcularTramosEnTiempoReal()">
                                 </div>
                                 <div>
-                                    <label class="text-[11px] text-slate-400 block mb-1">Precio Sesión (€)</label>
+                                    <label class="text-[11px] text-slate-400 block mb-1">Precio Sesión Medio (€)</label>
                                     <input type="number" id="input-precio-sesion" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white font-bold" oninput="calcularTramosEnTiempoReal()">
                                 </div>
                             </div>
@@ -168,12 +168,12 @@
                             </div>
 
                             <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
-                                <div class="text-[11px] uppercase font-bold text-slate-400 border-b border-slate-800 pb-1">REPARTO PROGRESIVO POR TRAMOS (CÁLULO MARGINAL ORIGINAL):</div>
+                                <div class="text-[11px] uppercase font-bold text-slate-400 border-b border-slate-800 pb-1">REPARTO PROGRESIVO POR TRAMOS (CÁLCULO MARGINAL ORIGINAL):</div>
                                 <div class="space-y-1 text-xs font-mono">
-                                    <div class="flex justify-between"><span>Tramo 1 (0 € a 1.400 €) | Reparto 50% / 50%:</span><span id="lbl-t1-val">PT: 0.00 € | BS: 0.00 €</span></div>
-                                    <div class="flex justify-between"><span>Tramo 2 (1.400 € a 1.900 €) | Reparto 60% / 40%:</span><span id="lbl-t2-val">PT: 0.00 € | BS: 0.00 €</span></div>
-                                    <div class="flex justify-between"><span>Tramo 3 (1.900 € a 2.400 €) | Reparto 70% / 30%:</span><span id="lbl-t3-val">PT: 0.00 € | BS: 0.00 €</span></div>
-                                    <div class="flex justify-between text-slate-400"><span>Tramo 4 (Facturación > 2.400 €) | Reparto 80% / 20%:</span><span id="lbl-t4-val">PT: 0.00 € | BS: 0.00 €</span></div>
+                                    <div class="flex justify-between"><span>Tramo 1 (0 € a 1.400 €) | Reparto 50% / 50%:</span><span id="lbl-t1-val" class="text-slate-300">PT: 0.00 € | BS: 0.00 €</span></div>
+                                    <div class="flex justify-between"><span>Tramo 2 (1.400 € a 1.900 €) | Reparto 60% / 40%:</span><span id="lbl-t2-val" class="text-slate-300">PT: 0.00 € | BS: 0.00 €</span></div>
+                                    <div class="flex justify-between"><span>Tramo 3 (1.900 € a 2.400 €) | Reparto 70% / 30%:</span><span id="lbl-t3-val" class="text-slate-300">PT: 0.00 € | BS: 0.00 €</span></div>
+                                    <div class="flex justify-between text-slate-400"><span>Tramo 4 (Facturación > 2.400 €) | Reparto 80% / 20%:</span><span id="lbl-t4-val" class="text-slate-400">PT: 0.00 € | BS: 0.00 €</span></div>
                                 </div>
                                 <div class="border-t border-slate-900 pt-1.5 flex justify-between font-bold text-sm">
                                     <span class="text-slate-200">TOTAL LIQUIDADO EN ESTE PERFIL:</span>
@@ -212,14 +212,14 @@
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="text-[11px] text-slate-400 block mb-1">Horario Turno</label>
+                                    <label class="text-[11px] text-slate-400 block mb-1">Franja Horaria</label>
                                     <select id="select-agenda-hora" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
                                 </div>
                             </div>
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
                                     <label class="text-[11px] text-slate-400 block mb-1">Modalidad</label>
-                                    <select id="select-agenda-modalidad" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" onchange="calcularPrecioAgendaDinámico()">
+                                    <select id="select-agenda-modalidad" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" onchange="alternarCamposAgendaCondicionales()">
                                         <option value="ind">Individual</option> <option value="par">Pareja</option>
                                         <option value="tri">Trío</option> <option value="red">Grupo Reducido</option>
                                     </select>
@@ -235,24 +235,36 @@
                             </div>
                             
                             <div class="p-3 bg-slate-950 border border-slate-800 rounded-lg space-y-2.5">
-                                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Matrícula y Control de Asistencia del Grupo</span>
-                                <div>
+                                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Matrícula de Asistencia</span>
+                                
+                                <div id="wrapper-grupo-id" class="hidden">
                                     <label class="text-[11px] text-slate-400 block mb-0.5">Identificador de Grupo</label>
                                     <input type="text" id="input-agenda-grupo" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white font-bold" placeholder="Ej: Grupo Mañana / Team Hyrox">
                                 </div>
+                                
                                 <div>
-                                    <label class="text-[11px] text-slate-400 block mb-0.5">Nombres de los Integrantes (Separados por comas)</label>
+                                    <label id="lbl-nombres-dinamico" class="text-[11px] text-slate-400 block mb-0.5">Nombre del Atleta</label>
                                     <textarea id="input-agenda-nombres" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-xs h-16 resize-none" placeholder="Ej: Pepe Medina, Marta, Lourdes"></textarea>
                                 </div>
+
                                 <div class="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <label class="text-[11px] text-slate-400 block mb-0.5">Cantidad Personas</label>
+                                    <div id="wrapper-num-personas" class="hidden">
+                                        <label class="text-[11px] text-slate-400 block mb-0.5">Nº Personas</label>
                                         <input type="number" id="input-agenda-num-personas" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-center font-bold" value="1" oninput="calcularPrecioAgendaDinámico()">
                                     </div>
-                                    <div>
-                                        <label class="text-[11px] text-emerald-400 block mb-0.5 font-bold">Rentabilidad Hora</label>
-                                        <div id="lbl-agenda-precio-calc" class="bg-slate-900 border border-slate-800 rounded p-2 text-emerald-400 font-bold text-center">0.00 €</div>
+                                    <div id="wrapper-selector-color" class="hidden">
+                                        <label class="text-[11px] text-slate-400 block mb-0.5">Color Identificativo</label>
+                                        <select id="select-agenda-color" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white font-bold">
+                                            <option value="azul">Azul Real</option> <option value="purpura">Púrpura</option>
+                                            <option value="cian">Turquesa</option> <option value="violeta">Violeta</option>
+                                            <option value="oro">Oro</option> <option value="fucsia">Fucsia</option>
+                                        </select>
                                     </div>
+                                </div>
+
+                                <div class="bg-slate-900 p-2 rounded border border-slate-800 text-center">
+                                    <span class="text-[10px] text-slate-500 block uppercase">Facturación de la Hora Completa</span>
+                                    <div id="lbl-agenda-precio-calc" class="text-base font-black text-emerald-400">0.00 €</div>
                                 </div>
                             </div>
 
@@ -263,33 +275,24 @@
                     </div>
 
                     <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
-                        <div>
-                            <div class="border-b border-slate-800 pb-2 mb-4">
-                                <h2 class="text-xs font-bold uppercase text-slate-300">Auditoría Operativa de Sesiones Activas</h2>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 text-center">
+                                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Sesiones Totales</span>
+                                <div id="kpi-agenda-num" class="text-xl font-black text-white mt-1">0</div>
                             </div>
-                            <div class="grid grid-cols-3 gap-4">
-                                <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 text-center">
-                                    <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Sesiones Bloqueadas</span>
-                                    <div id="kpi-agenda-num" class="text-xl font-black text-white mt-1">0</div>
-                                </div>
-                                <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 text-center">
-                                    <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Facturación de Agenda Real</span>
-                                    <div id="kpi-agenda-fact" class="text-xl font-black text-emerald-400 mt-1">0.00 €</div>
-                                </div>
-                                <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 text-center">
-                                    <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Ratio Ocupación</span>
-                                    <div id="kpi-agenda-ratio" class="text-xl font-black text-amber-400 mt-1">0.0 %</div>
-                                </div>
+                            <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 text-center">
+                                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Facturación Semanal Agenda</span>
+                                <div id="kpi-agenda-fact" class="text-xl font-black text-emerald-400 mt-1">0.00 €</div>
+                            </div>
+                            <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 text-center">
+                                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Ocupación Relativa</span>
+                                <div id="kpi-agenda-ratio" class="text-xl font-black text-amber-400 mt-1">0.0 %</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 overflow-x-auto">
-                    <div class="mb-4 border-b border-slate-800 pb-2 flex justify-between items-center">
-                        <h2 class="text-xs font-bold uppercase text-amber-400 tracking-wider">Cuadrante Semanal de Ocupación por Franja Horaria (07:00 - 22:00)</h2>
-                        <button onclick="limpiarTodaLaAgenda()" class="text-red-400 text-xs bg-red-950/20 border border-red-900/40 px-2 py-1 rounded">Limpiar Agenda</button>
-                    </div>
                     <table class="w-full text-left text-xs border-collapse min-w-[950px]">
                         <thead>
                             <tr class="border-b border-slate-800 text-slate-400 font-bold bg-slate-950">
@@ -304,25 +307,29 @@
                 </div>
             </section>
 
-            <section id="view-historico" class="hidden text-xs">
-                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 text-center text-slate-400">
-                    Historial consolidado disponible exclusivamente para consultas de cierre del equipo de dirección.
-                </div>
+            <section id="view-historico" class="hidden text-xs text-center text-slate-500">
+                Historial operativo reservado para cierres fiscales trimestrales de dirección.
             </section>
         </main>
     </div>
 
     <script>
-        const ADMIN_CREDENTIALS = {
-            "fran": "bs2026admin", "soraya": "bs2026soraya", "bea": "bs2026bea"
-        };
+        const ADMIN_CREDENTIALS = { "fran": "bs2026admin", "soraya": "bs2026soraya", "bea": "bs2026bea" };
 
-        // TARIFAS MATRICIALES OFICIALES 2026 DESGLOSADAS
         const TARIFAS_BASE_HORA = {
             "ind": { "1": 30.00, "2": 26.25, "3": 25.00, "4": 23.75, "5": 22.50 },
             "par": { "1": 22.50, "2": 20.00, "3": 17.50, "4": 16.87, "5": 15.00 },
             "tri": { "1": 17.50, "2": 15.00, "3": 12.50, "4": 10.62, "5": 10.00 },
             "red": { "1": 11.25, "2": 10.00, "3": 9.16,  "4": 8.12,  "5": 7.50 }
+        };
+
+        const PALETA_COLORES_EXCLUSIVOS = {
+            "azul": "bg-blue-950 border-blue-600 text-blue-200",
+            "purpura": "bg-purple-950 border-purple-600 text-purple-200",
+            "cian": "bg-cyan-950 border-cyan-600 text-cyan-200",
+            "violeta": "bg-violet-950 border-violet-600 text-violet-200",
+            "oro": "bg-yellow-950 border-amber-600 text-amber-200",
+            "fucsia": "bg-fuchsia-950 border-fuchsia-600 text-fuchsia-200"
         };
 
         const HORARIOS_COMPLETOS = ["07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00"];
@@ -331,22 +338,6 @@
         let centrosDeportivos, entrenadoresPorCentro, agendaMatriz, historicoCierres, firmaAuditoria;
         let currentUser = null, currentRol = "pt"; 
         let idCentroSeleccionado = null, idPTSeleccionado = null;
-
-        // GENERADOR DE COLORES MATEMÁTICOS PARA DISTINGUIR GRUPOS
-        function generarColorGrupoHtml(str) {
-            if(!str) return 'bg-slate-950 border-slate-800 text-slate-300';
-            let hash = 0;
-            for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); }
-            const paleta = [
-                'bg-blue-950/90 border-blue-600/70 text-blue-200',
-                'bg-purple-950/90 border-purple-600/70 text-purple-200',
-                'bg-cyan-950/90 border-cyan-600/70 text-cyan-200',
-                'bg-teal-950/90 border-teal-600/70 text-teal-200',
-                'bg-fuchsia-950/90 border-fuchsia-600/70 text-fuchsia-200',
-                'bg-emerald-950/90 border-emerald-600/70 text-emerald-200'
-            ];
-            return paleta[Math.abs(hash) % paleta.length];
-        }
 
         function checkUrlAndLoadData() {
             const params = new URLSearchParams(window.location.search);
@@ -405,11 +396,9 @@
 
             if (currentRol === "pt") {
                 document.getElementById('btn-tab-finanzas').classList.add('hidden');
-                document.getElementById('btn-tab-historico').classList.add('hidden');
                 switchTab('agenda');
             } else {
                 document.getElementById('btn-tab-finanzas').classList.remove('hidden');
-                document.getElementById('btn-tab-historico').classList.remove('hidden');
                 switchTab('finanzas');
             }
             renderCentros(); recalcularCuadroMandoGlobal();
@@ -421,37 +410,28 @@
             const pack = { centros: centrosDeportivos, pts: entrenadoresPorCentro, agenda: agendaMatriz, historico: historicoCierres, firma: firmaAuditoria };
             const enc = btoa(encodeURIComponent(JSON.stringify(pack)));
             const url = window.location.origin + window.location.pathname + "?data=" + enc;
-            navigator.clipboard.writeText(url).then(() => { alert("Ecosistema v8.0 Sincronizado Completamente."); });
+            navigator.clipboard.writeText(url).then(() => { alert("Ecosistema v8.5 Sincronizado."); });
         }
 
         function switchTab(tab) {
             document.getElementById('view-finanzas').className = tab === 'finanzas' ? 'space-y-6' : 'hidden';
             document.getElementById('view-agenda').className = tab === 'agenda' ? 'space-y-6' : 'hidden';
-            document.getElementById('view-historico').className = tab === 'historico' ? 'space-y-6' : 'hidden';
             
             document.getElementById('btn-tab-finanzas').className = tab === 'finanzas' ? "px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950" : "px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 bg-slate-900/50 border border-slate-800";
             document.getElementById('btn-tab-agenda').className = tab === 'agenda' ? "px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950 shadow" : "px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 bg-slate-900/50 border border-slate-800";
             
-            if(tab === 'agenda') { inyectarSelectoresAgenda(); renderCuadranteAgendaCompleto(); }
+            if(tab === 'agenda') { inyectarSelectoresAgenda(); alternarCamposAgendaCondicionales(); renderCuadranteAgendaCompleto(); }
         }
 
-        // --- SECCIÓN DE FINANZAS CORE ---
-        function obtenerFacturacionSede(cId) {
-            let total = 0;
-            Object.values(entrenadoresPorCentro).forEach(p => { if(p.centroId === cId) total += (p.clientes * p.sesionesMedias * p.precioSesion); });
-            return total;
-        }
-
+        // --- CORE CÁLCULOS LIQUIDACIÓN (CORREGIDO Y SUMADO ACUMULATIVO) ---
         function renderCentros() {
             const container = document.getElementById('center-selector-list'); container.innerHTML = '';
             Object.keys(centrosDeportivos).forEach(key => {
                 const center = centrosDeportivos[key];
-                const fSede = obtenerFacturacionSede(key);
                 const btn = document.createElement('div');
                 btn.className = `p-3 rounded-lg text-xs font-bold border cursor-pointer flex justify-between items-center transition-all ${idCentroSeleccionado === key ? 'border-amber-500 text-amber-400 bg-amber-500/5' : 'border-slate-800 text-slate-400 bg-slate-950'}`;
                 btn.onclick = () => { idCentroSeleccionado = key; idPTSeleccionado = null; renderCentros(); renderEntrenadoresDelCentro(); abrirCentro(key); };
-                btn.innerHTML = `<span>${center.nombre}</span><span class="font-mono text-emerald-400">${fSede.toLocaleString()} €</span>`;
-                container.appendChild(btn);
+                btn.innerHTML = `<span>${center.nombre}</span>`; container.appendChild(btn);
             });
         }
 
@@ -469,12 +449,11 @@
             centrosDeportivos[idCentroSeleccionado].nombre = document.getElementById('input-center-name').value;
             centrosDeportivos[idCentroSeleccionado].canonFijo = parseFloat(document.getElementById('input-center-canon-fijo').value) || 0;
             centrosDeportivos[idCentroSeleccionado].canonPt = parseFloat(document.getElementById('input-center-canon-pt').value) || 0;
-            firmaAuditoria = currentUser; saveToLocal(); renderCentros(); recalcularCuadroMandoGlobal();
+            firmaAuditoria = currentUser; saveToLocal(); recalcularCuadroMandoGlobal();
         }
 
         function agregarCentro() {
-            const id = "c-" + Date.now();
-            centrosDeportivos[id] = { id: id, nombre: "Sede Nueva Añadida", canonFijo: 300, canonPt: 200 };
+            const id = "c-" + Date.now(); centrosDeportivos[id] = { id: id, nombre: "Sede Añadida", canonFijo: 300, canonPt: 200 };
             saveToLocal(); renderCentros();
         }
 
@@ -506,11 +485,6 @@
             calcularTramosEnTiempoReal();
         }
 
-        function actualizarNombreEnVivo() {
-            if (!idPTSeleccionado) return;
-            entrenadoresPorCentro[idPTSeleccionado].nombre = document.getElementById('input-nombre-pt').value;
-        }
-
         function calcularTramosEnTiempoReal() {
             if(!idPTSeleccionado) return;
             const clientes = parseInt(document.getElementById('input-clientes').value) || 0;
@@ -522,16 +496,16 @@
             const F = clientes * sesiones * precio;
             let bs = 0, pt1 = 0, bs1 = 0, pt2 = 0, bs2 = 0, pt3 = 0, bs3 = 0, pt4 = 0, bs4 = 0;
 
+            // MODELADO MARGINAL FIJADO - EXPANSIÓN SIN ERRORES (Muestra obligatoria de tramos)
+            let rem = F;
+            let f1 = Math.min(rem, 1400); pt1 = f1 * 0.5; bs1 = f1 * 0.5; rem -= f1;
+            let f2 = Math.min(rem, 500);  pt2 = f2 * 0.6; bs2 = f2 * 0.4; rem -= f2;
+            let f3 = Math.min(rem, 500);  pt3 = f3 * 0.7; bs3 = f3 * 0.3; rem -= f3;
+            if(rem > 0) { pt4 = rem * 0.8; bs4 = rem * 0.2; }
+
             if(pacto) {
                 bs = 500; if (F > 500) bs += Math.floor((F - 500) / 500) * 100;
-                bs1 = bs;
             } else {
-                // RESTAURACIÓN INTEGRAL DE LOS 4 TRAMOS MARGINALES ORIGINALES DE TU IMAGEN image_73cebe.jpg
-                let rem = F;
-                let fT1 = Math.min(rem, 1400); pt1 = fT1 * 0.5; bs1 = fT1 * 0.5; rem -= fT1;
-                let fT2 = Math.min(rem, 500);  pt2 = fT2 * 0.6; bs2 = fT2 * 0.4; rem -= fT2;
-                let fT3 = Math.min(rem, 500);  pt3 = fT3 * 0.7; bs3 = fT3 * 0.3; rem -= fT3;
-                if(rem > 0) { pt4 = rem * 0.8; bs4 = rem * 0.2; }
                 bs = bs1 + bs2 + bs3 + bs4;
             }
 
@@ -542,12 +516,13 @@
             document.getElementById('lbl-t2-val').innerText = `PT: ${pt2.toFixed(2)} € | BS: ${bs2.toFixed(2)} €`;
             document.getElementById('lbl-t3-val').innerText = `PT: ${pt3.toFixed(2)} € | BS: ${bs3.toFixed(2)} €`;
             document.getElementById('lbl-t4-val').innerText = `PT: ${pt4.toFixed(2)} € | BS: ${bs4.toFixed(2)} €`;
+            
             document.getElementById('calc-fact-bruta').innerText = `${F.toFixed(2)} €`;
             document.getElementById('calc-tramo-base').innerText = `${(bs1+bs2+bs3+bs4).toFixed(2)} €`;
             document.getElementById('calc-tramo-excedente').innerText = `${(F - (bs1+bs2+bs3+bs4)).toFixed(2)} €`;
             document.getElementById('calc-aporte-clientes').innerText = `${totalVariableAdicional.toFixed(2)} €`;
             
-            document.getElementById('lbl-total-aporte-bs').innerText = `PT: ${(F - bs).toFixed(2)} € | BS: ${bs.toFixed(2)} €`;
+            document.getElementById('lbl-total-aporte-bs').innerText = `PT Net: ${(F - bs).toFixed(2)} € | BS Net: ${bs.toFixed(2)} €`;
         }
 
         function guardarRegistroPT() {
@@ -561,7 +536,7 @@
             p.pactoEspecial = document.getElementById('chk-pacto-especial').checked;
             p.aporteIndividualCliente = parseFloat(document.getElementById('input-pt-aporte-individual').value) || 0;
 
-            firmaAuditoria = currentUser; saveToLocal(); renderCentros(); renderEntrenadoresDelCentro(); recalcularCuadroMandoGlobal();
+            firmaAuditoria = currentUser; saveToLocal(); renderEntrenadoresDelCentro(); recalcularCuadroMandoGlobal();
             alert("Sincronización de ficha consolidada.");
         }
 
@@ -574,19 +549,24 @@
 
         function recalcularCuadroMandoGlobal() {
             let totalF = 0, totalPT = 0, totalBS = 0;
+            
+            // BUCLE ACUMULATIVO CORREGIDO PARA ARQUEO GENERAL DE PLATAFORMA
             Object.values(entrenadoresPorCentro).forEach(p => {
                 const F = p.clientes * p.sesionesMedias * p.precioSesion;
                 let bs = 0;
+                let rem = F;
+                let bs1 = Math.min(rem, 1400) * 0.5; rem -= Math.min(rem, 1400);
+                let bs2 = Math.min(rem, 500) * 0.4;  rem -= Math.min(rem, 500);
+                let bs3 = Math.min(rem, 500) * 0.3;  rem -= Math.min(rem, 500);
+                let bs4 = rem > 0 ? rem * 0.2 : 0;
+
                 if(p.pactoEspecial) {
                     bs = 500; if(F > 500) bs += Math.floor((F - 500) / 500) * 100;
                 } else {
-                    let rem = F;
-                    let f1 = Math.min(rem, 1400); bs += f1 * 0.5; rem -= f1;
-                    let f2 = Math.min(rem, 500);  bs += f2 * 0.4; rem -= f2;
-                    let f3 = Math.min(rem, 500);  bs += f3 * 0.3; rem -= f3;
-                    if(rem > 0) bs += rem * 0.2;
+                    bs = bs1 + bs2 + bs3 + bs4;
                 }
                 bs += (p.clientes * (p.aporteIndividualCliente || 0));
+                
                 totalF += F; totalBS += bs; totalPT += (F - bs);
             });
 
@@ -597,13 +577,13 @@
                 canonesGym += c.canonFijo + (num * c.canonPt);
             });
 
-            document.getElementById('kpi-fact-total').innerText = `${totalF.toLocaleString()} €`;
-            document.getElementById('kpi-pt-total').innerText = `${totalPT.toLocaleString()} €`;
-            document.getElementById('kpi-bs-total').innerText = `${(totalBS - canonesGym).toLocaleString()} €`;
+            document.getElementById('kpi-fact-total').innerText = `${totalF.toLocaleString('es-ES')} €`;
+            document.getElementById('kpi-pt-total').innerText = `${totalPT.toLocaleString('es-ES')} €`;
+            document.getElementById('kpi-bs-total').innerText = `${(totalBS - canonesGym).toLocaleString('es-ES')} €`;
             document.getElementById('kpi-auditoria-firma').innerText = firmaAuditoria;
         }
 
-        // --- CONTROLADORES DE LA AGENDA DE GRUPOS ---
+        // --- SISTEMA AGENDA INTELIGENTE CONDICIONAL ---
         function inyectarSelectoresAgenda() {
             const hSel = document.getElementById('select-agenda-hora'); hSel.innerHTML = '';
             HORARIOS_COMPLETOS.forEach(h => { hSel.innerHTML += `<option value="${h}">${h}</option>`; });
@@ -611,6 +591,28 @@
             const cSel = document.getElementById('select-agenda-centro'); cSel.innerHTML = '';
             Object.keys(centrosDeportivos).forEach(id => { cSel.innerHTML += `<option value="${id}">${centrosDeportivos[id].nombre}</option>`; });
             actualizarSelectEntrenadoresAgenda();
+        }
+
+        function alternarCamposAgendaCondicionales() {
+            const mod = document.getElementById('select-agenda-modalidad').value;
+            const wrapperGrupoId = document.getElementById('wrapper-grupo-id');
+            const wrapperNumPersonas = document.getElementById('wrapper-num-personas');
+            const wrapperSelectorColor = document.getElementById('wrapper-selector-color');
+            const lblNombres = document.getElementById('lbl-nombres-dinamico');
+
+            if (mod === "ind") {
+                wrapperGrupoId.classList.add('hidden');
+                wrapperNumPersonas.classList.add('hidden');
+                wrapperSelectorColor.classList.add('hidden');
+                lblNombres.innerText = "Nombre del Atleta Individual";
+                document.getElementById('input-agenda-num-personas').value = 1;
+            } else {
+                wrapperGrupoId.classList.remove('hidden');
+                wrapperNumPersonas.classList.remove('hidden');
+                wrapperSelectorColor.classList.remove('hidden');
+                lblNombres.innerText = "Nombres de los Integrantes (Separados por comas)";
+            }
+            calcularPrecioAgendaDinámico();
         }
 
         function actualizarSelectEntrenadoresAgenda() {
@@ -629,7 +631,6 @@
             const frec = document.getElementById('select-agenda-frecuencia').value;
             const numPersonas = parseInt(document.getElementById('input-agenda-num-personas').value) || 1;
             
-            // Lógica corregida: La tarifa base por hora se multiplica por la cantidad real de integrantes
             const tarifaBasePersona = TARIFAS_BASE_HORA[mod][frec] || 0;
             const rentabilidadHoraTotal = tarifaBasePersona * numPersonas;
             
@@ -645,31 +646,32 @@
             const mod = document.getElementById('select-agenda-modalidad').value;
             const frec = document.getElementById('select-agenda-frecuencia').value;
             
-            const grupoId = document.getElementById('input-agenda-grupo').value.trim() || "Grupo General";
-            const listaNombres = document.getElementById('input-agenda-nombres').value.trim() || "Atletas";
+            const grupoId = mod === 'ind' ? 'Clase Individual' : document.getElementById('input-agenda-grupo').value.trim();
+            const listaNombres = document.getElementById('input-agenda-nombres').value.trim() || "Atleta";
             const numPersonas = parseInt(document.getElementById('input-agenda-num-personas').value) || 1;
+            const colorElegido = mod === 'ind' ? 'ind_color' : document.getElementById('select-agenda-color').value;
 
             if(!pt) return;
 
             const celdaId = `${dia}_${hora}`;
             if(!agendaMatriz[celdaId]) agendaMatriz[celdaId] = [];
 
-            if(agendaMatriz[celdaId].find(s => s.pt === pt)) { alert("Este entrenador ya está ocupado en este tramo horario."); return; }
+            if(agendaMatriz[celdaId].find(s => s.pt === pt)) { alert("Conflicto: El PT ya está ocupado a esta hora."); return; }
 
             const tarifaBasePersona = TARIFAS_BASE_HORA[mod][frec] || 0;
             const valorTotalHora = tarifaBasePersona * numPersonas;
 
             agendaMatriz[celdaId].push({
-                centro: cText, pt: pt, grupo: grupoId, nombres: listaNombres, num: numPersonas,
-                tarifa: { valor: valorTotalHora, desc: `${mod.toUpperCase()} - ${frec}d/sem` }
+                centro: cText, pt: pt, grupo: grupoId, nombres: listaNombres, num: numPersonas, colorKey: colorElegido,
+                tarifa: { valor: valorTotalHora, desc: `${mod.toUpperCase()} (${frec}d/sem)` }
             });
             saveToLocal(); renderCuadranteAgendaCompleto();
         }
 
-        function borrarSesionAgenda(celdaId, index) {
+        function borrarSesion(celdaId, index) {
             const s = agendaMatriz[celdaId][index];
             if (currentRol === "pt" && s.pt !== currentUser) return;
-            if (confirm("¿Retirar esta sesión planificada?")) {
+            if (confirm("¿Retirar bloque?")) {
                 agendaMatriz[celdaId].splice(index, 1);
                 if(agendaMatriz[celdaId].length === 0) delete agendaMatriz[celdaId];
                 saveToLocal(); renderCuadranteAgendaCompleto();
@@ -677,7 +679,7 @@
         }
 
         function limpiarTodaLaAgenda() {
-            if(confirm("¿Vaciar por completo la parrilla de horarios?")) { agendaMatriz = {}; saveToLocal(); renderCuadranteAgendaCompleto(); }
+            if(confirm("¿Vaciar todo el cuadrante?")) { agendaMatriz = {}; saveToLocal(); renderCuadranteAgendaCompleto(); }
         }
 
         function renderCuadranteAgendaCompleto() {
@@ -699,14 +701,16 @@
                                 return;
                             }
                             totalS++; totalF += s.tarifa.valor;
-                            const colorClase = generarColorGrupoHtml(s.grupo);
+                            
+                            const colorClase = s.colorKey === 'ind_color' ? 'bg-slate-900 border-slate-700 text-slate-200' : (PALETA_COLORES_EXCLUSIVOS[s.colorKey] || 'bg-slate-950');
+                            
                             html += `
                                 <div class="${colorClase} border p-2 rounded relative group shadow space-y-0.5">
-                                    <button onclick="borrarSesionAgenda('${celdaId}', ${idx})" class="absolute top-0.5 right-1 text-red-500 text-[9px] font-bold opacity-0 group-hover:opacity-100">[X]</button>
+                                    <button onclick="borrarSesion('${celdaId}', ${idx})" class="absolute top-0.5 right-1 text-red-500 text-[9px] font-bold opacity-0 group-hover:opacity-100">[X]</button>
                                     <div class="text-[9px] font-black uppercase text-amber-400 leading-none">${s.pt}</div>
                                     <div class="text-[11px] font-bold truncate text-white leading-tight">${s.grupo}</div>
-                                    <div class="text-[10px] text-slate-300 truncate italic">${s.nombres}</div>
-                                    <div class="text-[9px] opacity-70 leading-none">${s.tarifa.desc} (${s.num} Pax)</div>
+                                    <div class="text-[10px] opacity-90 truncate font-semibold text-slate-200">${s.nombres}</div>
+                                    <div class="text-[9px] opacity-70 leading-none">${s.tarifa.desc} [${s.num} Pax]</div>
                                     <div class="text-[10px] font-black text-emerald-400 mt-1">${s.tarifa.valor.toFixed(2)} €/h</div>
                                 </div>
                             `;
@@ -721,6 +725,7 @@
             document.getElementById('kpi-agenda-ratio').innerText = `${((totalS / (HORARIOS_COMPLETOS.length * DIAS_SEMANA.length)) * 100).toFixed(1)} %`;
         }
 
+        function congelarMesEnHistorico() {}
         function renderHistorico() {}
         window.onload = checkUrlAndLoadData;
     </script>
