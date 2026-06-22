@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BESOUL Suite - Acceso Restringido</title>
+    <title>BESOUL Suite - Enterprise Cloud v5.7</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -15,34 +15,8 @@
 </head>
 <body class="text-slate-100 min-h-screen flex flex-col">
 
-    <!-- PANTALLA DE LOGIN -->
-    <div id="login-screen" class="flex-1 flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-sm w-full space-y-6 shadow-2xl">
-            <div class="flex flex-col items-center bg-white p-3 rounded-xl border border-slate-700 shadow-md w-36 mx-auto">
-                <div class="text-amber-500 font-extrabold text-2xl tracking-tighter italic font-serif">besoul</div>
-                <div class="text-slate-950 font-black text-[10px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
-            </div>
-            <div class="text-center space-y-1">
-                <h2 class="text-sm font-bold uppercase tracking-wider text-amber-400">Control de Acceso</h2>
-                <p class="text-xs text-slate-400">Introduce tus credenciales corporativas corporativas de Expansión.</p>
-            </div>
-            <div class="space-y-4">
-                <div>
-                    <label class="text-[11px] text-slate-400 block mb-1">Usuario</label>
-                    <input type="text" id="login-user" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-white focus:border-amber-500 focus:outline-none" placeholder="admin">
-                </div>
-                <div>
-                    <label class="text-[11px] text-slate-400 block mb-1">Contraseña</label>
-                    <input type="password" id="login-pass" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-white focus:border-amber-500 focus:outline-none" placeholder="••••••••">
-                </div>
-                <button onclick="verificarAcceso()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2.5 rounded-lg transition uppercase tracking-wider">Entrar al Sistema</button>
-                <div id="login-error" class="text-xs text-red-400 text-center hidden font-medium">⚠️ Credenciales incorrectas. Inténtalo de nuevo.</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- CONTENIDO PRINCIPAL DE LA SUITE (OCULTO POR DEFECTECTO) -->
-    <div id="app-content" class="hidden flex-1 flex flex-col">
+    <div id="app-content" class="flex-1 flex flex-col">
+        <!-- ENCABEZADO -->
         <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
             <div class="flex items-center gap-4">
                 <div class="flex flex-col items-center bg-white p-2 rounded-xl border border-slate-700 shadow-md w-32">
@@ -50,25 +24,31 @@
                     <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
                 </div>
                 <div>
-                    <h1 class="text-lg font-extrabold text-white tracking-tight">BESOUL Suite <span class="text-amber-500 font-medium text-sm">v5.6 Secure Cloud</span></h1>
-                    <p class="text-xs text-slate-400">Control Multi-centro, gestión avanzada de cánones y aportes por volumen de clientes</p>
+                    <h1 class="text-lg font-extrabold text-white tracking-tight">BESOUL Suite <span class="text-amber-500 font-medium text-sm">v5.7 Real-Time Cloud</span></h1>
+                    <p class="text-xs text-slate-400">Control Multi-centro, gestión avanzada de cánones y sincronización por enlace sin coste</p>
                 </div>
             </div>
             <div class="flex items-center gap-3">
+                <!-- BOTÓN DE ENLACE DE SYNC COMPARTIDO -->
+                <button onclick="copiarEnlaceSincronizado()" class="px-4 py-2 text-xs font-bold rounded-lg bg-emerald-500 hover:bg-emerald-600 text-slate-950 shadow flex items-center gap-1 transition">
+                    🔗 Compartir / Ver en Móvil
+                </button>
                 <span id="live-clock" class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-950 text-amber-400 border border-slate-800 tracking-wider">
-                    CARGANDO RELOJ...
+                    CARGANDO...
                 </span>
-                <button onclick="cerrarSesion()" class="px-3 py-1.5 text-xs bg-red-950 hover:bg-red-900 text-red-400 border border-red-900/50 rounded-lg transition">Salir</button>
             </div>
         </header>
 
+        <!-- PESTAÑAS -->
         <div class="bg-slate-950 px-6 py-3 border-b border-slate-900 flex flex-wrap gap-2">
             <button id="btn-tab-directo" onclick="switchTab('directo')" class="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950 shadow">Panel en Directo (Mes Actual)</button>
             <button id="btn-tab-historico" onclick="switchTab('historico')" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white bg-slate-900/50 border border-slate-800">Histórico de Cierres Reales</button>
         </div>
 
+        <!-- CONTENIDO PRINCIPAL -->
         <main class="flex-1 p-6 space-y-6">
             <section id="view-directo" class="space-y-6">
+                <!-- DASHBOARD GLOBAL -->
                 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
                         <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Facturación Bruta Red</h3>
@@ -96,6 +76,7 @@
                     </div>
                 </div>
 
+                <!-- SECCIÓN CENTROS -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[240px]">
                         <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
@@ -130,6 +111,7 @@
                     </div>
                 </div>
 
+                <!-- SECCIÓN ENTRENADORES -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[640px]">
                         <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
@@ -166,7 +148,7 @@
                                     </div>
                                     <div>
                                         <label class="text-[11px] text-amber-400 block mb-1 font-bold">Aporte / Cliente (€)</label>
-                                        <input type="number" id="input-pt-aporte-individual" class="w-full bg-slate-950 border border-amber-500/30 rounded p-2 text-xs text-amber-400 font-black focus:border-amber-500 focus:outline-none" oninput="calcularTramosEnTiempoReal()">
+                                        <input type="number" id="input-pt-aporte-individual" class="w-full bg-slate-950 border border-amber-500/30 rounded p-2 text-xs text-amber-400 font-black" oninput="calcularTramosEnTiempoReal()">
                                     </div>
                                 </div>
 
@@ -230,59 +212,71 @@
     </div>
 
     <script>
-        // CONFIGURACIÓN DE SEGURIDAD EMPRESARIAL CORREGIDA
-        const CREDENCIALES_VALIDAS = {
-            usuario: "besoul",       // Puedes cambiar tu usuario aquí
-            contrasena: "malaga2026"  // Puedes cambiar tu contraseña aquí
-        };
-
-        function verificarAcceso() {
-            const user = document.getElementById('login-user').value;
-            const pass = document.getElementById('login-pass').value;
-            const errorLabel = document.getElementById('login-error');
-
-            if (user === CREDENCIALES_VALIDAS.usuario && pass === CREDENCIALES_VALIDAS.contrasena) {
-                sessionStorage.setItem('besoul_logged_in', 'true');
-                errorLabel.classList.add('hidden');
-                initApp();
-            } else {
-                errorLabel.classList.remove('hidden');
-            }
-        }
-
-        function cerrarSesion() {
-            sessionStorage.removeItem('besoul_logged_in');
-            document.getElementById('app-content').classList.add('hidden');
-            document.getElementById('login-screen').classList.remove('hidden');
-        }
-
-        function checkSessionOnLoad() {
-            if (sessionStorage.getItem('besoul_logged_in') === 'true') {
-                initApp();
-            }
-        }
-
-        // LÓGICA DE INICIALIZACIÓN DE LA APLICACIÓN
         let centrosDeportivos, entrenadoresPorCentro, historicoCierres;
         let idCentroSeleccionado = null;
         let idPTSeleccionado = null;
 
-        function initApp() {
-            document.getElementById('login-screen').classList.add('hidden');
-            document.getElementById('app-content').classList.remove('hidden');
+        // MOTOR DE SINCRONIZACIÓN AUTOMÁTICA POR URL
+        function checkUrlAndLoadData() {
+            const params = new URLSearchParams(window.location.search);
+            const cloudData = params.get('data');
 
+            if (cloudData) {
+                try {
+                    const decrypted = JSON.parse(decodeURIComponent(atob(cloudData)));
+                    centrosDeportivos = decrypted.centros;
+                    entrenadoresPorCentro = decrypted.pts;
+                    historicoCierres = decrypted.historico;
+                    
+                    // Guardar localmente la última versión recibida
+                    localStorage.setItem('besoul_v5_centros', JSON.stringify(centrosDeportivos));
+                    localStorage.setItem('besoul_v5_pts', JSON.stringify(entrenadoresPorCentro));
+                    localStorage.setItem('besoul_v5_history', JSON.stringify(historicoCierres));
+                } catch (e) {
+                    loadFromLocalStorage();
+                }
+            } else {
+                loadFromLocalStorage();
+            }
+            initApp();
+        }
+
+        function loadFromLocalStorage() {
             centrosDeportivos = JSON.parse(localStorage.getItem('besoul_v5_centros')) || {
                 "c1": { id: "c1", nombre: "Alfa Prime Málaga", canonFijo: 300, canonPt: 200 },
-                "c2": { id: "c2", nombre: "Sede Sevilla (Proyecto)", canonFijo: 400, canonPt: 250 }
+                "c2": { id: "c2", nombre: "Lagunillas", canonFijo: 1000, canonPt: 0 },
+                "c3": { id: "c3", nombre: "Inacua", canonFijo: 1000, canonPt: 200 },
+                "c4": { id: "c4", nombre: "Fantasy", canonFijo: 300, canonPt: 200 }
             };
 
             entrenadoresPorCentro = JSON.parse(localStorage.getItem('besoul_v5_pts')) || {
-                "pt-1": { id: "pt-1", centroId: "c1", nombre: "Carmen", clientes: 20, sesionesMedias: 8, precioSesion: 18, pactoEspecial: true, aporteIndividualCliente: 1 },
-                "pt-2": { id: "pt-2", centroId: "c1", nombre: "Juan Carlos", clientes: 15, sesionesMedias: 8, precioSesion: 18, pactoEspecial: false, aporteIndividualCliente: 1 }
+                "pt-1": { id: "pt-1", centroId: "c1", nombre: "Carmen", clientes: 25, sesionesMedias: 8, precioSesion: 30, pactoEspecial: true, aporteIndividualCliente: 1 },
+                "pt-2": { id: "pt-2", centroId: "c1", nombre: "Juan Carlos", clientes: 20, sesionesMedias: 8, precioSesion: 30, pactoEspecial: false, aporteIndividualCliente: 1 },
+                "pt-3": { id: "pt-3", centroId: "c2", nombre: "Lillo", clientes: 60, sesionesMedias: 8, precioSesion: 30, pactoEspecial: false, aporteIndividualCliente: 1 },
+                "pt-4": { id: "pt-4", centroId: "c2", nombre: "Rubén", clientes: 50, sesionesMedias: 8, precioSesion: 30, pactoEspecial: false, aporteIndividualCliente: 1 },
+                "pt-5": { id: "pt-5", centroId: "c4", nombre: "Miguel", clientes: 25, sesionesMedias: 6, precioSesion: 25, pactoEspecial: false, aporteIndividualCliente: 1 }
             };
 
             historicoCierres = JSON.parse(localStorage.getItem('besoul_v5_history')) || [];
+        }
 
+        function copiarEnlaceSincronizado() {
+            const paqueteData = {
+                centros: centrosDeportivos,
+                pts: entrenadoresPorCentro,
+                historico: historicoCierres
+            };
+            const stringificado = btoa(encodeURIComponent(JSON.stringify(paqueteData)));
+            const urlCompleta = window.location.origin + window.location.pathname + "?data=" + stringificado;
+
+            navigator.clipboard.writeText(urlCompleta).then(() => {
+                alert("¡Enlace de sincronización copiado! Pégatelo en tu WhatsApp y ábrelo en tu móvil. Tendrás los datos exactos del PC en directo.");
+            }).catch(() => {
+                prompt("Copia este enlace manualmente para abrirlo en tu móvil:", urlCompleta);
+            });
+        }
+
+        function initApp() {
             runClock();
             renderCentros();
             recalcularCuadroMandoGlobal();
@@ -292,7 +286,7 @@
             const el = document.getElementById('live-clock');
             const refresh = () => {
                 const f = new Date();
-                el.innerText = f.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }).toUpperCase();
+                el.innerText = f.toLocaleDateString('es-ES', { weekday: 'long', hour: '2-digit', minute: '2-digit' }).toUpperCase();
             };
             setInterval(refresh, 60000);
             refresh();
@@ -368,7 +362,6 @@
                 idCentroSeleccionado = null;
                 document.getElementById('center-inputs-area').classList.add('hidden');
                 document.getElementById('btn-eliminar-centro').classList.add('hidden');
-                document.getElementById('center-profile-title').innerText = "Selecciona un centro";
                 renderCentros();
                 renderEntrenadoresDelCentro();
                 recalcularCuadroMandoGlobal();
@@ -445,6 +438,7 @@
 
             if (esPactoEspecialCarmen) {
                 document.getElementById('lbl-titulo-tramos').innerText = "Desglose Especial (Pacto Fijo Alternativo)";
+                
                 aporteBrutoBS = 500;
                 let exceso = F > 500 ? F - 500 : 0;
                 let bloquesExtras = Math.floor(exceso / 500);
@@ -452,23 +446,24 @@
                 aporteBrutoBS += tramosExtrasBS;
 
                 containerFilas.innerHTML += `
-                    <div class="flex justify-between text-xs pb-1">
+                    <div class="flex justify-between text-xs border-b border-slate-800/40 pb-1">
                         <span class="text-slate-400">Canon Base Fijo Inicial Reconocido</span>
                         <span class="font-mono text-slate-300">PT: 0.00 € | BS: 500.00 €</span>
                     </div>
-                    <div class="flex justify-between text-xs pb-1">
-                        <span class="text-slate-400">Exceso Marginal por Volumen (${bloquesExtras} bloques)</span>
+                    <div class="flex justify-between text-xs border-b border-slate-800/40 pb-1">
+                        <span class="text-slate-400">Exceso Marginal por Volumen (${bloquesExtras} bloques de 500€)</span>
                         <span class="font-mono text-slate-300">PT: ${(exceso - tramosExtrasBS).toFixed(2)} € | BS: ${tramosExtrasBS.toFixed(2)} €</span>
                     </div>
                 `;
             } else {
                 document.getElementById('lbl-titulo-tramos').innerText = "Reparto Progresivo por Tramos (Cálculo Marginal)";
-                let pt1 = F * 0.50, bs1 = F * 0.50;
-                let fT1 = Math.min(F, 1400); pt1 = fT1 * 0.50; bs1 = fT1 * 0.50;
-                let fT2 = F > 1400 ? Math.min(F, 1900) - 1400 : 0; let pt2 = fT2 * 0.60; let bs2 = fT2 * 0.40;
+                
+                let pt1 = 0, bs1 = 0, pt2 = 0, bs2 = 0, pt3_total = 0, bs3 = 0;
 
-                let umbralExactoTecho = 1900 + (100 / 0.30);
-                let bs3 = 0, pt3_total = 0;
+                let fT1 = Math.min(F, 1400); pt1 = fT1 * 0.50; bs1 = fT1 * 0.50;
+                let fT2 = F > 1400 ? Math.min(F, 1900) - 1400 : 0; pt2 = fT2 * 0.60; bs2 = fT2 * 0.40;
+
+                let umbralExactoTecho = 1900 + (100 / 0.30); // 2233.33 €
 
                 if (F > 1900) {
                     let facturacionTotalTramo3 = Math.min(F, 2400) - 1900;
@@ -484,28 +479,45 @@
                 aporteBrutoBS = bs1 + bs2 + bs3;
 
                 containerFilas.innerHTML += `
-                    <div class="flex justify-between text-xs pb-1"><span class="text-slate-400">Tramo 1 (0-1.400€) | 50%/50%</span><span class="font-mono">${pt1.toFixed(2)} € | ${bs1.toFixed(2)} €</span></div>
-                    <div class="flex justify-between text-xs pb-1"><span class="text-slate-400">Tramo 2 (1.400-1.900€) | 60%/40%</span><span class="font-mono">${pt2.toFixed(2)} € | ${bs2.toFixed(2)} €</span></div>
-                    <div class="flex justify-between text-xs pb-1"><span class="text-slate-400">Tramo 3 (1.900-2.400€) | Ajuste Techo</span><span class="font-mono">${pt3_total.toFixed(2)} € | ${bs3.toFixed(2)} €</span></div>
+                    <div class="flex justify-between text-xs border-b border-slate-800/30 pb-1"><span class="text-slate-400">Tramo 1 (0 € a 1.400 €) | Reparto 50% / 50%</span><span class="font-mono">PT: ${pt1.toFixed(2)} € | BS: ${bs1.toFixed(2)} €</span></div>
+                    <div class="flex justify-between text-xs border-b border-slate-800/30 pb-1"><span class="text-slate-400">Tramo 2 (1.400 € a 1.900 €) | Reparto 60% / 40%</span><span class="font-mono">PT: ${pt2.toFixed(2)} € | BS: ${bs2.toFixed(2)} €</span></div>
+                    <div class="flex justify-between text-xs border-b border-slate-800/30 pb-1"><span class="text-slate-400">Tramo 3 (1.900 € a 2.400 €) | Ajuste de Techo Prorrateado</span><span class="font-mono">PT: ${pt3_total.toFixed(2)} € | BS: ${bs3.toFixed(2)} €</span></div>
                 `;
 
                 let facturacionExcesoTecho = F > umbralExactoTecho ? F - umbralExactoTecho : 0;
                 if (facturacionExcesoTecho > 0) {
                     let numBloquesExtras = Math.floor(facturacionExcesoTecho / 500);
                     for (let i = 1; i <= numBloquesExtras; i++) {
-                        containerFilas.innerHTML += `<div class="flex justify-between text-xs text-amber-400 font-medium"><span>Bloque Extra #${i} (+500€)</span><span class="font-mono">PT: 400.00 € | BS: 100.00 €</span></div>`;
+                        containerFilas.innerHTML += `
+                            <div class="flex justify-between text-xs border-b border-slate-800/30 pb-1 text-amber-400 font-medium">
+                                <span>Tramo Extra Bloque #${i} (+500 € Facturación)</span>
+                                <span class="font-mono">PT: 400.00 € | BS: 100.00 €</span>
+                            </div>
+                        `;
                         aporteBrutoBS += 100;
                     }
-                    let residuo = facturacionExcesoTecho % 500;
-                    if (residuo > 0) {
-                        containerFilas.innerHTML += `<div class="flex justify-between text-xs text-slate-400 italic"><span>Exceso Residual en Curso</span><span class="font-mono">PT: ${residuo.toFixed(2)} € | BS: 0.00 €</span></div>`;
+                    let residuoFacturacion = facturacionExcesoTecho % 500;
+                    if (residuoFacturacion > 0) {
+                        containerFilas.innerHTML += `
+                            <div class="flex justify-between text-xs border-b border-slate-800/30 pb-1 text-slate-400 italic">
+                                <span>Exceso Residual en Curso</span>
+                                <span class="font-mono text-slate-300">PT: ${residuoFacturacion.toFixed(2)} € | BS: 0.00 €</span>
+                            </div>
+                        `;
                     }
+                } else {
+                    containerFilas.innerHTML += `
+                        <div class="flex justify-between text-xs border-b border-slate-800/30 pb-1">
+                            <span class="text-slate-400">Tramo 4 (Facturación > 2.400 €) | Reparto 80% / 20%</span>
+                            <span class="font-mono text-slate-500">PT: 0.00 € | BS: 0.00 €</span>
+                        </div>
+                    `;
                 }
             }
 
             const totalRecaudadoPorPT = aporteBrutoBS + aporteClientesSede;
-            document.getElementById('lbl-fact-calculada-txt').innerText = `${F.toLocaleString('es-ES')} €`;
-            document.getElementById('lbl-aporte-clientes-txt').innerText = `${aporteClientesSede.toLocaleString('es-ES')} €`;
+            document.getElementById('lbl-fact-calculada-txt').innerText = `${F.toLocaleString('es-ES', {minimumFractionDigits: 2})} €`;
+            document.getElementById('lbl-aporte-clientes-txt').innerText = `${aporteClientesSede.toLocaleString('es-ES', {minimumFractionDigits: 2})} €`;
             document.getElementById('lbl-total-aporte-bs').innerText = `PT: ${(F - totalRecaudadoPorPT).toFixed(2)} € | BS: ${totalRecaudadoPorPT.toFixed(2)} €`;
         }
 
@@ -522,7 +534,7 @@
             localStorage.setItem('besoul_v5_pts', JSON.stringify(entrenadoresPorCentro));
             renderEntrenadoresDelCentro();
             recalcularCuadroMandoGlobal();
-            alert("Guardado en almacenamiento local.");
+            alert("Ficha técnica consolidada localmente.");
         }
 
         function agregarEntrenador() {
@@ -535,7 +547,7 @@
 
         function eliminarEntrenadorActivo() {
             if (!idPTSeleccionado) return;
-            if (confirm("¿Dar de baja?")) {
+            if (confirm("¿Dar de baja este entrenador?")) {
                 delete entrenadoresPorCentro[idPTSeleccionado];
                 localStorage.setItem('besoul_v5_pts', JSON.stringify(entrenadoresPorCentro));
                 idPTSeleccionado = null;
@@ -569,14 +581,17 @@
                     if (F > umbralTecho) aporteBrutoBS += Math.floor((F - umbralTecho) / 500) * 100;
                 }
 
-                redFactTotal += F; redBsAporteTotal += (aporteBrutoBS + aporteCli); redPtNetoTotal += (F - (aporteBrutoBS + aporteCli)); redClientesTotal += tr.clientes;
+                redFactTotal += F;
+                redBsAporteTotal += (aporteBrutoBS + aporteCli);
+                redPtNetoTotal += (F - (aporteBrutoBS + aporteCli));
+                redClientesTotal += tr.clientes;
             });
 
             let redCosteCanonesCentros = 0;
             Object.keys(centrosDeportivos).forEach(cId => {
                 const center = centrosDeportivos[cId];
-                const num = Object.values(entrenadoresPorCentro).filter(p => p.centroId === cId).length;
-                redCosteCanonesCentros += center.canonFijo + (num * center.canonPt);
+                const numeroPTsEnClub = Object.values(entrenadoresPorCentro).filter(p => p.centroId === cId).length;
+                redCosteCanonesCentros += center.canonFijo + (numeroPTsEnClub * center.canonPt);
             });
 
             document.getElementById('kpi-fact-total').innerText = `${redFactTotal.toLocaleString('es-ES')} €`;
@@ -587,8 +602,9 @@
         }
 
         function congelarMesEnHistorico() {
-            const mesAño = prompt("Introduce Periodo (Ej: Junio 2026):");
+            const mesAño = prompt("Introduce el nombre del periodo (Ej: Junio 2026):");
             if (!mesAño) return;
+
             historicoCierres.push({
                 id: Date.now(), periodo: mesAño,
                 fact: parseFloat(document.getElementById('kpi-fact-total').innerText.replace(/\./g, '')),
@@ -597,30 +613,40 @@
                 clientes: parseInt(document.getElementById('kpi-clientes-total').innerText)
             });
             localStorage.setItem('besoul_v5_history', JSON.stringify(historicoCierres));
-            alert("Periodo archivado.");
+            alert(`Cierre de ${mesAño} archivado con éxito.`);
         }
 
         function renderHistorico() {
-            const tbody = document.getElementById('tabla-historico-cuerpo'); tbody.innerHTML = '';
+            const tbody = document.getElementById('tabla-historico-cuerpo');
+            tbody.innerHTML = '';
             if (historicoCierres.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="py-4 text-center text-slate-500">Historial vacío.</td></tr>`; return;
+                tbody.innerHTML = `<tr><td colspan="6" class="py-4 text-center text-slate-500">No hay cierres archivados.</td></tr>`;
+                return;
             }
             historicoCierres.forEach(item => {
-                const tr = document.createElement('tr'); tr.className = "border-b border-slate-800/40";
-                tr.innerHTML = `<td class="py-3 px-4 font-bold">${item.periodo}</td><td class="py-3 px-4">${item.fact.toLocaleString()} €</td><td class="py-3 px-4">${item.pt.toLocaleString()} €</td><td class="py-3 px-4 text-emerald-400 font-bold">${item.bs.toLocaleString()} €</td><td class="py-3 px-4">${item.clientes}</td><td class="py-3 px-4"><button onclick="borrarFilaHistorico(${item.id})" class="text-red-500">Borrar</button></td>`;
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-slate-800/40 hover:bg-slate-900/40 transition";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-bold text-white">${item.periodo}</td>
+                    <td class="py-3 px-4 font-semibold">${item.fact.toLocaleString()} €</td>
+                    <td class="py-3 px-4 text-slate-400">${item.pt.toLocaleString()} €</td>
+                    <td class="py-3 px-4 text-emerald-400 font-bold">${item.bs.toLocaleString()} €</td>
+                    <td class="py-3 px-4 text-slate-400">${item.clientes} usuarios</td>
+                    <td class="py-3 px-4"><button onclick="borrarFilaHistorico(${item.id})" class="text-red-500 hover:underline">Borrar</button></td>
+                `;
                 tbody.appendChild(tr);
             });
         }
 
         function borrarFilaHistorico(id) {
-            if (confirm("¿Borrar permanentemente?")) {
+            if (confirm("¿Eliminar del historial?")) {
                 historicoCierres = historicoCierres.filter(item => item.id !== id);
                 localStorage.setItem('besoul_v5_history', JSON.stringify(historicoCierres));
                 renderHistorico();
             }
         }
 
-        window.onload = checkSessionOnLoad;
+        window.onload = checkUrlAndLoadData;
     </script>
 </body>
 </html>
