@@ -112,7 +112,7 @@
             <!-- COLUMNA CALENDARIO -->
             <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[720px]">
                 <div class="flex justify-between items-center border-b border-slate-800 pb-2 mb-3">
-                    <h2 class="text-xs font-bold uppercase text-slate-300 tracking-wider">Cuadrante Semanal · Lunes a Domingo</h2>
+                    <h2 class="text-xs font-bold uppercase text-slate-300 tracking-wider">Cuadrante Semanal · Lunes a Domingo · Clases de 45 min</h2>
                     <button onclick="guardarMesEnHistorico()" class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded">Respaldar Semana</button>
                 </div>
                 <div class="flex-1 overflow-auto">
@@ -1029,15 +1029,45 @@
             recalcularKPIs(); renderClientes(); renderAgenda();
         }
 
+        function formatoMinutosHorario(totalMinutos) {
+            const horas = Math.floor(totalMinutos / 60);
+            const minutos = totalMinutos % 60;
+            return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
+        }
+
+        function generarFranjasHorario45Min() {
+            const franjas = [];
+            const inicioMinutos = 6 * 60;
+            const finMinutos = 22 * 60;
+            const duracionClase = 45;
+
+            for (let minutos = inicioMinutos; minutos + duracionClase <= finMinutos; minutos += duracionClase) {
+                franjas.push({
+                    inicio: formatoMinutosHorario(minutos),
+                    fin: formatoMinutosHorario(minutos + duracionClase)
+                });
+            }
+            return franjas;
+        }
+
+        function etiquetaFranja45(inicio) {
+            const partes = String(inicio || '').split(':');
+            if (partes.length !== 2) return inicio || '---';
+            const minutosInicio = (parseInt(partes[0], 10) * 60) + parseInt(partes[1], 10);
+            if (Number.isNaN(minutosInicio)) return inicio || '---';
+            return `${inicio} - ${formatoMinutosHorario(minutosInicio + 45)}`;
+        }
+
         function renderAgenda() {
             const cuerpo = document.getElementById('cuerpo-agenda'); cuerpo.innerHTML = '';
-            const franjas = Array.from({length: 17}, (_, i) => `${String(i + 6).padStart(2, '0')}:00`);
+            const franjas = generarFranjasHorario45Min();
 
-            franjas.forEach(franja => {
+            franjas.forEach(bloque => {
+                const franja = bloque.inicio;
                 const tr = document.createElement('tr'); tr.className = "hover:bg-slate-900/10 border-b border-slate-800/40 h-14";
                 let tdH = document.createElement('td');
                 tdH.className = "p-2 font-bold text-slate-500 border border-slate-800 bg-slate-950/30 text-center text-[10px]";
-                tdH.innerText = franja; tr.appendChild(tdH);
+                tdH.innerHTML = `<span class="text-slate-300">${bloque.inicio}</span><br><span class="text-[9px] text-slate-600">${bloque.fin}</span>`; tr.appendChild(tdH);
 
                 for (let idxDia = 0; idxDia < 7; idxDia++) {
                     let fTurno = new Date(lunesActual); fTurno.setDate(fTurno.getDate() + idxDia);
@@ -1134,7 +1164,7 @@
         function abrirModalNota(clave, obj, rent) {
             celdaNotaSeleccionada = clave;
             document.getElementById('modal-nota').classList.remove('hidden');
-            document.getElementById('nota-info-franja').innerText = clave.split('_')[1];
+            document.getElementById('nota-info-franja').innerText = etiquetaFranja45(clave.split('_')[1]);
             document.getElementById('nota-info-asignado').innerText = obj.nombre;
             document.getElementById('nota-info-profit').innerText = `${rent.toFixed(2)} €`;
             document.getElementById('txt-nota-contenido').value = dbNotas[clave] || "";
