@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BESOUL - Scheduler & Profit Suite v4.0 Enterprise</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0B0F17; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen flex flex-col">
+
+    <!-- PORTAL DE ACCESO -->
+    <div id="auth-screen" class="flex-1 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md space-y-6 shadow-2xl">
+            <div class="flex flex-col items-center bg-white p-2 rounded-xl border border-slate-700 w-32 mx-auto">
+                <div class="text-amber-500 font-extrabold text-xl tracking-tighter italic font-serif">besoul</div>
+                <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
+            </div>
+            <div class="text-center">
+                <h2 class="text-base font-bold text-white tracking-tight">Suite v4.0 Escalable</h2>
+                <p class="text-xs text-slate-400 mt-1">Introduce tus credenciales de acceso</p>
+            </div>
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="text-slate-400 block mb-1">Usuario</label>
+                    <input type="text" id="login-user" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="fran, soraya, bea o entrenador">
+                </div>
+                <div>
+                    <label class="text-slate-400 block mb-1">Contraseña</label>
+                    <input type="password" id="login-pass" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="••••••••">
+                </div>
+                <button onclick="ejecutarLogin()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-lg transition uppercase tracking-wider mt-2">
+                    Acceder al Sistema
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ENTORNO OPERATIVO -->
+    <div id="app-content" class="hidden flex-1 flex flex-col">
+        <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-4">
+                <div class="flex flex-col items-center bg-white p-2 rounded-xl border border-slate-700 shadow-md w-32">
+                    <div class="text-amber-500 font-extrabold text-xl tracking-tighter italic font-serif">besoul</div>
+                    <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
+                </div>
+                <div>
+                    <h1 class="text-lg font-extrabold text-white tracking-tight">BESOUL Agenda <span class="text-amber-500 font-medium text-sm">v4.0 Multi-PT</span></h1>
+                    <p class="text-xs text-slate-400">Usuario activo: <span id="lbl-usuario-logeado" class="text-amber-400 font-bold uppercase">---</span> (<span id="lbl-rol" class="text-slate-300 italic">---</span>)</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="logout()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-400 border border-slate-800 hover:text-white transition">Salir</button>
+                <span id="live-clock" class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-950 text-amber-400 border border-slate-800 tracking-wider">CARGANDO...</span>
+            </div>
+        </header>
+
+        <!-- FILTROS Y KPIs -->
+        <div class="bg-slate-950 px-6 py-4 border-b border-slate-900 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+            <div class="flex flex-wrap gap-4 items-center text-xs">
+                <div id="admin-trainer-filter-block" class="hidden flex items-center gap-2">
+                    <label class="text-slate-400 font-bold">Auditar PT:</label>
+                    <select id="select-trainer-filter" onchange="cambiarEntrenadorVisto()" class="bg-slate-900 border border-slate-800 rounded p-1.5 text-white font-medium"></select>
+                    <button onclick="abrirModalNuevoTrainer()" class="bg-cyan-600 hover:bg-cyan-500 text-white px-2 py-1.5 rounded font-bold transition ml-2">+ Añadir PT</button>
+                </div>
+                <div class="bg-slate-900 p-1.5 rounded border border-slate-800 flex items-center gap-2">
+                    <button onclick="navegarSemana(-1)" class="bg-slate-950 border border-slate-800 hover:border-slate-700 px-2.5 py-1 rounded text-[11px] font-bold">◀ Ant.</button>
+                    <span id="lbl-rango-semana" class="font-mono text-[11px] text-amber-400 font-bold px-1">Cargando fecha...</span>
+                    <button onclick="navegarSemana(1)" class="bg-slate-950 border border-slate-800 hover:border-slate-700 px-2.5 py-1 rounded text-[11px] font-bold">Sig. ▶</button>
+                    <button onclick="irSemanaActual()" class="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-1 rounded text-[11px] font-bold ml-1">Hoy</button>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-xs">
+                <div class="bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">
+                    <span class="text-slate-400 text-[10px] uppercase font-bold block">Rentabilidad Media/Hora</span>
+                    <span id="kpi-rentabilidad-total" class="text-sm font-black text-emerald-400 font-mono">0.00 €/h</span>
+                </div>
+                <div class="bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">
+                    <span class="text-slate-400 text-[10px] uppercase font-bold block">Facturación Mes Cartera</span>
+                    <span id="kpi-facturacion-cartera" class="text-sm font-black text-white font-mono">0.00 €</span>
+                </div>
+                <div class="bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">
+                    <span class="text-slate-400 text-[10px] uppercase font-bold block">Atletas Activos Red</span>
+                    <span id="kpi-atletas-activos" class="text-sm font-black text-amber-400 font-mono">0</span>
+                </div>
+                <div class="bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">
+                    <span class="text-slate-400 text-[10px] uppercase font-bold block">Sesiones Agendadas</span>
+                    <span id="kpi-sesiones-semana" class="text-sm font-black text-cyan-400 font-mono">0</span>
+                </div>
+            </div>
+        </div>
+
+        <main class="flex-1 p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- COLUMNA CLIENTES -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[720px]">
+                <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
+                    <div class="flex gap-2">
+                        <button id="tab-ind" onclick="cambiarFichaTab('individual')" class="text-xs font-bold uppercase tracking-wider text-amber-400 border-b-2 border-amber-400 pb-1">Atletas</button>
+                        <button id="tab-grp" onclick="cambiarFichaTab('grupo')" class="text-xs font-bold uppercase tracking-wider text-slate-500 pb-1 ml-2">Grupos</button>
+                    </div>
+                    <button onclick="mostrarModalNuevoCliente()" class="bg-amber-500 text-slate-950 px-2.5 py-1 rounded font-bold text-[10px] hover:bg-amber-600 transition shadow">+ Alta Ficha</button>
+                </div>
+                <p class="text-[10px] text-slate-500 mb-2 italic">💡 Arrastra la ficha al calendario para agendar. Clica en "Editar" para modificar cuotas, teléfono o modalidad.</p>
+                <div id="lista-clientes-pt" class="flex-1 overflow-y-auto space-y-2 pr-1"></div>
+            </div>
+
+            <!-- COLUMNA CALENDARIO -->
+            <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[720px]">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2 mb-3">
+                    <h2 class="text-xs font-bold uppercase text-slate-300 tracking-wider">Cuadrante Semanal Horario Real</h2>
+                    <button onclick="guardarMesEnHistorico()" class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded hover:bg-emerald-500/20 transition">Respaldar Semana a Historial</button>
+                </div>
+                <div class="flex-1 overflow-auto">
+                    <table class="w-full text-left text-xs border-collapse border border-slate-800 table-fixed">
+                        <thead>
+                            <tr class="bg-slate-950 text-slate-400 font-bold uppercase border-b border-slate-800">
+                                <th class="p-2 border border-slate-800 w-24 text-center">Franja (45')</th>
+                                <th id="th-d1" class="p-2 border border-slate-800 text-center">Lunes</th>
+                                <th id="th-d2" class="p-2 border border-slate-800 text-center">Martes</th>
+                                <th id="th-d3" class="p-2 border border-slate-800 text-center">Miércoles</th>
+                                <th id="th-d4" class="p-2 border border-slate-800 text-center">Jueves</th>
+                                <th id="th-d5" class="p-2 border border-slate-800 text-center">Viernes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cuerpo-agenda" class="divide-y divide-slate-800 text-slate-300"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL POPUP ALTA / EDICIÓN FICHA -->
+    <div id="modal-cliente" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md space-y-4">
+            <h3 class="text-sm font-bold text-amber-400 uppercase tracking-wider" id="modal-title">Nueva Ficha de Entrada</h3>
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="text-slate-400 block mb-1">Nombre Atleta / Identificador Grupo</label>
+                    <input type="text" id="cust-name" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="Ej: Pedro Martínez">
+                </div>
+                <div>
+                    <label class="text-slate-400 block mb-1">Teléfono de Contacto (Opcional)</label>
+                    <input type="tel" id="cust-phone" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="Ej: 600 123 456">
+                </div>
+                <div id="group-members-field" class="hidden">
+                    <label class="text-slate-400 block mb-1">Integrantes (Separados por comas)</label>
+                    <textarea id="cust-members" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white h-12 resize-none" placeholder="Ej: Juan, Ana, Carlos, María"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-slate-400 block mb-1">Modalidad de Sesión</label>
+                        <select id="cust-mod" onchange="autoCalcularTarifa()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+                            <option value="Individual Plan">Individual (Plan Mensual)</option>
+                            <option value="Individual Suelta">Individual (Sesión Suelta)</option>
+                            <option value="Individual Bono">Bono 10 (Individual)</option>
+                            <option value="Pareja">Pareja (Plan Mensual)</option>
+                            <option value="Trío">Trío (Plan Mensual)</option>
+                            <option value="Grupo Reducido Plan">Grupo Reducido (Plan Mensual)</option>
+                            <option value="Grupo Reducido Suelta">Grupo Reducido (Suelta)</option>
+                            <option value="Grupo Reducido Bono">Bono 10 (G. Reducido)</option>
+                            <option value="Grupo Aire Libre">Grupo Aire Libre</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label id="lbl-factor-dinamico" class="text-slate-400 block mb-1">Días/Sem o Integrantes</label>
+                        <select id="cust-factor" onchange="autoCalcularTarifa()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+                            <option value="1">1 unidad / 1 día</option>
+                            <option value="2">2 unidades / 2 días</option>
+                            <option value="3">3 unidades / 3 días</option>
+                            <option value="4">4 unidades / 4 días (G. Red. Mínimo)</option>
+                            <option value="5">5 unidades / 5 días</option>
+                            <option value="6">6 Atletas (Máx. Rentabilidad)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-slate-400 block mb-1">Tipo de Compra</label>
+                        <select id="cust-purchase-type" onchange="toggleBonoFields()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+                            <option value="Mensualidad">Mensualidad Recurrente</option>
+                            <option value="Bono">Bono con Caducidad (3 meses)</option>
+                        </select>
+                    </div>
+                    <div id="bono-date-field" class="hidden">
+                        <label class="text-amber-400 block mb-1">Fecha de Compra Bono</label>
+                        <input type="date" id="cust-bono-date" class="w-full bg-slate-950 border border-amber-500/40 rounded p-2 text-white">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-slate-400 block mb-1">Color Identificador en Agenda</label>
+                    <div class="grid grid-cols-5 gap-2 bg-slate-950 p-2 rounded border border-slate-800" id="color-picker-container"></div>
+                    <input type="hidden" id="cust-color" value="amber">
+                </div>
+                <div class="p-2 bg-slate-950 border border-slate-800 rounded">
+                    <span class="text-slate-400 text-[11px] font-bold">Valor Mensual de Tarifa Oficial 2026:</span>
+                    <div class="text-base font-extrabold text-emerald-400 font-mono" id="lbl-tarifa-calculada">0.00 €</div>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button onclick="cerrarModal()" class="bg-slate-800 text-slate-400 px-3 py-2 rounded font-bold hover:text-white transition">Cancelar</button>
+                    <button id="btn-save-client" onclick="guardarCliente()" class="bg-amber-500 text-slate-950 px-4 py-2 rounded font-bold hover:bg-amber-600 transition">Vincular a Cartera</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL NUEVO ENTRENADOR (SOLO ADMIN) -->
+    <div id="modal-trainer" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-sm space-y-4">
+            <h3 class="text-sm font-bold text-cyan-400 uppercase tracking-wider">Alta de Nuevo Personal Técnico</h3>
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="text-slate-400 block mb-1">Nombre de Usuario (Para Login)</label>
+                    <input type="text" id="new-trainer-user" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="Ej: marcos">
+                </div>
+                <div>
+                    <label class="text-slate-400 block mb-1">Contraseña Inicial</label>
+                    <input type="text" id="new-trainer-pass" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="Ej: marcos2026">
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button onclick="cerrarModalTrainer()" class="bg-slate-800 text-slate-400 px-3 py-2 rounded font-bold hover:text-white transition">Cancelar</button>
+                    <button onclick="guardarTrainer()" class="bg-cyan-600 text-white px-4 py-2 rounded font-bold hover:bg-cyan-500 transition">Crear Entrenador</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL NOTAS -->
+    <div id="modal-nota" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <!-- Contenido idéntico de modal notas -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md space-y-4">
+            <h3 class="text-xs font-bold text-amber-400 uppercase tracking-wider flex justify-between">
+                <span>Auditoría & Notas de Dirección</span>
+                <button onclick="borrarSesionAgenda()" class="text-red-500 hover:underline font-bold text-[10px] uppercase">❌ Remover Sesión</button>
+            </h3>
+            <div class="space-y-2 text-xs">
+                <p class="text-slate-400">Franja Horaria: <span id="nota-info-franja" class="text-white font-bold font-mono">---</span></p>
+                <p class="text-slate-400">Asignado a: <span id="nota-info-asignado" class="text-white font-bold">---</span></p>
+                <p class="text-slate-300 font-semibold">Rentabilidad Real Estimada (Hora): <span id="nota-info-profit" class="text-emerald-400 font-bold font-mono">---</span></p>
+                <div>
+                    <label class="text-slate-400 block mb-1">Notas del Entrenamiento</label>
+                    <textarea id="txt-nota-contenido" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white h-24 text-xs" placeholder="Pautas de rendimiento..."></textarea>
+                </div>
+                <div id="admin-note-warning" class="hidden text-[10px] text-amber-500 italic bg-amber-500/10 p-2 border border-amber-500/20 rounded">
+                    ⚡ Perfil Admin Total Activo.
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button onclick="cerrarModalNota()" class="bg-slate-800 text-slate-400 px-3 py-2 rounded font-bold hover:text-white transition">Cerrar</button>
+                    <button id="btn-save-nota" onclick="guardarNota()" class="bg-amber-500 text-slate-950 px-4 py-2 rounded font-bold hover:bg-amber-600 transition">Fijar Nota</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // BASE DE DATOS LOCAL SEGURA Y EXTENSIBLE PARA CREDENCIALES
+        const CREDENCIALES_BASE = {
+            "fran": { pass: "bs2026admin", rol: "admin" },
+            "soraya": { pass: "bs2026soraya", rol: "admin" },
+            "bea": { pass: "bs2026bea", rol: "admin" },
+            "carmen": { pass: "carmen2026", rol: "pt" },
+            "juan carlos": { pass: "jc2026", rol: "pt" },
+            "lillo": { pass: "lillo2026", rol: "pt" },
+            "ruben": { pass: "ruben2026", rol: "pt" },
+            "miguel": { pass: "miguel2026", rol: "pt" }
+        };
+
+        let dbCredenciales = JSON.parse(localStorage.getItem('bs_db_credenciales_v5')) || CREDENCIALES_BASE;
+
+        const TARIFAS_2026 = {
+            "Individual Plan": { 1: 120, 2: 210, 3: 300, 4: 380, 5: 450 },
+            "Individual Suelta": { 1: 30 }, "Individual Bono": { 1: 270 },
+            "Pareja": { 1: 90, 2: 160, 3: 210, 4: 270, 5: 300 },
+            "Trío": { 1: 70, 2: 120, 3: 150, 4: 170, 5: 200 },
+            "Grupo Reducido Plan": { 4: 130, 5: 150, 6: 150 }, 
+            "Grupo Reducido Suelta": { 1: 12 }, "Grupo Reducido Bono": { 1: 105 },
+            "Grupo Aire Libre": { 1: 30, 2: 40, 3: 50, 4: 60, 5: 70 }
+        };
+
+        const PALETA_COLORES = {
+            "amber": "bg-amber-500/20 text-amber-400 border-amber-500/40",
+            "emerald": "bg-emerald-500/20 text-emerald-400 border-emerald-500/40",
+            "blue": "bg-blue-500/20 text-blue-400 border-blue-500/40",
+            "purple": "bg-purple-500/20 text-purple-400 border-purple-500/40",
+            "rose": "bg-rose-500/20 text-rose-400 border-rose-500/40",
+            "cyan": "bg-cyan-500/20 text-cyan-400 border-cyan-500/40",
+            "indigo": "bg-indigo-500/20 text-indigo-400 border-indigo-500/40",
+            "orange": "bg-orange-500/20 text-orange-400 border-orange-500/40",
+            "lime": "bg-lime-500/20 text-lime-400 border-lime-500/40",
+            "fuchsia": "bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/40"
+        };
+
+        let usuarioLogeado = ""; let rolActivo = ""; let entrenadorVisto = "";
+        let tabFichaActiva = "individual"; let celdaNotaSeleccionada = "";
+        let lunesActual = new Date(); 
+        let idFichaEditando = null; // Variable clave para controlar Edición vs Creación
+
+        let dbClientes = JSON.parse(localStorage.getItem('bs_db_clientes_v5')) || {};
+        let dbAgenda = JSON.parse(localStorage.getItem('bs_db_agenda_v5')) || {};
+        let dbNotas = JSON.parse(localStorage.getItem('bs_db_notas_v5')) || {};
+        let dbHistorico = JSON.parse(localStorage.getItem('bs_db_historico_v5')) || [];
+
+        function ejecutarLogin() {
+            const user = document.getElementById('login-user').value.trim().toLowerCase();
+            const pass = document.getElementById('login-pass').value.trim();
+
+            if (dbCredenciales[user] && dbCredenciales[user].pass === pass) {
+                usuarioLogeado = user; rolActivo = dbCredenciales[user].rol; entrenadorVisto = user;
+                document.getElementById('auth-screen').classList.add('hidden');
+                document.getElementById('app-content').classList.remove('hidden');
+                document.getElementById('lbl-usuario-logeado').innerText = user;
+                document.getElementById('lbl-rol').innerText = rolActivo === 'admin' ? "Admin Total" : "Personal Técnico";
+
+                if (rolActivo === 'admin') {
+                    document.getElementById('admin-trainer-filter-block').classList.remove('hidden');
+                    configurarSelectorAdmin();
+                }
+                buildColorPicker(); irSemanaActual();
+            } else { alert("Credenciales incorrectas."); }
+        }
+
+        function configurarSelectorAdmin() {
+            const select = document.getElementById('select-trainer-filter'); select.innerHTML = '';
+            Object.keys(dbCredenciales).forEach(key => {
+                if (dbCredenciales[key].rol === 'pt') {
+                    let opt = document.createElement('option'); opt.value = key; opt.innerText = key.toUpperCase();
+                    select.appendChild(opt);
+                }
+            });
+            if (select.firstChild) entrenadorVisto = select.firstChild.value;
+        }
+
+        // SISTEMA DE ALTA DE NUEVOS ENTRENADORES PARA ESCALABILIDAD
+        function abrirModalNuevoTrainer() { document.getElementById('modal-trainer').classList.remove('hidden'); }
+        function cerrarModalTrainer() { document.getElementById('modal-trainer').classList.add('hidden'); }
+        
+        function guardarTrainer() {
+            let u = document.getElementById('new-trainer-user').value.trim().toLowerCase();
+            let p = document.getElementById('new-trainer-pass').value.trim();
+            if(!u || !p) { alert("Rellena todos los campos."); return; }
+            if(dbCredenciales[u]) { alert("Este usuario ya existe."); return; }
+
+            dbCredenciales[u] = { pass: p, rol: "pt" };
+            localStorage.setItem('bs_db_credenciales_v5', JSON.stringify(dbCredenciales));
+            configurarSelectorAdmin(); cerrarModalTrainer();
+            alert("Nuevo entrenador creado y añadido al sistema operativo de la franquicia.");
+        }
+
+        function cambiarEntrenadorVisto() {
+            entrenadorVisto = document.getElementById('select-trainer-filter').value;
+            recalcularKPIs(); renderClientes(); renderAgenda();
+        }
+
+        function cambiarFichaTab(type) {
+            tabFichaActiva = type;
+            document.getElementById('tab-ind').className = type === 'individual' ? "text-xs font-bold uppercase tracking-wider text-amber-400 border-b-2 border-amber-400 pb-1" : "text-xs font-bold uppercase tracking-wider text-slate-500 pb-1";
+            document.getElementById('tab-grp').className = type === 'grupo' ? "text-xs font-bold uppercase tracking-wider text-amber-400 border-b-2 border-amber-400 pb-1 font-bold" : "text-xs font-bold uppercase tracking-wider text-slate-500 pb-1";
+            renderClientes();
+        }
+
+        function buildColorPicker() {
+            const container = document.getElementById('color-picker-container'); container.innerHTML = '';
+            const codigosHex = { amber:'#f59e0b', emerald:'#10b981', blue:'#3b82f6', purple:'#a855f7', rose:'#f43f5e', cyan:'#06b6d4', indigo:'#6366f1', orange:'#f97316', lime:'#84cc16', fuchsia:'#d946ef' };
+            Object.keys(PALETA_COLORES).forEach(color => {
+                let d = document.createElement('div');
+                d.className = `h-5 w-5 rounded-full cursor-pointer border border-white/10 transition hover:scale-110`;
+                d.style.backgroundColor = codigosHex[color];
+                d.onclick = () => {
+                    document.querySelectorAll('#color-picker-container div').forEach(x => x.classList.remove('ring-2', 'ring-white'));
+                    d.classList.add('ring-2', 'ring-white'); document.getElementById('cust-color').value = color;
+                };
+                container.appendChild(d);
+            });
+        }
+
+        function toggleBonoFields() {
+            const isBono = document.getElementById('cust-purchase-type').value === 'Bono';
+            document.getElementById('bono-date-field').className = isBono ? "block" : "hidden";
+        }
+
+        function autoCalcularTarifa() {
+            const mod = document.getElementById('cust-mod').value;
+            const factor = parseInt(document.getElementById('cust-factor').value) || 1;
+            let precioFinal = 0;
+            if (TARIFAS_2026[mod]) {
+                precioFinal = TARIFAS_2026[mod][factor] || TARIFAS_2026[mod][1] || 0;
+                if (mod.includes("Grupo Reducido Plan")) { precioFinal = (TARIFAS_2026[mod][factor] || 150) * factor; }
+            }
+            document.getElementById('lbl-tarifa-calculada').innerText = `${precioFinal.toFixed(2)} €`;
+        }
+
+        function mostrarModalNuevoCliente() {
+            idFichaEditando = null; // Modo Creación
+            document.getElementById('modal-title').innerText = "Alta de Nueva Ficha";
+            document.getElementById('btn-save-client').innerText = "Vincular a Cartera";
+            
+            // Limpiar campos
+            document.getElementById('cust-name').value = '';
+            document.getElementById('cust-phone').value = '';
+            document.getElementById('cust-members').value = '';
+            
+            document.getElementById('modal-cliente').classList.remove('hidden');
+            document.getElementById('group-members-field').className = tabFichaActiva === 'grupo' ? "block" : "hidden";
+            document.getElementById('lbl-factor-dinamico').innerText = tabFichaActiva === 'grupo' ? "Número de Alumnos Matriculados" : "Días de frecuencia / semana";
+            autoCalcularTarifa();
+        }
+
+        // FUNCIÓN DE EDICIÓN DE CLIENTE EXISTENTE (ACTUALIZAR CLASES, TELÉFONO, ETC)
+        function editarFicha(id) {
+            idFichaEditando = id;
+            const c = dbClientes[entrenadorVisto].find(x => x.id === id);
+            if(!c) return;
+
+            document.getElementById('modal-title').innerText = "Modificar Ficha de Atleta";
+            document.getElementById('btn-save-client').innerText = "Guardar Cambios";
+
+            document.getElementById('cust-name').value = c.nombre;
+            document.getElementById('cust-phone').value = c.telefono || "";
+            document.getElementById('cust-members').value = c.integrantes || "";
+            document.getElementById('cust-mod').value = c.modalidad;
+            document.getElementById('cust-factor').value = c.factor;
+            document.getElementById('cust-purchase-type').value = c.tipoCompra;
+            document.getElementById('cust-bono-date').value = c.fechaCompra || "";
+            document.getElementById('cust-color').value = c.color;
+
+            // Simular clic en la paleta de colores para seleccionarlo
+            const containers = document.querySelectorAll('#color-picker-container div');
+            const keys = Object.keys(PALETA_COLORES);
+            const index = keys.indexOf(c.color);
+            if(index !== -1 && containers[index]) containers[index].click();
+
+            document.getElementById('modal-cliente').classList.remove('hidden');
+            document.getElementById('group-members-field').className = c.tipo === 'grupo' ? "block" : "hidden";
+            document.getElementById('lbl-factor-dinamico').innerText = c.tipo === 'grupo' ? "Número de Alumnos Matriculados" : "Días de frecuencia / semana";
+            
+            toggleBonoFields(); autoCalcularTarifa();
+        }
+
+        function cerrarModal() { document.getElementById('modal-cliente').classList.add('hidden'); }
+
+        function guardarCliente() {
+            const name = document.getElementById('cust-name').value.trim();
+            const phone = document.getElementById('cust-phone').value.trim();
+            const mod = document.getElementById('cust-mod').value;
+            const factor = parseInt(document.getElementById('cust-factor').value) || 1;
+            const purchaseType = document.getElementById('cust-purchase-type').value;
+            const purchaseDate = document.getElementById('cust-bono-date').value;
+            const color = document.getElementById('cust-color').value;
+            const members = document.getElementById('cust-members').value;
+
+            if(!name) { alert("Introduce un nombre."); return; }
+            if(!dbClientes[entrenadorVisto]) dbClientes[entrenadorVisto] = [];
+            
+            if (idFichaEditando) {
+                // Modo Actualización
+                let idx = dbClientes[entrenadorVisto].findIndex(c => c.id === idFichaEditando);
+                if(idx !== -1) {
+                    dbClientes[entrenadorVisto][idx].nombre = name;
+                    dbClientes[entrenadorVisto][idx].telefono = phone;
+                    dbClientes[entrenadorVisto][idx].modalidad = mod;
+                    dbClientes[entrenadorVisto][idx].factor = factor;
+                    dbClientes[entrenadorVisto][idx].tipoCompra = purchaseType;
+                    dbClientes[entrenadorVisto][idx].fechaCompra = purchaseDate;
+                    dbClientes[entrenadorVisto][idx].color = color;
+                    dbClientes[entrenadorVisto][idx].integrantes = tabFichaActiva === 'grupo' ? members : "";
+                }
+            } else {
+                // Modo Creación
+                dbClientes[entrenadorVisto].push({
+                    id: "cli_" + Date.now(), tipo: tabFichaActiva, nombre: name, telefono: phone, modalidad: mod,
+                    factor: factor, tipoCompra: purchaseType, fechaCompra: purchaseDate, color: color, integrantes: tabFichaActiva === 'grupo' ? members : ""
+                });
+            }
+
+            localStorage.setItem('bs_db_clientes_v5', JSON.stringify(dbClientes));
+            
+            // Actualizar agenda existente por si cambió el nombre
+            actualizarNombreEnAgendaSiCambia(idFichaEditando);
+
+            cerrarModal(); recalcularKPIs(); renderClientes(); renderAgenda();
+        }
+
+        function actualizarNombreEnAgendaSiCambia(idFicha) {
+            if(!idFicha || !dbAgenda[entrenadorVisto]) return;
+            const fichaActualizada = dbClientes[entrenadorVisto].find(c => c.id === idFicha);
+            if(!fichaActualizada) return;
+            
+            Object.keys(dbAgenda[entrenadorVisto]).forEach(key => {
+                if(dbAgenda[entrenadorVisto][key].id === idFicha) {
+                    dbAgenda[entrenadorVisto][key] = fichaActualizada;
+                }
+            });
+            localStorage.setItem('bs_db_agenda_v5', JSON.stringify(dbAgenda));
+        }
+
+        function calcularAlertasBono(cliente) {
+            if (cliente.tipoCompra !== 'Bono' || !cliente.fechaCompra) return "";
+            const fechaC = new Date(cliente.fechaCompra);
+            const fechaLimite = new Date(fechaC.setMonth(fechaC.getMonth() + 3));
+            const hoy = new Date(); const msDiferencia = fechaLimite - hoy;
+            const diasRestantes = Math.ceil(msDiferencia / (1000 * 60 * 60 * 24));
+
+            if (diasRestantes <= 0) return `<span class="text-red-500 font-extrabold block text-[10px]">⚠️ BONO CADUCADO EN HISTORIAL</span>`;
+            if (diasRestantes <= 15) return `<span class="text-orange-400 font-bold block text-[10px]">⏳ Vence en ${diasRestantes} días</span>`;
+            return `<span class="text-slate-400 block text-[10px]">Vence en ${diasRestantes} días</span>`;
+        }
+
+        function renderClientes() {
+            const container = document.getElementById('lista-clientes-pt'); container.innerHTML = '';
+            if(!dbClientes[entrenadorVisto]) dbClientes[entrenadorVisto] = [];
+
+            const filtrados = dbClientes[entrenadorVisto].filter(c => (c.tipo || 'individual') === tabFichaActiva);
+
+            if(filtrados.length === 0) {
+                container.innerHTML = `<div class="text-center py-8 text-slate-600 text-xs">Sin registros activos.</div>`; return;
+            }
+
+            filtrados.forEach(c => {
+                const item = document.createElement('div');
+                item.className = `p-3 rounded-lg border border-slate-800 bg-slate-950/70 text-xs flex flex-col gap-1 cursor-grab active:cursor-grabbing select-none hover:border-amber-500/40 transition relative group`;
+                
+                item.setAttribute('draggable', 'true');
+                item.ondragstart = (e) => { e.dataTransfer.setData("text/plain", c.id); };
+
+                let tarifaBase = TARIFAS_2026[c.modalidad] ? (TARIFAS_2026[c.modalidad][c.factor] || TARIFAS_2026[c.modalidad][1] || 0) : 0;
+                if(c.modalidad.includes("Grupo Reducido Plan")) tarifaBase = tarifaBase * c.factor;
+
+                item.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <span class="inline-block w-2.5 h-2.5 rounded-full mr-1" style="background-color: ${c.color === 'rose'?'#f43f5e':c.color==='emerald'?'#10b981':c.color==='blue'?'#3b82f6':c.color==='purple'?'#a855f7':'#f59e0b'}"></span>
+                            <strong class="text-white text-xs uppercase">${c.nombre}</strong>
+                            ${c.telefono ? `<div class="text-slate-500 text-[9px] mt-0.5">📞 ${c.telefono}</div>` : ''}
+                            ${c.integrantes ? `<div class="text-slate-400 text-[10px] mt-0.5 font-medium">Pax: ${c.integrantes}</div>` : ''}
+                            <div class="text-[9px] text-slate-500 font-mono mt-0.5">${c.modalidad} [${c.factor}]</div>
+                        </div>
+                        <div class="text-right flex flex-col items-end">
+                            <span class="text-emerald-400 font-black font-mono">${tarifaBase}€</span>
+                            <div class="flex gap-2 mt-2">
+                                <button onclick="editarFicha('${c.id}')" class="text-cyan-500 text-[10px] hover:underline font-bold">Editar</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-1 pt-1 border-t border-slate-900/60 flex justify-between items-center text-[10px]">
+                        ${calcularAlertasBono(c)}
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function irSemanaActual() {
+            let hoy = new Date(); let d = hoy.getDay();
+            let dif = hoy.getDate() - d + (d === 0 ? -6 : 1); 
+            lunesActual = new Date(hoy.setDate(dif)); actualizarDiasCabeceraYAgenda();
+        }
+
+        function navegarSemana(direccion) {
+            lunesActual.setDate(lunesActual.getDate() + (direccion * 7)); actualizarDiasCabeceraYAgenda();
+        }
+
+        function obtenerFechaStringISO(fecha) { return fecha.toISOString().split('T')[0]; }
+
+        function actualizarDiasCabeceraYAgenda() {
+            const diasIds = ["th-d1", "th-d2", "th-d3", "th-d4", "th-d5"];
+            const nombresDias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+            let tFecha = new Date(lunesActual);
+
+            for (let i = 0; i < 5; i++) {
+                let dStr = tFecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+                document.getElementById(diasIds[i]).innerText = `${nombresDias[i]} ${dStr}`;
+                tFecha.setDate(tFecha.getDate() + 1);
+            }
+
+            let finSemana = new Date(lunesActual); finSemana.setDate(finSemana.getDate() + 4);
+            document.getElementById('lbl-rango-semana').innerText = `${lunesActual.getDate()} ${lunesActual.toLocaleDateString('es-ES',{month:'short'})} - ${finSemana.getDate()} ${finSemana.toLocaleDateString('es-ES',{month:'short'})} ${lunesActual.getFullYear()}`;
+            
+            recalcularKPIs(); renderAgenda();
+        }
+
+        // CÁLCULO ESTRATÉGICO DE RENTABILIDAD EXACTO CORREGIDO
+        function calcularValorHoraReal(objAsignado) {
+            let tarifaTotalMensual = TARIFAS_2026[objAsignado.modalidad] ? (TARIFAS_2026[objAsignado.modalidad][objAsignado.factor] || TARIFAS_2026[objAsignado.modalidad][1] || 0) : 0;
+            
+            if (objAsignado.modalidad.includes("Grupo Reducido Plan")) {
+                tarifaTotalMensual = tarifaTotalMensual * objAsignado.factor;
+            }
+
+            let sesionesMes = 1; // Por defecto
+            if (objAsignado.tipoCompra === "Mensualidad" || objAsignado.modalidad.includes("Plan") || objAsignado.modalidad === "Pareja" || objAsignado.modalidad === "Trío" || objAsignado.modalidad === "Grupo Aire Libre") {
+                sesionesMes = objAsignado.factor * 4; // 4 semanas teóricas para la facturación mensual
+            } else if (objAsignado.modalidad.includes("Bono")) {
+                sesionesMes = 10; // Un bono de 10 sesiones
+            } else if (objAsignado.modalidad.includes("Suelta")) {
+                sesionesMes = 1;
+            }
+
+            let rentabilidadPorSesion = tarifaTotalMensual / sesionesMes;
+            // Bloque de 45 min = (60/45) = 1.3333 para extrapolar a hora
+            return rentabilidadPorSesion * 1.3333; 
+        }
+
+        function renderAgenda() {
+            const cuerpo = document.getElementById('cuerpo-agenda'); cuerpo.innerHTML = '';
+            
+            const franjas = [
+                "07:00 - 07:45", "07:45 - 08:30", "08:30 - 09:15", "09:15 - 10:00",
+                "10:00 - 10:45", "10:45 - 11:30", "11:30 - 12:15", "12:15 - 13:00",
+                "16:00 - 16:45", "16:45 - 17:30", "17:30 - 18:15", "18:15 - 19:00", 
+                "19:00 - 19:45", "19:45 - 20:30", "20:30 - 21:15", "21:15 - 22:00"
+            ];
+
+            franjas.forEach(franja => {
+                const tr = document.createElement('tr'); tr.className = "hover:bg-slate-900/10 border-b border-slate-800/40 transition h-14";
+                
+                let tdHora = document.createElement('td');
+                tdHora.className = "p-2 font-bold text-slate-500 border border-slate-800 bg-slate-950/30 text-center text-[10px] font-mono w-24";
+                tdHora.innerText = franja; tr.appendChild(tdHora);
+
+                for (let idxDia = 0; idxDia < 5; idxDia++) {
+                    let fechaTurno = new Date(lunesActual); fechaTurno.setDate(fechaTurno.getDate() + idxDia);
+                    let fStr = obtenerFechaStringISO(fechaTurno);
+                    const claveCelda = `${fStr}_${franja}`;
+
+                    let tdCell = document.createElement('td');
+                    tdCell.className = "p-1.5 border border-slate-800/60 align-top transition-all relative text-center";
+                    
+                    tdCell.ondragover = (e) => { e.preventDefault(); tdCell.classList.add('bg-slate-800/40'); };
+                    tdCell.ondragleave = () => { tdCell.classList.remove('bg-slate-800/40'); };
+                    tdCell.ondrop = (e) => {
+                        e.preventDefault(); tdCell.classList.remove('bg-slate-800/40');
+                        const idCliente = e.dataTransfer.getData("text/plain");
+                        soltarFichaEnCelda(claveCelda, idCliente);
+                    };
+
+                    let objAsignado = null; let ocupadoPorOtro = false;
+                    Object.keys(dbAgenda).forEach(ptKey => {
+                        if (dbAgenda[ptKey] && dbAgenda[ptKey][claveCelda]) {
+                            if (ptKey === entrenadorVisto) { objAsignado = dbAgenda[ptKey][claveCelda]; } 
+                            else { ocupadoPorOtro = true; }
+                        }
+                    });
+
+                    if (objAsignado) {
+                        const diseñoColor = PALETA_COLORES[objAsignado.color || "amber"];
+                        tdCell.className += ` ${diseñoColor} font-bold shadow-sm rounded-sm border-amber-500/20`;
+                        
+                        let valorPorHoraReal = calcularValorHoraReal(objAsignado);
+
+                        tdCell.innerHTML = `
+                            <div class="text-[11px] leading-tight text-white uppercase truncate">${objAsignado.nombre}</div>
+                            <div class="text-[9px] font-black text-emerald-400 font-mono mt-0.5">${valorPorHoraReal.toFixed(1)}€/h</div>
+                        `;
+                        if (dbNotas[claveCelda]) {
+                            tdCell.innerHTML += `<span class="absolute bottom-0.5 right-1 text-[8px] bg-cyan-500 text-slate-950 px-1 rounded-sm font-extrabold leading-none">NOTA</span>`;
+                        }
+
+                        tdCell.onclick = () => abrirModalNota(claveCelda, objAsignado, valorPorHoraReal);
+                    } else if (ocupadoPorOtro) {
+                        tdCell.className += " bg-red-950/10 text-red-500/30 italic cursor-not-allowed text-[9px] flex items-center justify-center";
+                        tdCell.innerText = "🔒 Bloque Ocupado";
+                    } else {
+                        tdCell.className += " text-slate-800 hover:bg-slate-900/40 text-[9px] font-medium transition italic";
+                        tdCell.innerText = "[Vacío]";
+                    }
+                    tr.appendChild(tdCell);
+                }
+                cuerpo.appendChild(tr);
+            });
+        }
+
+        function soltarFichaEnCelda(claveCelda, idCliente) {
+            const encontrado = dbClientes[entrenadorVisto].find(c => c.id === idCliente);
+            if (encontrado) {
+                if (!dbAgenda[entrenadorVisto]) dbAgenda[entrenadorVisto] = {};
+                dbAgenda[entrenadorVisto][claveCelda] = encontrado;
+                localStorage.setItem('bs_db_agenda_v5', JSON.stringify(dbAgenda));
+                recalcularKPIs(); renderAgenda();
+            }
+        }
+
+        function recalcularKPIs() {
+            if(!dbClientes[entrenadorVisto]) dbClientes[entrenadorVisto] = [];
+            
+            let facturacionMes = 0;
+            dbClientes[entrenadorVisto].forEach(c => {
+                let tarifa = TARIFAS_2026[c.modalidad] ? (TARIFAS_2026[c.modalidad][c.factor] || TARIFAS_2026[c.modalidad][1] || 0) : 0;
+                if(c.modalidad.includes("Grupo Reducido Plan")) tarifa = tarifa * c.factor;
+                facturacionMes += tarifa;
+            });
+            document.getElementById('kpi-facturacion-cartera').innerText = `${facturacionMes.toLocaleString('es-ES')} €`;
+
+            let clientesActivosContador = 0;
+            dbClientes[entrenadorVisto].forEach(c => {
+                if(c.tipo === 'grupo' && c.integrantes) {
+                    clientesActivosContador += c.integrantes.split(',').length;
+                } else { clientesActivosContador += 1; }
+            });
+            document.getElementById('kpi-atletas-activos').innerText = clientesActivosContador;
+
+            let sesionesContadorSemana = 0; let rentabilidadAcumulada = 0;
+            if(dbAgenda[entrenadorVisto]) {
+                for (let idxDia = 0; idxDia < 5; idxDia++) {
+                    let fechaTurno = new Date(lunesActual); fechaTurno.setDate(fechaTurno.getDate() + idxDia);
+                    let fStr = obtenerFechaStringISO(fechaTurno);
+                    
+                    Object.keys(dbAgenda[entrenadorVisto]).forEach(clave => {
+                        if(clave.startsWith(fStr)) {
+                            sesionesContadorSemana++;
+                            let obj = dbAgenda[entrenadorVisto][clave];
+                            rentabilidadAcumulada += calcularValorHoraReal(obj);
+                        }
+                    });
+                }
+            }
+            document.getElementById('kpi-sesiones-semana').innerText = sesionesContadorSemana;
+            const rentMedia = sesionesContadorSemana > 0 ? (rentabilidadAcumulada / sesionesContadorSemana) : 0;
+            document.getElementById('kpi-rentabilidad-total').innerText = `${rentMedia.toFixed(2)} €/h`;
+        }
+
+        function abrirModalNota(claveCelda, objAsignado, valorPorHoraReal) {
+            celdaNotaSeleccionada = claveCelda;
+            document.getElementById('modal-nota').classList.remove('hidden');
+            document.getElementById('nota-info-franja').innerText = claveCelda;
+            document.getElementById('nota-info-asignado').innerText = objAsignado.nombre;
+            document.getElementById('nota-info-profit').innerText = `${valorPorHoraReal.toFixed(2)} €/h`;
+            document.getElementById('txt-nota-contenido').value = dbNotas[claveCelda] || "";
+
+            if (rolActivo === 'admin') {
+                document.getElementById('admin-note-warning').classList.remove('hidden');
+                document.getElementById('btn-save-nota').classList.remove('hidden');
+                document.getElementById('txt-nota-contenido').removeAttribute('disabled');
+            } else {
+                document.getElementById('admin-note-warning').classList.add('hidden');
+                document.getElementById('btn-save-nota').classList.add('hidden');
+                document.getElementById('txt-nota-contenido').setAttribute('disabled', 'true');
+            }
+        }
+
+        function cerrarModalNota() { document.getElementById('modal-nota').classList.add('hidden'); }
+
+        function guardarNota() {
+            const txt = document.getElementById('txt-nota-contenido').value.trim();
+            if(txt) { dbNotas[celdaNotaSeleccionada] = txt; } else { delete dbNotas[celdaNotaSeleccionada]; }
+            localStorage.setItem('bs_db_notas_v5', JSON.stringify(dbNotas)); cerrarModalNota(); renderAgenda();
+        }
+
+        function borrarSesionAgenda() {
+            if(confirm("¿Retirar este turno planificado del calendario?")) {
+                delete dbAgenda[entrenadorVisto][celdaNotaSeleccionada];
+                localStorage.setItem('bs_db_agenda_v5', JSON.stringify(dbAgenda));
+                cerrarModalNota(); recalcularKPIs(); renderAgenda();
+            }
+        }
+
+        function guardarMesEnHistorico() {
+            dbHistorico.push({
+                periodo: "Automático", rango: document.getElementById('lbl-rango-semana').innerText, timestamp: Date.now(),
+                clientes: JSON.parse(JSON.stringify(dbClientes)), agenda: JSON.parse(JSON.stringify(dbAgenda)), notas: JSON.parse(JSON.stringify(dbNotas))
+            });
+            localStorage.setItem('bs_db_historico_v5', JSON.stringify(dbHistorico));
+            alert(`Histórico consolidado de la semana guardado en el archivo de BESOUL.`);
+        }
+
+        function logout() { window.location.reload(); }
+    </script>
+</body>
+</html>
