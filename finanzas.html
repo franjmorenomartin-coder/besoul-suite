@@ -3,15 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BESOUL - Gestión Financiera v4.1</title>
+    <title>BESOUL Suite - Enterprise Cloud v5.8</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #0B0F17; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -21,7 +18,7 @@
 </head>
 <body class="text-slate-100 min-h-screen flex flex-col">
 
-    <!-- PORTAL DE ACCESO -->
+    <!-- COMPONENTE DE ACCESO CORPORATIVO SEGURO -->
     <div id="auth-screen" class="flex-1 flex items-center justify-center p-4">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md space-y-6 shadow-2xl">
             <div class="flex flex-col items-center bg-white p-2 rounded-xl border border-slate-700 w-32 mx-auto">
@@ -29,58 +26,236 @@
                 <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
             </div>
             <div class="text-center">
-                <h2 class="text-base font-bold text-white tracking-tight">Gestión Financiera v4.1</h2>
-                <p class="text-xs text-slate-400 mt-1">Acceso restringido a Administradores</p>
+                <h2 class="text-base font-bold text-white tracking-tight">Acceso Corporativo Seguro v5.8</h2>
+                <p class="text-xs text-slate-400 mt-1">Introduce tus credenciales de Administrador</p>
             </div>
             <div class="space-y-3 text-xs">
                 <div>
-                    <label class="text-slate-400 block mb-1">Email</label>
-                    <input type="email" id="login-email" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="admin@besoul.com">
+                    <label class="text-slate-400 block mb-1">Usuario Dirección</label>
+                    <input type="text" id="login-user" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="Ej: fran">
                 </div>
                 <div>
-                    <label class="text-slate-400 block mb-1">Contraseña</label>
+                    <label class="text-slate-400 block mb-1">Contraseña de Seguridad</label>
                     <input type="password" id="login-pass" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="••••••••">
                 </div>
-                <button onclick="ejecutarLogin()" id="btn-login" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-2.5 rounded-lg transition uppercase tracking-wider mt-2">
-                    Acceder al Panel
+                <button onclick="ejecutarLogin()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-lg transition uppercase tracking-wider mt-2">
+                    Validar e Ingresar
                 </button>
-                <div id="login-error" class="text-red-500 text-[10px] text-center hidden"></div>
             </div>
         </div>
     </div>
 
-    <!-- ENTORNO OPERATIVO -->
+    <!-- ENTORNO DE TRABAJO PRINCIPAL (OCULTO HASTA PASAR EL LOGIN) -->
     <div id="app-content" class="hidden flex-1 flex flex-col">
-        <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center">
+        <!-- ENCABEZADO -->
+        <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
             <div class="flex items-center gap-4">
-                <div class="bg-white p-2 rounded-xl border border-slate-700 w-24">
-                    <div class="text-amber-500 font-extrabold text-lg tracking-tighter italic font-serif text-center">besoul</div>
+                <div class="flex flex-col items-center bg-white p-2 rounded-xl border border-slate-700 shadow-md w-32">
+                    <div class="text-amber-500 font-extrabold text-xl tracking-tighter italic font-serif">besoul</div>
+                    <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
                 </div>
-                <h1 class="text-lg font-extrabold text-white">Gestión Financiera</h1>
+                <div>
+                    <h1 class="text-lg font-extrabold text-white tracking-tight">BESOUL Suite <span class="text-amber-500 font-medium text-sm">v5.8 Firebase Cloud</span></h1>
+                    <p class="text-xs text-slate-400">Panel de Control: Administrador <span id="lbl-usuario-logeado" class="text-amber-400 font-bold uppercase">---</span></p>
+                </div>
             </div>
             <div class="flex items-center gap-3">
-                <span id="lbl-usuario-logeado" class="text-xs text-slate-400 uppercase font-bold">---</span>
-                <button onclick="logout()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-400 border border-slate-800 hover:text-white transition">Salir</button>
+                <button onclick="copiarEnlaceSincronizado()" class="px-4 py-2 text-xs font-bold rounded-lg bg-emerald-500 hover:bg-emerald-600 text-slate-950 shadow flex items-center gap-1 transition">
+                    🔗 Compartir / Ver en Móvil
+                </button>
+                <button onclick="logout()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-400 border border-slate-800 hover:text-white transition">
+                    Salir
+                </button>
+                <span id="live-clock" class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-950 text-amber-400 border border-slate-800 tracking-wider">
+                    CARGANDO...
+                </span>
             </div>
         </header>
 
-        <main class="flex-1 p-6">
-            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center max-w-2xl mx-auto mt-20">
-                <h2 class="text-xl font-bold mb-4">Panel de Control Financiero</h2>
-                <p class="text-slate-400 mb-6">Esta sección requiere que tu cuenta de Firebase tenga permisos de <b>Administrador</b> en Firestore.</p>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <a href="agenda.html" class="bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-amber-500 transition">
-                        <div class="text-amber-500 font-bold">Volver a Agenda</div>
-                    </a>
-                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 opacity-50">
-                        <div class="text-slate-500 font-bold italic">Próximamente: Informes PDF</div>
+        <!-- PESTAÑAS -->
+        <div class="bg-slate-950 px-6 py-3 border-b border-slate-900 flex flex-wrap gap-2">
+            <button id="btn-tab-directo" onclick="switchTab('directo')" class="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950 shadow">Panel en Directo (Mes Actual)</button>
+            <button id="btn-tab-historico" onclick="switchTab('historico')" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white bg-slate-900/50 border border-slate-800">Histórico de Cierres Reales</button>
+        </div>
+
+        <!-- CONTENIDO PRINCIPAL -->
+        <main class="flex-1 p-6 space-y-6">
+            <section id="view-directo" class="space-y-6">
+                <!-- DASHBOARD GLOBAL -->
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
+                        <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Facturación Bruta Red</h3>
+                        <div id="kpi-fact-total" class="text-lg font-black text-white">0.00 €</div>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
+                        <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Neto Equipo (PT)</h3>
+                        <div id="kpi-pt-total" class="text-lg font-black text-amber-400">0.00 €</div>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
+                        <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Neto BESOUL</h3>
+                        <div id="kpi-bs-total" class="text-lg font-black text-emerald-400">0.00 €</div>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
+                        <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Total Clientes Red</h3>
+                        <div id="kpi-clientes-total" class="text-lg font-black text-white">0</div>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
+                        <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Cánones de Centros</h3>
+                        <div id="kpi-canones-total" class="text-lg font-black text-red-400">0.00 €</div>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
+                        <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Cierre del Mes</h3>
+                        <button onclick="congelarMesEnHistorico()" class="mt-1 w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-[11px] py-1 px-2 rounded transition">Guardar Mes</button>
                     </div>
                 </div>
-            </div>
+
+                <!-- SECCIÓN CENTROS -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[240px]">
+                        <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
+                            <h2 class="text-xs font-bold uppercase text-amber-400 tracking-wider">Centros Deportivos Activos</h2>
+                            <button onclick="agregarCentro()" class="bg-amber-500 text-slate-950 px-2 py-1 rounded font-bold text-[10px] hover:bg-amber-600 transition">+ Añadir Centro</button>
+                        </div>
+                        <div id="center-selector-list" class="flex-1 overflow-y-auto space-y-1.5 pr-1"></div>
+                    </div>
+
+                    <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-4 h-[240px] flex flex-col justify-between">
+                        <div>
+                            <div class="border-b border-slate-800 pb-2 mb-3 flex justify-between items-center">
+                                <h2 id="center-profile-title" class="text-xs font-bold uppercase text-slate-300">Selecciona un centro</h2>
+                                <button id="btn-eliminar-centro" onclick="eliminarCentroActivo()" class="hidden text-red-400 text-xs hover:underline">Eliminar centro</button>
+                            </div>
+                            <div id="center-inputs-area" class="hidden grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div class="flex flex-col gap-1">
+                                    <label class="text-[11px] text-slate-400">Nombre del Centro</label>
+                                    <input type="text" id="input-center-name" class="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" oninput="actualizarVariablesCentro()">
+                                </div>
+                                <div class="flex flex-col gap-1">
+                                    <label class="text-[11px] text-slate-400">Canon Fijo (€/mes)</label>
+                                    <input type="number" id="input-center-canon-fijo" class="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" oninput="actualizarVariablesCentro()">
+                                </div>
+                                <div class="flex flex-col gap-1">
+                                    <label class="text-[11px] text-slate-400">Canon por PT (€/mes)</label>
+                                    <input type="number" id="input-center-canon-pt" class="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" oninput="actualizarVariablesCentro()">
+                                </div>
+                            </div>
+                        </div>
+                        <div id="center-info-foot" class="text-[11px] text-slate-500 italic">Los cambios en los cánones se indexan de forma inmediata.</div>
+                    </div>
+                </div>
+
+                <!-- SECCIÓN ENTRENADORES -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[640px]">
+                        <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
+                            <h2 id="trainer-list-title" class="text-xs font-bold uppercase text-amber-400 tracking-wider">Entrenadores en este centro</h2>
+                            <button id="btn-add-pt" onclick="agregarEntrenador()" class="hidden bg-amber-500 text-slate-950 px-2 py-1 rounded font-bold text-[10px] hover:bg-amber-600 transition">+ Añadir PT</button>
+                        </div>
+                        <div id="trainer-selector-list" class="flex-1 overflow-y-auto space-y-1.5 pr-1"></div>
+                    </div>
+
+                    <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-6 flex flex-col justify-between h-[640px]">
+                        <div>
+                            <div class="border-b border-slate-800 pb-2 mb-4 flex justify-between items-center">
+                                <h2 id="current-profile-title" class="text-sm font-bold text-white">Selecciona un entrenador</h2>
+                                <button id="btn-eliminar-pt" onclick="eliminarEntrenadorActivo()" class="hidden text-red-400 text-xs hover:underline">Dar de baja PT</button>
+                            </div>
+
+                            <div id="profile-inputs-area" class="hidden space-y-4">
+                                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                    <div class="col-span-2 md:col-span-1">
+                                        <label class="text-[11px] text-slate-400 block mb-1">Nombre Entrenador</label>
+                                        <input type="text" id="input-nombre-pt" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" oninput="actualizarNombreEnVivo(); calcularTramosEnTiempoReal()">
+                                    </div>
+                                    <div>
+                                        <label class="text-[11px] text-slate-400 block mb-1">Nº Clientes Activos (Stats)</label>
+                                        <input type="number" id="input-clientes" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white font-medium" oninput="calcularTramosEnTiempoReal()">
+                                    </div>
+                                    <div>
+                                        <label class="text-[11px] text-amber-400 block mb-1 font-bold">Horas de Clase Impartidas</label>
+                                        <input type="number" id="input-sesiones-medias" class="w-full bg-slate-950 border border-amber-500/30 rounded p-2 text-xs text-amber-400 font-black" oninput="calcularTramosEnTiempoReal()">
+                                    </div>
+                                    <div>
+                                        <label class="text-[11px] text-slate-400 block mb-1">Precio Hora Medio (€)</label>
+                                        <input type="number" id="input-precio-sesion" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white font-bold" oninput="calcularTramosEnTiempoReal()">
+                                    </div>
+                                    <div>
+                                        <label class="text-[11px] text-slate-400 block mb-1">Aporte / Cliente (€)</label>
+                                        <input type="number" id="input-pt-aporte-individual" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" oninput="calcularTramosEnTiempoReal()">
+                                    </div>
+                                </div>
+
+                                <div class="bg-slate-950 border border-slate-800/80 rounded-lg p-3 flex flex-col md:flex-row gap-4 justify-between items-center">
+                                    <div class="flex items-center gap-3">
+                                        <input type="checkbox" id="chk-pacto-especial" class="w-4 h-4 rounded accent-amber-500 cursor-pointer" onchange="calcularTramosEnTiempoReal()">
+                                        <div class="leading-tight">
+                                            <label for="chk-pacto-especial" class="text-xs font-bold text-amber-400 block cursor-pointer">Tarifa Especial (Pacto Fijo Alternativo)</label>
+                                            <span class="text-[10px] text-slate-500">Abona 500€ fijos + 100€ por cada 500€ extras de facturación real de horas.</span>
+                                        </div>
+                                    </div>
+                                    <div class="text-[11px] text-slate-400 max-w-sm text-right">
+                                        <span class="font-bold text-slate-200">Nueva Lógica Matrix 2026:</span> La facturación bruta real se genera multiplicando **Horas Impartidas** × **Precio Hora Medio**.
+                                    </div>
+                                </div>
+
+                                <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2.5">
+                                    <h3 id="lbl-titulo-tramos" class="text-xs font-bold uppercase text-slate-400 tracking-wider border-b border-slate-900 pb-1.5">Reparto Progresivo por Tramos (Cálculo Marginal s/ Horas Reales)</h3>
+                                    <div id="container-filas-tramos" class="space-y-2"></div>
+                                    <div class="grid grid-cols-2 gap-4 border-t border-slate-800 pt-2 text-xs text-slate-400">
+                                        <div>Facturación de Horas Real: <span id="lbl-fact-calculada-txt" class="font-bold text-white">0.00 €</span></div>
+                                        <div class="text-right">Aporte Adicional s/ Clientes Activos: <span id="lbl-aporte-clientes-txt" class="font-bold text-amber-400">0.00 €</span></div>
+                                    </div>
+                                    <div class="flex justify-between text-sm pt-1 font-bold border-t border-slate-900">
+                                        <span class="uppercase tracking-tight text-slate-200">Aporte Bruto Total a BESOUL por este PT:</span>
+                                        <span id="lbl-total-aporte-bs" class="text-emerald-400 font-mono">PT: 0.00 € | BS: 0.00 €</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="action-area" class="hidden">
+                            <button onclick="guardarRegistroPT()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2.5 px-4 rounded-lg transition uppercase tracking-wider">Guardar Ficha del Entrenador</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="view-historico" class="hidden space-y-6">
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 overflow-x-auto">
+                    <div class="mb-4">
+                        <h2 class="text-base font-bold text-white">Historial de Cierres de Caja Consolidados</h2>
+                        <p class="text-xs text-slate-400">Datos registrados en la nube de BESOUL.</p>
+                    </div>
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-800 text-amber-400 font-bold uppercase">
+                                <th class="py-3 px-4">Mes / Año de Cierre</th>
+                                <th class="py-3 px-4">Facturación Bruta Red</th>
+                                <th class="py-3 px-4">Neto de la Plantilla (PT)</th>
+                                <th class="py-3 px-4">Neto BESOUL (Limpio)</th>
+                                <th class="py-3 px-4">Clientes en Red</th>
+                                <th class="py-3 px-4">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-historico-cuerpo" class="divide-y divide-slate-800/50 text-slate-300"></tbody>
+                    </table>
+                </div>
+            </section>
         </main>
     </div>
 
     <script>
+        // LISTADO DE ACCESOS CONFIGURADOS COMO ADMINISTRADORES TOTALES
+        const CREDENCIALES_ADMIN = {
+            "fran": "bs2026admin",
+            "soraya": "bs2026soraya",
+            "bea": "bs2026bea"
+        };
+
+        let centrosDeportivos, entrenadoresPorCentro, historicoCierres;
+        let idCentroSeleccionado = null;
+        let idPTSeleccionado = null;
+
         const BS_FIREBASE_CONFIG = {
             apiKey: "AIzaSyAHp7l39BYkgHTVNNwPaaa21tTksBQ94Zo",
             authDomain: "besoul-suite.firebaseapp.com",
@@ -90,55 +265,530 @@
             appId: "1:215142605598:web:943629a7a9c50c034a1f0f"
         };
 
-        if (!firebase.apps.length) firebase.initializeApp(BS_FIREBASE_CONFIG);
-        const auth = firebase.auth();
-        const firestore = firebase.firestore();
 
-        auth.onAuthStateChanged(user => {
-            if (user) {
-                // Verificar si es admin en Firestore
-                firestore.collection('besoulSuite').doc('agenda').get().then(doc => {
-                    const data = doc.data();
-                    const creds = data.credenciales || {};
-                    const email = user.email;
-                    const userKey = Object.keys(creds).find(k => k === email || creds[k].email === email);
-                    
-                    if (userKey && creds[userKey].rol === 'admin') {
-                        document.getElementById('auth-screen').classList.add('hidden');
-                        document.getElementById('app-content').classList.remove('hidden');
-                        document.getElementById('lbl-usuario-logeado').innerText = email;
-                    } else {
-                        alert("Acceso denegado: No tienes permisos de administrador.");
-                        auth.signOut();
-                    }
-                });
-            } else {
-                document.getElementById('auth-screen').classList.remove('hidden');
-                document.getElementById('app-content').classList.add('hidden');
-            }
-        });
+        window.bsFinanzasCloudDocRef = null;
+        window.bsFinanzasCloudTimer = null;
+        window.bsFinanzasAplicandoNube = false;
+        window.bsFinanzasDatosInicializados = false;
 
-        function ejecutarLogin() {
-            const email = document.getElementById('login-email').value.trim();
-            const pass = document.getElementById('login-pass').value.trim();
-            const errorDiv = document.getElementById('login-error');
-            const btn = document.getElementById('btn-login');
-
-            if (!email || !pass) return;
-            btn.disabled = true;
-            btn.innerText = "Verificando...";
-            errorDiv.classList.add('hidden');
-
-            auth.signInWithEmailAndPassword(email, pass)
-                .catch(err => {
-                    btn.disabled = false;
-                    btn.innerText = "Acceder al Panel";
-                    errorDiv.innerText = "Error: " + err.message;
-                    errorDiv.classList.remove('hidden');
-                });
+        function estadoLocalFinanzasParaNube() {
+            return {
+                centros: centrosDeportivos || {},
+                pts: entrenadoresPorCentro || {},
+                historico: historicoCierres || [],
+                ultimaActualizacionLocal: new Date().toISOString()
+            };
         }
 
-        function logout() { auth.signOut().then(() => window.location.reload()); }
+        function guardarEstadoNubeFinanzas() {
+            if (!window.bsFinanzasCloudDocRef || window.bsFinanzasAplicandoNube || !window.bsFinanzasDatosInicializados) return;
+            try {
+                const payload = estadoLocalFinanzasParaNube();
+                payload.actualizadoEn = firebase.firestore.FieldValue.serverTimestamp();
+                window.bsFinanzasCloudDocRef.set(payload, { merge: true }).catch(err => console.error('Error guardando finanzas en Firebase:', err));
+            } catch (err) {
+                console.error('Error preparando finanzas para Firebase:', err);
+            }
+        }
+
+        function programarGuardadoNubeFinanzas() {
+            if (!window.bsFinanzasCloudDocRef || window.bsFinanzasAplicandoNube || !window.bsFinanzasDatosInicializados) return;
+            clearTimeout(window.bsFinanzasCloudTimer);
+            window.bsFinanzasCloudTimer = setTimeout(guardarEstadoNubeFinanzas, 350);
+        }
+
+        function aplicarEstadoNubeFinanzas(data) {
+            if (!data) return;
+            window.bsFinanzasAplicandoNube = true;
+            try {
+                centrosDeportivos = data.centros || centrosDeportivos || {};
+                entrenadoresPorCentro = data.pts || entrenadoresPorCentro || {};
+                historicoCierres = data.historico || historicoCierres || [];
+
+                localStorage.setItem('besoul_v5_centros', JSON.stringify(centrosDeportivos));
+                localStorage.setItem('besoul_v5_pts', JSON.stringify(entrenadoresPorCentro));
+                localStorage.setItem('besoul_v5_history', JSON.stringify(historicoCierres));
+            } finally {
+                window.bsFinanzasAplicandoNube = false;
+            }
+
+            const appVisible = document.getElementById('app-content') && !document.getElementById('app-content').classList.contains('hidden');
+            if (appVisible) {
+                if (idCentroSeleccionado && !centrosDeportivos[idCentroSeleccionado]) idCentroSeleccionado = null;
+                if (idPTSeleccionado && !entrenadoresPorCentro[idPTSeleccionado]) idPTSeleccionado = null;
+                renderCentros();
+                renderEntrenadoresDelCentro();
+                if (idPTSeleccionado) abrirPerfilPT(idPTSeleccionado);
+                recalcularCuadroMandoGlobal();
+                if (!document.getElementById('view-historico').classList.contains('hidden')) renderHistorico();
+            }
+        }
+
+        function iniciarSincronizacionNubeFinanzas() {
+            try {
+                if (!window.firebase) {
+                    console.warn('Firebase no está cargado. Finanzas funcionará solo en este navegador.');
+                    return;
+                }
+                if (!firebase.apps.length) firebase.initializeApp(BS_FIREBASE_CONFIG);
+                const firestore = firebase.firestore();
+                window.bsFinanzasCloudDocRef = firestore.collection('besoulSuite').doc('finanzas');
+
+                window.bsFinanzasCloudDocRef.onSnapshot(snapshot => {
+                    if (snapshot.exists) {
+                        aplicarEstadoNubeFinanzas(snapshot.data());
+                    }
+                }, err => {
+                    console.error('Error conectando finanzas con Firebase:', err);
+                    alert('No se ha podido conectar Finanzas con Firebase. Revisa las reglas de Firestore.');
+                });
+            } catch (err) {
+                console.error('Error iniciando sincronización de finanzas:', err);
+            }
+        }
+
+        iniciarSincronizacionNubeFinanzas();
+
+
+        function ejecutarLogin() {
+            const user = document.getElementById('login-user').value.trim().toLowerCase();
+            const pass = document.getElementById('login-pass').value.trim();
+
+            if (CREDENCIALES_ADMIN[user] && CREDENCIALES_ADMIN[user] === pass) {
+                document.getElementById('auth-screen').classList.add('hidden');
+                document.getElementById('app-content').classList.remove('hidden');
+                document.getElementById('lbl-usuario-logeado').innerText = user;
+                // La carga e inicialización se ejecutan tras validar credenciales de administración
+                checkUrlAndLoadData();
+            } else {
+                alert("Acceso denegado: Credenciales de administrador incorrectas.");
+            }
+        }
+
+        function logout() { window.location.reload(); }
+
+        function checkUrlAndLoadData() {
+            const params = new URLSearchParams(window.location.search);
+            const cloudData = params.get('data');
+
+            if (cloudData) {
+                try {
+                    const decrypted = JSON.parse(decodeURIComponent(atob(cloudData)));
+                    centrosDeportivos = decrypted.centros;
+                    entrenadoresPorCentro = decrypted.pts;
+                    historicoCierres = decrypted.historico;
+                    
+                    localStorage.setItem('besoul_v5_centros', JSON.stringify(centrosDeportivos));
+            programarGuardadoNubeFinanzas();
+                    localStorage.setItem('besoul_v5_pts', JSON.stringify(entrenadoresPorCentro));
+            programarGuardadoNubeFinanzas();
+                    localStorage.setItem('besoul_v5_history', JSON.stringify(historicoCierres));
+            programarGuardadoNubeFinanzas();
+                } catch (e) {
+                    loadFromLocalStorage();
+                }
+            } else {
+                loadFromLocalStorage();
+            }
+            initApp();
+        }
+
+        function loadFromLocalStorage() {
+            centrosDeportivos = JSON.parse(localStorage.getItem('besoul_v5_centros')) || {
+                "c1": { id: "c1", nombre: "Alfa Prime Málaga", canonFijo: 300, canonPt: 200 },
+                "c2": { id: "c2", nombre: "Lagunillas", canonFijo: 1000, canonPt: 0 },
+                "c3": { id: "c3", nombre: "Inacua", canonFijo: 1000, canonPt: 200 },
+                "c4": { id: "c4", nombre: "Fantasy", canonFijo: 300, canonPt: 200 }
+            };
+
+            // SE CONSERVAN LOS INTEGRANTES DE TRABAJO ORIGINALES AJUSTADOS A LA VARIABLE DE HORAS
+            entrenadoresPorCentro = JSON.parse(localStorage.getItem('besoul_v5_pts')) || {
+                "pt-1": { id: "pt-1", centroId: "c1", nombre: "Carmen", clientes: 25, sesionesMedias: 200, precioSesion: 30, pactoEspecial: true, aporteIndividualCliente: 1 },
+                "pt-2": { id: "pt-2", centroId: "c1", nombre: "Juan Carlos", clientes: 20, sesionesMedias: 160, precioSesion: 30, pactoEspecial: false, aporteIndividualCliente: 1 },
+                "pt-3": { id: "pt-3", centroId: "c2", nombre: "Lillo", clientes: 60, sesionesMedias: 180, precioSesion: 30, pactoEspecial: false, aporteIndividualCliente: 1 },
+                "pt-4": { id: "pt-4", centroId: "c2", nombre: "Rubén", clientes: 50, sesionesMedias: 150, precioSesion: 30, pactoEspecial: false, aporteIndividualCliente: 1 },
+                "pt-5": { id: "pt-5", centroId: "c4", nombre: "Miguel", clientes: 25, sesionesMedias: 120, precioSesion: 25, pactoEspecial: false, aporteIndividualCliente: 1 }
+            };
+
+            historicoCierres = JSON.parse(localStorage.getItem('besoul_v5_history')) || [];
+        }
+
+        function copiarEnlaceSincronizado() {
+            if (window.bsFinanzasCloudDocRef) {
+                const urlLimpia = window.location.origin + window.location.pathname;
+                navigator.clipboard.writeText(urlLimpia).then(() => {
+                    alert('Enlace copiado. Los datos se sincronizan automáticamente con Firebase.');
+                }).catch(() => {
+                    prompt('Copia este enlace manualmente:', urlLimpia);
+                });
+                return;
+            }
+            const paqueteData = { centros: centrosDeportivos, pts: entrenadoresPorCentro, historico: historicoCierres };
+            const stringificado = btoa(encodeURIComponent(JSON.stringify(paqueteData)));
+            const urlCompleta = window.location.origin + window.location.pathname + "?data=" + stringificado;
+
+            navigator.clipboard.writeText(urlCompleta).then(() => {
+                alert("¡Enlace de sincronización copiado! Pégatelo en tu WhatsApp.");
+            }).catch(() => {
+                prompt("Copia este enlace manualmente:", urlCompleta);
+            });
+        }
+
+        function initApp() {
+            window.bsFinanzasDatosInicializados = true;
+            runClock();
+            renderCentros();
+            recalcularCuadroMandoGlobal();
+            programarGuardadoNubeFinanzas();
+        }
+
+        function runClock() {
+            const el = document.getElementById('live-clock');
+            const refresh = () => {
+                const f = new Date();
+                el.innerText = f.toLocaleDateString('es-ES', { weekday: 'long', hour: '2-digit', minute: '2-digit' }).toUpperCase();
+            };
+            setInterval(refresh, 60000); refresh();
+        }
+
+        function switchTab(tab) {
+            document.getElementById('view-directo').className = tab === 'directo' ? 'space-y-6' : 'hidden';
+            document.getElementById('view-historico').className = tab === 'historico' ? 'space-y-6' : 'hidden';
+            document.getElementById('btn-tab-directo').className = tab === 'directo' ? "px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950 shadow" : "px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white bg-slate-900/50 border border-slate-800";
+            document.getElementById('btn-tab-historico').className = tab === 'historico' ? "px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950 shadow" : "px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white bg-slate-900/50 border border-slate-800";
+            if(tab === 'historico') renderHistorico();
+        }
+
+        function renderCentros() {
+            const container = document.getElementById('center-selector-list'); container.innerHTML = '';
+            Object.keys(centrosDeportivos).forEach(key => {
+                const center = centrosDeportivos[key];
+                const btn = document.createElement('div');
+                btn.className = `p-3 rounded-lg text-xs font-bold border cursor-pointer flex justify-between items-center transition-all ${idCentroSeleccionado === key ? 'bg-amber-500/10 border-amber-500 text-amber-400' : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'}`;
+                btn.onclick = () => abrirCentro(key);
+                const totalPTs = Object.values(entrenadoresPorCentro).filter(p => p.centroId === key).length;
+                btn.innerHTML = `<span>${center.nombre}</span><span class="bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded text-[10px]">${totalPTs} PTs</span>`;
+                container.appendChild(btn);
+            });
+        }
+
+        function abrirCentro(key) {
+            idCentroSeleccionado = key; idPTSeleccionado = null;
+            renderCentros(); renderEntrenadoresDelCentro();
+            const center = centrosDeportivos[key];
+            document.getElementById('center-profile-title').innerText = `Configuración Base: ${center.nombre}`;
+            document.getElementById('center-inputs-area').classList.remove('hidden');
+            document.getElementById('btn-eliminar-centro').classList.remove('hidden');
+            document.getElementById('input-center-name').value = center.nombre;
+            document.getElementById('input-center-canon-fijo').value = center.canonFijo;
+            document.getElementById('input-center-canon-pt').value = center.canonPt;
+            document.getElementById('profile-inputs-area').classList.add('hidden');
+            document.getElementById('action-area').classList.add('hidden');
+            document.getElementById('btn-eliminar-pt').classList.add('hidden');
+        }
+
+        function actualizarVariablesCentro() {
+            if (!idCentroSeleccionado) return;
+            centrosDeportivos[idCentroSeleccionado].nombre = document.getElementById('input-center-name').value || "Centro Sin Nombre";
+            centrosDeportivos[idCentroSeleccionado].canonFijo = parseFloat(document.getElementById('input-center-canon-fijo').value) || 0;
+            centrosDeportivos[idCentroSeleccionado].canonPt = parseFloat(document.getElementById('input-center-canon-pt').value) || 0;
+            localStorage.setItem('besoul_v5_centros', JSON.stringify(centrosDeportivos));
+            programarGuardadoNubeFinanzas();
+            renderCentros(); recalcularCuadroMandoGlobal();
+        }
+
+        function agregarCentro() {
+            const id = "c-" + Date.now();
+            centrosDeportivos[id] = { id: id, nombre: "Nuevo Centro Deportivo", canonFijo: 300, canonPt: 200 };
+            localStorage.setItem('besoul_v5_centros', JSON.stringify(centrosDeportivos));
+            programarGuardadoNubeFinanzas();
+            abrirCentro(id); recalcularCuadroMandoGlobal();
+        }
+
+        function eliminarCentroActivo() {
+            if (!idCentroSeleccionado) return;
+            if (confirm(`¿Estás seguro de borrar este centro?`)) {
+                delete centrosDeportivos[idCentroSeleccionado];
+                localStorage.setItem('besoul_v5_centros', JSON.stringify(centrosDeportivos));
+            programarGuardadoNubeFinanzas();
+                idCentroSeleccionado = null;
+                document.getElementById('center-inputs-area').classList.add('hidden');
+                document.getElementById('btn-eliminar-centro').classList.add('hidden');
+                renderCentros(); renderEntrenadoresDelCentro(); recalcularCuadroMandoGlobal();
+            }
+        }
+
+        function renderEntrenadoresDelCentro() {
+            const container = document.getElementById('trainer-selector-list');
+            if (!idCentroSeleccionado) {
+                container.innerHTML = `<div class="text-xs text-slate-500 text-center pt-10">Selecciona un centro para ver a sus entrenadores.</div>`;
+                document.getElementById('btn-add-pt').classList.add('hidden'); return;
+            }
+
+            document.getElementById('btn-add-pt').classList.remove('hidden');
+            const listaFiltrada = Object.values(entrenadoresPorCentro).filter(p => p.centroId === idCentroSeleccionado);
+
+            if (listaFiltrada.length === 0) {
+                container.innerHTML = `<div class="text-xs text-slate-500 text-center pt-10">No hay entrenadores. Añade el primero.</div>`; return;
+            }
+
+            container.innerHTML = '';
+            listaFiltrada.forEach(tr => {
+                const facturacion = tr.sesionesMedias * tr.precioSesion;
+                const btn = document.createElement('div');
+                btn.className = `flex justify-between items-center p-2.5 rounded border text-xs cursor-pointer transition-all ${idPTSeleccionado === tr.id ? 'bg-amber-500/10 border-amber-500 text-amber-400' : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'}`;
+                btn.onclick = () => abrirPerfilPT(tr.id);
+                btn.innerHTML = `<span>${tr.nombre}</span><span class="font-mono text-slate-400">${facturacion.toLocaleString('es-ES')} €</span>`;
+                container.appendChild(btn);
+            });
+        }
+
+        function abrirPerfilPT(id) {
+            idPTSeleccionado = id; renderEntrenadoresDelCentro();
+            const tr = entrenadoresPorCentro[id];
+            document.getElementById('current-profile-title').innerText = `Gestión Operativa: ${tr.nombre}`;
+            document.getElementById('profile-inputs-area').classList.remove('hidden');
+            document.getElementById('action-area').classList.remove('hidden');
+            document.getElementById('btn-eliminar-pt').classList.remove('hidden');
+
+            document.getElementById('input-nombre-pt').value = tr.nombre;
+            document.getElementById('input-clientes').value = tr.clientes;
+            document.getElementById('input-sesiones-medias').value = tr.sesionesMedias;
+            document.getElementById('input-precio-sesion').value = tr.precioSesion;
+            document.getElementById('chk-pacto-especial').checked = tr.pactoEspecial || false;
+            document.getElementById('input-pt-aporte-individual').value = tr.aporteIndividualCliente !== undefined ? tr.aporteIndividualCliente : 1;
+
+            calcularTramosEnTiempoReal();
+        }
+
+        function actualizarNombreEnVivo() {
+            if (!idPTSeleccionado) return;
+            entrenadoresPorCentro[idPTSeleccionado].nombre = document.getElementById('input-nombre-pt').value || "Sin Nombre";
+        }
+
+        function calcularTramosEnTiempoReal() {
+            if (!idPTSeleccionado) return;
+
+            const clientes = parseInt(document.getElementById('input-clientes').value) || 0;
+            const horasImpartidas = parseFloat(document.getElementById('input-sesiones-medias').value) || 0;
+            const precioHora = parseFloat(document.getElementById('input-precio-sesion').value) || 0;
+            const esPactoEspecialCarmen = document.getElementById('chk-pacto-especial').checked;
+            const factorAporteClienteIndividual = parseFloat(document.getElementById('input-pt-aporte-individual').value) || 0;
+
+            const F = horasImpartidas * precioHora;
+            const avanceMarginalClientesActivos = clientes * factorAporteClienteIndividual;
+            const containerFilas = document.getElementById('container-filas-tramos');
+            containerFilas.innerHTML = ''; 
+
+            let aporteBrutoBS = 0;
+
+            if (esPactoEspecialCarmen) {
+                document.getElementById('lbl-titulo-tramos').innerText = "Tarifa Especial (Pacto Fijo Alternativo)";
+                aporteBrutoBS = 500;
+                let exceso = F > 500 ? F - 500 : 0;
+                let bloquesExtras = Math.floor(exceso / 500);
+                let tramosExtrasBS = bloquesExtras * 100;
+                aporteBrutoBS += tramosExtrasBS;
+
+                containerFilas.innerHTML += `
+                    <div class="flex justify-between text-xs border-b border-slate-800/40 pb-1">
+                        <span class="text-slate-400">Canon Base Fijo Inicial Reconocido</span>
+                        <span class="font-mono text-slate-300">PT: 0.00 € | BS: 500.00 €</span>
+                    </div>
+                    <div class="flex justify-between text-xs border-b border-slate-800/40 pb-1">
+                        <span class="text-slate-400">Exceso Marginal por Volumen (${bloquesExtras} bloques de 500€)</span>
+                        <span class="font-mono text-slate-300">PT: ${(exceso - tramosExtrasBS).toFixed(2)} € | BS: ${tramosExtrasBS.toFixed(2)} €</span>
+                    </div>
+                `;
+            } else {
+                document.getElementById('lbl-titulo-tramos').innerText = "Reparto Progresivo por Tramos (Cálculo Marginal s/ Horas Reales)";
+                
+                let pt1 = 0, bs1 = 0, pt2 = 0, bs2 = 0, pt3_total = 0, bs3 = 0;
+
+                let fT1 = Math.min(F, 1400); pt1 = fT1 * 0.50; bs1 = fT1 * 0.50;
+                let fT2 = F > 1400 ? Math.min(F, 1900) - 1400 : 0; pt2 = fT2 * 0.60; bs2 = fT2 * 0.40;
+                let umbralExactoTecho = 1900 + (100 / 0.30); 
+
+                if (F > 1900) {
+                    let facturacionTotalTramo3 = Math.min(F, 2400) - 1900;
+                    if (F <= umbralExactoTecho) {
+                        let fT3_base = facturacionTotalTramo3; bs3 = fT3_base * 0.30; pt3_total = fT3_base * 0.70;
+                    } else {
+                        let fT3_base = umbralExactoTecho - 1900; bs3 = 100.00;
+                        pt3_total = (fT3_base * 0.70) + (facturacionTotalTramo3 - fT3_base);
+                    }
+                }
+
+                aporteBrutoBS = bs1 + bs2 + bs3;
+
+                containerFilas.innerHTML += `
+                    <div class="flex justify-between text-xs border-b border-slate-800/30 pb-1"><span class="text-slate-400">Tramo 1 (0 € a 1.400 €) | Reparto 50% / 50%</span><span class="font-mono">PT: ${pt1.toFixed(2)} € | BS: ${bs1.toFixed(2)} €</span></div>
+                    <div class="flex justify-between text-xs border-b border-slate-800/30 pb-1"><span class="text-slate-400">Tramo 2 (1.400 € a 1.900 €) | Reparto 60% / 40%</span><span class="font-mono">PT: ${pt2.toFixed(2)} € | BS: ${bs2.toFixed(2)} €</span></div>
+                    <div class="flex justify-between text-xs border-b border-slate-800/30 pb-1"><span class="text-slate-400">Tramo 3 (1.900 € a 2.400 €) | Ajuste de Techo Prorrateado</span><span class="font-mono">PT: ${pt3_total.toFixed(2)} € | BS: ${bs3.toFixed(2)} €</span></div>
+                `;
+
+                let facturacionExcesoTecho = F > umbralExactoTecho ? F - umbralExactoTecho : 0;
+                if (facturacionExcesoTecho > 0) {
+                    let numBloquesExtras = Math.floor(facturacionExcesoTecho / 500);
+                    for (let i = 1; i <= numBloquesExtras; i++) {
+                        containerFilas.innerHTML += `
+                            <div class="flex justify-between text-xs border-b border-slate-800/30 pb-1 text-amber-400 font-medium">
+                                <span>Tramo Extra Bloque #${i} (+500 € Horas extra)</span>
+                                <span class="font-mono">PT: 400.00 € | BS: 100.00 €</span>
+                            </div>
+                        `;
+                        aporteBrutoBS += 100;
+                    }
+                    let residuoFacturacion = facturacionExcesoTecho % 500;
+                    if (residuoFacturacion > 0) {
+                        containerFilas.innerHTML += `
+                            <div class="flex justify-between text-xs border-b border-slate-800/30 pb-1 text-slate-400 italic">
+                                <span>Exceso Residual s/ Horas</span>
+                                <span class="font-mono text-slate-300">PT: ${residuoFacturacion.toFixed(2)} € | BS: 0.00 €</span>
+                            </div>
+                        `;
+                    }
+                } else {
+                    containerFilas.innerHTML += `
+                        <div class="flex justify-between text-xs border-b border-slate-800/30 pb-1">
+                            <span class="text-slate-400">Tramo 4 (Facturación > 2.400 €) | Reparto 80% / 20%</span>
+                            <span class="font-mono text-slate-500">PT: 0.00 € | BS: 0.00 €</span>
+                        </div>
+                    `;
+                }
+            }
+
+            const totalRecaudadoPorPT = aporteBrutoBS + avanceMarginalClientesActivos;
+            document.getElementById('lbl-fact-calculada-txt').innerText = `${F.toLocaleString('es-ES', {minimumFractionDigits: 2})} €`;
+            document.getElementById('lbl-aporte-clientes-txt').innerText = `${avanceMarginalClientesActivos.toLocaleString('es-ES', {minimumFractionDigits: 2})} €`;
+            document.getElementById('lbl-total-aporte-bs').innerText = `PT Neto: ${(F - totalRecaudadoPorPT).toFixed(2)} € | BS Neto: ${totalRecaudadoPorPT.toFixed(2)} €`;
+        }
+
+        function guardarRegistroPT() {
+            if (!idPTSeleccionado) return;
+            const tr = entrenadoresPorCentro[idPTSeleccionado];
+            tr.nombre = document.getElementById('input-nombre-pt').value;
+            tr.clientes = parseInt(document.getElementById('input-clientes').value) || 0;
+            tr.sesionesMedias = parseFloat(document.getElementById('input-sesiones-medias').value) || 0;
+            tr.precioSesion = parseFloat(document.getElementById('input-precio-sesion').value) || 0;
+            tr.pactoEspecial = document.getElementById('chk-pacto-especial').checked;
+            tr.aporteIndividualCliente = parseFloat(document.getElementById('input-pt-aporte-individual').value) || 0;
+
+            localStorage.setItem('besoul_v5_pts', JSON.stringify(entrenadoresPorCentro));
+            programarGuardadoNubeFinanzas();
+            renderEntrenadoresDelCentro(); recalcularCuadroMandoGlobal();
+            alert("Ficha técnica consolidada.");
+        }
+
+        function agregarEntrenador() {
+            if (!idCentroSeleccionado) return;
+            const id = "pt-" + Date.now();
+            entrenadoresPorCentro[id] = { id: id, centroId: idCentroSeleccionado, nombre: "Nuevo PT", clientes: 0, sesionesMedias: 0, precioSesion: 0, pactoEspecial: false, aporteIndividualCliente: 1 };
+            localStorage.setItem('besoul_v5_pts', JSON.stringify(entrenadoresPorCentro));
+            programarGuardadoNubeFinanzas();
+            abrirPerfilPT(id);
+        }
+
+        function eliminarEntrenadorActivo() {
+            if (!idPTSeleccionado) return;
+            if (confirm("¿Dar de baja este entrenador?")) {
+                delete entrenadoresPorCentro[idPTSeleccionado];
+                localStorage.setItem('besoul_v5_pts', JSON.stringify(entrenadoresPorCentro));
+            programarGuardadoNubeFinanzas();
+                idPTSeleccionado = null;
+                document.getElementById('profile-inputs-area').classList.add('hidden');
+                document.getElementById('action-area').classList.add('hidden');
+                renderEntrenadoresDelCentro(); recalcularCuadroMandoGlobal();
+            }
+        }
+
+        function recalcularCuadroMandoGlobal() {
+            let redFactTotal = 0, redPtNetoTotal = 0, redBsAporteTotal = 0, redClientesTotal = 0;
+            
+            Object.keys(entrenadoresPorCentro).forEach(ptId => {
+                const tr = entrenadoresPorCentro[ptId];
+                const F = tr.sesionesMedias * tr.precioSesion;
+                const factorInd = tr.aporteIndividualCliente !== undefined ? tr.aporteIndividualCliente : 1;
+                const aporteCli = tr.clientes * factorInd;
+
+                let aporteBrutoBS = 0;
+                if (tr.pactoEspecial) {
+                    aporteBrutoBS = 500; if (F > 500) aporteBrutoBS += Math.floor((F - 500) / 500) * 100;
+                } else {
+                    let bs1 = Math.min(F, 1400) * 0.50;
+                    let fT2 = F > 1400 ? Math.min(F, 1900) - 1400 : 0; let bs2 = fT2 * 0.40;
+                    let umbralTecho = 1900 + (100 / 0.30); let bs3 = 0;
+                    if (F > 1900) bs3 = F <= umbralTecho ? (Math.min(F, 2400) - 1900) * 0.30 : 100.00;
+                    
+                    aporteBrutoBS = bs1 + bs2 + bs3;
+                    if (F > umbralTecho) aporteBrutoBS += Math.floor((F - umbralTecho) / 500) * 100;
+                }
+
+                redFactTotal += F;
+                redBsAporteTotal += (aporteBrutoBS + aporteCli);
+                redPtNetoTotal += (F - (aporteBrutoBS + aporteCli));
+                redClientesTotal += tr.clientes;
+            });
+
+            let redCosteCanonesCentros = 0;
+            Object.keys(centrosDeportivos).forEach(cId => {
+                const center = centrosDeportivos[cId];
+                const numeroPTsEnClub = Object.values(entrenadoresPorCentro).filter(p => p.centroId === cId).length;
+                redCosteCanonesCentros += center.canonFijo + (numeroPTsEnClub * center.canonPt);
+            });
+
+            document.getElementById('kpi-fact-total').innerText = `${redFactTotal.toLocaleString('es-ES')} €`;
+            document.getElementById('kpi-pt-total').innerText = `${redPtNetoTotal.toLocaleString('es-ES')} €`;
+            document.getElementById('kpi-bs-total').innerText = `${(redBsAporteTotal - redCosteCanonesCentros).toLocaleString('es-ES')} €`;
+            document.getElementById('kpi-clientes-total').innerText = redClientesTotal;
+            document.getElementById('kpi-canones-total').innerText = `${redCosteCanonesCentros.toLocaleString('es-ES')} €`;
+        }
+
+        function congelarMesEnHistorico() {
+            const mesAño = prompt("Introduce el nombre del periodo (Ej: Junio 2026):");
+            if (!mesAño) return;
+
+            historicoCierres.push({
+                id: Date.now(), periodo: mesAño,
+                fact: parseFloat(document.getElementById('kpi-fact-total').innerText.replace(/\./g, '').replace(',', '.')),
+                pt: parseFloat(document.getElementById('kpi-pt-total').innerText.replace(/\./g, '').replace(',', '.')),
+                bs: parseFloat(document.getElementById('kpi-bs-total').innerText.replace(/\./g, '').replace(',', '.')),
+                clientes: parseInt(document.getElementById('kpi-clientes-total').innerText)
+            });
+            localStorage.setItem('besoul_v5_history', JSON.stringify(historicoCierres));
+            programarGuardadoNubeFinanzas();
+            alert(`Cierre de ${mesAño} archivado.`);
+        }
+
+        function renderHistorico() {
+            const tbody = document.getElementById('tabla-historico-cuerpo'); tbody.innerHTML = '';
+            if (historicoCierres.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="py-4 text-center text-slate-500">No hay cierres archivados.</td></tr>`; return;
+            }
+            historicoCierres.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-slate-800/40 hover:bg-slate-900/40 transition";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-bold text-white">${item.periodo}</td>
+                    <td class="py-3 px-4 font-semibold">${item.fact.toLocaleString()} €</td>
+                    <td class="py-3 px-4 text-slate-400">${item.pt.toLocaleString()} €</td>
+                    <td class="py-3 px-4 text-emerald-400 font-bold">${item.bs.toLocaleString()} €</td>
+                    <td class="py-3 px-4 text-slate-400">${item.clientes} usuarios</td>
+                    <td class="py-3 px-4"><button onclick="borrarFilaHistorico(${item.id})" class="text-red-500 hover:underline">Borrar</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function borrarFilaHistorico(id) {
+            if (confirm("¿Eliminar?")) {
+                historicoCierres = historicoCierres.filter(item => item.id !== id);
+                localStorage.setItem('besoul_v5_history', JSON.stringify(historicoCierres));
+            programarGuardadoNubeFinanzas(); renderHistorico();
+            }
+        }
+
+        // Se elimina la ejecución directa del arranque automático para esperar a la validación del login corporativo
     </script>
 </body>
 </html>
