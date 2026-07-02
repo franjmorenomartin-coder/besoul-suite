@@ -12,28 +12,53 @@
 </head>
 <body class="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
 
-  <main class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-center">
-    <div class="bg-white rounded-xl p-3 w-40 mx-auto mb-6 border border-slate-700">
-      <div class="text-amber-500 font-extrabold text-2xl tracking-tighter italic font-serif">besoul</div>
-      <div class="text-slate-950 font-black text-[10px] tracking-[0.25em] border-t border-slate-950 mt-1">FIT</div>
-    </div>
+  <main class="w-full max-w-5xl">
+    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl text-center">
+      <div class="bg-white rounded-xl p-3 w-40 mx-auto mb-6 border border-slate-700">
+        <div class="text-amber-500 font-extrabold text-2xl tracking-tighter italic font-serif">besoul</div>
+        <div class="text-slate-950 font-black text-[10px] tracking-[0.25em] border-t border-slate-950 mt-1">FIT</div>
+      </div>
 
-    <h1 class="text-xl font-black mb-2">BESOUL Suite</h1>
-    <p class="text-sm text-slate-400 mb-6">Selecciona la aplicación que quieres abrir</p>
+      <h1 class="text-2xl font-black mb-2">BESOUL Suite</h1>
+      <p class="text-sm text-slate-400 mb-8">Sistema operativo interno para agenda, crecimiento comercial y control financiero.</p>
 
-    <div class="space-y-3">
-      <a href="./agenda.html" class="block bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-3 rounded-xl transition">
-        Abrir Agenda / Entrenadores
-      </a>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+        <a href="./agenda.html" class="group block bg-slate-950 border border-slate-800 hover:border-amber-500/70 rounded-2xl p-5 transition shadow-lg">
+          <div class="flex items-center justify-between mb-4">
+            <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-amber-500 text-slate-950 font-black">A</span>
+            <span class="text-[10px] uppercase tracking-wider text-amber-400 font-bold">Operativa</span>
+          </div>
+          <h2 class="text-lg font-black text-white group-hover:text-amber-400 transition">Agenda</h2>
+          <p class="text-xs text-slate-400 mt-2 leading-relaxed">Entrenadores, clientes, grupos, sesiones, pruebas CRM, contratos, descuentos e histórico operativo.</p>
+          <div class="mt-5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-center font-black py-2.5 rounded-xl transition">Abrir Agenda</div>
+        </a>
 
-      <a href="./finanzas.html" class="block bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black py-3 rounded-xl transition">
-        Abrir Gestión Financiera
-      </a>
-    </div>
+        <a href="./crm.html" class="group block bg-slate-950 border border-slate-800 hover:border-cyan-500/70 rounded-2xl p-5 transition shadow-lg">
+          <div class="flex items-center justify-between mb-4">
+            <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-cyan-400 text-slate-950 font-black">C</span>
+            <span class="text-[10px] uppercase tracking-wider text-cyan-300 font-bold">Growth</span>
+          </div>
+          <h2 class="text-lg font-black text-white group-hover:text-cyan-300 transition">CRM</h2>
+          <p class="text-xs text-slate-400 mt-2 leading-relaxed">Leads, fuentes, pruebas, asignación a entrenadores, seguimiento comercial y conversión a cliente.</p>
+          <div class="mt-5 bg-cyan-400 hover:bg-cyan-500 text-slate-950 text-center font-black py-2.5 rounded-xl transition">Abrir CRM</div>
+        </a>
 
-    <p class="text-[11px] text-slate-500 mt-5 leading-relaxed">
-      Publicado en GitHub Pages. Los datos seguirán siendo locales hasta conectar Firebase.
-    </p>
+        <a href="./finanzas.html" class="group block bg-slate-950 border border-slate-800 hover:border-emerald-500/70 rounded-2xl p-5 transition shadow-lg">
+          <div class="flex items-center justify-between mb-4">
+            <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-500 text-slate-950 font-black">F</span>
+            <span class="text-[10px] uppercase tracking-wider text-emerald-400 font-bold">Administración</span>
+          </div>
+          <h2 class="text-lg font-black text-white group-hover:text-emerald-400 transition">Finanzas</h2>
+          <p class="text-xs text-slate-400 mt-2 leading-relaxed">Centros, entrenadores, tramos, comisiones, cierres históricos y resultado financiero BESOUL.</p>
+          <div class="mt-5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-center font-black py-2.5 rounded-xl transition">Abrir Finanzas</div>
+        </a>
+      </div>
+
+      <div class="mt-7 border-t border-slate-800 pt-5 text-[11px] text-slate-500 leading-relaxed">
+        <p>Acceso protegido con Firebase Authentication. Los datos se sincronizan con Firebase/Firestore.</p>
+        <p class="mt-1">Usa siempre “Salir” en equipos compartidos.</p>
+      </div>
+    </section>
   </main>
 
 </body>
