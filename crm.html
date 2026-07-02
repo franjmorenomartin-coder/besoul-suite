@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -819,51 +818,102 @@ function objetoPruebaAgendaCRM(leadId, leadData, claveInfo) {
 }
 async function sincronizarPruebaAgendaDesdeLead(leadId, leadData, avisar = true) {
   if (!leadId || !db) return { visible:false };
+
   const agendaRef = db.collection('besoulSuite').doc('agenda');
-  const snap = await agendaRef.get();
-  const agendaData = snap.exists ? snap.data() : {};
-  const agenda = agendaData.agenda || {};
-  eliminarPruebaAgendaEnObjeto(agenda, leadId);
+  const borrados = {};
+  const resultado = { visible:false, clave:'', trainerKey:leadData.trainerKey || '', error:'' };
 
-  let resultado = { visible:false, clave:'', trainerKey:leadData.trainerKey || '', error:'' };
+  try {
+    await db.runTransaction(async tx => {
+      const snap = await tx.get(agendaRef);
+      const agendaData = snap.exists ? snap.data() : {};
+      const agenda = agendaData.agenda || {};
+      const pruebasCRM = agendaData.pruebasCRM || {};
+      const updatePayload = {
+        ultimaActualizacionLocal: ahoraISO(),
+        actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+      };
 
-  if (debeVersePruebaEnAgenda(leadData)) {
-    const claveInfo = claveAgendaDesdeFechaPrueba(leadData.fechaPrueba);
-    if (!claveInfo.ok) {
-      resultado.error = claveInfo.error;
-    } else {
-      const trainerKey = leadData.trainerKey;
-      if (!agenda[trainerKey]) agenda[trainerKey] = {};
-      const ocupada = agenda[trainerKey][claveInfo.clave];
-      if (ocupada) {
-        resultado.error = `La franja ${claveInfo.clave.replace('_', ' ')} ya está ocupada por ${ocupada.nombre || 'otra cita'}. Lead guardado, pero la prueba no se ha colocado en Agenda.`;
-      } else {
-        agenda[trainerKey][claveInfo.clave] = objetoPruebaAgendaCRM(leadId, leadData, claveInfo);
-        resultado.visible = true;
-        resultado.clave = claveInfo.clave;
-        if (claveInfo.normalizada && avisar) {
-          alert(`La prueba se mostrará en Agenda en la franja más cercana: ${claveInfo.clave.replace('_', ' ')}.`);
+      // Borrar cualquier prueba anterior de este lead, tanto del mapa principal agenda
+      // como del mapa auxiliar pruebasCRM. Usamos FieldValue.delete() sobre rutas exactas
+      // para evitar que Firestore ignore cambios por mezcla parcial de mapas.
+      Object.keys(agenda || {}).forEach(trainerKey => {
+        const agendaTrainer = agenda[trainerKey] || {};
+        Object.keys(agendaTrainer).forEach(clave => {
+          const cita = agendaTrainer[clave];
+          if (cita && cita.esPruebaCRM === true && cita.leadId === leadId) {
+            updatePayload[`agenda.${trainerKey}.${clave}`] = firebase.firestore.FieldValue.delete();
+            if (!borrados[trainerKey]) borrados[trainerKey] = {};
+            borrados[trainerKey][clave] = true;
+          }
+        });
+      });
+
+      Object.keys(pruebasCRM || {}).forEach(trainerKey => {
+        const agendaTrainer = pruebasCRM[trainerKey] || {};
+        Object.keys(agendaTrainer).forEach(clave => {
+          const cita = agendaTrainer[clave];
+          if (cita && cita.leadId === leadId) {
+            updatePayload[`pruebasCRM.${trainerKey}.${clave}`] = firebase.firestore.FieldValue.delete();
+            if (!borrados[trainerKey]) borrados[trainerKey] = {};
+            borrados[trainerKey][clave] = true;
+          }
+        });
+      });
+
+      if (debeVersePruebaEnAgenda(leadData)) {
+        const claveInfo = claveAgendaDesdeFechaPrueba(leadData.fechaPrueba);
+        if (!claveInfo.ok) {
+          resultado.error = claveInfo.error;
+        } else {
+          const trainerKey = leadData.trainerKey;
+          const ocupadaAgenda = agenda?.[trainerKey]?.[claveInfo.clave];
+          const ocupadaPrueba = pruebasCRM?.[trainerKey]?.[claveInfo.clave];
+          const ocupadaSeBorra = !!(borrados?.[trainerKey]?.[claveInfo.clave]);
+          const ocupada = !ocupadaSeBorra && (ocupadaAgenda || ocupadaPrueba);
+
+          if (ocupada) {
+            resultado.error = `La franja ${claveInfo.clave.replace('_', ' ')} ya está ocupada por ${ocupada.nombre || 'otra cita'}. Lead guardado, pero la prueba no se ha colocado en Agenda.`;
+          } else {
+            const citaPrueba = objetoPruebaAgendaCRM(leadId, leadData, claveInfo);
+            updatePayload[`agenda.${trainerKey}.${claveInfo.clave}`] = citaPrueba;
+            updatePayload[`pruebasCRM.${trainerKey}.${claveInfo.clave}`] = citaPrueba;
+            resultado.visible = true;
+            resultado.clave = claveInfo.clave;
+
+            if (claveInfo.normalizada && avisar) {
+              setTimeout(() => alert(`La prueba se mostrará en Agenda en la franja más cercana: ${claveInfo.clave.replace('_', ' ')}.`), 50);
+            }
+          }
         }
       }
-    }
+
+      tx.set(agendaRef, updatePayload, { merge:true });
+    });
+
+    await db.collection('besoulLeads').doc(leadId).set({
+      agendaPruebaVisible: resultado.visible,
+      agendaPruebaClave: resultado.clave || '',
+      agendaPruebaTrainerKey: resultado.trainerKey || '',
+      agendaPruebaError: resultado.error || '',
+      agendaPruebaSyncAt: ahoraISO()
+    }, { merge:true });
+
+    if (resultado.error && avisar) alert(resultado.error);
+    return resultado;
+  } catch (err) {
+    console.error('Error sincronizando prueba CRM con Agenda:', err);
+    const msg = 'Lead guardado, pero no se ha podido sincronizar la prueba con Agenda. Revisa permisos/reglas o vuelve a guardar.';
+    await db.collection('besoulLeads').doc(leadId).set({
+      agendaPruebaVisible: false,
+      agendaPruebaClave: '',
+      agendaPruebaTrainerKey: resultado.trainerKey || '',
+      agendaPruebaError: msg,
+      agendaPruebaSyncAt: ahoraISO()
+    }, { merge:true }).catch(() => {});
+    if (avisar) alert(msg);
+    return { ...resultado, visible:false, error:msg };
   }
-
-  await agendaRef.set({
-    agenda,
-    ultimaActualizacionLocal: ahoraISO(),
-    actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
-  }, { merge:true });
-
-  await db.collection('besoulLeads').doc(leadId).set({
-    agendaPruebaVisible: resultado.visible,
-    agendaPruebaClave: resultado.clave || '',
-    agendaPruebaTrainerKey: resultado.trainerKey || '',
-    agendaPruebaError: resultado.error || '',
-    agendaPruebaSyncAt: ahoraISO()
-  }, { merge:true });
-
-  if (resultado.error && avisar) alert(resultado.error);
-  return resultado;
 }
 
 async function guardarLead() {
@@ -892,6 +942,7 @@ async function guardarLead() {
 async function eliminarLead() {
   if (!leadEditandoId || !esAdmin()) return;
   if (!confirm('¿Eliminar este lead? Esta acción no borra ningún cliente de Agenda.')) return;
+  await sincronizarPruebaAgendaDesdeLead(leadEditandoId, { estado:'Eliminado', trainerKey:'' }, false);
   await db.collection('besoulLeads').doc(leadEditandoId).delete();
   cerrarModalLead();
 }
