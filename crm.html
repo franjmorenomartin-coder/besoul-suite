@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BESOUL CRM - Captación y Crecimiento</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #0B0F17; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #111827; }
+    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+  </style>
+</head>
+<body class="text-slate-100 min-h-screen flex flex-col">
+
+  <div id="auth-screen" class="flex-1 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md space-y-6 shadow-2xl">
+      <div class="flex flex-col items-center bg-white p-2 rounded-xl border border-slate-700 w-32 mx-auto">
+        <div class="text-amber-500 font-extrabold text-xl tracking-tighter italic font-serif">besoul</div>
+        <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
+      </div>
+      <div class="text-center">
+        <h2 class="text-base font-bold text-white tracking-tight">BESOUL CRM · Firebase Auth</h2>
+        <p class="text-xs text-slate-400 mt-1">Captación, leads, pruebas y conversión</p>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="text-slate-400 block mb-1">Email</label>
+          <input type="email" id="login-email" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="tu@email.com" autocomplete="email">
+        </div>
+        <div>
+          <label class="text-slate-400 block mb-1">Contraseña</label>
+          <input type="password" id="login-pass" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <button onclick="loginCRM()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-lg transition uppercase tracking-wider mt-2">Entrar al CRM</button>
+        <p id="auth-error" class="hidden text-red-400 text-[11px] leading-relaxed"></p>
+      </div>
+    </div>
+  </div>
+
+  <div id="app-content" class="hidden flex-1 flex flex-col">
+    <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div class="flex items-center gap-4">
+        <div class="flex flex-col items-center bg-white p-2 rounded-xl border border-slate-700 shadow-md w-32">
+          <div class="text-amber-500 font-extrabold text-xl tracking-tighter italic font-serif">besoul</div>
+          <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
+        </div>
+        <div>
+          <h1 class="text-lg font-extrabold text-white tracking-tight">BESOUL CRM <span class="text-amber-500 font-medium text-sm">v1.0 Growth</span></h1>
+          <p class="text-xs text-slate-400">Usuario: <span id="lbl-usuario" class="text-amber-400 font-bold uppercase">---</span> · <span id="lbl-rol" class="text-slate-300 italic">---</span></p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap justify-end">
+        <a href="agenda.html" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">Agenda</a>
+        <a href="finanzas.html" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">Finanzas</a>
+        <button onclick="abrirModalLead()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-500 text-slate-950 hover:bg-amber-600 transition">+ Nuevo lead</button>
+        <button onclick="logoutCRM()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-400 border border-slate-800 hover:text-white transition">Salir</button>
+      </div>
+    </header>
+
+    <section class="bg-slate-950 px-6 py-4 border-b border-slate-900 space-y-4">
+      <div class="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-10 gap-3 text-center text-xs">
+        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Leads mes</span><span id="kpi-leads" class="text-sm font-black text-white font-mono">0</span></div>
+        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Contactados</span><span id="kpi-contactados" class="text-sm font-black text-cyan-400 font-mono">0</span></div>
+        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Pruebas solicit.</span><span id="kpi-pruebas-sol" class="text-sm font-black text-amber-400 font-mono">0</span></div>
+        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Pruebas real.</span><span id="kpi-pruebas-real" class="text-sm font-black text-blue-400 font-mono">0</span></div>
+        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Convertidos</span><span id="kpi-convertidos" class="text-sm font-black text-emerald-400 font-mono">0</span></div>
+        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Conversión</span><span id="kpi-conversion" class="text-sm font-black text-emerald-400 font-mono">0%</span></div>
+        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Perdidos</span><span id="kpi-perdidos" class="text-sm font-black text-red-400 font-mono">0</span></div>
+        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Fuente top</span><span id="kpi-fuente" class="text-xs font-black text-white">---</span></div>
+        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Centro top</span><span id="kpi-centro" class="text-xs font-black text-white">---</span></div>
+        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Trainer top</span><span id="kpi-trainer" class="text-xs font-black text-white">---</span></div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-6 gap-3 text-xs">
+        <div>
+          <label class="text-slate-400 block mb-1">Mes</label>
+          <input type="month" id="filter-month" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+        </div>
+        <div>
+          <label class="text-slate-400 block mb-1">Centro</label>
+          <select id="filter-center" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+        </div>
+        <div>
+          <label class="text-slate-400 block mb-1">Entrenador</label>
+          <select id="filter-trainer" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+        </div>
+        <div>
+          <label class="text-slate-400 block mb-1">Estado</label>
+          <select id="filter-status" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+        </div>
+        <div>
+          <label class="text-slate-400 block mb-1">Fuente</label>
+          <select id="filter-source" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+        </div>
+        <div>
+          <label class="text-slate-400 block mb-1">Buscar</label>
+          <input type="text" id="filter-search" oninput="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="nombre, teléfono, nota...">
+        </div>
+      </div>
+    </section>
+
+    <main class="flex-1 p-6 grid grid-cols-1 xl:grid-cols-4 gap-6">
+      <section class="xl:col-span-3 bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col min-h-[700px]">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
+          <div>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-amber-400">Pipeline comercial</h2>
+            <p id="lead-count-label" class="text-[11px] text-slate-500 mt-1">0 leads</p>
+          </div>
+          <button onclick="exportarLeadsCSV()" class="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">Export CSV</button>
+        </div>
+        <div class="overflow-x-auto flex-1">
+          <table class="w-full min-w-[1200px] text-left text-xs border-collapse">
+            <thead>
+              <tr class="text-slate-400 uppercase font-bold border-b border-slate-800">
+                <th class="py-2 px-3">Lead</th>
+                <th class="py-2 px-3">Estado</th>
+                <th class="py-2 px-3">Centro</th>
+                <th class="py-2 px-3">Entrenador</th>
+                <th class="py-2 px-3">Fuente</th>
+                <th class="py-2 px-3">Objetivo</th>
+                <th class="py-2 px-3">Próxima acción</th>
+                <th class="py-2 px-3">Último contacto</th>
+                <th class="py-2 px-3 text-right">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="lead-table-body" class="divide-y divide-slate-800/60 text-slate-300"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside class="bg-slate-900 border border-slate-800 rounded-xl p-4 min-h-[700px]">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-amber-400 border-b border-slate-800 pb-3 mb-3">Alertas internas</h2>
+        <div id="alerts-box" class="space-y-2 text-xs"></div>
+      </aside>
+    </main>
+  </div>
+
+  <div id="modal-lead" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-5xl space-y-4 my-8">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h3 id="modal-title" class="text-sm font-bold text-amber-400 uppercase tracking-wider">Nuevo lead</h3>
+          <p id="modal-subtitle" class="text-[11px] text-slate-500 mt-1">Registro comercial de captación</p>
+        </div>
+        <button onclick="cerrarModalLead()" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 text-xs">
+        <div class="lg:col-span-2 space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label class="text-slate-400 block mb-1">Nombre *</label>
+              <input type="text" id="lead-nombre" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+            </div>
+            <div>
+              <label class="text-slate-400 block mb-1">Teléfono *</label>
+              <input type="tel" id="lead-telefono" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+            </div>
+            <div>
+              <label class="text-slate-400 block mb-1">Email</label>
+              <input type="email" id="lead-email" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label class="text-slate-400 block mb-1">Centro de interés *</label>
+              <select id="lead-centro" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+            </div>
+            <div>
+              <label class="text-slate-400 block mb-1">Entrenador asignado</label>
+              <select id="lead-trainer" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+            </div>
+            <div>
+              <label class="text-slate-400 block mb-1">Entrenador/captador inicial</label>
+              <input type="text" id="lead-captador" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="Si lo captó alguien concreto">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label class="text-slate-400 block mb-1">Estado *</label>
+              <select id="lead-estado" onchange="toggleLeadFields()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+            </div>
+            <div>
+              <label class="text-slate-400 block mb-1">Fuente *</label>
+              <select id="lead-fuente" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+            </div>
+            <div>
+              <label class="text-slate-400 block mb-1">Objetivo</label>
+              <select id="lead-objetivo" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+            </div>
+            <div>
+              <label class="text-slate-400 block mb-1">Horario preferido</label>
+              <select id="lead-horario" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label class="text-slate-400 block mb-1">Tipo de prueba</label>
+              <select id="lead-tipo-prueba" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+                <option value="Prueba gratuita">Prueba gratuita</option>
+                <option value="Valoración inicial">Valoración inicial</option>
+                <option value="No aplica">No aplica</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-slate-400 block mb-1">Duración prueba</label>
+              <select id="lead-duracion-prueba" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+                <option value="45 min">45 min</option>
+                <option value="30 min">30 min</option>
+                <option value="60 min">60 min</option>
+                <option value="Depende">Depende</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-slate-400 block mb-1">Fecha prueba</label>
+              <input type="datetime-local" id="lead-fecha-prueba" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+            </div>
+            <div>
+              <label class="text-slate-400 block mb-1">Motivo pérdida</label>
+              <select id="lead-motivo-perdida" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="text-slate-400 block mb-1">Próxima acción</label>
+              <select id="lead-proxima-accion" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+            </div>
+            <div>
+              <label class="text-slate-400 block mb-1">Fecha próxima acción</label>
+              <input type="datetime-local" id="lead-fecha-accion" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+            </div>
+          </div>
+
+          <div>
+            <label class="text-slate-400 block mb-1">Notas comerciales</label>
+            <textarea id="lead-notas" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white h-24"></textarea>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 space-y-2">
+            <h4 class="text-[11px] text-amber-400 font-bold uppercase tracking-wider">Historial de contacto</h4>
+            <div class="flex gap-2">
+              <select id="event-tipo" class="w-1/3 bg-slate-900 border border-slate-800 rounded p-2 text-white">
+                <option>WhatsApp</option><option>Llamada</option><option>Email</option><option>Nota</option><option>Prueba</option>
+              </select>
+              <input type="text" id="event-text" class="flex-1 bg-slate-900 border border-slate-800 rounded p-2 text-white" placeholder="Ej: se envía WhatsApp y queda pendiente">
+              <button onclick="agregarEventoTemporal()" class="bg-slate-800 text-white px-3 rounded font-bold">+</button>
+            </div>
+            <div id="events-list" class="space-y-2 max-h-[220px] overflow-y-auto pr-1 text-[11px]"></div>
+          </div>
+
+          <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 space-y-2">
+            <h4 class="text-[11px] text-amber-400 font-bold uppercase tracking-wider">Acciones</h4>
+            <button id="btn-convert" onclick="convertirLeadEnCliente()" class="hidden w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-2 rounded">Convertir en cliente de Agenda</button>
+            <button id="btn-delete" onclick="eliminarLead()" class="hidden w-full bg-red-500/10 text-red-400 border border-red-500/30 font-bold py-2 rounded">Eliminar lead</button>
+            <p class="text-[10px] text-slate-500 leading-relaxed">La conversión solo está disponible para administradores y crea una ficha básica en Agenda sin tocar citas existentes.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+        <button onclick="cerrarModalLead()" class="bg-slate-800 text-slate-400 px-4 py-2 rounded font-bold hover:text-white transition">Cancelar</button>
+        <button onclick="guardarLead()" class="bg-amber-500 text-slate-950 px-5 py-2 rounded font-bold hover:bg-amber-600 transition">Guardar lead</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+const BS_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAHp7l39BYkgHTVNNwPaaa21tTksBQ94Zo",
+  authDomain: "besoul-suite.firebaseapp.com",
+  projectId: "besoul-suite",
+  storageBucket: "besoul-suite.firebasestorage.app",
+  messagingSenderId: "215142605598",
+  appId: "1:215142605598:web:943629a7a9c50c034a1f0f"
+};
+
+const ESTADOS = ['Nuevo lead','Contactado','Pendiente de respuesta','Prueba solicitada','Prueba agendada','Prueba realizada','Convertido a cliente','Perdido','Reactivar más adelante'];
+const FUENTES = ['Instagram','WhatsApp','Página web','Google','Recomendación de cliente','Recomendación de entrenador','Recepción del centro deportivo','Campañas pagadas','Clientes antiguos','Otros'];
+const OBJETIVOS = ['','Pérdida de peso','Fuerza','Salud','Dolor / lesión','Rendimiento','Estética','Preparación física','Bienestar general','Otro'];
+const HORARIOS = ['','Mañana','Mediodía','Tarde','Noche','Flexible'];
+const MOTIVOS_PERDIDA = ['','Precio','Horario','Distancia','No responde','Eligió otro centro','No encaja el servicio','Solo quería información','Otro'];
+const ACCIONES = ['','Llamar','Enviar WhatsApp','Enviar email','Esperar respuesta','Agendar prueba','Confirmar prueba','Reactivar en 30 días','Otra'];
+const CENTROS_FALLBACK = {
+  'c1': { id:'c1', nombre:'Alfa Prime Málaga' },
+  'c2': { id:'c2', nombre:'Lagunillas' },
+  'c3': { id:'c3', nombre:'Inacua' },
+  'c4': { id:'c4', nombre:'Fantasy' },
+  'sin-centro': { id:'sin-centro', nombre:'Sin centro asignado' }
+};
+
+let auth, db;
+let usuario = null;
+let perfil = null;
+let centros = { ...CENTROS_FALLBACK };
+let usuariosBesoul = [];
+let leads = [];
+let leadsFiltrados = [];
+let unsubscribeLeads = null;
+let leadEditandoId = null;
+let eventosTemporales = [];
+
+function escapeHTML(valor) {
+  return String(valor || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
+}
+function normalizarEmail(email) { return String(email || '').trim().toLowerCase(); }
+function ahoraISO() { return new Date().toISOString(); }
+function fechaLocalInputDesdeISO(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function isoDesdeLocalInput(valor) { return valor ? new Date(valor).toISOString() : ''; }
+function formatoFecha(iso) {
+  if (!iso) return '---';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '---';
+  return d.toLocaleString('es-ES', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+function mesActualInput() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function inicioFinMes(valorMes) {
+  const [y,m] = (valorMes || mesActualInput()).split('-').map(Number);
+  const ini = new Date(y, m-1, 1);
+  const fin = new Date(y, m, 1);
+  return { ini, fin, iniISO: ini.toISOString(), finISO: fin.toISOString() };
+}
+function esAdmin() { return perfil && perfil.rol === 'admin'; }
+function trainerKeyActual() { return perfil && perfil.trainerKey ? perfil.trainerKey : ''; }
+function nombreUsuarioPerfil() { return perfil?.nombre || usuario?.email || 'Usuario'; }
+function textoCentro(id) { return centros[id]?.nombre || id || 'Sin centro'; }
+function textoTrainer(key) {
+  if (!key) return 'Sin asignar';
+  const u = usuariosBesoul.find(x => x.trainerKey === key);
+  return u?.nombre || key;
+}
+
+function initFirebase() {
+  if (!firebase.apps.length) firebase.initializeApp(BS_FIREBASE_CONFIG);
+  auth = firebase.auth();
+  db = firebase.firestore();
+  auth.onAuthStateChanged(async user => {
+    if (user) {
+      try { await iniciarSesionAutenticada(user); }
+      catch (err) { console.error(err); mostrarAuthError(err.message || 'No se ha podido iniciar CRM.'); await auth.signOut(); }
+    } else {
+      mostrarPantallaLogin();
+    }
+  });
+}
+
+function mostrarAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  el.innerText = msg;
+  el.classList.remove('hidden');
+}
+function limpiarAuthError() {
+  const el = document.getElementById('auth-error');
+  el.innerText = '';
+  el.classList.add('hidden');
+}
+async function loginCRM() {
+  limpiarAuthError();
+  const email = normalizarEmail(document.getElementById('login-email').value);
+  const pass = document.getElementById('login-pass').value;
+  if (!email || !pass) { mostrarAuthError('Introduce email y contraseña.'); return; }
+  try { await auth.signInWithEmailAndPassword(email, pass); }
+  catch (err) { mostrarAuthError('Acceso denegado. Revisa email, contraseña y usuario activo en besoulUsers.'); }
+}
+async function logoutCRM() {
+  if (unsubscribeLeads) unsubscribeLeads();
+  await auth.signOut();
+}
+function mostrarPantallaLogin() {
+  document.getElementById('auth-screen').classList.remove('hidden');
+  document.getElementById('app-content').classList.add('hidden');
+}
+
+async function iniciarSesionAutenticada(user) {
+  usuario = user;
+  const email = normalizarEmail(user.email);
+  const perfilSnap = await db.collection('besoulUsers').doc(email).get();
+  if (!perfilSnap.exists) throw new Error('Tu usuario no tiene perfil en besoulUsers.');
+  perfil = { email, ...perfilSnap.data() };
+  if (perfil.activo !== true) throw new Error('Tu usuario está inactivo.');
+
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('app-content').classList.remove('hidden');
+  document.getElementById('lbl-usuario').innerText = nombreUsuarioPerfil();
+  document.getElementById('lbl-rol').innerText = esAdmin() ? 'Administrador' : 'Entrenador';
+  document.getElementById('filter-month').value = mesActualInput();
+
+  await cargarCentros();
+  await cargarUsuariosBesoul();
+  poblarSelectsBase();
+  iniciarEscuchaLeads();
+}
+
+async function cargarCentros() {
+  try {
+    const snap = await db.collection('besoulSuite').doc('finanzas').get();
+    const data = snap.exists ? snap.data() : null;
+    if (data && data.centros && Object.keys(data.centros).length) {
+      centros = { ...CENTROS_FALLBACK };
+      Object.keys(data.centros).forEach(k => {
+        centros[k] = { id:k, nombre:data.centros[k].nombre || k };
+      });
+      if (!centros['sin-centro']) centros['sin-centro'] = CENTROS_FALLBACK['sin-centro'];
+    }
+  } catch (err) {
+    console.warn('No se pudieron cargar centros de finanzas. Uso fallback.', err);
+    centros = { ...CENTROS_FALLBACK };
+  }
+}
+async function cargarUsuariosBesoul() {
+  usuariosBesoul = [];
+  if (esAdmin()) {
+    const snap = await db.collection('besoulUsers').get();
+    snap.forEach(doc => {
+      const d = doc.data();
+      if (d.activo === true && d.trainerKey) usuariosBesoul.push({ id:doc.id, ...d });
+    });
+  } else {
+    usuariosBesoul = [{ id: perfil.email, ...perfil }];
+  }
+  usuariosBesoul.sort((a,b) => String(a.nombre||'').localeCompare(String(b.nombre||''), 'es'));
+}
+
+function poblarSelect(selectId, valores, opts={}) {
+  const select = document.getElementById(selectId);
+  if (!select) return;
+  select.innerHTML = '';
+  if (opts.todos) {
+    const o = document.createElement('option'); o.value = ''; o.innerText = opts.todos; select.appendChild(o);
+  }
+  valores.forEach(v => {
+    const o = document.createElement('option');
+    if (typeof v === 'string') { o.value = v; o.innerText = v || opts.vacio || '---'; }
+    else { o.value = v.value; o.innerText = v.label; }
+    select.appendChild(o);
+  });
+}
+function centrosValores() {
+  return Object.keys(centros).map(id => ({ value:id, label:centros[id].nombre })).sort((a,b) => a.label.localeCompare(b.label,'es'));
+}
+function trainersValores() {
+  return usuariosBesoul.map(u => ({ value:u.trainerKey, label:`${u.nombre || u.trainerKey} (${u.rol === 'admin' ? 'Admin' : 'PT'})` }));
+}
+function poblarSelectsBase() {
+  poblarSelect('filter-center', centrosValores(), { todos:'Todos los centros' });
+  poblarSelect('filter-trainer', trainersValores(), { todos: esAdmin() ? 'Todos los entrenadores' : '' });
+  if (!esAdmin()) document.getElementById('filter-trainer').value = trainerKeyActual();
+  poblarSelect('filter-status', ESTADOS, { todos:'Todos los estados' });
+  poblarSelect('filter-source', FUENTES, { todos:'Todas las fuentes' });
+
+  poblarSelect('lead-centro', centrosValores());
+  poblarSelect('lead-trainer', trainersValores(), { todos:'Sin asignar todavía' });
+  poblarSelect('lead-estado', ESTADOS);
+  poblarSelect('lead-fuente', FUENTES);
+  poblarSelect('lead-objetivo', OBJETIVOS, { vacio:'Sin objetivo' });
+  poblarSelect('lead-horario', HORARIOS, { vacio:'Sin preferencia' });
+  poblarSelect('lead-motivo-perdida', MOTIVOS_PERDIDA, { vacio:'No aplica' });
+  poblarSelect('lead-proxima-accion', ACCIONES, { vacio:'Sin próxima acción' });
+}
+
+function iniciarEscuchaLeads() {
+  if (unsubscribeLeads) unsubscribeLeads();
+  let ref = db.collection('besoulLeads');
+  if (!esAdmin()) ref = ref.where('trainerKey', '==', trainerKeyActual());
+  unsubscribeLeads = ref.onSnapshot(snapshot => {
+    leads = [];
+    snapshot.forEach(doc => leads.push({ id:doc.id, ...doc.data() }));
+    leads.sort((a,b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    aplicarFiltros();
+  }, err => {
+    console.error(err);
+    alert('No se han podido cargar los leads. Revisa reglas de Firestore para besoulLeads.');
+  });
+}
+
+function aplicarFiltros() {
+  const month = document.getElementById('filter-month').value || mesActualInput();
+  const centro = document.getElementById('filter-center').value;
+  const trainer = document.getElementById('filter-trainer').value;
+  const estado = document.getElementById('filter-status').value;
+  const fuente = document.getElementById('filter-source').value;
+  const search = String(document.getElementById('filter-search').value || '').trim().toLowerCase();
+  const { iniISO, finISO } = inicioFinMes(month);
+
+  leadsFiltrados = leads.filter(l => {
+    const created = l.createdAt || l.updatedAt || '';
+    if (created && (created < iniISO || created >= finISO)) return false;
+    if (centro && l.centroId !== centro) return false;
+    if (trainer && l.trainerKey !== trainer) return false;
+    if (estado && l.estado !== estado) return false;
+    if (fuente && l.fuente !== fuente) return false;
+    if (search) {
+      const blob = [l.nombre,l.telefono,l.email,l.notas,l.objetivo,l.estado,l.fuente,l.captadorNombre].join(' ').toLowerCase();
+      if (!blob.includes(search)) return false;
+    }
+    return true;
+  });
+  renderTablaLeads();
+  recalcularKPIs();
+  renderAlertas();
+}
+
+function badgeEstado(estado) {
+  const map = {
+    'Nuevo lead':'bg-slate-800 text-slate-300 border-slate-700',
+    'Contactado':'bg-cyan-500/10 text-cyan-400 border-cyan-500/30',
+    'Pendiente de respuesta':'bg-amber-500/10 text-amber-400 border-amber-500/30',
+    'Prueba solicitada':'bg-blue-500/10 text-blue-400 border-blue-500/30',
+    'Prueba agendada':'bg-indigo-500/10 text-indigo-400 border-indigo-500/30',
+    'Prueba realizada':'bg-purple-500/10 text-purple-400 border-purple-500/30',
+    'Convertido a cliente':'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+    'Perdido':'bg-red-500/10 text-red-400 border-red-500/30',
+    'Reactivar más adelante':'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/30'
+  };
+  return `<span class="inline-flex px-2 py-1 rounded-full border text-[10px] font-bold ${map[estado] || map['Nuevo lead']}">${escapeHTML(estado || 'Nuevo lead')}</span>`;
+}
+function renderTablaLeads() {
+  const tbody = document.getElementById('lead-table-body');
+  tbody.innerHTML = '';
+  document.getElementById('lead-count-label').innerText = `${leadsFiltrados.length} leads filtrados`;
+  if (!leadsFiltrados.length) {
+    tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-500">No hay leads con estos filtros.</td></tr>`;
+    return;
+  }
+  leadsFiltrados.forEach(l => {
+    const ultimoEvento = (l.historial || [])[0];
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-slate-950/50 transition';
+    tr.innerHTML = `
+      <td class="py-3 px-3">
+        <div class="font-bold text-white">${escapeHTML(l.nombre)}</div>
+        <div class="text-[10px] text-slate-500">${escapeHTML(l.telefono)} ${l.email ? '· ' + escapeHTML(l.email) : ''}</div>
+      </td>
+      <td class="py-3 px-3">${badgeEstado(l.estado)}</td>
+      <td class="py-3 px-3">${escapeHTML(textoCentro(l.centroId))}</td>
+      <td class="py-3 px-3">${escapeHTML(textoTrainer(l.trainerKey))}</td>
+      <td class="py-3 px-3">${escapeHTML(l.fuente || '---')}</td>
+      <td class="py-3 px-3">${escapeHTML(l.objetivo || '---')}</td>
+      <td class="py-3 px-3">
+        <div class="font-semibold text-slate-200">${escapeHTML(l.proximaAccion || '---')}</div>
+        <div class="text-[10px] text-slate-500">${formatoFecha(l.fechaProximaAccion)}</div>
+      </td>
+      <td class="py-3 px-3">
+        <div class="text-[10px] text-slate-400">${ultimoEvento ? escapeHTML(ultimoEvento.tipo) : '---'}</div>
+        <div class="text-[10px] text-slate-500">${ultimoEvento ? formatoFecha(ultimoEvento.fecha) : '---'}</div>
+      </td>
+      <td class="py-3 px-3 text-right">
+        <button onclick="abrirModalLead('${l.id}')" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded font-bold text-[11px]">Abrir</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function contarPor(lista, campo) {
+  const c = {};
+  lista.forEach(l => { const v = l[campo] || '---'; c[v] = (c[v] || 0) + 1; });
+  return c;
+}
+function topLabel(lista, campo, traductor=null) {
+  const c = contarPor(lista, campo);
+  const keys = Object.keys(c).sort((a,b) => c[b]-c[a]);
+  if (!keys.length) return '---';
+  return `${traductor ? traductor(keys[0]) : keys[0]} (${c[keys[0]]})`;
+}
+function recalcularKPIs() {
+  const total = leadsFiltrados.length;
+  const contactados = leadsFiltrados.filter(l => l.estado && l.estado !== 'Nuevo lead').length;
+  const pruebasSol = leadsFiltrados.filter(l => ['Prueba solicitada','Prueba agendada','Prueba realizada','Convertido a cliente'].includes(l.estado)).length;
+  const pruebasReal = leadsFiltrados.filter(l => ['Prueba realizada','Convertido a cliente'].includes(l.estado)).length;
+  const convertidos = leadsFiltrados.filter(l => l.estado === 'Convertido a cliente' || l.convertido === true).length;
+  const perdidos = leadsFiltrados.filter(l => l.estado === 'Perdido').length;
+  document.getElementById('kpi-leads').innerText = total;
+  document.getElementById('kpi-contactados').innerText = contactados;
+  document.getElementById('kpi-pruebas-sol').innerText = pruebasSol;
+  document.getElementById('kpi-pruebas-real').innerText = pruebasReal;
+  document.getElementById('kpi-convertidos').innerText = convertidos;
+  document.getElementById('kpi-conversion').innerText = total ? `${Math.round((convertidos/total)*100)}%` : '0%';
+  document.getElementById('kpi-perdidos').innerText = perdidos;
+  document.getElementById('kpi-fuente').innerText = topLabel(leadsFiltrados, 'fuente');
+  document.getElementById('kpi-centro').innerText = topLabel(leadsFiltrados, 'centroId', textoCentro);
+  document.getElementById('kpi-trainer').innerText = topLabel(leadsFiltrados.filter(l => l.estado === 'Convertido a cliente' || l.convertido === true), 'trainerKey', textoTrainer);
+}
+function renderAlertas() {
+  const box = document.getElementById('alerts-box');
+  const now = Date.now();
+  const alertas = [];
+  leads.forEach(l => {
+    const created = new Date(l.createdAt || l.updatedAt || now).getTime();
+    const updated = new Date(l.updatedAt || l.createdAt || now).getTime();
+    const fechaPrueba = l.fechaPrueba ? new Date(l.fechaPrueba) : null;
+    const fechaAccion = l.fechaProximaAccion ? new Date(l.fechaProximaAccion) : null;
+    if (l.estado === 'Nuevo lead' && now - created > 24*60*60*1000) alertas.push({ tipo:'Lead sin contactar', texto:`${l.nombre} lleva más de 24 h como nuevo lead.`, id:l.id, color:'text-red-400' });
+    if (l.estado === 'Pendiente de respuesta' && now - updated > 3*24*60*60*1000) alertas.push({ tipo:'Pendiente >3 días', texto:`${l.nombre} lleva más de 3 días pendiente.`, id:l.id, color:'text-amber-400' });
+    if (l.estado === 'Perdido' && !l.motivoPerdida) alertas.push({ tipo:'Perdido sin motivo', texto:`${l.nombre} está perdido sin motivo registrado.`, id:l.id, color:'text-red-400' });
+    if (fechaPrueba && fechaPrueba.toDateString() === new Date().toDateString() && l.estado === 'Prueba agendada') alertas.push({ tipo:'Prueba hoy', texto:`${l.nombre} tiene prueba hoy.`, id:l.id, color:'text-blue-400' });
+    if (fechaAccion && fechaAccion.getTime() < now && !['Convertido a cliente','Perdido'].includes(l.estado)) alertas.push({ tipo:'Acción vencida', texto:`${l.nombre} tiene acción pendiente vencida.`, id:l.id, color:'text-red-400' });
+  });
+  if (!alertas.length) {
+    box.innerHTML = `<div class="text-slate-500 text-center py-8">Sin alertas críticas.</div>`;
+    return;
+  }
+  box.innerHTML = alertas.slice(0, 20).map(a => `
+    <button onclick="abrirModalLead('${a.id}')" class="w-full text-left bg-slate-950 border border-slate-800 rounded-lg p-3 hover:border-slate-700 transition">
+      <div class="font-bold ${a.color}">${escapeHTML(a.tipo)}</div>
+      <div class="text-slate-300 mt-1">${escapeHTML(a.texto)}</div>
+    </button>`).join('');
+}
+
+function resetLeadForm() {
+  leadEditandoId = null;
+  eventosTemporales = [];
+  ['lead-nombre','lead-telefono','lead-email','lead-captador','lead-fecha-prueba','lead-fecha-accion','lead-notas','event-text'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('lead-estado').value = 'Nuevo lead';
+  document.getElementById('lead-fuente').value = 'Instagram';
+  document.getElementById('lead-objetivo').value = '';
+  document.getElementById('lead-horario').value = '';
+  document.getElementById('lead-tipo-prueba').value = 'Prueba gratuita';
+  document.getElementById('lead-duracion-prueba').value = '45 min';
+  document.getElementById('lead-motivo-perdida').value = '';
+  document.getElementById('lead-proxima-accion').value = '';
+  if (!esAdmin()) document.getElementById('lead-trainer').value = trainerKeyActual();
+  else document.getElementById('lead-trainer').value = '';
+  document.getElementById('lead-centro').value = centrosValores()[0]?.value || 'sin-centro';
+  renderEventosTemporal();
+  toggleLeadFields();
+}
+function abrirModalLead(id=null) {
+  poblarSelectsBase();
+  resetLeadForm();
+  if (id) {
+    const lead = leads.find(l => l.id === id);
+    if (!lead) return;
+    leadEditandoId = id;
+    document.getElementById('modal-title').innerText = 'Editar lead';
+    document.getElementById('modal-subtitle').innerText = `Creado: ${formatoFecha(lead.createdAt)} · Actualizado: ${formatoFecha(lead.updatedAt)}`;
+    document.getElementById('lead-nombre').value = lead.nombre || '';
+    document.getElementById('lead-telefono').value = lead.telefono || '';
+    document.getElementById('lead-email').value = lead.email || '';
+    document.getElementById('lead-centro').value = lead.centroId || 'sin-centro';
+    document.getElementById('lead-trainer').value = lead.trainerKey || '';
+    document.getElementById('lead-captador').value = lead.captadorNombre || '';
+    document.getElementById('lead-estado').value = lead.estado || 'Nuevo lead';
+    document.getElementById('lead-fuente').value = lead.fuente || 'Instagram';
+    document.getElementById('lead-objetivo').value = lead.objetivo || '';
+    document.getElementById('lead-horario').value = lead.horarioPreferido || '';
+    document.getElementById('lead-tipo-prueba').value = lead.tipoPrueba || 'Prueba gratuita';
+    document.getElementById('lead-duracion-prueba').value = lead.duracionPrueba || '45 min';
+    document.getElementById('lead-fecha-prueba').value = fechaLocalInputDesdeISO(lead.fechaPrueba);
+    document.getElementById('lead-motivo-perdida').value = lead.motivoPerdida || '';
+    document.getElementById('lead-proxima-accion').value = lead.proximaAccion || '';
+    document.getElementById('lead-fecha-accion').value = fechaLocalInputDesdeISO(lead.fechaProximaAccion);
+    document.getElementById('lead-notas').value = lead.notas || '';
+    eventosTemporales = Array.isArray(lead.historial) ? [...lead.historial] : [];
+  } else {
+    document.getElementById('modal-title').innerText = 'Nuevo lead';
+    document.getElementById('modal-subtitle').innerText = 'Registro comercial de captación';
+  }
+  document.getElementById('btn-delete').className = (leadEditandoId && esAdmin()) ? 'w-full bg-red-500/10 text-red-400 border border-red-500/30 font-bold py-2 rounded' : 'hidden w-full bg-red-500/10 text-red-400 border border-red-500/30 font-bold py-2 rounded';
+  document.getElementById('btn-convert').className = (leadEditandoId && esAdmin()) ? 'w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-2 rounded' : 'hidden w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-2 rounded';
+  renderEventosTemporal();
+  toggleLeadFields();
+  document.getElementById('modal-lead').classList.remove('hidden');
+}
+function cerrarModalLead() { document.getElementById('modal-lead').classList.add('hidden'); }
+function toggleLeadFields() {
+  const estado = document.getElementById('lead-estado').value;
+  const perdida = document.getElementById('lead-motivo-perdida').parentElement;
+  perdida.style.opacity = estado === 'Perdido' ? '1' : '0.45';
+}
+function agregarEventoTemporal() {
+  const tipo = document.getElementById('event-tipo').value;
+  const texto = document.getElementById('event-text').value.trim();
+  if (!texto) return;
+  eventosTemporales.unshift({ tipo, texto, fecha: ahoraISO(), usuario: nombreUsuarioPerfil(), userEmail: perfil.email });
+  document.getElementById('event-text').value = '';
+  renderEventosTemporal();
+}
+function renderEventosTemporal() {
+  const cont = document.getElementById('events-list');
+  if (!eventosTemporales.length) { cont.innerHTML = '<div class="text-slate-500">Sin historial todavía.</div>'; return; }
+  cont.innerHTML = eventosTemporales.map((e, idx) => `
+    <div class="bg-slate-900 border border-slate-800 rounded p-2">
+      <div class="flex justify-between gap-2"><b class="text-slate-200">${escapeHTML(e.tipo)}</b><span class="text-slate-500">${formatoFecha(e.fecha)}</span></div>
+      <div class="text-slate-300 mt-1">${escapeHTML(e.texto)}</div>
+      <div class="flex justify-between mt-1 text-[10px] text-slate-500"><span>${escapeHTML(e.usuario || '')}</span><button onclick="eventosTemporales.splice(${idx},1); renderEventosTemporal();" class="text-red-400">Quitar</button></div>
+    </div>`).join('');
+}
+
+function recogerLeadFormulario() {
+  const nombre = document.getElementById('lead-nombre').value.trim();
+  const telefono = document.getElementById('lead-telefono').value.trim();
+  const centroId = document.getElementById('lead-centro').value || 'sin-centro';
+  const fuente = document.getElementById('lead-fuente').value;
+  const estado = document.getElementById('lead-estado').value;
+  if (!nombre || !telefono || !centroId || !fuente || !estado) throw new Error('Nombre, teléfono, centro, fuente y estado son obligatorios.');
+  const tKey = document.getElementById('lead-trainer').value || '';
+  if (!esAdmin() && tKey !== trainerKeyActual()) throw new Error('Solo puedes asignar leads a tu propio usuario.');
+  return {
+    nombre,
+    telefono,
+    email: document.getElementById('lead-email').value.trim(),
+    centroId,
+    centroNombre: textoCentro(centroId),
+    trainerKey: tKey,
+    trainerName: textoTrainer(tKey),
+    captadorNombre: document.getElementById('lead-captador').value.trim(),
+    estado,
+    fuente,
+    objetivo: document.getElementById('lead-objetivo').value,
+    horarioPreferido: document.getElementById('lead-horario').value,
+    tipoPrueba: document.getElementById('lead-tipo-prueba').value,
+    duracionPrueba: document.getElementById('lead-duracion-prueba').value,
+    fechaPrueba: isoDesdeLocalInput(document.getElementById('lead-fecha-prueba').value),
+    motivoPerdida: document.getElementById('lead-motivo-perdida').value,
+    proximaAccion: document.getElementById('lead-proxima-accion').value,
+    fechaProximaAccion: isoDesdeLocalInput(document.getElementById('lead-fecha-accion').value),
+    notas: document.getElementById('lead-notas').value.trim(),
+    historial: eventosTemporales
+  };
+}
+async function guardarLead() {
+  try {
+    const data = recogerLeadFormulario();
+    data.updatedAt = ahoraISO();
+    data.updatedByEmail = perfil.email;
+    data.updatedByName = nombreUsuarioPerfil();
+    if (leadEditandoId) {
+      await db.collection('besoulLeads').doc(leadEditandoId).set(data, { merge:true });
+    } else {
+      data.createdAt = ahoraISO();
+      data.createdByEmail = perfil.email;
+      data.createdByName = nombreUsuarioPerfil();
+      data.convertido = false;
+      await db.collection('besoulLeads').add(data);
+    }
+    cerrarModalLead();
+  } catch (err) {
+    alert(err.message || 'No se ha podido guardar el lead.');
+  }
+}
+async function eliminarLead() {
+  if (!leadEditandoId || !esAdmin()) return;
+  if (!confirm('¿Eliminar este lead? Esta acción no borra ningún cliente de Agenda.')) return;
+  await db.collection('besoulLeads').doc(leadEditandoId).delete();
+  cerrarModalLead();
+}
+
+async function convertirLeadEnCliente() {
+  if (!leadEditandoId || !esAdmin()) return;
+  const lead = leads.find(l => l.id === leadEditandoId);
+  if (!lead) return;
+  if (lead.convertido === true || lead.estado === 'Convertido a cliente') { alert('Este lead ya figura como convertido.'); return; }
+  const trainerKey = document.getElementById('lead-trainer').value || lead.trainerKey;
+  if (!trainerKey) { alert('Asigna primero un entrenador para crear la ficha en Agenda.'); return; }
+  if (!confirm(`Crear ficha de cliente en Agenda para ${lead.nombre} bajo el entrenador ${textoTrainer(trainerKey)}?`)) return;
+  const leadActualizado = recogerLeadFormulario();
+  const nuevoClienteId = `cli_crm_${leadEditandoId}_${Date.now()}`;
+  const nuevoCliente = {
+    id: nuevoClienteId,
+    tipo: 'individual',
+    nombre: leadActualizado.nombre,
+    telefono: leadActualizado.telefono,
+    email: leadActualizado.email || '',
+    modalidad: 'Individual Plan',
+    factor: 1,
+    tipoCompra: 'Mensualidad',
+    fechaCompra: '',
+    color: 'amber',
+    descuentoPct: 0,
+    contratoCliente: { firmado:false, nombreArchivo:'', tipoMime:'', contenidoBase64:'', subidaEn:'' },
+    estadoCliente: 'activo',
+    fechaAlta: new Date().toISOString().slice(0,10),
+    fechaCambioEstado: new Date().toISOString().slice(0,10),
+    observacionesEstado: `Creado desde CRM. Fuente: ${leadActualizado.fuente}. Centro: ${leadActualizado.centroNombre}. Objetivo: ${leadActualizado.objetivo || 'sin indicar'}. Notas: ${leadActualizado.notas || ''}`,
+    origenCRM: true,
+    leadId: leadEditandoId,
+    fuenteCaptacion: leadActualizado.fuente,
+    centroInteres: leadActualizado.centroId,
+    objetivoCliente: leadActualizado.objetivo || '',
+    horarioPreferido: leadActualizado.horarioPreferido || '',
+    creadoDesdeCRMEn: ahoraISO()
+  };
+
+  await db.runTransaction(async tx => {
+    const agendaRef = db.collection('besoulSuite').doc('agenda');
+    const leadRef = db.collection('besoulLeads').doc(leadEditandoId);
+    const agendaSnap = await tx.get(agendaRef);
+    const agendaData = agendaSnap.exists ? agendaSnap.data() : {};
+    const clientes = agendaData.clientes || {};
+    if (!Array.isArray(clientes[trainerKey])) clientes[trainerKey] = [];
+    const existe = clientes[trainerKey].some(c => c.leadId === leadEditandoId || c.id === nuevoClienteId);
+    if (!existe) clientes[trainerKey].push(nuevoCliente);
+    tx.set(agendaRef, {
+      clientes,
+      ultimaActualizacionLocal: ahoraISO(),
+      actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge:true });
+    tx.set(leadRef, {
+      ...leadActualizado,
+      estado: 'Convertido a cliente',
+      convertido: true,
+      convertedAt: ahoraISO(),
+      convertedByEmail: perfil.email,
+      convertedByName: nombreUsuarioPerfil(),
+      convertedTrainerKey: trainerKey,
+      convertedClientId: nuevoClienteId,
+      updatedAt: ahoraISO(),
+      historial: [
+        { tipo:'Conversión', texto:`Lead convertido en cliente de Agenda bajo ${textoTrainer(trainerKey)}.`, fecha:ahoraISO(), usuario:nombreUsuarioPerfil(), userEmail:perfil.email },
+        ...(leadActualizado.historial || [])
+      ]
+    }, { merge:true });
+  });
+  alert('Cliente creado en Agenda. Revisa su ficha para completar tarifa, contrato y datos operativos.');
+  cerrarModalLead();
+}
+
+function exportarLeadsCSV() {
+  const cols = ['nombre','telefono','email','estado','centroNombre','trainerName','fuente','objetivo','horarioPreferido','proximaAccion','fechaProximaAccion','motivoPerdida','notas'];
+  const rows = [cols.join(';')];
+  leadsFiltrados.forEach(l => {
+    rows.push(cols.map(c => `"${String(l[c] || '').replace(/"/g,'""')}"`).join(';'));
+  });
+  const blob = new Blob([rows.join('\n')], { type:'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `besoul_leads_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+window.addEventListener('DOMContentLoaded', initFirebase);
+</script>
+</body>
+</html>
