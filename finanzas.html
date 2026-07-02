@@ -9,6 +9,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #0B0F17; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -26,16 +27,16 @@
                 <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
             </div>
             <div class="text-center">
-                <h2 class="text-base font-bold text-white tracking-tight">Acceso Corporativo Seguro v5.8</h2>
-                <p class="text-xs text-slate-400 mt-1">Introduce tus credenciales de Administrador</p>
+                <h2 class="text-base font-bold text-white tracking-tight">Acceso Corporativo Seguro v5.8 · Firebase Auth</h2>
+                <p class="text-xs text-slate-400 mt-1">Introduce tu email y contraseña de Firebase</p>
             </div>
             <div class="space-y-3 text-xs">
                 <div>
-                    <label class="text-slate-400 block mb-1">Usuario Dirección</label>
-                    <input type="text" id="login-user" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="Ej: fran">
+                    <label class="text-slate-400 block mb-1">Email de administrador</label>
+                    <input type="text" id="login-user" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="fran.jmorenomartin@gmail.com">
                 </div>
                 <div>
-                    <label class="text-slate-400 block mb-1">Contraseña de Seguridad</label>
+                    <label class="text-slate-400 block mb-1">Contraseña</label>
                     <input type="password" id="login-pass" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="••••••••">
                 </div>
                 <button onclick="ejecutarLogin()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-lg transition uppercase tracking-wider mt-2">
@@ -245,16 +246,11 @@
     </div>
 
     <script>
-        // LISTADO DE ACCESOS CONFIGURADOS COMO ADMINISTRADORES TOTALES
-        const CREDENCIALES_ADMIN = {
-            "fran": "bs2026admin",
-            "soraya": "bs2026soraya",
-            "bea": "bs2026bea"
-        };
-
         let centrosDeportivos, entrenadoresPorCentro, historicoCierres;
         let idCentroSeleccionado = null;
         let idPTSeleccionado = null;
+        let usuarioFinanzasEmail = '';
+        let perfilFinanzas = null;
 
         const BS_FIREBASE_CONFIG = {
             apiKey: "AIzaSyAHp7l39BYkgHTVNNwPaaa21tTksBQ94Zo",
@@ -270,6 +266,7 @@
         window.bsFinanzasCloudTimer = null;
         window.bsFinanzasAplicandoNube = false;
         window.bsFinanzasDatosInicializados = false;
+        window.bsFinanzasCloudUnsub = null;
 
         function estadoLocalFinanzasParaNube() {
             return {
@@ -324,17 +321,84 @@
             }
         }
 
-        function iniciarSincronizacionNubeFinanzas() {
+        function inicializarFirebaseFinanzasAuth() {
+            try {
+                if (!window.firebase) {
+                    console.warn('Firebase no está cargado. Finanzas no puede autenticarse.');
+                    alert('Firebase no se ha cargado. Revisa la conexión.');
+                    return;
+                }
+                if (!firebase.apps.length) firebase.initializeApp(BS_FIREBASE_CONFIG);
+
+                firebase.auth().onAuthStateChanged(async user => {
+                    if (!user) {
+                        window.bsFinanzasDatosInicializados = false;
+                        if (window.bsFinanzasCloudUnsub) {
+                            window.bsFinanzasCloudUnsub();
+                            window.bsFinanzasCloudUnsub = null;
+                        }
+                        document.getElementById('auth-screen').classList.remove('hidden');
+                        document.getElementById('app-content').classList.add('hidden');
+                        return;
+                    }
+
+                    try {
+                        const email = String(user.email || '').trim().toLowerCase();
+                        const firestore = firebase.firestore();
+                        const profileSnap = await firestore.collection('besoulUsers').doc(email).get();
+
+                        if (!profileSnap.exists) {
+                            await firebase.auth().signOut();
+                            alert('Tu email existe en Authentication, pero no tiene perfil en besoulUsers. Crea el documento con tu email y rol admin.');
+                            return;
+                        }
+
+                        const perfil = { email, ...profileSnap.data() };
+                        if (!perfil.activo) {
+                            await firebase.auth().signOut();
+                            alert('Tu usuario está desactivado.');
+                            return;
+                        }
+                        if (perfil.rol !== 'admin') {
+                            await firebase.auth().signOut();
+                            alert('Finanzas solo está disponible para usuarios administradores.');
+                            return;
+                        }
+
+                        usuarioFinanzasEmail = email;
+                        perfilFinanzas = perfil;
+                        document.getElementById('auth-screen').classList.add('hidden');
+                        document.getElementById('app-content').classList.remove('hidden');
+                        document.getElementById('lbl-usuario-logeado').innerText = perfil.nombre || email;
+                        await iniciarSincronizacionNubeFinanzas();
+                    } catch (err) {
+                        console.error('Error validando usuario de finanzas:', err);
+                        alert('No se ha podido validar tu usuario de Finanzas. Revisa besoulUsers y las reglas de Firestore.');
+                    }
+                });
+            } catch (err) {
+                console.error('Error iniciando Firebase Auth en Finanzas:', err);
+                alert('Error iniciando Firebase Auth en Finanzas.');
+            }
+        }
+
+        async function iniciarSincronizacionNubeFinanzas() {
             try {
                 if (!window.firebase) {
                     console.warn('Firebase no está cargado. Finanzas funcionará solo en este navegador.');
+                    checkUrlAndLoadData(null);
                     return;
                 }
                 if (!firebase.apps.length) firebase.initializeApp(BS_FIREBASE_CONFIG);
                 const firestore = firebase.firestore();
                 window.bsFinanzasCloudDocRef = firestore.collection('besoulSuite').doc('finanzas');
 
-                window.bsFinanzasCloudDocRef.onSnapshot(snapshot => {
+                const snapshotInicial = await window.bsFinanzasCloudDocRef.get();
+                const datosIniciales = snapshotInicial.exists ? snapshotInicial.data() : null;
+                checkUrlAndLoadData(datosIniciales);
+
+                if (window.bsFinanzasCloudUnsub) window.bsFinanzasCloudUnsub();
+                window.bsFinanzasCloudUnsub = window.bsFinanzasCloudDocRef.onSnapshot(snapshot => {
                     if (snapshot.exists) {
                         aplicarEstadoNubeFinanzas(snapshot.data());
                     }
@@ -344,30 +408,36 @@
                 });
             } catch (err) {
                 console.error('Error iniciando sincronización de finanzas:', err);
+                alert('No se ha podido conectar Finanzas con Firebase. Revisa las reglas de Firestore.');
             }
         }
-
-        iniciarSincronizacionNubeFinanzas();
-
 
         function ejecutarLogin() {
-            const user = document.getElementById('login-user').value.trim().toLowerCase();
+            const email = document.getElementById('login-user').value.trim().toLowerCase();
             const pass = document.getElementById('login-pass').value.trim();
+            if (!email || !pass) {
+                alert('Introduce email y contraseña.');
+                return;
+            }
+            if (!window.firebase || !firebase.auth) {
+                alert('Firebase Auth no se ha cargado.');
+                return;
+            }
+            firebase.auth().signInWithEmailAndPassword(email, pass).catch(err => {
+                console.error('Error de login en Finanzas:', err);
+                alert('Acceso denegado. Revisa email, contraseña y que el usuario sea administrador en besoulUsers.');
+            });
+        }
 
-            if (CREDENCIALES_ADMIN[user] && CREDENCIALES_ADMIN[user] === pass) {
-                document.getElementById('auth-screen').classList.add('hidden');
-                document.getElementById('app-content').classList.remove('hidden');
-                document.getElementById('lbl-usuario-logeado').innerText = user;
-                // La carga e inicialización se ejecutan tras validar credenciales de administración
-                checkUrlAndLoadData();
+        function logout() {
+            if (window.firebase && firebase.auth) {
+                firebase.auth().signOut().finally(() => window.location.reload());
             } else {
-                alert("Acceso denegado: Credenciales de administrador incorrectas.");
+                window.location.reload();
             }
         }
 
-        function logout() { window.location.reload(); }
-
-        function checkUrlAndLoadData() {
+        function checkUrlAndLoadData(datosFirebase = null) {
             const params = new URLSearchParams(window.location.search);
             const cloudData = params.get('data');
 
@@ -377,16 +447,15 @@
                     centrosDeportivos = decrypted.centros;
                     entrenadoresPorCentro = decrypted.pts;
                     historicoCierres = decrypted.historico;
-                    
                     localStorage.setItem('besoul_v5_centros', JSON.stringify(centrosDeportivos));
-            programarGuardadoNubeFinanzas();
                     localStorage.setItem('besoul_v5_pts', JSON.stringify(entrenadoresPorCentro));
-            programarGuardadoNubeFinanzas();
                     localStorage.setItem('besoul_v5_history', JSON.stringify(historicoCierres));
-            programarGuardadoNubeFinanzas();
                 } catch (e) {
-                    loadFromLocalStorage();
+                    if (datosFirebase) aplicarEstadoNubeFinanzas(datosFirebase);
+                    else loadFromLocalStorage();
                 }
+            } else if (datosFirebase) {
+                aplicarEstadoNubeFinanzas(datosFirebase);
             } else {
                 loadFromLocalStorage();
             }
@@ -788,7 +857,8 @@
             }
         }
 
-        // Se elimina la ejecución directa del arranque automático para esperar a la validación del login corporativo
+        // Arranque seguro: primero Firebase Auth; después sincronización con Firestore.
+        inicializarFirebaseFinanzasAuth();
     </script>
 </body>
 </html>
