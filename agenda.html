@@ -728,6 +728,7 @@
         let dbClientes = JSON.parse(localStorage.getItem('bs_db_clientes_v6')) || {};
 
         let dbAgenda = JSON.parse(localStorage.getItem('bs_db_agenda_v6')) || {};
+        let dbPruebasCRM = JSON.parse(localStorage.getItem('bs_db_pruebas_crm_v6')) || {};
 
         let dbNotas = JSON.parse(localStorage.getItem('bs_db_notas_v6')) || {};
         let dbHistoricoClientes = JSON.parse(localStorage.getItem('bs_db_historico_clientes_v6')) || {};
@@ -772,6 +773,7 @@
                 clientes: dbClientes || {},
 
                 agenda: dbAgenda || {},
+                pruebasCRM: dbPruebasCRM || {},
 
                 notas: dbNotas || {},
                 historicoClientes: dbHistoricoClientes || {},
@@ -833,6 +835,8 @@
                 dbClientes = data.clientes || {};
 
                 dbAgenda = data.agenda || {};
+                dbPruebasCRM = data.pruebasCRM || {};
+                sincronizarPruebasCRMDentroDeAgenda();
 
                 dbNotas = data.notas || {};
                 dbHistoricoClientes = data.historicoClientes || {};
@@ -844,6 +848,7 @@
                 localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
 
                 localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
+                localStorage.setItem('bs_db_pruebas_crm_v6', JSON.stringify(dbPruebasCRM));
 
                 localStorage.setItem('bs_db_notas_v6', JSON.stringify(dbNotas));
                 localStorage.setItem('bs_db_historico_clientes_v6', JSON.stringify(dbHistoricoClientes));
@@ -1320,7 +1325,29 @@
 
 
 
-        function calcularRentabilidadFicha(ficha) {
+        
+        function sincronizarPruebasCRMDentroDeAgenda() {
+            // Las pruebas procedentes del CRM se guardan también en pruebasCRM como respaldo.
+            // Para que la Agenda las pinte aunque el mapa principal no se haya fusionado bien,
+            // las inyectamos en dbAgenda solo en memoria/local antes de renderizar.
+            Object.keys(dbPruebasCRM || {}).forEach(trainerKey => {
+                if (!dbAgenda[trainerKey]) dbAgenda[trainerKey] = {};
+                Object.keys(dbPruebasCRM[trainerKey] || {}).forEach(clave => {
+                    const prueba = dbPruebasCRM[trainerKey][clave];
+                    if (prueba && esCitaPruebaCRM(prueba) && !dbAgenda[trainerKey][clave]) {
+                        dbAgenda[trainerKey][clave] = prueba;
+                    }
+                });
+            });
+        }
+
+        function obtenerCitaAgendaEnClave(clave) {
+            const normal = dbAgenda[entrenadorVisto] ? dbAgenda[entrenadorVisto][clave] : null;
+            if (normal) return normal;
+            return dbPruebasCRM[entrenadorVisto] ? dbPruebasCRM[entrenadorVisto][clave] : null;
+        }
+
+function calcularRentabilidadFicha(ficha) {
 
             if (!ficha) return 0;
 
@@ -2784,7 +2811,7 @@
 
 
 
-                    let obj = dbAgenda[entrenadorVisto] ? dbAgenda[entrenadorVisto][clave] : null;
+                    let obj = obtenerCitaAgendaEnClave(clave);
 
 
 
