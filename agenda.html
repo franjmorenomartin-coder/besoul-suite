@@ -729,6 +729,7 @@
 
         let dbAgenda = JSON.parse(localStorage.getItem('bs_db_agenda_v6')) || {};
         let dbPruebasCRM = JSON.parse(localStorage.getItem('bs_db_pruebas_crm_v6')) || {};
+        let dbLeadsPruebasCRM = JSON.parse(localStorage.getItem('bs_db_leads_pruebas_crm_v6')) || {};
 
         let dbNotas = JSON.parse(localStorage.getItem('bs_db_notas_v6')) || {};
         let dbHistoricoClientes = JSON.parse(localStorage.getItem('bs_db_historico_clientes_v6')) || {};
@@ -758,6 +759,7 @@
         window.bsAgendaCloudDocRef = null;
 
         window.bsAgendaCloudTimer = null;
+        window.bsAgendaLeadsCRMUnsub = null;
 
         window.bsAgendaAplicandoNube = false;
 
@@ -934,6 +936,111 @@
         }
 
 
+
+
+        function fechaAgendaLocalDesdeDateCRM(fecha) {
+            const y = fecha.getFullYear();
+            const m = String(fecha.getMonth() + 1).padStart(2, '0');
+            const d = String(fecha.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function horaAgendaDesdeMinutosCRM(total) {
+            const h = Math.floor(total / 60);
+            const m = total % 60;
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        }
+
+        function claveAgendaDesdeFechaPruebaCRM(iso) {
+            if (!iso) return null;
+            const d = new Date(iso);
+            if (Number.isNaN(d.getTime())) return null;
+            const inicio = 6 * 60;
+            const fin = 22 * 60;
+            const duracion = 45;
+            const total = d.getHours() * 60 + d.getMinutes();
+            if (total < inicio || total + duracion > fin) return null;
+            let slot = inicio + Math.round((total - inicio) / duracion) * duracion;
+            if (slot + duracion > fin) slot = fin - duracion;
+            if (slot < inicio) slot = inicio;
+            return `${fechaAgendaLocalDesdeDateCRM(d)}_${horaAgendaDesdeMinutosCRM(slot)}`;
+        }
+
+        function leadDebePintarseComoPruebaCRM(lead) {
+            return !!(
+                lead &&
+                lead.estado === 'Prueba agendada' &&
+                lead.convertido !== true &&
+                lead.fechaPrueba &&
+                lead.trainerKey
+            );
+        }
+
+        function objetoAgendaDesdeLeadPruebaCRM(id, lead, clave) {
+            return {
+                id: `crm_trial_${id}`,
+                tipo: 'lead',
+                tipoCita: 'pruebaCRM',
+                esPruebaCRM: true,
+                noSumaFacturacion: true,
+                nombre: lead.nombre || 'Lead CRM',
+                telefono: lead.telefono || '',
+                email: lead.email || '',
+                modalidad: 'Prueba CRM',
+                tipoPrueba: lead.tipoPrueba || 'Prueba gratuita',
+                duracionPrueba: lead.duracionPrueba || '45 min',
+                factor: 1,
+                tipoCompra: 'Prueba CRM',
+                color: 'cyan',
+                descuentoPct: 0,
+                estadoCliente: 'lead',
+                leadId: id,
+                trainerKey: lead.trainerKey || '',
+                trainerName: lead.trainerName || nombreEntrenador(lead.trainerKey),
+                centroId: lead.centroId || 'sin-centro',
+                centroNombre: lead.centroNombre || '',
+                fuenteCaptacion: lead.fuente || '',
+                objetivoCliente: lead.objetivo || '',
+                horarioPreferido: lead.horarioPreferido || '',
+                fechaPrueba: lead.fechaPrueba || '',
+                claveAgendaCRM: clave,
+                rentabilidadCRM: 0,
+                creadoDesdeCRMEn: lead.createdAt || '',
+                updatedAt: lead.updatedAt || ''
+            };
+        }
+
+        function iniciarSincronizacionLeadsCRMAgenda() {
+            try {
+                if (!window.firebase || !firebase.apps.length) return;
+                const firestore = firebase.firestore();
+                if (window.bsAgendaLeadsCRMUnsub) {
+                    try { window.bsAgendaLeadsCRMUnsub(); } catch(e) {}
+                    window.bsAgendaLeadsCRMUnsub = null;
+                }
+                window.bsAgendaLeadsCRMUnsub = firestore.collection('besoulLeads').onSnapshot(snapshot => {
+                    const mapa = {};
+                    snapshot.forEach(doc => {
+                        const lead = doc.data() || {};
+                        if (!leadDebePintarseComoPruebaCRM(lead)) return;
+                        const clave = claveAgendaDesdeFechaPruebaCRM(lead.fechaPrueba);
+                        if (!clave) return;
+                        const trainerKey = String(lead.trainerKey || '').trim();
+                        if (!trainerKey) return;
+                        if (!mapa[trainerKey]) mapa[trainerKey] = {};
+                        mapa[trainerKey][clave] = objetoAgendaDesdeLeadPruebaCRM(doc.id, lead, clave);
+                    });
+                    dbLeadsPruebasCRM = mapa;
+                    localStorage.setItem('bs_db_leads_pruebas_crm_v6', JSON.stringify(dbLeadsPruebasCRM));
+                    const appVisible = document.getElementById('app-content') && !document.getElementById('app-content').classList.contains('hidden');
+                    if (appVisible) renderAgenda();
+                }, err => {
+                    console.error('Error leyendo pruebas CRM en Agenda:', err);
+                });
+            } catch (err) {
+                console.error('Error iniciando lectura directa de leads CRM:', err);
+            }
+        }
 
         // La sincronización de Firestore se inicia después del login Firebase.
 
@@ -1344,7 +1451,9 @@
         function obtenerCitaAgendaEnClave(clave) {
             const normal = dbAgenda[entrenadorVisto] ? dbAgenda[entrenadorVisto][clave] : null;
             if (normal) return normal;
-            return dbPruebasCRM[entrenadorVisto] ? dbPruebasCRM[entrenadorVisto][clave] : null;
+            const pruebaGuardada = dbPruebasCRM[entrenadorVisto] ? dbPruebasCRM[entrenadorVisto][clave] : null;
+            if (pruebaGuardada) return pruebaGuardada;
+            return dbLeadsPruebasCRM[entrenadorVisto] ? dbLeadsPruebasCRM[entrenadorVisto][clave] : null;
         }
 
 function calcularRentabilidadFicha(ficha) {
@@ -1566,6 +1675,7 @@ function calcularRentabilidadFicha(ficha) {
                 }
 
                 iniciarSincronizacionNubeAgenda();
+                iniciarSincronizacionLeadsCRMAgenda();
                 buildColorPicker(); 
                 irSemanaActual();
 
