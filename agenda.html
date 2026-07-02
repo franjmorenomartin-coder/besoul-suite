@@ -760,6 +760,8 @@
 
         window.bsAgendaCloudTimer = null;
         window.bsAgendaLeadsCRMUnsub = null;
+        window.bsAgendaLeadsCRMTimer = null;
+        window.bsAgendaLeadsCRMDebug = '';
 
         window.bsAgendaAplicandoNube = false;
 
@@ -938,6 +940,23 @@
 
 
 
+        function valorFechaPruebaCRM(valor) {
+            if (!valor) return null;
+            if (valor instanceof Date) return valor;
+            if (typeof valor === 'object' && typeof valor.toDate === 'function') return valor.toDate();
+            if (typeof valor === 'object' && typeof valor.seconds === 'number') return new Date(valor.seconds * 1000);
+            if (typeof valor === 'string') {
+                const texto = valor.trim();
+                if (!texto) return null;
+                const d = new Date(texto);
+                if (!Number.isNaN(d.getTime())) return d;
+                // Fallback para posibles formatos dd/mm/yyyy hh:mm
+                const m = texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
+                if (m) return new Date(parseInt(m[3],10), parseInt(m[2],10)-1, parseInt(m[1],10), parseInt(m[4],10), parseInt(m[5],10));
+            }
+            return null;
+        }
+
         function fechaAgendaLocalDesdeDateCRM(fecha) {
             const y = fecha.getFullYear();
             const m = String(fecha.getMonth() + 1).padStart(2, '0');
@@ -951,10 +970,9 @@
             return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
         }
 
-        function claveAgendaDesdeFechaPruebaCRM(iso) {
-            if (!iso) return null;
-            const d = new Date(iso);
-            if (Number.isNaN(d.getTime())) return null;
+        function claveAgendaDesdeFechaPruebaCRM(valor) {
+            const d = valorFechaPruebaCRM(valor);
+            if (!d || Number.isNaN(d.getTime())) return null;
             const inicio = 6 * 60;
             const fin = 22 * 60;
             const duracion = 45;
@@ -966,17 +984,36 @@
             return `${fechaAgendaLocalDesdeDateCRM(d)}_${horaAgendaDesdeMinutosCRM(slot)}`;
         }
 
+        function textoNormalizadoCRM(valor) {
+            return String(valor || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+        }
+
+        function trainerKeyDesdeLeadCRM(lead) {
+            const directo = String(lead?.trainerKey || '').trim().toLowerCase().replace(/\s+/g, '');
+            if (directo) return directo;
+            const nombreLead = textoNormalizadoCRM(lead?.trainerName || lead?.entrenadorNombre || lead?.entrenadorAsignado || '');
+            if (!nombreLead) return '';
+            const match = Object.keys(dbCredenciales || {}).find(key => {
+                const cred = dbCredenciales[key] || {};
+                return textoNormalizadoCRM(cred.nombre) === nombreLead || textoNormalizadoCRM(key) === nombreLead;
+            });
+            return match || '';
+        }
+
         function leadDebePintarseComoPruebaCRM(lead) {
+            const estado = textoNormalizadoCRM(lead?.estado);
+            const convertido = lead?.convertido === true || lead?.converted === true || estado === 'convertido a cliente';
             return !!(
                 lead &&
-                lead.estado === 'Prueba agendada' &&
-                lead.convertido !== true &&
+                estado === 'prueba agendada' &&
+                !convertido &&
                 lead.fechaPrueba &&
-                lead.trainerKey
+                trainerKeyDesdeLeadCRM(lead)
             );
         }
 
         function objetoAgendaDesdeLeadPruebaCRM(id, lead, clave) {
+            const trainerKey = trainerKeyDesdeLeadCRM(lead);
             return {
                 id: `crm_trial_${id}`,
                 tipo: 'lead',
@@ -995,8 +1032,8 @@
                 descuentoPct: 0,
                 estadoCliente: 'lead',
                 leadId: id,
-                trainerKey: lead.trainerKey || '',
-                trainerName: lead.trainerName || nombreEntrenador(lead.trainerKey),
+                trainerKey: trainerKey,
+                trainerName: lead.trainerName || nombreEntrenador(trainerKey),
                 centroId: lead.centroId || 'sin-centro',
                 centroNombre: lead.centroNombre || '',
                 fuenteCaptacion: lead.fuente || '',
@@ -1010,6 +1047,42 @@
             };
         }
 
+        function procesarSnapshotLeadsCRMAgenda(snapshot) {
+            const mapa = {};
+            let totalPruebas = 0;
+            let totalLeads = 0;
+            snapshot.forEach(doc => {
+                totalLeads++;
+                const lead = doc.data() || {};
+                if (!leadDebePintarseComoPruebaCRM(lead)) return;
+                const clave = claveAgendaDesdeFechaPruebaCRM(lead.fechaPrueba);
+                if (!clave) return;
+                const trainerKey = trainerKeyDesdeLeadCRM(lead);
+                if (!trainerKey) return;
+                if (!mapa[trainerKey]) mapa[trainerKey] = {};
+                mapa[trainerKey][clave] = objetoAgendaDesdeLeadPruebaCRM(doc.id, lead, clave);
+                totalPruebas++;
+            });
+            dbLeadsPruebasCRM = mapa;
+            localStorage.setItem('bs_db_leads_pruebas_crm_v6', JSON.stringify(dbLeadsPruebasCRM));
+            window.bsAgendaLeadsCRMDebug = `Leads leídos: ${totalLeads} · pruebas visibles: ${totalPruebas}`;
+            console.log('[BESOUL Agenda CRM]', window.bsAgendaLeadsCRMDebug, dbLeadsPruebasCRM);
+            const appVisible = document.getElementById('app-content') && !document.getElementById('app-content').classList.contains('hidden');
+            if (appVisible) renderAgenda();
+        }
+
+        async function cargarLeadsCRMUnaVezAgenda() {
+            try {
+                if (!window.firebase || !firebase.apps.length) return;
+                const firestore = firebase.firestore();
+                const snap = await firestore.collection('besoulLeads').get();
+                procesarSnapshotLeadsCRMAgenda(snap);
+            } catch (err) {
+                console.error('Error cargando pruebas CRM una vez en Agenda:', err);
+                window.bsAgendaLeadsCRMDebug = 'Error leyendo besoulLeads: ' + (err.message || err.code || err);
+            }
+        }
+
         function iniciarSincronizacionLeadsCRMAgenda() {
             try {
                 if (!window.firebase || !firebase.apps.length) return;
@@ -1017,26 +1090,19 @@
                 if (window.bsAgendaLeadsCRMUnsub) {
                     try { window.bsAgendaLeadsCRMUnsub(); } catch(e) {}
                     window.bsAgendaLeadsCRMUnsub = null;
+        window.bsAgendaLeadsCRMTimer = null;
+        window.bsAgendaLeadsCRMDebug = '';
                 }
+                // Carga inmediata por si el listener tarda o el navegador lo retrasa.
+                cargarLeadsCRMUnaVezAgenda();
                 window.bsAgendaLeadsCRMUnsub = firestore.collection('besoulLeads').onSnapshot(snapshot => {
-                    const mapa = {};
-                    snapshot.forEach(doc => {
-                        const lead = doc.data() || {};
-                        if (!leadDebePintarseComoPruebaCRM(lead)) return;
-                        const clave = claveAgendaDesdeFechaPruebaCRM(lead.fechaPrueba);
-                        if (!clave) return;
-                        const trainerKey = String(lead.trainerKey || '').trim();
-                        if (!trainerKey) return;
-                        if (!mapa[trainerKey]) mapa[trainerKey] = {};
-                        mapa[trainerKey][clave] = objetoAgendaDesdeLeadPruebaCRM(doc.id, lead, clave);
-                    });
-                    dbLeadsPruebasCRM = mapa;
-                    localStorage.setItem('bs_db_leads_pruebas_crm_v6', JSON.stringify(dbLeadsPruebasCRM));
-                    const appVisible = document.getElementById('app-content') && !document.getElementById('app-content').classList.contains('hidden');
-                    if (appVisible) renderAgenda();
+                    procesarSnapshotLeadsCRMAgenda(snapshot);
                 }, err => {
                     console.error('Error leyendo pruebas CRM en Agenda:', err);
+                    window.bsAgendaLeadsCRMDebug = 'Error leyendo besoulLeads: ' + (err.message || err.code || err);
                 });
+                if (window.bsAgendaLeadsCRMTimer) clearInterval(window.bsAgendaLeadsCRMTimer);
+                window.bsAgendaLeadsCRMTimer = setInterval(cargarLeadsCRMUnaVezAgenda, 15000);
             } catch (err) {
                 console.error('Error iniciando lectura directa de leads CRM:', err);
             }
