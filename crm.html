@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -222,7 +223,8 @@
             </div>
             <div>
               <label class="text-slate-400 block mb-1">Fecha prueba</label>
-              <input type="datetime-local" id="lead-fecha-prueba" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+              <input type="datetime-local" id="lead-fecha-prueba" step="2700" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+              <p class="text-[9px] text-cyan-400/80 mt-1 leading-tight">Si el estado es "Prueba agendada", se mostrará en la agenda del entrenador como PRUEBA y no sumará facturación.</p>
             </div>
             <div>
               <label class="text-slate-400 block mb-1">Motivo pérdida</label>
@@ -738,12 +740,139 @@ function recogerLeadFormulario() {
     historial: eventosTemporales
   };
 }
+
+function formatoFechaAgendaLocalDesdeDate(fecha) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${fecha.getFullYear()}-${pad(fecha.getMonth()+1)}-${pad(fecha.getDate())}`;
+}
+function formatoHoraAgendaDesdeMinutos(total) {
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+function claveAgendaDesdeFechaPrueba(iso) {
+  if (!iso) return { ok:false, error:'La prueba no tiene fecha.' };
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { ok:false, error:'La fecha de prueba no es válida.' };
+  const inicio = 6 * 60;
+  const fin = 22 * 60;
+  const duracion = 45;
+  const total = d.getHours() * 60 + d.getMinutes();
+  if (total < inicio || total + duracion > fin) {
+    return { ok:false, error:'La prueba queda fuera del horario visible de agenda (06:00-22:00).' };
+  }
+  let slot = inicio + Math.round((total - inicio) / duracion) * duracion;
+  if (slot + duracion > fin) slot = fin - duracion;
+  if (slot < inicio) slot = inicio;
+  const franja = formatoHoraAgendaDesdeMinutos(slot);
+  return { ok:true, clave:`${formatoFechaAgendaLocalDesdeDate(d)}_${franja}`, franja, normalizada: slot !== total };
+}
+function eliminarPruebaAgendaEnObjeto(agenda, leadId) {
+  let borradas = 0;
+  Object.keys(agenda || {}).forEach(trainerKey => {
+    const agendaTrainer = agenda[trainerKey] || {};
+    Object.keys(agendaTrainer).forEach(clave => {
+      const cita = agendaTrainer[clave];
+      if (cita && cita.esPruebaCRM === true && cita.leadId === leadId) {
+        delete agendaTrainer[clave];
+        borradas++;
+      }
+    });
+  });
+  return borradas;
+}
+function debeVersePruebaEnAgenda(leadData) {
+  return leadData && leadData.estado === 'Prueba agendada' && !!leadData.fechaPrueba && !!leadData.trainerKey;
+}
+function objetoPruebaAgendaCRM(leadId, leadData, claveInfo) {
+  return {
+    id: `crm_trial_${leadId}`,
+    tipo: 'lead',
+    tipoCita: 'pruebaCRM',
+    esPruebaCRM: true,
+    noSumaFacturacion: true,
+    nombre: leadData.nombre || 'Lead CRM',
+    telefono: leadData.telefono || '',
+    email: leadData.email || '',
+    modalidad: 'Prueba CRM',
+    tipoPrueba: leadData.tipoPrueba || 'Prueba gratuita',
+    duracionPrueba: leadData.duracionPrueba || '45 min',
+    factor: 1,
+    tipoCompra: 'Prueba CRM',
+    color: 'cyan',
+    descuentoPct: 0,
+    estadoCliente: 'lead',
+    leadId,
+    trainerKey: leadData.trainerKey || '',
+    trainerName: leadData.trainerName || textoTrainer(leadData.trainerKey),
+    centroId: leadData.centroId || 'sin-centro',
+    centroNombre: leadData.centroNombre || textoCentro(leadData.centroId),
+    fuenteCaptacion: leadData.fuente || '',
+    objetivoCliente: leadData.objetivo || '',
+    horarioPreferido: leadData.horarioPreferido || '',
+    fechaPrueba: leadData.fechaPrueba || '',
+    franjaAgenda: claveInfo?.franja || '',
+    rentabilidadCRM: 0,
+    creadoDesdeCRMEn: ahoraISO(),
+    updatedAt: ahoraISO()
+  };
+}
+async function sincronizarPruebaAgendaDesdeLead(leadId, leadData, avisar = true) {
+  if (!leadId || !db) return { visible:false };
+  const agendaRef = db.collection('besoulSuite').doc('agenda');
+  const snap = await agendaRef.get();
+  const agendaData = snap.exists ? snap.data() : {};
+  const agenda = agendaData.agenda || {};
+  eliminarPruebaAgendaEnObjeto(agenda, leadId);
+
+  let resultado = { visible:false, clave:'', trainerKey:leadData.trainerKey || '', error:'' };
+
+  if (debeVersePruebaEnAgenda(leadData)) {
+    const claveInfo = claveAgendaDesdeFechaPrueba(leadData.fechaPrueba);
+    if (!claveInfo.ok) {
+      resultado.error = claveInfo.error;
+    } else {
+      const trainerKey = leadData.trainerKey;
+      if (!agenda[trainerKey]) agenda[trainerKey] = {};
+      const ocupada = agenda[trainerKey][claveInfo.clave];
+      if (ocupada) {
+        resultado.error = `La franja ${claveInfo.clave.replace('_', ' ')} ya está ocupada por ${ocupada.nombre || 'otra cita'}. Lead guardado, pero la prueba no se ha colocado en Agenda.`;
+      } else {
+        agenda[trainerKey][claveInfo.clave] = objetoPruebaAgendaCRM(leadId, leadData, claveInfo);
+        resultado.visible = true;
+        resultado.clave = claveInfo.clave;
+        if (claveInfo.normalizada && avisar) {
+          alert(`La prueba se mostrará en Agenda en la franja más cercana: ${claveInfo.clave.replace('_', ' ')}.`);
+        }
+      }
+    }
+  }
+
+  await agendaRef.set({
+    agenda,
+    ultimaActualizacionLocal: ahoraISO(),
+    actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge:true });
+
+  await db.collection('besoulLeads').doc(leadId).set({
+    agendaPruebaVisible: resultado.visible,
+    agendaPruebaClave: resultado.clave || '',
+    agendaPruebaTrainerKey: resultado.trainerKey || '',
+    agendaPruebaError: resultado.error || '',
+    agendaPruebaSyncAt: ahoraISO()
+  }, { merge:true });
+
+  if (resultado.error && avisar) alert(resultado.error);
+  return resultado;
+}
+
 async function guardarLead() {
   try {
     const data = recogerLeadFormulario();
     data.updatedAt = ahoraISO();
     data.updatedByEmail = perfil.email;
     data.updatedByName = nombreUsuarioPerfil();
+    let docId = leadEditandoId;
     if (leadEditandoId) {
       await db.collection('besoulLeads').doc(leadEditandoId).set(data, { merge:true });
     } else {
@@ -751,8 +880,10 @@ async function guardarLead() {
       data.createdByEmail = perfil.email;
       data.createdByName = nombreUsuarioPerfil();
       data.convertido = false;
-      await db.collection('besoulLeads').add(data);
+      const ref = await db.collection('besoulLeads').add(data);
+      docId = ref.id;
     }
+    await sincronizarPruebaAgendaDesdeLead(docId, { id: docId, ...data }, true);
     cerrarModalLead();
   } catch (err) {
     alert(err.message || 'No se ha podido guardar el lead.');
@@ -807,11 +938,14 @@ async function convertirLeadEnCliente() {
     const agendaSnap = await tx.get(agendaRef);
     const agendaData = agendaSnap.exists ? agendaSnap.data() : {};
     const clientes = agendaData.clientes || {};
+    const agenda = agendaData.agenda || {};
+    eliminarPruebaAgendaEnObjeto(agenda, leadEditandoId);
     if (!Array.isArray(clientes[trainerKey])) clientes[trainerKey] = [];
     const existe = clientes[trainerKey].some(c => c.leadId === leadEditandoId || c.id === nuevoClienteId);
     if (!existe) clientes[trainerKey].push(nuevoCliente);
     tx.set(agendaRef, {
       clientes,
+      agenda,
       ultimaActualizacionLocal: ahoraISO(),
       actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge:true });
@@ -824,6 +958,9 @@ async function convertirLeadEnCliente() {
       convertedByName: nombreUsuarioPerfil(),
       convertedTrainerKey: trainerKey,
       convertedClientId: nuevoClienteId,
+      agendaPruebaVisible: false,
+      agendaPruebaClave: '',
+      agendaPruebaError: '',
       updatedAt: ahoraISO(),
       historial: [
         { tipo:'Conversión', texto:`Lead convertido en cliente de Agenda bajo ${textoTrainer(trainerKey)}.`, fecha:ahoraISO(), usuario:nombreUsuarioPerfil(), userEmail:perfil.email },
