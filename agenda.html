@@ -1344,6 +1344,7 @@
 
                 const obj = dbAgenda[entrenadorVisto][clave];
 
+                if (esCitaPruebaCRM(obj)) return total;
                 if (fechaClave >= desdeISO && fechaClave < hastaISO && obj && idsValidos.has(obj.id)) return total + 1;
 
                 return total;
@@ -2682,6 +2683,19 @@
 
 
 
+
+        function esCitaPruebaCRM(obj) {
+            return !!(obj && (obj.esPruebaCRM === true || obj.tipoCita === 'pruebaCRM' || obj.noSumaFacturacion === true || obj.modalidad === 'Prueba CRM'));
+        }
+
+        function textoDetallePruebaCRM(obj) {
+            const partes = [];
+            if (obj?.fuenteCaptacion) partes.push(obj.fuenteCaptacion);
+            if (obj?.centroNombre) partes.push(obj.centroNombre);
+            if (obj?.duracionPrueba) partes.push(obj.duracionPrueba);
+            return partes.join(' · ') || 'Lead CRM';
+        }
+
         function claveNotaAgenda(clave, entrenador = entrenadorVisto) {
             return `${entrenador}__${clave}`;
         }
@@ -2777,53 +2791,62 @@
                     if (obj) {
 
                         obj = buscarFichaPorId(obj.id) || obj;
+                        const esPruebaCRM = esCitaPruebaCRM(obj);
 
-                        let colHex = CODIGOS_HEX[obj.color] || '#f59e0b';
+                        let colHex = esPruebaCRM ? '#06b6d4' : (CODIGOS_HEX[obj.color] || '#f59e0b');
 
-                        tdCell.style.backgroundColor = colHex + '20'; // 20% opacidad
+                        tdCell.style.backgroundColor = colHex + (esPruebaCRM ? '18' : '20'); // opacidad diferenciada
 
-                        tdCell.style.borderColor = colHex + '40';
+                        tdCell.style.borderColor = colHex + (esPruebaCRM ? '80' : '40');
 
                         tdCell.style.color = colHex;
 
-                        tdCell.className += " font-bold border rounded-sm cursor-pointer";
+                        tdCell.className += esPruebaCRM ? " font-bold border rounded-sm cursor-pointer border-dashed" : " font-bold border rounded-sm cursor-pointer";
 
-                        tdCell.setAttribute('draggable', 'true');
+                        if (esPruebaCRM) {
+                            tdCell.title = 'Prueba comercial procedente del CRM. No suma facturación ni sesiones. Gestionar cambios desde CRM.';
+                            const detalle = textoDetallePruebaCRM(obj);
+                            const objetivo = obj.objetivoCliente ? `<div class="text-[8px] mt-0.5 text-cyan-100 truncate opacity-80">${escapeHTML(obj.objetivoCliente)}</div>` : '';
+                            tdCell.innerHTML = `<div class="absolute top-1 left-1 text-[8px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-500/30">PRUEBA</div><div class="pt-3 text-[11px] text-white uppercase truncate">${escapeHTML(obj.nombre)}</div><div class="text-[8px] mt-0.5 text-cyan-200 truncate">${escapeHTML(detalle)}</div>${objetivo}`;
+                            tdCell.onclick = () => alert('Prueba asignada desde CRM. No suma facturación ni sesiones. Para cambiar fecha, entrenador o estado, abre el lead en CRM.');
+                        } else {
+                            tdCell.setAttribute('draggable', 'true');
 
-                        tdCell.title = 'Haz clic para notas/borrar o arrastra para mover la cita';
+                            tdCell.title = 'Haz clic para notas/borrar o arrastra para mover la cita';
 
-                        tdCell.ondragstart = (e) => {
+                            tdCell.ondragstart = (e) => {
 
-                            e.stopPropagation();
+                                e.stopPropagation();
 
-                            claveAgendaArrastrada = clave;
+                                claveAgendaArrastrada = clave;
 
-                            e.dataTransfer.setData("application/x-bs-agenda-key", clave);
+                                e.dataTransfer.setData("application/x-bs-agenda-key", clave);
 
-                            // Fallback robusto: algunos navegadores/GitHub Pages no preservan bien MIME custom en drag/drop.
-                            e.dataTransfer.setData("text/plain", `bs-agenda-move|${clave}|${obj.id}`);
+                                // Fallback robusto: algunos navegadores/GitHub Pages no preservan bien MIME custom en drag/drop.
+                                e.dataTransfer.setData("text/plain", `bs-agenda-move|${clave}|${obj.id}`);
 
-                            e.dataTransfer.effectAllowed = 'move';
+                                e.dataTransfer.effectAllowed = 'move';
 
-                        };
+                            };
 
-                        tdCell.ondragend = () => { claveAgendaArrastrada = ''; };
+                            tdCell.ondragend = () => { claveAgendaArrastrada = ''; };
 
-                        
+                            
 
-                        const rent = calcularRentabilidadFicha(obj);
+                            const rent = calcularRentabilidadFicha(obj);
 
-                        const nota = obtenerNotaAgenda(clave);
+                            const nota = obtenerNotaAgenda(clave);
 
-                        const iconoNota = nota ? '<div class="absolute top-1 right-1 text-[10px] text-amber-300" title="Tiene nota">📝</div>' : '';
+                            const iconoNota = nota ? '<div class="absolute top-1 right-1 text-[10px] text-amber-300" title="Tiene nota">📝</div>' : '';
 
-                        const resumenNota = nota ? `<div class="text-[8px] mt-0.5 text-amber-200 truncate opacity-90">${escapeHTML(nota)}</div>` : '';
+                            const resumenNota = nota ? `<div class="text-[8px] mt-0.5 text-amber-200 truncate opacity-90">${escapeHTML(nota)}</div>` : '';
 
 
 
-                        tdCell.innerHTML = `${iconoNota}<div class="text-[11px] text-white uppercase truncate">${escapeHTML(obj.nombre)}</div><div class="text-[9px] mt-0.5 opacity-90">${rent.toFixed(2)}€</div>${resumenNota}`;
+                            tdCell.innerHTML = `${iconoNota}<div class="text-[11px] text-white uppercase truncate">${escapeHTML(obj.nombre)}</div><div class="text-[9px] mt-0.5 opacity-90">${rent.toFixed(2)}€</div>${resumenNota}`;
 
-                        tdCell.onclick = () => abrirModalNota(clave, obj, rent);
+                            tdCell.onclick = () => abrirModalNota(clave, obj, rent);
+                        }
 
                     } else {
 
@@ -2942,7 +2965,7 @@
                     if(fechaClave >= desdeISO && fechaClave < hastaISO) {
                         const objGuardado = dbAgenda[entrenadorVisto][k];
                         const obj = buscarFichaPorId(objGuardado?.id) || objGuardado;
-                        if (!obj) return;
+                        if (!obj || esCitaPruebaCRM(obj)) return;
                         ses++;
                         factMes += calcularRentabilidadFicha(obj);
                     }
