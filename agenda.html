@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 
 <html lang="es">
@@ -765,8 +766,9 @@
 
             return {
 
-                credenciales: sanitizarCredenciales(dbCredenciales || {}),
-
+                // En la versión con Firebase Authentication, los usuarios/roles se leen de besoulUsers.
+                // No guardamos credenciales dentro del documento de agenda para evitar que una copia antigua
+                // sobrescriba el selector de entrenadores o elimine perfiles por error.
                 clientes: dbClientes || {},
 
                 agenda: dbAgenda || {},
@@ -824,7 +826,9 @@
 
             try {
 
-                dbCredenciales = sanitizarCredenciales(data.credenciales || dbCredenciales || CREDENCIALES_BASE);
+                // Los entrenadores vienen de besoulUsers, no del documento de agenda.
+                // Así evitamos perder el modo admin o el selector si el campo credenciales de agenda quedó antiguo.
+                dbCredenciales = sanitizarCredenciales(dbCredenciales || CREDENCIALES_BASE);
 
                 dbClientes = data.clientes || {};
 
@@ -999,7 +1003,8 @@
             const snap = await fb.firestore().collection('besoulUsers').get();
             const perfiles = {};
             snap.forEach(doc => {
-                const perfil = perfilFirestoreAcredencial({ ...doc.data(), email: doc.id }, doc.id);
+                const data = doc.data() || {};
+                const perfil = perfilFirestoreAcredencial(data, data.email || doc.id);
                 if (perfil.activo) perfiles[perfil.trainerKey] = perfil;
             });
             dbCredenciales = sanitizarCredenciales(perfiles);
@@ -1654,7 +1659,7 @@
 
                         <button onclick="guardarEntrenadorExistente('${user}')" class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-1.5 rounded font-bold hover:bg-emerald-500/20">Guardar</button>
 
-                        <button onclick="eliminarEntrenador('${user}')" class="bg-red-500/10 text-red-400 border border-red-500/30 px-2 py-1.5 rounded font-bold hover:bg-red-500/20">Eliminar</button>
+                        <button onclick="eliminarEntrenador('${user}')" class="bg-red-500/10 text-red-400 border border-red-500/30 px-2 py-1.5 rounded font-bold hover:bg-red-500/20">Desactivar</button>
 
                     </div>
 
@@ -1762,7 +1767,7 @@
 
         async function eliminarEntrenador(user) {
 
-            if (user === usuarioLogeado) { alert('No puedes eliminar el usuario con el que has iniciado sesión.'); return; }
+            if (user === usuarioLogeado) { alert('No puedes desactivar el usuario con el que has iniciado sesión.'); return; }
 
             const copiaRoles = { ...dbCredenciales };
 
@@ -1774,23 +1779,23 @@
 
             const nombre = nombreEntrenador(user);
 
-            if (!confirm(`Vas a eliminar el perfil de ${nombre}. También se eliminarán sus atletas, grupos y agenda guardada. El usuario de Firebase Authentication deberás desactivarlo o borrarlo en Firebase Console. ¿Continuar?`)) return;
+            if (!confirm(`Vas a desactivar el perfil de ${nombre}. Sus atletas, grupos, agenda, notas e históricos NO se borrarán. Solo dejará de aparecer como usuario activo hasta que lo reactives en Firebase. ¿Continuar?`)) return;
 
             try {
                 const email = dbCredenciales[user]?.email;
-                if (email) await inicializarFirebaseBesoul().firestore().collection('besoulUsers').doc(emailDocId(email)).delete();
+                if (email) {
+                    await inicializarFirebaseBesoul().firestore().collection('besoulUsers').doc(emailDocId(email)).set({
+                        activo: false,
+                        actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                }
 
                 delete dbCredenciales[user];
-                delete dbClientes[user];
-                delete dbAgenda[user];
 
                 guardarCredenciales();
 
-                localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
-                programarGuardadoNubeAgenda();
-
-                localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
-                programarGuardadoNubeAgenda();
+                // Importante: no borramos dbClientes[user], dbAgenda[user], dbNotas ni dbHistoricoClientes.
+                // Las bajas de entrenadores/usuarios deben conservar datos históricos.
 
                 if (entrenadorVisto === user) entrenadorVisto = Object.keys(dbCredenciales)[0] || usuarioLogeado;
 
@@ -1798,7 +1803,7 @@
                 renderEntrenadoresAdmin();
                 recalcularKPIs(); renderClientes(); renderAgenda();
             } catch (err) {
-                mostrarErrorAuth(err.message || 'No se pudo eliminar el perfil del entrenador.');
+                mostrarErrorAuth(err.message || 'No se pudo desactivar el perfil del entrenador.');
             }
 
         }
