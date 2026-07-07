@@ -183,7 +183,7 @@
             </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
             <div>
               <label class="text-slate-400 block mb-1">Estado *</label>
               <select id="lead-estado" onchange="toggleLeadFields()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
@@ -191,6 +191,10 @@
             <div>
               <label class="text-slate-400 block mb-1">Fuente *</label>
               <select id="lead-fuente" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+            </div>
+            <div>
+              <label class="text-slate-400 block mb-1">Medio / canal concreto</label>
+              <input type="text" id="lead-medio" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="Ej: WhatsApp BESOUL, Instagram corporativo, recepción">
             </div>
             <div>
               <label class="text-slate-400 block mb-1">Objetivo</label>
@@ -229,6 +233,12 @@
               <label class="text-slate-400 block mb-1">Motivo pérdida</label>
               <select id="lead-motivo-perdida" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
             </div>
+          </div>
+
+          <div>
+            <label class="text-cyan-300 block mb-1 font-bold">Notas para el entrenador / salud</label>
+            <textarea id="lead-nota-entrenador" class="w-full bg-slate-950 border border-cyan-500/30 rounded p-2 text-white h-20" placeholder="Ej.: lesión de rodilla, dolor lumbar, embarazo, preferencia de intensidad, limitaciones, objetivo sensible, etc."></textarea>
+            <p class="text-[9px] text-cyan-400/80 mt-1 leading-tight">Estas notas se verán en la Agenda dentro del bloque PRUEBA para que el entrenador prepare la sesión.</p>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -630,7 +640,7 @@ function renderAlertas() {
 function resetLeadForm() {
   leadEditandoId = null;
   eventosTemporales = [];
-  ['lead-nombre','lead-telefono','lead-email','lead-captador','lead-fecha-prueba','lead-fecha-accion','lead-notas','event-text'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['lead-nombre','lead-telefono','lead-email','lead-captador','lead-medio','lead-fecha-prueba','lead-fecha-accion','lead-notas','lead-nota-entrenador','event-text'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('lead-estado').value = 'Nuevo lead';
   document.getElementById('lead-fuente').value = 'Instagram';
   document.getElementById('lead-objetivo').value = '';
@@ -662,6 +672,7 @@ function abrirModalLead(id=null) {
     document.getElementById('lead-captador').value = lead.captadorNombre || '';
     document.getElementById('lead-estado').value = lead.estado || 'Nuevo lead';
     document.getElementById('lead-fuente').value = lead.fuente || 'Instagram';
+    document.getElementById('lead-medio').value = lead.medioCaptacion || lead.medio || '';
     document.getElementById('lead-objetivo').value = lead.objetivo || '';
     document.getElementById('lead-horario').value = lead.horarioPreferido || '';
     document.getElementById('lead-tipo-prueba').value = lead.tipoPrueba || 'Prueba gratuita';
@@ -671,6 +682,7 @@ function abrirModalLead(id=null) {
     document.getElementById('lead-proxima-accion').value = lead.proximaAccion || '';
     document.getElementById('lead-fecha-accion').value = fechaLocalInputDesdeISO(lead.fechaProximaAccion);
     document.getElementById('lead-notas').value = lead.notas || '';
+    document.getElementById('lead-nota-entrenador').value = lead.notaEntrenadorPrueba || lead.notaEntrenador || lead.notasEntrenadorPrueba || '';
     eventosTemporales = Array.isArray(lead.historial) ? [...lead.historial] : [];
   } else {
     document.getElementById('modal-title').innerText = 'Nuevo lead';
@@ -727,6 +739,7 @@ function recogerLeadFormulario() {
     captadorNombre: document.getElementById('lead-captador').value.trim(),
     estado,
     fuente,
+    medioCaptacion: document.getElementById('lead-medio').value.trim(),
     objetivo: document.getElementById('lead-objetivo').value,
     horarioPreferido: document.getElementById('lead-horario').value,
     tipoPrueba: document.getElementById('lead-tipo-prueba').value,
@@ -736,6 +749,7 @@ function recogerLeadFormulario() {
     proximaAccion: document.getElementById('lead-proxima-accion').value,
     fechaProximaAccion: isoDesdeLocalInput(document.getElementById('lead-fecha-accion').value),
     notas: document.getElementById('lead-notas').value.trim(),
+    notaEntrenadorPrueba: document.getElementById('lead-nota-entrenador').value.trim(),
     historial: eventosTemporales
   };
 }
@@ -807,6 +821,9 @@ function objetoPruebaAgendaCRM(leadId, leadData, claveInfo) {
     centroId: leadData.centroId || 'sin-centro',
     centroNombre: leadData.centroNombre || textoCentro(leadData.centroId),
     fuenteCaptacion: leadData.fuente || '',
+    medioCaptacion: leadData.medioCaptacion || '',
+    notaEntrenadorPrueba: leadData.notaEntrenadorPrueba || '',
+    notasComercialesCRM: leadData.notas || '',
     objetivoCliente: leadData.objetivo || '',
     horarioPreferido: leadData.horarioPreferido || '',
     fechaPrueba: leadData.fechaPrueba || '',
@@ -916,6 +933,63 @@ async function sincronizarPruebaAgendaDesdeLead(leadId, leadData, avisar = true)
   }
 }
 
+
+async function sincronizarClienteAgendaDesdeLeadConvertido(leadId) {
+  if (!leadId || !db) return;
+  try {
+    const leadSnap = await db.collection('besoulLeads').doc(leadId).get();
+    if (!leadSnap.exists) return;
+    const lead = { id: leadId, ...leadSnap.data() };
+    const convertido = lead.convertido === true || lead.estado === 'Convertido a cliente' || !!lead.convertedClientId;
+    if (!convertido) return;
+
+    const trainerPreferente = lead.convertedTrainerKey || lead.trainerKey || '';
+    const agendaRef = db.collection('besoulSuite').doc('agenda');
+    await db.runTransaction(async tx => {
+      const agendaSnap = await tx.get(agendaRef);
+      if (!agendaSnap.exists) return;
+      const agendaData = agendaSnap.data() || {};
+      const clientes = agendaData.clientes || {};
+      let actualizado = false;
+      const trainerKeys = trainerPreferente ? [trainerPreferente, ...Object.keys(clientes).filter(k => k !== trainerPreferente)] : Object.keys(clientes);
+      trainerKeys.forEach(tKey => {
+        if (!Array.isArray(clientes[tKey])) return;
+        clientes[tKey] = clientes[tKey].map(c => {
+          if (!c || (c.leadId !== leadId && c.id !== lead.convertedClientId)) return c;
+          actualizado = true;
+          return {
+            ...c,
+            nombre: lead.nombre || c.nombre,
+            telefono: lead.telefono || c.telefono || '',
+            email: lead.email || c.email || '',
+            origenCRM: true,
+            leadId: leadId,
+            fuenteCaptacion: lead.fuente || c.fuenteCaptacion || '',
+            medioCaptacion: lead.medioCaptacion || c.medioCaptacion || '',
+            captadorNombre: lead.captadorNombre || c.captadorNombre || '',
+            centroInteres: lead.centroId || c.centroInteres || '',
+            centroNombre: lead.centroNombre || c.centroNombre || '',
+            objetivoCliente: lead.objetivo || c.objetivoCliente || '',
+            horarioPreferido: lead.horarioPreferido || c.horarioPreferido || '',
+            notasComercialesCRM: lead.notas || c.notasComercialesCRM || '',
+            notaEntrenadorPrueba: lead.notaEntrenadorPrueba || c.notaEntrenadorPrueba || '',
+            actualizadoDesdeCRMEn: ahoraISO()
+          };
+        });
+      });
+      if (actualizado) {
+        tx.set(agendaRef, {
+          clientes,
+          ultimaActualizacionLocal: ahoraISO(),
+          actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge:true });
+      }
+    });
+  } catch (err) {
+    console.error('No se pudo actualizar la ficha de Agenda desde CRM:', err);
+  }
+}
+
 async function guardarLead() {
   try {
     const data = recogerLeadFormulario();
@@ -934,6 +1008,7 @@ async function guardarLead() {
       docId = ref.id;
     }
     await sincronizarPruebaAgendaDesdeLead(docId, { id: docId, ...data }, true);
+    await sincronizarClienteAgendaDesdeLeadConvertido(docId);
     cerrarModalLead();
   } catch (err) {
     alert(err.message || 'No se ha podido guardar el lead.');
@@ -973,10 +1048,14 @@ async function convertirLeadEnCliente() {
     estadoCliente: 'activo',
     fechaAlta: new Date().toISOString().slice(0,10),
     fechaCambioEstado: new Date().toISOString().slice(0,10),
-    observacionesEstado: `Creado desde CRM. Fuente: ${leadActualizado.fuente}. Centro: ${leadActualizado.centroNombre}. Objetivo: ${leadActualizado.objetivo || 'sin indicar'}. Notas: ${leadActualizado.notas || ''}`,
+    observacionesEstado: `Creado desde CRM. Fuente: ${leadActualizado.fuente}. Medio: ${leadActualizado.medioCaptacion || 'sin indicar'}. Centro: ${leadActualizado.centroNombre}. Objetivo: ${leadActualizado.objetivo || 'sin indicar'}. Notas comerciales: ${leadActualizado.notas || ''}. Nota entrenador: ${leadActualizado.notaEntrenadorPrueba || ''}`,
     origenCRM: true,
     leadId: leadEditandoId,
     fuenteCaptacion: leadActualizado.fuente,
+    medioCaptacion: leadActualizado.medioCaptacion || '',
+    captadorNombre: leadActualizado.captadorNombre || '',
+    notasComercialesCRM: leadActualizado.notas || '',
+    notaEntrenadorPrueba: leadActualizado.notaEntrenadorPrueba || '',
     centroInteres: leadActualizado.centroId,
     objetivoCliente: leadActualizado.objetivo || '',
     horarioPreferido: leadActualizado.horarioPreferido || '',
@@ -1024,7 +1103,7 @@ async function convertirLeadEnCliente() {
 }
 
 function exportarLeadsCSV() {
-  const cols = ['nombre','telefono','email','estado','centroNombre','trainerName','fuente','objetivo','horarioPreferido','proximaAccion','fechaProximaAccion','motivoPerdida','notas'];
+  const cols = ['nombre','telefono','email','estado','centroNombre','trainerName','fuente','medioCaptacion','objetivo','horarioPreferido','proximaAccion','fechaProximaAccion','motivoPerdida','notaEntrenadorPrueba','notas'];
   const rows = [cols.join(';')];
   leadsFiltrados.forEach(l => {
     rows.push(cols.map(c => `"${String(l[c] || '').replace(/"/g,'""')}"`).join(';'));
