@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 
 <html lang="es">
@@ -317,6 +316,23 @@
 
                     <input type="tel" id="cust-phone" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
 
+                </div>
+
+                <div id="crm-origin-block" class="hidden p-3 bg-cyan-500/5 border border-cyan-500/20 rounded space-y-2">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-cyan-300 text-[10px] font-bold uppercase tracking-wider">Origen comercial CRM</span>
+                        <span id="crm-origin-badge" class="text-[9px] text-cyan-200 bg-cyan-500/10 border border-cyan-500/30 rounded px-2 py-0.5">CRM</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px]">
+                        <div><span class="text-slate-500 block uppercase font-bold">Fuente</span><span id="crm-origin-source" class="text-white">---</span></div>
+                        <div><span class="text-slate-500 block uppercase font-bold">Medio / canal</span><span id="crm-origin-medium" class="text-white">---</span></div>
+                        <div><span class="text-slate-500 block uppercase font-bold">Centro interés</span><span id="crm-origin-center" class="text-white">---</span></div>
+                        <div><span class="text-slate-500 block uppercase font-bold">Objetivo</span><span id="crm-origin-objective" class="text-white">---</span></div>
+                    </div>
+                    <div id="crm-origin-trainer-note-wrap" class="hidden text-[10px] leading-relaxed bg-slate-950/60 border border-cyan-500/10 rounded p-2">
+                        <span class="text-cyan-300 font-bold uppercase block mb-1">Nota original para el entrenador</span>
+                        <span id="crm-origin-trainer-note" class="text-slate-200 whitespace-pre-wrap"></span>
+                    </div>
                 </div>
 
                 <div class="p-3 bg-slate-950/50 border border-slate-800 rounded space-y-2">
@@ -1037,6 +1053,9 @@
                 centroId: lead.centroId || 'sin-centro',
                 centroNombre: lead.centroNombre || '',
                 fuenteCaptacion: lead.fuente || '',
+                medioCaptacion: lead.medioCaptacion || '',
+                notaEntrenadorPrueba: lead.notaEntrenadorPrueba || '',
+                notasComercialesCRM: lead.notas || '',
                 objetivoCliente: lead.objetivo || '',
                 horarioPreferido: lead.horarioPreferido || '',
                 fechaPrueba: lead.fechaPrueba || '',
@@ -1438,6 +1457,37 @@
         function clienteActivoParaAgenda(ficha) { return estadoClienteFicha(ficha) === 'activo'; }
         function etiquetaEstadoCliente(ficha) { const estado = estadoClienteFicha(ficha); if (estado === 'inactivo') return 'Inactivo temporal'; if (estado === 'baja') return 'Baja definitiva'; return 'Activo'; }
         function claseBadgeEstadoCliente(ficha) { const estado = estadoClienteFicha(ficha); if (estado === 'inactivo') return 'bg-orange-500/10 text-orange-400 border-orange-500/30'; if (estado === 'baja') return 'bg-red-500/10 text-red-400 border-red-500/30'; return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'; }
+
+        function valorOrigenCRM(ficha, claves) {
+            for (const clave of claves) {
+                const valor = ficha && ficha[clave];
+                if (valor !== undefined && valor !== null && String(valor).trim()) return String(valor).trim();
+            }
+            return '';
+        }
+
+        function actualizarOrigenComercialModal(ficha) {
+            const block = document.getElementById('crm-origin-block');
+            if (!block) return;
+            const fuente = valorOrigenCRM(ficha, ['fuenteCaptacion','fuente','origenFuente']);
+            const medio = valorOrigenCRM(ficha, ['medioCaptacion','medio','captadorNombre']);
+            const centro = valorOrigenCRM(ficha, ['centroNombre','centroInteres','centroId']);
+            const objetivo = valorOrigenCRM(ficha, ['objetivoCliente','objetivo']);
+            const notaEntrenador = valorOrigenCRM(ficha, ['notaEntrenadorPrueba','notaEntrenador','notasEntrenadorPrueba']);
+            const visible = !!(ficha && (ficha.origenCRM || ficha.leadId || fuente || medio || centro || objetivo || notaEntrenador));
+            block.className = visible ? 'p-3 bg-cyan-500/5 border border-cyan-500/20 rounded space-y-2' : 'hidden p-3 bg-cyan-500/5 border border-cyan-500/20 rounded space-y-2';
+            const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val || '---'; };
+            setTxt('crm-origin-source', fuente);
+            setTxt('crm-origin-medium', medio);
+            setTxt('crm-origin-center', centro);
+            setTxt('crm-origin-objective', objetivo);
+            const badge = document.getElementById('crm-origin-badge');
+            if (badge) badge.innerText = ficha?.leadId ? 'CRM · lead' : 'CRM';
+            const noteWrap = document.getElementById('crm-origin-trainer-note-wrap');
+            const noteEl = document.getElementById('crm-origin-trainer-note');
+            if (noteWrap) noteWrap.className = notaEntrenador ? 'text-[10px] leading-relaxed bg-slate-950/60 border border-cyan-500/10 rounded p-2' : 'hidden text-[10px] leading-relaxed bg-slate-950/60 border border-cyan-500/10 rounded p-2';
+            if (noteEl) noteEl.innerText = notaEntrenador || '';
+        }
         function toggleEstadoClienteFields() {
             const estado = normalizarEstadoCliente(document.getElementById('cust-status')?.value || 'activo');
             const field = document.getElementById('cust-status-reason-field');
@@ -2300,6 +2350,7 @@ function calcularRentabilidadFicha(ficha) {
             if (document.getElementById('cust-status-reason')) document.getElementById('cust-status-reason').value = '';
             toggleEstadoClienteFields();
             prepararContratoTemporalDesdeFicha({ contratoCliente: contratoVacio() });
+            actualizarOrigenComercialModal(null);
 
             
 
@@ -2367,6 +2418,7 @@ function calcularRentabilidadFicha(ficha) {
             if (document.getElementById('cust-status-reason')) document.getElementById('cust-status-reason').value = c.observacionesEstado || '';
             toggleEstadoClienteFields();
             prepararContratoTemporalDesdeFicha(c);
+            actualizarOrigenComercialModal(c);
 
             
 
@@ -2714,6 +2766,8 @@ function calcularRentabilidadFicha(ficha) {
                 const notaFacturacionTxt = esVinculado ? '<div class="text-[8px] text-slate-500 mt-0.5">Dato estadístico · no suma a cartera</div>' : '';
                 const descuentoBadge = obtenerDescuentoFicha(c) > 0 ? `<span class="ml-1 text-[8px] bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded px-1 py-0.5 align-middle">-${obtenerDescuentoFicha(c)}%</span>` : '';
                 const contratoBadge = c.contratoCliente?.firmado ? '<span class="ml-1 text-[8px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded px-1 py-0.5 align-middle">CONTRATO</span>' : '';
+                const origenBadge = (c.origenCRM || c.fuenteCaptacion) ? `<span class="ml-1 text-[8px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded px-1 py-0.5 align-middle">CRM</span>` : '';
+                const origenLinea = (c.origenCRM || c.fuenteCaptacion || c.medioCaptacion) ? `<div class="text-[8px] text-cyan-300 mt-0.5 truncate max-w-[220px]">Origen: ${escapeHTML([c.fuenteCaptacion, c.medioCaptacion].filter(Boolean).join(' · ') || 'CRM')}</div>` : '';
                 const estadoBadge = estadoClienteFicha(c) !== 'activo' ? `<span class="ml-1 text-[8px] ${claseBadgeEstadoCliente(c)} border rounded px-1 py-0.5 align-middle">${escapeHTML(etiquetaEstadoCliente(c)).toUpperCase()}</span>` : '';
 
                 const botonEditarId = esVinculado ? c.vinculacion : c.id;
@@ -2734,13 +2788,14 @@ function calcularRentabilidadFicha(ficha) {
 
                             <strong class="text-white text-xs uppercase">${escapeHTML(c.nombre)}</strong>
 
-                            ${esVinculado ? '<span class="ml-1 text-[8px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded px-1 py-0.5 align-middle">GRUPO</span>' : ''}${descuentoBadge}${contratoBadge}${estadoBadge}
+                            ${esVinculado ? '<span class="ml-1 text-[8px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded px-1 py-0.5 align-middle">GRUPO</span>' : ''}${origenBadge}${descuentoBadge}${contratoBadge}${estadoBadge}
 
                             <div class="text-slate-500 text-[9px] mt-0.5 truncate max-w-[220px]">${txtExtra}</div>
 
                             <div class="text-[9px] text-slate-400 mt-0.5">${modalidadTxt}</div>
 
                             ${notaFacturacionTxt}
+                            ${origenLinea}
 
                         </div>
 
@@ -3010,8 +3065,23 @@ function calcularRentabilidadFicha(ficha) {
                             tdCell.title = 'Prueba comercial procedente del CRM. No suma facturación ni sesiones. Gestionar cambios desde CRM.';
                             const detalle = textoDetallePruebaCRM(obj);
                             const objetivo = obj.objetivoCliente ? `<div class="text-[8px] mt-0.5 text-cyan-100 truncate opacity-80">${escapeHTML(obj.objetivoCliente)}</div>` : '';
-                            tdCell.innerHTML = `<div class="absolute top-1 left-1 text-[8px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-500/30">PRUEBA</div><div class="pt-3 text-[11px] text-white uppercase truncate">${escapeHTML(obj.nombre)}</div><div class="text-[8px] mt-0.5 text-cyan-200 truncate">${escapeHTML(detalle)}</div>${objetivo}`;
-                            tdCell.onclick = () => alert('Prueba asignada desde CRM. No suma facturación ni sesiones. Para cambiar fecha, entrenador o estado, abre el lead en CRM.');
+                            const notaEntrenador = obj.notaEntrenadorPrueba || obj.notaEntrenador || obj.notasEntrenadorPrueba || '';
+                            const notaHTML = notaEntrenador ? `<div class="text-[8px] mt-0.5 text-amber-200 truncate opacity-95">⚠ ${escapeHTML(notaEntrenador)}</div>` : '';
+                            tdCell.innerHTML = `<div class="absolute top-1 left-1 text-[8px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-500/30">PRUEBA</div><div class="pt-3 text-[11px] text-white uppercase truncate">${escapeHTML(obj.nombre)}</div><div class="text-[8px] mt-0.5 text-cyan-200 truncate">${escapeHTML(detalle)}</div>${objetivo}${notaHTML}`;
+                            tdCell.onclick = () => {
+                                const lineas = [
+                                    'Prueba asignada desde CRM.',
+                                    `Lead: ${obj.nombre || '---'}`,
+                                    `Teléfono: ${obj.telefono || '---'}`,
+                                    `Fuente: ${obj.fuenteCaptacion || '---'}`,
+                                    `Medio: ${obj.medioCaptacion || '---'}`,
+                                    `Objetivo: ${obj.objetivoCliente || '---'}`,
+                                    notaEntrenador ? `Notas para el entrenador: ${notaEntrenador}` : 'Notas para el entrenador: ---',
+                                    '',
+                                    'No suma facturación ni sesiones. Para cambiar fecha, entrenador o estado, abre el lead en CRM.'
+                                ];
+                                alert(lineas.join('\n'));
+                            };
                         } else {
                             tdCell.setAttribute('draggable', 'true');
 
