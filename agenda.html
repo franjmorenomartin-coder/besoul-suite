@@ -2683,6 +2683,92 @@ function calcularRentabilidadFicha(ficha) {
 
 
 
+        function borrarFichaCliente(id) {
+
+            if (rolActivo !== 'admin') {
+                alert('Solo los administradores pueden borrar fichas de clientes.');
+                return;
+            }
+
+            if (!dbClientes[entrenadorVisto]) return;
+
+            const lista = dbClientes[entrenadorVisto];
+            const ficha = lista.find(c => c.id === id);
+
+            if (!ficha) {
+                alert('No se ha encontrado la ficha.');
+                return;
+            }
+
+            if (ficha.vinculacion) {
+                alert('Esta ficha pertenece a un grupo. Para borrar integrantes, edita o borra el grupo completo.');
+                return;
+            }
+
+            const idsEliminar = new Set([ficha.id]);
+            if (ficha.tipo === 'grupo') {
+                lista.forEach(c => {
+                    if (c.vinculacion === ficha.id) idsEliminar.add(c.id);
+                });
+            }
+
+            let sesionesAsociadas = 0;
+            if (dbAgenda[entrenadorVisto]) {
+                Object.keys(dbAgenda[entrenadorVisto]).forEach(clave => {
+                    const cita = dbAgenda[entrenadorVisto][clave];
+                    if (cita && idsEliminar.has(cita.id)) sesionesAsociadas++;
+                });
+            }
+
+            const tipoTexto = ficha.tipo === 'grupo' ? 'grupo' : 'cliente';
+            const detalleGrupo = ficha.tipo === 'grupo' ? `\nTambién se borrarán ${idsEliminar.size - 1} integrantes vinculados.` : '';
+            const detalleSesiones = sesionesAsociadas ? `\nTambién se borrarán ${sesionesAsociadas} sesiones agendadas asociadas.` : '';
+            const detalleHistorico = ' También se eliminará su histórico interno guardado en Agenda.';
+
+            const ok = confirm(
+                `Vas a borrar definitivamente el ${tipoTexto}: ${ficha.nombre}.${detalleGrupo}${detalleSesiones}\n${detalleHistorico}\n\nEsta acción debe usarse solo para fichas creadas por error o pruebas ficticias. ¿Continuar?`
+            );
+            if (!ok) return;
+
+            const confirmacion = prompt(`Para confirmar el borrado definitivo de "${ficha.nombre}", escribe BORRAR:`);
+            if (String(confirmacion || '').trim().toUpperCase() !== 'BORRAR') {
+                alert('Borrado cancelado.');
+                return;
+            }
+
+            dbClientes[entrenadorVisto] = lista.filter(c => !idsEliminar.has(c.id));
+
+            if (dbAgenda[entrenadorVisto]) {
+                Object.keys(dbAgenda[entrenadorVisto]).forEach(clave => {
+                    const cita = dbAgenda[entrenadorVisto][clave];
+                    if (cita && idsEliminar.has(cita.id)) {
+                        delete dbAgenda[entrenadorVisto][clave];
+                        fijarNotaAgenda(clave, '');
+                    }
+                });
+            }
+
+            if (dbHistoricoClientes[entrenadorVisto]) {
+                idsEliminar.forEach(clienteId => {
+                    delete dbHistoricoClientes[entrenadorVisto][clienteId];
+                });
+            }
+
+            localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
+            localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
+            localStorage.setItem('bs_db_notas_v6', JSON.stringify(dbNotas));
+            localStorage.setItem('bs_db_historico_clientes_v6', JSON.stringify(dbHistoricoClientes));
+
+            programarGuardadoNubeAgenda();
+            recalcularKPIs();
+            renderClientes();
+            renderAgenda();
+            alert(`${ficha.nombre} se ha borrado correctamente.`);
+
+        }
+
+
+
         function actualizarNombreEnAgendaSiCambia() {
 
             if(!dbAgenda[entrenadorVisto] || !dbClientes[entrenadorVisto]) return;
@@ -2773,6 +2859,9 @@ function calcularRentabilidadFicha(ficha) {
                 const botonEditarId = esVinculado ? c.vinculacion : c.id;
 
                 const textoBoton = esVinculado ? 'Editar grupo' : 'Editar';
+                const botonBorrarHTML = (rolActivo === 'admin' && !esVinculado)
+                    ? `<button onclick="borrarFichaCliente('${c.id}')" class="text-red-400 text-[10px] mt-1 font-bold hover:underline">Borrar</button>`
+                    : '';
 
                 const contadorHTML = renderContadorHTML(c);
 
@@ -2807,6 +2896,7 @@ function calcularRentabilidadFicha(ficha) {
 
                             <button onclick="editarFicha('${botonEditarId}')" class="text-cyan-500 text-[10px] mt-2 font-bold hover:underline">${textoBoton}</button>
                             <button onclick="abrirModalHistoricoCliente('${botonEditarId}')" class="text-amber-400 text-[10px] mt-1 font-bold hover:underline">Histórico</button>
+                            ${botonBorrarHTML}
 
                         </div>
 
