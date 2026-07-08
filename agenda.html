@@ -249,7 +249,7 @@
 
                 <div class="flex justify-between items-center border-b border-slate-800 pb-2 mb-3">
 
-                    <h2 class="text-xs font-bold uppercase text-slate-300 tracking-wider">Cuadrante Semanal · Lunes a Domingo · Clases de 45 min</h2>
+                    <h2 class="text-xs font-bold uppercase text-slate-300 tracking-wider">Cuadrante Semanal · Lunes a Domingo · tramos de 15 min · sesiones de 45 min</h2>
 
                     <button onclick="guardarMesEnHistorico()" class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded">Respaldar Semana</button>
 
@@ -395,7 +395,7 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="text-slate-400 block mb-1">Descuento aplicado (%)</label>
-                        <input type="number" id="cust-discount" min="0" max="100" step="0.1" inputmode="decimal" value="0" oninput="autoCalcularTarifa()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="0,0">
+                        <input type="text" id="cust-discount" inputmode="decimal" pattern="[0-9]+([\.,][0-9]+)?" value="0" oninput="autoCalcularTarifa()" onblur="normalizarCampoDescuento()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="0,0">
                     </div>
                     <div class="p-2 bg-slate-950 border border-slate-800 rounded">
                         <span class="text-slate-500 text-[9px] block uppercase font-bold">Precio base sin descuento</span>
@@ -1003,9 +1003,10 @@
             const inicio = 6 * 60;
             const fin = 22 * 60;
             const duracion = 45;
+            const paso = 15;
             const total = d.getHours() * 60 + d.getMinutes();
             if (total < inicio || total + duracion > fin) return null;
-            let slot = inicio + Math.round((total - inicio) / duracion) * duracion;
+            let slot = inicio + Math.round((total - inicio) / paso) * paso;
             if (slot + duracion > fin) slot = fin - duracion;
             if (slot < inicio) slot = inicio;
             return `${fechaAgendaLocalDesdeDateCRM(d)}_${horaAgendaDesdeMinutosCRM(slot)}`;
@@ -1458,6 +1459,13 @@
             return normalizarPorcentajeDescuento(valor).toLocaleString('es-ES', { maximumFractionDigits: 2 });
         }
 
+        function normalizarCampoDescuento() {
+            const input = document.getElementById('cust-discount');
+            if (!input) return;
+            input.value = formatoPorcentajeDescuento(input.value || 0);
+            autoCalcularTarifa();
+        }
+
         function obtenerDescuentoFicha(ficha) {
             if (!ficha) return 0;
             return normalizarPorcentajeDescuento(ficha.descuentoPct || 0);
@@ -1590,6 +1598,69 @@
             const pruebaGuardada = dbPruebasCRM[entrenadorVisto] ? dbPruebasCRM[entrenadorVisto][clave] : null;
             if (pruebaGuardada) return pruebaGuardada;
             return dbLeadsPruebasCRM[entrenadorVisto] ? dbLeadsPruebasCRM[entrenadorVisto][clave] : null;
+        }
+
+        function minutosDesdeHorario(hora) {
+            const partes = String(hora || '').split(':');
+            if (partes.length !== 2) return NaN;
+            const h = parseInt(partes[0], 10);
+            const m = parseInt(partes[1], 10);
+            if (Number.isNaN(h) || Number.isNaN(m)) return NaN;
+            return h * 60 + m;
+        }
+
+        function claveDesdeFechaYMinutos(fechaISO, minutos) {
+            return `${fechaISO}_${formatoMinutosHorario(minutos)}`;
+        }
+
+        function clavesBloqueSesion(clave, duracionMin = 45) {
+            const partes = String(clave || '').split('_');
+            if (partes.length < 2) return [];
+            const fechaISO = partes[0];
+            const inicio = minutosDesdeHorario(partes[1]);
+            if (Number.isNaN(inicio)) return [];
+            const paso = 15;
+            const finAgenda = 22 * 60;
+            const duracion = parseInt(duracionMin, 10) || 45;
+            if (inicio + duracion > finAgenda) return [];
+            const claves = [];
+            for (let m = inicio; m < inicio + duracion; m += paso) {
+                claves.push(claveDesdeFechaYMinutos(fechaISO, m));
+            }
+            return claves;
+        }
+
+        function obtenerCoberturaCitaAgenda(clave) {
+            const partes = String(clave || '').split('_');
+            if (partes.length < 2) return null;
+            const fechaISO = partes[0];
+            const minutosActual = minutosDesdeHorario(partes[1]);
+            if (Number.isNaN(minutosActual)) return null;
+            const paso = 15;
+            const duracionDefault = 45;
+
+            for (let retroceso = 0; retroceso < duracionDefault; retroceso += paso) {
+                const inicioPosible = minutosActual - retroceso;
+                if (inicioPosible < 0) continue;
+                const claveInicio = claveDesdeFechaYMinutos(fechaISO, inicioPosible);
+                const obj = obtenerCitaAgendaEnClave(claveInicio);
+                if (!obj) continue;
+                const duracion = parseInt(obj.duracionMin || obj.duracionPruebaMin || 45, 10) || 45;
+                if (minutosActual >= inicioPosible && minutosActual < inicioPosible + duracion) {
+                    return { obj, claveInicio, esInicio: claveInicio === clave, duracionMin: duracion };
+                }
+            }
+            return null;
+        }
+
+        function hayConflictoBloqueSesion(claveDestino, claveOrigenIgnorada = '') {
+            const claves = clavesBloqueSesion(claveDestino, 45);
+            if (claves.length !== 3) return { fueraHorario: true };
+            for (const k of claves) {
+                const cobertura = obtenerCoberturaCitaAgenda(k);
+                if (cobertura && cobertura.claveInicio !== claveOrigenIgnorada) return cobertura;
+            }
+            return null;
         }
 
 function calcularRentabilidadFicha(ficha) {
@@ -2182,7 +2253,6 @@ function calcularRentabilidadFicha(ficha) {
             const mod = document.getElementById('cust-mod').value;
             const factor = parseInt(document.getElementById('cust-factor').value) || 1;
             const descuentoPct = normalizarPorcentajeDescuento(document.getElementById('cust-discount')?.value || 0);
-            if (document.getElementById('cust-discount')) document.getElementById('cust-discount').value = descuentoPct;
             
             // Personas asumidas por facturación en la matriz
             let multiplicadorPersonas = 1; 
@@ -2437,7 +2507,7 @@ function calcularRentabilidadFicha(ficha) {
             document.getElementById('cust-purchase-type').value = c.tipoCompra;
 
             document.getElementById('cust-bono-date').value = c.fechaCompra || "";
-            document.getElementById('cust-discount').value = normalizarPorcentajeDescuento(c.descuentoPct || 0);
+            document.getElementById('cust-discount').value = formatoPorcentajeDescuento(c.descuentoPct || 0);
             if (document.getElementById('cust-status')) document.getElementById('cust-status').value = estadoClienteFicha(c);
             if (document.getElementById('cust-start-date')) document.getElementById('cust-start-date').value = c.fechaAlta || '';
             if (document.getElementById('cust-status-date')) document.getElementById('cust-status-date').value = c.fechaEstado || '';
@@ -3024,17 +3094,17 @@ function calcularRentabilidadFicha(ficha) {
 
             const finMinutos = 22 * 60;
 
-            const duracionClase = 45;
+            const pasoAgenda = 15;
 
 
 
-            for (let minutos = inicioMinutos; minutos + duracionClase <= finMinutos; minutos += duracionClase) {
+            for (let minutos = inicioMinutos; minutos < finMinutos; minutos += pasoAgenda) {
 
                 franjas.push({
 
                     inicio: formatoMinutosHorario(minutos),
 
-                    fin: formatoMinutosHorario(minutos + duracionClase)
+                    fin: formatoMinutosHorario(minutos + pasoAgenda)
 
                 });
 
@@ -3115,11 +3185,11 @@ function calcularRentabilidadFicha(ficha) {
 
                 const franja = bloque.inicio;
 
-                const tr = document.createElement('tr'); tr.className = "hover:bg-slate-900/10 border-b border-slate-800/40 h-14";
+                const tr = document.createElement('tr'); tr.className = "hover:bg-slate-900/10 border-b border-slate-800/40 h-9";
 
                 let tdH = document.createElement('td');
 
-                tdH.className = "p-2 font-bold text-slate-500 border border-slate-800 bg-slate-950/30 text-center text-[10px]";
+                tdH.className = "p-1.5 font-bold text-slate-500 border border-slate-800 bg-slate-950/30 text-center text-[10px]";
 
                 tdH.innerHTML = `<span class="text-slate-300">${bloque.inicio}</span><br><span class="text-[9px] text-slate-600">${bloque.fin}</span>`; tr.appendChild(tdH);
 
@@ -3133,91 +3203,153 @@ function calcularRentabilidadFicha(ficha) {
 
                     let tdCell = document.createElement('td');
 
-                    tdCell.className = "p-1.5 border border-slate-800/60 align-top relative text-center transition";
+                    tdCell.className = "p-1 border border-slate-800/60 align-top relative text-center transition";
 
-                    
+                    const cobertura = obtenerCoberturaCitaAgenda(clave);
 
-                    tdCell.ondragover = (e) => { e.preventDefault(); tdCell.classList.add('bg-slate-800/40'); };
 
-                    tdCell.ondragleave = () => tdCell.classList.remove('bg-slate-800/40');
 
-                    tdCell.ondrop = (e) => {
+                    if (cobertura && !cobertura.esInicio) {
 
-                        e.preventDefault(); tdCell.classList.remove('bg-slate-800/40');
+                        const objBloque = buscarFichaPorId(cobertura.obj?.id) || cobertura.obj;
 
-                        const payloadTexto = e.dataTransfer.getData("text/plain");
+                        const esPruebaBloque = esCitaPruebaCRM(objBloque);
 
-                        let claveOrigen = e.dataTransfer.getData("application/x-bs-agenda-key") || claveAgendaArrastrada || '';
+                        const colHexBloque = esPruebaBloque ? '#06b6d4' : (CODIGOS_HEX[objBloque?.color] || '#f59e0b');
 
-                        let idCliente = payloadTexto;
+                        tdCell.className += " text-[9px] italic cursor-not-allowed";
 
-                        if (payloadTexto && payloadTexto.startsWith('bs-agenda-move|')) {
-                            const partes = payloadTexto.split('|');
-                            claveOrigen = claveOrigen || partes[1] || '';
-                            idCliente = partes[2] || '';
-                        }
+                        tdCell.style.backgroundColor = colHexBloque + '10';
 
-                        soltarFichaEnCelda(clave, idCliente, claveOrigen);
+                        tdCell.style.borderColor = colHexBloque + '30';
+
+                        tdCell.style.color = colHexBloque;
+
+                        tdCell.title = `Bloque reservado por ${objBloque?.nombre || 'sesión'} (${etiquetaFranja45(cobertura.claveInicio.split('_')[1])})`;
+
+                        tdCell.innerHTML = `<div class="opacity-45 pt-1">↳ ocupado</div>`;
+
+                        tr.appendChild(tdCell);
+
+                        continue;
+
+                    }
+
+
+
+                    const activarDropLibre = () => {
+
+                        tdCell.ondragover = (e) => { e.preventDefault(); tdCell.classList.add('bg-slate-800/40'); };
+
+                        tdCell.ondragleave = () => tdCell.classList.remove('bg-slate-800/40');
+
+                        tdCell.ondrop = (e) => {
+
+                            e.preventDefault(); tdCell.classList.remove('bg-slate-800/40');
+
+                            const payloadTexto = e.dataTransfer.getData("text/plain");
+
+                            let claveOrigen = e.dataTransfer.getData("application/x-bs-agenda-key") || claveAgendaArrastrada || '';
+
+                            let idCliente = payloadTexto;
+
+                            if (payloadTexto && payloadTexto.startsWith('bs-agenda-move|')) {
+
+                                const partes = payloadTexto.split('|');
+
+                                claveOrigen = claveOrigen || partes[1] || '';
+
+                                idCliente = partes[2] || '';
+
+                            }
+
+                            soltarFichaEnCelda(clave, idCliente, claveOrigen);
+
+                        };
 
                     };
 
 
 
-                    let obj = obtenerCitaAgendaEnClave(clave);
+                    let obj = cobertura && cobertura.esInicio ? cobertura.obj : null;
 
 
 
                     if (obj) {
 
+                        const objOriginal = obj;
+
                         obj = buscarFichaPorId(obj.id) || obj;
-                        const esPruebaCRM = esCitaPruebaCRM(obj);
+
+                        const esPruebaCRM = esCitaPruebaCRM(objOriginal) || esCitaPruebaCRM(obj);
 
                         let colHex = esPruebaCRM ? '#06b6d4' : (CODIGOS_HEX[obj.color] || '#f59e0b');
 
-                        tdCell.style.backgroundColor = colHex + (esPruebaCRM ? '18' : '20'); // opacidad diferenciada
+                        tdCell.style.backgroundColor = colHex + (esPruebaCRM ? '18' : '20');
 
                         tdCell.style.borderColor = colHex + (esPruebaCRM ? '80' : '40');
 
                         tdCell.style.color = colHex;
 
-                        tdCell.className += esPruebaCRM ? " font-bold border rounded-sm cursor-pointer border-dashed" : " font-bold border rounded-sm cursor-pointer";
+                        tdCell.className += esPruebaCRM ? " font-bold border rounded-sm cursor-pointer border-dashed min-h-[54px]" : " font-bold border rounded-sm cursor-pointer min-h-[54px]";
 
                         if (esPruebaCRM) {
+
                             tdCell.title = 'Prueba comercial procedente del CRM. No suma facturación ni sesiones. Gestionar cambios desde CRM.';
-                            const detalle = textoDetallePruebaCRM(obj);
-                            const objetivo = obj.objetivoCliente ? `<div class="text-[8px] mt-0.5 text-cyan-100 truncate opacity-80">${escapeHTML(obj.objetivoCliente)}</div>` : '';
-                            const notaEntrenador = obj.notaEntrenadorPrueba || obj.notaEntrenador || obj.notasEntrenadorPrueba || '';
+
+                            const detalle = textoDetallePruebaCRM(objOriginal);
+
+                            const objetivo = objOriginal.objetivoCliente ? `<div class="text-[8px] mt-0.5 text-cyan-100 truncate opacity-80">${escapeHTML(objOriginal.objetivoCliente)}</div>` : '';
+
+                            const notaEntrenador = objOriginal.notaEntrenadorPrueba || objOriginal.notaEntrenador || objOriginal.notasEntrenadorPrueba || '';
+
                             const notaHTML = notaEntrenador ? `<div class="text-[8px] mt-0.5 text-amber-200 truncate opacity-95">⚠ ${escapeHTML(notaEntrenador)}</div>` : '';
-                            tdCell.innerHTML = `<div class="absolute top-1 left-1 text-[8px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-500/30">PRUEBA</div><div class="pt-3 text-[11px] text-white uppercase truncate">${escapeHTML(obj.nombre)}</div><div class="text-[8px] mt-0.5 text-cyan-200 truncate">${escapeHTML(detalle)}</div>${objetivo}${notaHTML}`;
+
+                            tdCell.innerHTML = `<div class="absolute top-1 left-1 text-[8px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-500/30">PRUEBA</div><div class="pt-3 text-[11px] text-white uppercase truncate">${escapeHTML(objOriginal.nombre)}</div><div class="text-[8px] mt-0.5 text-cyan-200 truncate">${escapeHTML(detalle)}</div>${objetivo}${notaHTML}`;
+
                             tdCell.onclick = () => {
+
                                 const lineas = [
+
                                     'Prueba asignada desde CRM.',
-                                    `Lead: ${obj.nombre || '---'}`,
-                                    `Teléfono: ${obj.telefono || '---'}`,
-                                    `Fuente: ${obj.fuenteCaptacion || '---'}`,
-                                    `Medio: ${obj.medioCaptacion || '---'}`,
-                                    `Objetivo: ${obj.objetivoCliente || '---'}`,
+
+                                    `Lead: ${objOriginal.nombre || '---'}`,
+
+                                    `Teléfono: ${objOriginal.telefono || '---'}`,
+
+                                    `Fuente: ${objOriginal.fuenteCaptacion || '---'}`,
+
+                                    `Medio: ${objOriginal.medioCaptacion || '---'}`,
+
+                                    `Objetivo: ${objOriginal.objetivoCliente || '---'}`,
+
                                     notaEntrenador ? `Notas para el entrenador: ${notaEntrenador}` : 'Notas para el entrenador: ---',
+
                                     '',
+
                                     'No suma facturación ni sesiones. Para cambiar fecha, entrenador o estado, abre el lead en CRM.'
+
                                 ];
+
                                 alert(lineas.join('\n'));
+
                             };
+
                         } else {
+
                             tdCell.setAttribute('draggable', 'true');
 
-                            tdCell.title = 'Haz clic para notas/borrar o arrastra para mover la cita';
+                            tdCell.title = 'Haz clic para notas/borrar o arrastra para mover la cita. Bloquea 45 min desde esta hora.';
 
                             tdCell.ondragstart = (e) => {
 
                                 e.stopPropagation();
 
-                                claveAgendaArrastrada = clave;
+                                claveAgendaArrastrada = cobertura.claveInicio;
 
-                                e.dataTransfer.setData("application/x-bs-agenda-key", clave);
+                                e.dataTransfer.setData("application/x-bs-agenda-key", cobertura.claveInicio);
 
-                                // Fallback robusto: algunos navegadores/GitHub Pages no preservan bien MIME custom en drag/drop.
-                                e.dataTransfer.setData("text/plain", `bs-agenda-move|${clave}|${obj.id}`);
+                                e.dataTransfer.setData("text/plain", `bs-agenda-move|${cobertura.claveInicio}|${obj.id}`);
 
                                 e.dataTransfer.effectAllowed = 'move';
 
@@ -3225,24 +3357,23 @@ function calcularRentabilidadFicha(ficha) {
 
                             tdCell.ondragend = () => { claveAgendaArrastrada = ''; };
 
-                            
-
                             const rent = calcularRentabilidadFicha(obj);
 
-                            const nota = obtenerNotaAgenda(clave);
+                            const nota = obtenerNotaAgenda(cobertura.claveInicio);
 
                             const iconoNota = nota ? '<div class="absolute top-1 right-1 text-[10px] text-amber-300" title="Tiene nota">📝</div>' : '';
 
                             const resumenNota = nota ? `<div class="text-[8px] mt-0.5 text-amber-200 truncate opacity-90">${escapeHTML(nota)}</div>` : '';
 
+                            tdCell.innerHTML = `${iconoNota}<div class="text-[11px] text-white uppercase truncate">${escapeHTML(obj.nombre)}</div><div class="text-[9px] mt-0.5 opacity-90">${rent.toFixed(2)}€</div><div class="text-[8px] mt-0.5 opacity-60">45 min</div>${resumenNota}`;
 
+                            tdCell.onclick = () => abrirModalNota(cobertura.claveInicio, obj, rent);
 
-                            tdCell.innerHTML = `${iconoNota}<div class="text-[11px] text-white uppercase truncate">${escapeHTML(obj.nombre)}</div><div class="text-[9px] mt-0.5 opacity-90">${rent.toFixed(2)}€</div>${resumenNota}`;
-
-                            tdCell.onclick = () => abrirModalNota(clave, obj, rent);
                         }
 
                     } else {
+
+                        activarDropLibre();
 
                         tdCell.className += " text-slate-800 text-[9px] italic";
 
@@ -3263,8 +3394,6 @@ function calcularRentabilidadFicha(ficha) {
         function soltarFichaEnCelda(clave, idCliente, claveOrigen = '') {
             if (!dbAgenda[entrenadorVisto]) dbAgenda[entrenadorVisto] = {};
 
-            // Movimiento de una cita ya agendada: debe eliminar siempre la celda original.
-            // Se usa claveOrigen, y como refuerzo la variable global de arrastre.
             if (!claveOrigen && claveAgendaArrastrada) claveOrigen = claveAgendaArrastrada;
 
             if (idCliente && String(idCliente).startsWith('bs-agenda-move|')) {
@@ -3273,7 +3402,16 @@ function calcularRentabilidadFicha(ficha) {
                 idCliente = partes[2] || '';
             }
 
+            if (clavesBloqueSesion(clave, 45).length !== 3) {
+                alert('No hay espacio suficiente para una sesión de 45 minutos desde esta hora.');
+                claveAgendaArrastrada = '';
+                return;
+            }
+
             if (claveOrigen) {
+                const coberturaOrigen = obtenerCoberturaCitaAgenda(claveOrigen);
+                if (coberturaOrigen && !dbAgenda[entrenadorVisto][claveOrigen]) claveOrigen = coberturaOrigen.claveInicio;
+
                 if (claveOrigen === clave) {
                     claveAgendaArrastrada = '';
                     return;
@@ -3285,12 +3423,25 @@ function calcularRentabilidadFicha(ficha) {
                     return;
                 }
 
-                if (dbAgenda[entrenadorVisto][clave] && !confirm('Esta franja ya tiene una cita. ¿Quieres sustituirla?')) {
-                    claveAgendaArrastrada = '';
-                    return;
+                const conflicto = hayConflictoBloqueSesion(clave, claveOrigen);
+                if (conflicto) {
+                    const nombreConflicto = conflicto.obj?.nombre || 'otra cita';
+                    if (esCitaPruebaCRM(conflicto.obj)) {
+                        alert(`Esta franja se solapa con una prueba CRM de ${nombreConflicto}. Cambia o libera esa prueba desde CRM antes de agendar aquí.`);
+                        claveAgendaArrastrada = '';
+                        return;
+                    }
+                    if (!confirm(`La sesión de 45 minutos se solapa con ${nombreConflicto}. ¿Quieres sustituirla?`)) {
+                        claveAgendaArrastrada = '';
+                        return;
+                    }
+                    if (conflicto.claveInicio && dbAgenda[entrenadorVisto][conflicto.claveInicio]) {
+                        delete dbAgenda[entrenadorVisto][conflicto.claveInicio];
+                        fijarNotaAgenda(conflicto.claveInicio, '');
+                    }
                 }
 
-                dbAgenda[entrenadorVisto][clave] = citaMovida;
+                dbAgenda[entrenadorVisto][clave] = { ...citaMovida, duracionMin: 45 };
                 delete dbAgenda[entrenadorVisto][claveOrigen];
                 moverNotaAgenda(claveOrigen, clave);
                 claveAgendaArrastrada = '';
@@ -3305,13 +3456,24 @@ function calcularRentabilidadFicha(ficha) {
             const c = dbClientes[entrenadorVisto].find(x => x.id === idCliente);
 
             if (c) {
-
                 if (c.vinculacion) { alert('Este atleta está vinculado a un grupo. Agenda el grupo completo para consumir sus clases.'); return; }
                 if (!clienteActivoParaAgenda(c)) { alert('Este cliente no está activo. Cambia su estado a Activo para poder agendar sesiones.'); return; }
 
-                if (dbAgenda[entrenadorVisto][clave] && !confirm('Esta franja ya tiene una cita. ¿Quieres sustituirla?')) return;
+                const conflicto = hayConflictoBloqueSesion(clave, '');
+                if (conflicto) {
+                    const nombreConflicto = conflicto.obj?.nombre || 'otra cita';
+                    if (esCitaPruebaCRM(conflicto.obj)) {
+                        alert(`Esta franja se solapa con una prueba CRM de ${nombreConflicto}. Cambia o libera esa prueba desde CRM antes de agendar aquí.`);
+                        return;
+                    }
+                    if (!confirm(`La sesión de 45 minutos se solapa con ${nombreConflicto}. ¿Quieres sustituirla?`)) return;
+                    if (conflicto.claveInicio && dbAgenda[entrenadorVisto][conflicto.claveInicio]) {
+                        delete dbAgenda[entrenadorVisto][conflicto.claveInicio];
+                        fijarNotaAgenda(conflicto.claveInicio, '');
+                    }
+                }
 
-                dbAgenda[entrenadorVisto][clave] = c;
+                dbAgenda[entrenadorVisto][clave] = { ...c, duracionMin: 45 };
                 fijarNotaAgenda(clave, '');
 
                 localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
@@ -3410,8 +3572,10 @@ function calcularRentabilidadFicha(ficha) {
 
         function borrarSesionAgenda() {
 
-            delete dbAgenda[entrenadorVisto][celdaNotaSeleccionada];
-            fijarNotaAgenda(celdaNotaSeleccionada, '');
+            const cobertura = obtenerCoberturaCitaAgenda(celdaNotaSeleccionada);
+            const claveBorrar = cobertura ? cobertura.claveInicio : celdaNotaSeleccionada;
+            delete dbAgenda[entrenadorVisto][claveBorrar];
+            fijarNotaAgenda(claveBorrar, '');
 
             localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
             localStorage.setItem('bs_db_notas_v6', JSON.stringify(dbNotas));
