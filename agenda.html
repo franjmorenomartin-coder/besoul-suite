@@ -747,6 +747,7 @@
         let usuarioFirebaseActual = null;
         let perfilFirebaseActual = null;
         let claveAgendaArrastrada = '';
+        let fichaSeleccionadaMovilId = '';
         let contratoTemporalFicha = { firmado: false, nombreArchivo: '', tipoMime: '', contenidoBase64: '', subidaEn: '' };
 
 
@@ -1257,6 +1258,74 @@
         }
 
 
+
+
+        function obtenerFichaSeleccionadaParaAgenda() {
+            if (!fichaSeleccionadaMovilId || !dbClientes[entrenadorVisto]) return null;
+            return dbClientes[entrenadorVisto].find(c => c.id === fichaSeleccionadaMovilId) || null;
+        }
+
+        function asegurarBarraSeleccionAgenda() {
+            let barra = document.getElementById('barra-seleccion-agenda-movil');
+            if (barra) return barra;
+            barra = document.createElement('div');
+            barra.id = 'barra-seleccion-agenda-movil';
+            barra.className = 'hidden fixed left-3 right-3 bottom-3 z-[80] bg-slate-950/95 border border-amber-500/40 rounded-2xl shadow-2xl p-3 text-xs backdrop-blur-md';
+            barra.innerHTML = `
+                <div class="flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <div class="text-[10px] uppercase tracking-wider text-amber-400 font-black">Modo agenda táctil</div>
+                        <div id="barra-seleccion-agenda-texto" class="text-white font-bold truncate">Cliente seleccionado</div>
+                        <div class="text-slate-400 text-[10px] mt-0.5">Toca una franja del calendario para bloquear 45 min.</div>
+                    </div>
+                    <button type="button" onclick="limpiarSeleccionFichaMovil()" class="shrink-0 bg-slate-800 text-slate-300 px-3 py-2 rounded-xl font-bold hover:text-white">Cancelar</button>
+                </div>
+            `;
+            document.body.appendChild(barra);
+            return barra;
+        }
+
+        function actualizarBarraSeleccionAgenda() {
+            const barra = asegurarBarraSeleccionAgenda();
+            const texto = document.getElementById('barra-seleccion-agenda-texto');
+            const ficha = obtenerFichaSeleccionadaParaAgenda();
+            if (!ficha) {
+                barra.classList.add('hidden');
+                return;
+            }
+            if (texto) texto.innerText = `Seleccionado: ${ficha.nombre}`;
+            barra.classList.remove('hidden');
+        }
+
+        function seleccionarFichaParaAgendaMovil(idCliente) {
+            const ficha = (dbClientes[entrenadorVisto] || []).find(c => c.id === idCliente);
+            if (!ficha) return;
+            if (ficha.vinculacion) { alert('Este atleta está vinculado a un grupo. Agenda el grupo completo.'); return; }
+            if (!clienteActivoParaAgenda(ficha)) { alert('Este cliente no está activo. Cambia su estado a Activo para poder agendar sesiones.'); return; }
+            fichaSeleccionadaMovilId = idCliente;
+            actualizarBarraSeleccionAgenda();
+            renderClientes();
+            renderAgenda();
+        }
+
+        function limpiarSeleccionFichaMovil(render = true) {
+            fichaSeleccionadaMovilId = '';
+            actualizarBarraSeleccionAgenda();
+            if (render) {
+                renderClientes();
+                renderAgenda();
+            }
+        }
+
+        function agendarFichaSeleccionadaEnCelda(clave) {
+            if (!fichaSeleccionadaMovilId) return false;
+            const idCliente = fichaSeleccionadaMovilId;
+            const antes = JSON.stringify(dbAgenda[entrenadorVisto] || {});
+            soltarFichaEnCelda(clave, idCliente, '');
+            const despues = JSON.stringify(dbAgenda[entrenadorVisto] || {});
+            if (antes !== despues) limpiarSeleccionFichaMovil(false);
+            return true;
+        }
 
         function normalizarCredenciales() {
 
@@ -2922,13 +2991,17 @@ function calcularRentabilidadFicha(ficha) {
                 const esVinculado = !!c.vinculacion;
 
                 const puedeAgendar = !esVinculado && clienteActivoParaAgenda(c);
-                item.className = `p-3 rounded-lg border border-slate-800 bg-slate-950/70 text-xs flex flex-col gap-1 ${puedeAgendar ? 'cursor-grab active:cursor-grabbing' : 'cursor-default opacity-80'} hover:border-slate-600 transition`;
+                item.className = `p-3 rounded-lg border border-slate-800 bg-slate-950/70 text-xs flex flex-col gap-1 ${puedeAgendar ? 'cursor-grab active:cursor-grabbing' : 'cursor-default opacity-80'} hover:border-slate-600 transition ${fichaSeleccionadaMovilId === c.id ? 'ring-2 ring-amber-400 border-amber-400 bg-amber-500/10' : ''}`;
 
                 if (puedeAgendar) {
 
                     item.setAttribute('draggable', 'true');
 
                     item.ondragstart = (e) => { e.dataTransfer.setData("text/plain", c.id); };
+                    item.onclick = (e) => {
+                        if (e.target && e.target.closest('button')) return;
+                        seleccionarFichaParaAgendaMovil(c.id);
+                    };
 
                 }
 
@@ -2961,7 +3034,7 @@ function calcularRentabilidadFicha(ficha) {
 
                 const textoBoton = esVinculado ? 'Editar grupo' : 'Editar';
                 const botonBorrarHTML = (rolActivo === 'admin' && !esVinculado)
-                    ? `<button onclick="borrarFichaCliente('${c.id}')" class="text-red-400 text-[10px] mt-1 font-bold hover:underline">Borrar</button>`
+                    ? `<button onclick="event.stopPropagation(); borrarFichaCliente('${c.id}')" class="text-red-400 text-[10px] mt-1 font-bold hover:underline">Borrar</button>`
                     : '';
 
                 const contadorHTML = renderContadorHTML(c);
@@ -2995,8 +3068,8 @@ function calcularRentabilidadFicha(ficha) {
 
                             ${esVinculado ? '<span class="text-[8px] text-slate-500 uppercase">estadístico</span>' : ''}
 
-                            <button onclick="editarFicha('${botonEditarId}')" class="text-cyan-500 text-[10px] mt-2 font-bold hover:underline">${textoBoton}</button>
-                            <button onclick="abrirModalHistoricoCliente('${botonEditarId}')" class="text-amber-400 text-[10px] mt-1 font-bold hover:underline">Histórico</button>
+                            <button onclick="event.stopPropagation(); editarFicha('${botonEditarId}')" class="text-cyan-500 text-[10px] mt-2 font-bold hover:underline">${textoBoton}</button>
+                            <button onclick="event.stopPropagation(); abrirModalHistoricoCliente('${botonEditarId}')" class="text-amber-400 text-[10px] mt-1 font-bold hover:underline">Histórico</button>
                             ${botonBorrarHTML}
 
                         </div>
@@ -3228,6 +3301,9 @@ function calcularRentabilidadFicha(ficha) {
                         tdCell.title = `Bloque reservado por ${objBloque?.nombre || 'sesión'} (${etiquetaFranja45(cobertura.claveInicio.split('_')[1])})`;
 
                         tdCell.innerHTML = `<div class="opacity-45 pt-1">↳ ocupado</div>`;
+                        tdCell.onclick = () => {
+                            if (fichaSeleccionadaMovilId) agendarFichaSeleccionadaEnCelda(clave);
+                        };
 
                         tr.appendChild(tdCell);
 
@@ -3308,6 +3384,10 @@ function calcularRentabilidadFicha(ficha) {
                             tdCell.innerHTML = `<div class="absolute top-1 left-1 text-[8px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-500/30">PRUEBA</div><div class="pt-3 text-[11px] text-white uppercase truncate">${escapeHTML(objOriginal.nombre)}</div><div class="text-[8px] mt-0.5 text-cyan-200 truncate">${escapeHTML(detalle)}</div>${objetivo}${notaHTML}`;
 
                             tdCell.onclick = () => {
+                                if (fichaSeleccionadaMovilId) {
+                                    agendarFichaSeleccionadaEnCelda(cobertura.claveInicio);
+                                    return;
+                                }
 
                                 const lineas = [
 
@@ -3367,17 +3447,26 @@ function calcularRentabilidadFicha(ficha) {
 
                             tdCell.innerHTML = `${iconoNota}<div class="text-[11px] text-white uppercase truncate">${escapeHTML(obj.nombre)}</div><div class="text-[9px] mt-0.5 opacity-90">${rent.toFixed(2)}€</div><div class="text-[8px] mt-0.5 opacity-60">45 min</div>${resumenNota}`;
 
-                            tdCell.onclick = () => abrirModalNota(cobertura.claveInicio, obj, rent);
+                            tdCell.onclick = () => {
+                                if (fichaSeleccionadaMovilId) {
+                                    agendarFichaSeleccionadaEnCelda(cobertura.claveInicio);
+                                    return;
+                                }
+                                abrirModalNota(cobertura.claveInicio, obj, rent);
+                            };
 
                         }
 
                     } else {
 
                         activarDropLibre();
+                        tdCell.onclick = () => {
+                            if (fichaSeleccionadaMovilId) agendarFichaSeleccionadaEnCelda(clave);
+                        };
 
                         tdCell.className += " text-slate-800 text-[9px] italic";
 
-                        tdCell.innerText = "Libre";
+                        tdCell.innerText = fichaSeleccionadaMovilId ? "Tocar para agendar" : "Libre";
 
                     }
 
