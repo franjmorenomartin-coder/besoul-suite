@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -14,6 +15,12 @@
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #111827; }
     ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+    @media (max-width: 640px) {
+      input, select, textarea { font-size: 16px !important; }
+      #modal-lead { align-items: flex-start !important; padding: 0.5rem !important; }
+      #modal-lead-panel { max-height: 94vh; overflow-y: auto; padding: 1rem !important; margin-top: 0.5rem !important; margin-bottom: 0.5rem !important; }
+      #modal-lead .modal-actions-sticky { position: sticky; bottom: -1rem; background: #0f172a; padding-top: 0.75rem; padding-bottom: 0.25rem; }
+    }
   </style>
 </head>
 <body class="text-slate-100 min-h-screen flex flex-col">
@@ -141,8 +148,8 @@
     </main>
   </div>
 
-  <div id="modal-lead" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-5xl space-y-4 my-8">
+  <div id="modal-lead" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+    <div id="modal-lead-panel" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 w-full max-w-5xl space-y-4 my-2 sm:my-8 max-h-[94vh] overflow-y-auto">
       <div class="flex items-start justify-between gap-4">
         <div>
           <h3 id="modal-title" class="text-sm font-bold text-amber-400 uppercase tracking-wider">Nuevo lead</h3>
@@ -156,15 +163,15 @@
           <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label class="text-slate-400 block mb-1">Nombre *</label>
-              <input type="text" id="lead-nombre" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+              <input type="text" id="lead-nombre" autocomplete="name" placeholder="Nombre del lead" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
             </div>
             <div>
               <label class="text-slate-400 block mb-1">Teléfono *</label>
-              <input type="tel" id="lead-telefono" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+              <input type="tel" id="lead-telefono" autocomplete="tel" placeholder="Teléfono" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
             </div>
             <div>
               <label class="text-slate-400 block mb-1">Email</label>
-              <input type="email" id="lead-email" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+              <input type="email" id="lead-email" autocomplete="email" placeholder="Email opcional" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
             </div>
           </div>
 
@@ -280,7 +287,7 @@
         </div>
       </div>
 
-      <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+      <div class="modal-actions-sticky flex justify-end gap-2 pt-2 border-t border-slate-800">
         <button onclick="cerrarModalLead()" class="bg-slate-800 text-slate-400 px-4 py-2 rounded font-bold hover:text-white transition">Cancelar</button>
         <button onclick="guardarLead()" class="bg-amber-500 text-slate-950 px-5 py-2 rounded font-bold hover:bg-amber-600 transition">Guardar lead</button>
       </div>
@@ -719,13 +726,28 @@ function renderEventosTemporal() {
     </div>`).join('');
 }
 
+function enfocarCampoLead(id, mensaje) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.classList.add('border-red-500');
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => { try { el.focus(); } catch(e) {} }, 250);
+    setTimeout(() => el.classList.remove('border-red-500'), 2600);
+  }
+  throw new Error(mensaje);
+}
+
 function recogerLeadFormulario() {
   const nombre = document.getElementById('lead-nombre').value.trim();
   const telefono = document.getElementById('lead-telefono').value.trim();
   const centroId = document.getElementById('lead-centro').value || 'sin-centro';
   const fuente = document.getElementById('lead-fuente').value;
   const estado = document.getElementById('lead-estado').value;
-  if (!nombre || !telefono || !centroId || !fuente || !estado) throw new Error('Nombre, teléfono, centro, fuente y estado son obligatorios.');
+  if (!nombre) enfocarCampoLead('lead-nombre', 'El nombre del lead es obligatorio.');
+  if (!telefono) enfocarCampoLead('lead-telefono', 'El teléfono del lead es obligatorio.');
+  if (!centroId) enfocarCampoLead('lead-centro', 'El centro de interés es obligatorio.');
+  if (!fuente) enfocarCampoLead('lead-fuente', 'La fuente de captación es obligatoria.');
+  if (!estado) enfocarCampoLead('lead-estado', 'El estado comercial es obligatorio.');
   const tKey = document.getElementById('lead-trainer').value || '';
   if (!esAdmin() && tKey !== trainerKeyActual()) throw new Error('Solo puedes asignar leads a tu propio usuario.');
   return {
