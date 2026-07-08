@@ -1,4 +1,4 @@
-
+ 
 <!DOCTYPE html>
 
 <html lang="es">
@@ -1275,8 +1275,8 @@
                 <div class="flex items-center justify-between gap-3">
                     <div class="min-w-0">
                         <div class="text-[10px] uppercase tracking-wider text-amber-400 font-black">Modo agenda táctil</div>
-                        <div id="barra-seleccion-agenda-texto" class="text-white font-bold truncate">Cliente seleccionado</div>
-                        <div class="text-slate-400 text-[10px] mt-0.5">Toca una franja del calendario para bloquear 45 min.</div>
+                        <div id="barra-seleccion-agenda-texto" class="text-white font-bold truncate">Ficha seleccionada</div>
+                        <div class="text-slate-400 text-[10px] mt-0.5">Toca una franja del calendario para agendar cliente o grupo y bloquear 45 min.</div>
                     </div>
                     <button type="button" onclick="limpiarSeleccionFichaMovil()" class="shrink-0 bg-slate-800 text-slate-300 px-3 py-2 rounded-xl font-bold hover:text-white">Cancelar</button>
                 </div>
@@ -1293,7 +1293,7 @@
                 barra.classList.add('hidden');
                 return;
             }
-            if (texto) texto.innerText = `Seleccionado: ${ficha.nombre}`;
+            if (texto) texto.innerText = `${ficha.tipo === 'grupo' ? 'Grupo seleccionado' : 'Cliente seleccionado'}: ${ficha.nombre}`;
             barra.classList.remove('hidden');
         }
 
@@ -1301,7 +1301,7 @@
             const ficha = (dbClientes[entrenadorVisto] || []).find(c => c.id === idCliente);
             if (!ficha) return;
             if (ficha.vinculacion) { alert('Este atleta está vinculado a un grupo. Agenda el grupo completo.'); return; }
-            if (!clienteActivoParaAgenda(ficha)) { alert('Este cliente no está activo. Cambia su estado a Activo para poder agendar sesiones.'); return; }
+            if (!clienteActivoParaAgenda(ficha)) { alert('Esta ficha no está activa. Cambia su estado a Activo para poder agendar sesiones.'); return; }
             fichaSeleccionadaMovilId = idCliente;
             actualizarBarraSeleccionAgenda();
             renderClientes();
@@ -3059,6 +3059,7 @@ function calcularRentabilidadFicha(ficha) {
 
                             ${notaFacturacionTxt}
                             ${origenLinea}
+                            ${puedeAgendar ? `<div class="text-[9px] text-amber-300 mt-1 font-bold">📌 Tocar para agendar ${c.tipo === 'grupo' ? 'grupo completo' : 'sesión'} · 45 min</div>` : ''}
 
                         </div>
 
@@ -3546,7 +3547,7 @@ function calcularRentabilidadFicha(ficha) {
 
             if (c) {
                 if (c.vinculacion) { alert('Este atleta está vinculado a un grupo. Agenda el grupo completo para consumir sus clases.'); return; }
-                if (!clienteActivoParaAgenda(c)) { alert('Este cliente no está activo. Cambia su estado a Activo para poder agendar sesiones.'); return; }
+                if (!clienteActivoParaAgenda(c)) { alert('Esta ficha no está activa. Cambia su estado a Activo para poder agendar sesiones.'); return; }
 
                 const conflicto = hayConflictoBloqueSesion(clave, '');
                 if (conflicto) {
