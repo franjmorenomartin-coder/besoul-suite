@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 
 <html lang="es">
@@ -30,6 +31,14 @@
         ::-webkit-scrollbar-track { background: #111827; }
 
         ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+
+
+        @media (max-width: 640px) {
+            input, select, textarea { font-size: 16px !important; }
+            #modal-cliente { align-items: flex-start; padding: 0.5rem; }
+            #modal-cliente > div { max-height: calc(100dvh - 1rem); overflow-y: auto; margin-top: 0.5rem; margin-bottom: 0.5rem; padding: 1rem; border-radius: 1rem; }
+            #modal-title { position: sticky; top: -1rem; z-index: 10; background-color: #0f172a; padding: 0.75rem 0; }
+        }
 
     </style>
 
@@ -290,9 +299,9 @@
 
     <!-- MODAL POPUP ALTA / EDICIÓN -->
 
-    <div id="modal-cliente" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+    <div id="modal-cliente" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
 
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md space-y-4 my-8">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 w-full max-w-lg sm:max-w-md space-y-4 my-2 sm:my-8 max-h-[calc(100dvh-1rem)] sm:max-h-none overflow-y-auto sm:overflow-visible">
 
             <h3 class="text-sm font-bold text-amber-400 uppercase tracking-wider" id="modal-title">Ficha de Atleta/Grupo</h3>
 
@@ -304,7 +313,7 @@
 
                     <label class="text-slate-400 block mb-1">Nombre Atleta / Nombre del Grupo</label>
 
-                    <input type="text" id="cust-name" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+                    <input type="text" id="cust-name" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="Escribe aquí el nombre del atleta o grupo">
 
                 </div>
 
@@ -349,8 +358,8 @@
                             <label class="text-slate-400 block mb-1">Fecha de alta</label>
                             <input type="date" id="cust-start-date" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
                         </div>
-                        <div>
-                            <label class="text-slate-400 block mb-1">Fecha estado</label>
+                        <div id="cust-status-date-field" class="hidden">
+                            <label class="text-slate-400 block mb-1">Fecha pausa/baja</label>
                             <input type="date" id="cust-status-date" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
                         </div>
                     </div>
@@ -358,7 +367,7 @@
                         <label class="text-slate-400 block mb-1">Motivo / observaciones de estado</label>
                         <textarea id="cust-status-reason" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white h-16 text-xs" placeholder="Ej.: pausa julio, baja por cambio de horario, lesión, etc."></textarea>
                     </div>
-                    <p class="text-[9px] text-slate-500 leading-tight">Los clientes inactivos o de baja se conservan para histórico, pero no se pueden arrastrar a la agenda.</p>
+                    <p class="text-[9px] text-slate-500 leading-tight">Si un cliente se pausa o causa baja, conserva su histórico pero no se podrá arrastrar a la agenda. La fecha pausa/baja solo aplica cuando el estado no es activo.</p>
                 </div>
 
 
@@ -386,7 +395,7 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="text-slate-400 block mb-1">Descuento aplicado (%)</label>
-                        <input type="number" id="cust-discount" min="0" max="100" step="1" value="0" oninput="autoCalcularTarifa()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="0">
+                        <input type="number" id="cust-discount" min="0" max="100" step="0.1" inputmode="decimal" value="0" oninput="autoCalcularTarifa()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="0,0">
                     </div>
                     <div class="p-2 bg-slate-950 border border-slate-800 rounded">
                         <span class="text-slate-500 text-[9px] block uppercase font-bold">Precio base sin descuento</span>
@@ -401,13 +410,14 @@
                         <span>Contrato de cliente firmado</span>
                     </label>
                     <div id="contract-upload-field" class="hidden space-y-2">
-                        <input type="file" id="cust-contract-file" accept="application/pdf" onchange="gestionarSubidaContratoPDF(event)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-[10px] text-slate-300">
-                        <div id="contract-file-summary" class="text-[10px] text-slate-400 leading-relaxed">Sin PDF adjunto.</div>
+                        <label class="text-slate-400 block mb-1 text-[10px] font-bold uppercase">Enlace al contrato PDF</label>
+                        <input type="url" id="cust-contract-url" oninput="actualizarContratoURLManual()" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-[11px] text-slate-300" placeholder="Pega aquí el enlace privado de Google Drive, OneDrive o similar">
+                        <div id="contract-file-summary" class="text-[10px] text-slate-400 leading-relaxed">Sin enlace adjunto.</div>
                         <div class="flex gap-2">
-                            <button type="button" onclick="abrirContratoTemporal()" id="btn-open-contract" class="hidden bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 px-2 py-1 rounded font-bold text-[10px]">Ver PDF</button>
-                            <button type="button" onclick="eliminarContratoTemporal()" id="btn-delete-contract" class="hidden bg-red-500/10 text-red-400 border border-red-500/30 px-2 py-1 rounded font-bold text-[10px]">Quitar PDF</button>
+                            <button type="button" onclick="abrirContratoTemporal()" id="btn-open-contract" class="hidden bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 px-2 py-1 rounded font-bold text-[10px]">Abrir enlace</button>
+                            <button type="button" onclick="eliminarContratoTemporal()" id="btn-delete-contract" class="hidden bg-red-500/10 text-red-400 border border-red-500/30 px-2 py-1 rounded font-bold text-[10px]">Quitar enlace</button>
                         </div>
-                        <p class="text-[9px] text-slate-500 leading-tight">Adjunto pensado para contratos PDF ligeros. Para contratos pesados, será mejor pasarlo a Firebase Storage cuando activemos Authentication.</p>
+                        <p class="text-[9px] text-slate-500 leading-tight">Para evitar pasar Firebase a plan de pago, el PDF no se sube a la app: súbelo a Drive/OneDrive y pega aquí el enlace. La app solo guarda el enlace y el estado firmado.</p>
                     </div>
                 </div>
 
@@ -773,6 +783,7 @@
 
 
         window.bsAgendaCloudDocRef = null;
+        window.bsAgendaStorage = null;
 
         window.bsAgendaCloudTimer = null;
         window.bsAgendaLeadsCRMUnsub = null;
@@ -1139,6 +1150,7 @@
                 throw new Error('Firebase no está cargado.');
             }
             if (!firebase.apps.length) firebase.initializeApp(BS_FIREBASE_CONFIG);
+            if (firebase.storage && !window.bsAgendaStorage) window.bsAgendaStorage = firebase.storage();
             return firebase;
         }
 
@@ -1436,9 +1448,14 @@
 
 
         function normalizarPorcentajeDescuento(valor) {
-            const num = parseFloat(valor);
+            const normalizado = String(valor ?? '').replace(',', '.');
+            const num = parseFloat(normalizado);
             if (Number.isNaN(num)) return 0;
             return Math.min(100, Math.max(0, num));
+        }
+
+        function formatoPorcentajeDescuento(valor) {
+            return normalizarPorcentajeDescuento(valor).toLocaleString('es-ES', { maximumFractionDigits: 2 });
         }
 
         function obtenerDescuentoFicha(ficha) {
@@ -1490,10 +1507,13 @@
         }
         function toggleEstadoClienteFields() {
             const estado = normalizarEstadoCliente(document.getElementById('cust-status')?.value || 'activo');
-            const field = document.getElementById('cust-status-reason-field');
-            if (field) field.className = estado === 'activo' ? 'hidden' : '';
+            const reasonField = document.getElementById('cust-status-reason-field');
+            const dateField = document.getElementById('cust-status-date-field');
+            const visible = estado !== 'activo';
+            if (reasonField) reasonField.className = visible ? '' : 'hidden';
+            if (dateField) dateField.className = visible ? '' : 'hidden';
             const date = document.getElementById('cust-status-date');
-            if (date && !date.value && estado !== 'activo') date.value = fechaHoyISO();
+            if (date && !date.value && visible) date.value = fechaHoyISO();
         }
         function cambiarFiltroEstadoClientes() {
             filtroEstadoClientes = document.getElementById('filter-client-status')?.value || 'activo';
@@ -2186,7 +2206,7 @@ function calcularRentabilidadFicha(ficha) {
             const lblBase = document.getElementById('lbl-precio-base');
             const lblDesc = document.getElementById('lbl-descuento-aplicado');
             if (lblBase) lblBase.innerText = `${facturacionBaseMensual.toFixed(2)} €`;
-            if (lblDesc) lblDesc.innerText = `Descuento: ${descuentoPct}% · -${descuentoEuros.toFixed(2)} €`;
+            if (lblDesc) lblDesc.innerText = `Descuento: ${formatoPorcentajeDescuento(descuentoPct)}% · -${descuentoEuros.toFixed(2)} €`;
 
             // RENTABILIDAD POR SESIÓN: Cuota total / Total de sesiones en 4 semanas
             const sesionesMes = mod.includes("Bono") ? 10 : (mod.includes("Suelta") ? 1 : factor * 4);
@@ -2230,7 +2250,12 @@ function calcularRentabilidadFicha(ficha) {
 
 
         function contratoVacio() {
-            return { firmado: false, nombreArchivo: '', tipoMime: '', contenidoBase64: '', subidaEn: '' };
+            return { firmado: false, nombreArchivo: '', tipoMime: 'application/pdf', contenidoBase64: '', storagePath: '', downloadURL: '', externalURL: '', enlaceContrato: '', subidaEn: '' };
+        }
+
+        function urlContratoActual(contrato) {
+            const c = contrato || contratoVacio();
+            return c.externalURL || c.enlaceContrato || c.downloadURL || c.contenidoBase64 || '';
         }
 
         function prepararContratoTemporalDesdeFicha(ficha) {
@@ -2238,8 +2263,8 @@ function calcularRentabilidadFicha(ficha) {
             contratoTemporalFicha = { ...contratoVacio(), ...contrato };
             const chk = document.getElementById('cust-contract-signed');
             if (chk) chk.checked = !!contratoTemporalFicha.firmado;
-            const fileInput = document.getElementById('cust-contract-file');
-            if (fileInput) fileInput.value = '';
+            const urlInput = document.getElementById('cust-contract-url');
+            if (urlInput) urlInput.value = contratoTemporalFicha.externalURL || contratoTemporalFicha.enlaceContrato || contratoTemporalFicha.downloadURL || '';
             actualizarResumenContratoModal();
         }
 
@@ -2251,19 +2276,45 @@ function calcularRentabilidadFicha(ficha) {
             actualizarResumenContratoModal();
         }
 
+        function actualizarContratoURLManual() {
+            const input = document.getElementById('cust-contract-url');
+            const url = input ? input.value.trim() : '';
+            contratoTemporalFicha = {
+                ...(contratoTemporalFicha || contratoVacio()),
+                firmado: !!document.getElementById('cust-contract-signed')?.checked || !!url,
+                externalURL: url,
+                enlaceContrato: url,
+                nombreArchivo: url ? 'Contrato externo' : '',
+                tipoMime: 'application/pdf',
+                contenidoBase64: '',
+                storagePath: '',
+                downloadURL: '',
+                subidaEn: url ? ((contratoTemporalFicha && contratoTemporalFicha.subidaEn) || new Date().toISOString()) : ''
+            };
+            const chk = document.getElementById('cust-contract-signed');
+            if (chk && url) chk.checked = true;
+            actualizarResumenContratoModal();
+        }
+
         function actualizarResumenContratoModal() {
             const resumen = document.getElementById('contract-file-summary');
             const btnOpen = document.getElementById('btn-open-contract');
             const btnDelete = document.getElementById('btn-delete-contract');
             const contrato = contratoTemporalFicha || contratoVacio();
-            const tienePdf = !!contrato.contenidoBase64;
+            const url = urlContratoActual(contrato);
+            const tieneEnlace = !!url;
             if (resumen) {
-                resumen.innerHTML = tienePdf
-                    ? `PDF adjunto: <b class="text-white">${escapeHTML(contrato.nombreArchivo || 'contrato.pdf')}</b>`
-                    : 'Sin PDF adjunto.';
+                if (tieneEnlace) {
+                    const origen = contrato.contenidoBase64 ? 'adjunto antiguo' : 'enlace externo';
+                    resumen.innerHTML = `Contrato asociado mediante <b class="text-white">${origen}</b>. La app no guarda el PDF, solo el enlace.`;
+                } else if (contrato.firmado) {
+                    resumen.innerHTML = 'Contrato marcado como firmado, sin enlace PDF asociado.';
+                } else {
+                    resumen.innerHTML = 'Sin enlace adjunto.';
+                }
             }
-            if (btnOpen) btnOpen.className = tienePdf ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 px-2 py-1 rounded font-bold text-[10px]' : 'hidden bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 px-2 py-1 rounded font-bold text-[10px]';
-            if (btnDelete) btnDelete.className = tienePdf ? 'bg-red-500/10 text-red-400 border border-red-500/30 px-2 py-1 rounded font-bold text-[10px]' : 'hidden bg-red-500/10 text-red-400 border border-red-500/30 px-2 py-1 rounded font-bold text-[10px]';
+            if (btnOpen) btnOpen.className = tieneEnlace ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 px-2 py-1 rounded font-bold text-[10px]' : 'hidden bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 px-2 py-1 rounded font-bold text-[10px]';
+            if (btnDelete) btnDelete.className = tieneEnlace ? 'bg-red-500/10 text-red-400 border border-red-500/30 px-2 py-1 rounded font-bold text-[10px]' : 'hidden bg-red-500/10 text-red-400 border border-red-500/30 px-2 py-1 rounded font-bold text-[10px]';
             toggleContractFieldsVisualOnly();
         }
 
@@ -2273,50 +2324,25 @@ function calcularRentabilidadFicha(ficha) {
             if (field) field.className = firmado ? 'space-y-2' : 'hidden space-y-2';
         }
 
-        function gestionarSubidaContratoPDF(event) {
-            const file = event.target.files && event.target.files[0];
-            if (!file) return;
-            if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-                alert('Solo se permiten contratos en PDF.');
-                event.target.value = '';
-                return;
-            }
-            const maxBytes = 750 * 1024;
-            if (file.size > maxBytes) {
-                alert('El PDF es demasiado grande para guardarlo en esta versión. Límite provisional: 750 KB. Para contratos grandes, lo conectaremos a Firebase Storage cuando activemos Authentication.');
-                event.target.value = '';
-                return;
-            }
-            const reader = new FileReader();
-            reader.onload = () => {
-                contratoTemporalFicha = {
-                    ...(contratoTemporalFicha || contratoVacio()),
-                    firmado: true,
-                    nombreArchivo: file.name,
-                    tipoMime: 'application/pdf',
-                    contenidoBase64: String(reader.result || ''),
-                    subidaEn: new Date().toISOString()
-                };
-                const chk = document.getElementById('cust-contract-signed');
-                if (chk) chk.checked = true;
-                actualizarResumenContratoModal();
-            };
-            reader.readAsDataURL(file);
-        }
-
         function abrirContratoTemporal() {
             const contrato = contratoTemporalFicha || contratoVacio();
-            if (!contrato.contenidoBase64) { alert('No hay PDF adjunto.'); return; }
-            const win = window.open();
-            if (!win) { alert('El navegador ha bloqueado la apertura del PDF.'); return; }
-            win.document.write(`<iframe src="${contrato.contenidoBase64}" style="border:0;width:100%;height:100vh;"></iframe>`);
+            const url = urlContratoActual(contrato);
+            if (!url) { alert('No hay enlace de contrato asociado.'); return; }
+            const win = window.open(url, '_blank');
+            if (!win && contrato.contenidoBase64) {
+                const fallback = window.open();
+                if (!fallback) { alert('El navegador ha bloqueado la apertura del PDF.'); return; }
+                fallback.document.write(`<iframe src="${contrato.contenidoBase64}" style="border:0;width:100%;height:100vh;"></iframe>`);
+            } else if (!win) {
+                alert('El navegador ha bloqueado la apertura del enlace.');
+            }
         }
 
         function eliminarContratoTemporal() {
-            if (!confirm('¿Quitar el PDF adjunto de esta ficha?')) return;
-            contratoTemporalFicha = { ...(contratoTemporalFicha || contratoVacio()), nombreArchivo: '', tipoMime: '', contenidoBase64: '', subidaEn: '' };
-            const fileInput = document.getElementById('cust-contract-file');
-            if (fileInput) fileInput.value = '';
+            if (!confirm('¿Quitar el enlace del contrato de esta ficha?')) return;
+            contratoTemporalFicha = { ...(contratoTemporalFicha || contratoVacio()), nombreArchivo: '', tipoMime: 'application/pdf', contenidoBase64: '', storagePath: '', downloadURL: '', externalURL: '', enlaceContrato: '', subidaEn: '' };
+            const urlInput = document.getElementById('cust-contract-url');
+            if (urlInput) urlInput.value = '';
             actualizarResumenContratoModal();
         }
 
@@ -2582,12 +2608,17 @@ function calcularRentabilidadFicha(ficha) {
             const contratoCliente = { ...(contratoTemporalFicha || contratoVacio()), firmado: !!document.getElementById('cust-contract-signed')?.checked };
             const estadoCliente = normalizarEstadoCliente(document.getElementById('cust-status')?.value || 'activo');
             const fechaAlta = document.getElementById('cust-start-date')?.value || '';
-            const fechaEstado = document.getElementById('cust-status-date')?.value || '';
-            const observacionesEstado = document.getElementById('cust-status-reason')?.value.trim() || '';
+            const fechaEstado = estadoCliente === 'activo' ? '' : (document.getElementById('cust-status-date')?.value || '');
+            const observacionesEstado = estadoCliente === 'activo' ? '' : (document.getElementById('cust-status-reason')?.value.trim() || '');
 
 
 
-            if(!name) { alert("El nombre es obligatorio."); return; }
+            if(!name) {
+                alert('El nombre es obligatorio. En móvil está en el primer campo de la ficha.');
+                const nameInput = document.getElementById('cust-name');
+                if (nameInput) { nameInput.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => nameInput.focus(), 50); }
+                return;
+            }
 
             if(!dbClientes[entrenadorVisto]) dbClientes[entrenadorVisto] = [];
 
