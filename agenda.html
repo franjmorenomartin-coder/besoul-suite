@@ -639,7 +639,16 @@
 
                 <p class="text-slate-300 font-semibold">Rentabilidad Real: <span id="nota-info-profit" class="text-emerald-400 font-bold font-mono">---</span></p>
                 <p id="nota-info-recurrente" class="hidden text-[10px] text-amber-300 font-bold leading-relaxed">↻ Sesión recurrente semanal.</p>
+                <p id="nota-info-recuperacion" class="hidden text-[10px] text-cyan-300 font-bold leading-relaxed">↩ Recuperación no facturable confirmada por administración.</p>
                 <p class="text-[10px] text-slate-500 leading-relaxed">Puedes arrastrar esta cita a otra franja del calendario para moverla. Las notas se conservarán al moverla.</p>
+
+                <div id="panel-recuperacion-admin" class="hidden p-3 bg-cyan-500/5 border border-cyan-500/25 rounded space-y-2">
+                    <label class="flex items-start gap-2 text-[11px] text-cyan-100 font-bold cursor-pointer leading-relaxed">
+                        <input type="checkbox" id="chk-recuperacion-no-facturable" class="mt-0.5 w-4 h-4 accent-cyan-500">
+                        <span>Marcar como recuperación de meses anteriores / no facturable</span>
+                    </label>
+                    <p class="text-[9px] text-slate-400 leading-relaxed">Solo administración puede confirmar esta marca. La sesión seguirá ocupando agenda, pero Finanzas no la contará en bonos/sesiones sueltas.</p>
+                </div>
 
                 <div id="panel-recurrencia-sesion" class="p-3 bg-slate-950/50 border border-slate-800 rounded space-y-2">
                     <div class="flex flex-col sm:flex-row gap-2 sm:items-end">
@@ -3460,7 +3469,9 @@ function calcularRentabilidadFicha(ficha) {
                             const resumenNota = nota ? `<div class="text-[8px] mt-0.5 text-amber-200 truncate opacity-90">${escapeHTML(nota)}</div>` : '';
 
                             const recurrenteHTML = (obj.recurrente || obj.serieRecurrenteId || obj.recurrenteOrigen) ? '<div class="absolute top-1 left-1 text-[8px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/30">↻</div>' : '';
-                            tdCell.innerHTML = `${iconoNota}${recurrenteHTML}<div class="text-[11px] text-white uppercase truncate ${recurrenteHTML ? 'pt-3' : ''}">${escapeHTML(obj.nombre)}</div><div class="text-[9px] mt-0.5 opacity-90">${rent.toFixed(2)}€</div><div class="text-[8px] mt-0.5 opacity-60">45 min${recurrenteHTML ? ' · semanal' : ''}</div>${resumenNota}`;
+                            const recuperacionHTML = esRecuperacionNoFacturable(objOriginal) || esRecuperacionNoFacturable(obj) ? '<div class="absolute bottom-1 right-1 text-[8px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-500/30">RECUP.</div>' : '';
+                            const paddingTitulo = recurrenteHTML ? 'pt-3' : '';
+                            tdCell.innerHTML = `${iconoNota}${recurrenteHTML}${recuperacionHTML}<div class="text-[11px] text-white uppercase truncate ${paddingTitulo}">${escapeHTML(obj.nombre)}</div><div class="text-[9px] mt-0.5 opacity-90">${rent.toFixed(2)}€</div><div class="text-[8px] mt-0.5 opacity-60">45 min${recurrenteHTML ? ' · semanal' : ''}${recuperacionHTML ? ' · no facturable' : ''}</div>${resumenNota}`;
 
                             tdCell.onclick = () => {
                                 if (fichaSeleccionadaMovilId) {
@@ -3816,6 +3827,48 @@ function calcularRentabilidadFicha(ficha) {
             alert(`Sesiones futuras borradas: ${borradas}`);
         }
 
+        function esRecuperacionNoFacturable(obj) {
+            return !!(obj && (obj.recuperacionNoFacturable === true || obj.noFacturable === true || obj.tipoFacturacion === 'recuperacion_no_facturable'));
+        }
+
+        function prepararPanelRecuperacionSesion(clave, obj) {
+            const panel = document.getElementById('panel-recuperacion-admin');
+            const chk = document.getElementById('chk-recuperacion-no-facturable');
+            const info = document.getElementById('nota-info-recuperacion');
+            const esRecuperacion = esRecuperacionNoFacturable(obj);
+            if (info) info.className = esRecuperacion ? 'text-[10px] text-cyan-300 font-bold leading-relaxed' : 'hidden text-[10px] text-cyan-300 font-bold leading-relaxed';
+            if (chk) chk.checked = esRecuperacion;
+            const puedeEditar = rolActivo === 'admin' && !esCitaPruebaCRM(obj);
+            if (panel) panel.className = puedeEditar ? 'p-3 bg-cyan-500/5 border border-cyan-500/25 rounded space-y-2' : 'hidden p-3 bg-cyan-500/5 border border-cyan-500/25 rounded space-y-2';
+        }
+
+        function aplicarMarcaRecuperacionDesdeModal() {
+            if (rolActivo !== 'admin') return;
+            const clave = claveInicioDesdeSeleccionNota ? claveInicioDesdeSeleccionNota() : celdaNotaSeleccionada;
+            if (!clave || !dbAgenda[entrenadorVisto] || !dbAgenda[entrenadorVisto][clave]) return;
+            const cita = dbAgenda[entrenadorVisto][clave];
+            if (esCitaPruebaCRM(cita)) return;
+            const marcado = !!document.getElementById('chk-recuperacion-no-facturable')?.checked;
+            if (marcado) {
+                dbAgenda[entrenadorVisto][clave] = {
+                    ...cita,
+                    recuperacionNoFacturable: true,
+                    tipoFacturacion: 'recuperacion_no_facturable',
+                    marcadoRecuperacionPor: usuarioLogeado || '',
+                    marcadoRecuperacionEn: new Date().toISOString()
+                };
+            } else {
+                const copia = { ...cita };
+                delete copia.recuperacionNoFacturable;
+                delete copia.noFacturable;
+                delete copia.tipoFacturacion;
+                delete copia.marcadoRecuperacionPor;
+                delete copia.marcadoRecuperacionEn;
+                dbAgenda[entrenadorVisto][clave] = copia;
+            }
+            localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
+        }
+
         function abrirModalNota(clave, obj, rent) {
 
             celdaNotaSeleccionada = clave;
@@ -3830,6 +3883,7 @@ function calcularRentabilidadFicha(ficha) {
 
             document.getElementById('txt-nota-contenido').value = obtenerNotaAgenda(clave);
             prepararPanelRecurrenciaSesion(clave, obj);
+            prepararPanelRecuperacionSesion(clave, obj);
 
         }
 
@@ -3844,10 +3898,13 @@ function calcularRentabilidadFicha(ficha) {
             const txt = document.getElementById('txt-nota-contenido').value.trim();
 
             fijarNotaAgenda(celdaNotaSeleccionada, txt);
+            aplicarMarcaRecuperacionDesdeModal();
 
             localStorage.setItem('bs_db_notas_v6', JSON.stringify(dbNotas));
+            localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
 
             programarGuardadoNubeAgenda(); cerrarModalNota();
+            recalcularKPIs();
             renderAgenda();
 
         }
