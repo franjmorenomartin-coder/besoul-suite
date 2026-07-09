@@ -1,4 +1,3 @@
- 
 <!DOCTYPE html>
 
 <html lang="es">
@@ -638,7 +637,20 @@
                 <p class="text-slate-400">Cliente: <span id="nota-info-asignado" class="text-white font-bold">---</span></p>
 
                 <p class="text-slate-300 font-semibold">Rentabilidad Real: <span id="nota-info-profit" class="text-emerald-400 font-bold font-mono">---</span></p>
+                <p id="nota-info-recurrente" class="hidden text-[10px] text-amber-300 font-bold leading-relaxed">↻ Sesión recurrente semanal.</p>
                 <p class="text-[10px] text-slate-500 leading-relaxed">Puedes arrastrar esta cita a otra franja del calendario para moverla. Las notas se conservarán al moverla.</p>
+
+                <div id="panel-recurrencia-sesion" class="p-3 bg-slate-950/50 border border-slate-800 rounded space-y-2">
+                    <div class="flex flex-col sm:flex-row gap-2 sm:items-end">
+                        <div class="flex-1">
+                            <label class="text-slate-400 block mb-1">Repetir semanalmente hasta</label>
+                            <input type="date" id="recurrent-until" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-xs">
+                        </div>
+                        <button type="button" onclick="crearRecurrenciaSemanalSesion()" class="bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-3 py-2 rounded font-bold text-[10px] hover:bg-cyan-500/20 transition">Repetir semanal</button>
+                    </div>
+                    <p class="text-[9px] text-slate-500 leading-relaxed">Crea la misma sesión cada semana, el mismo día y a la misma hora, bloqueando 45 min. Si una semana está ocupada, se omite para evitar solapamientos.</p>
+                    <button type="button" id="btn-delete-recurrent-series" onclick="borrarFuturasRecurrentesSesion()" class="hidden bg-red-500/10 text-red-400 border border-red-500/30 px-2 py-1 rounded font-bold text-[10px] hover:bg-red-500/20 transition">Borrar futuras de esta serie</button>
+                </div>
 
                 <div>
 
@@ -648,7 +660,7 @@
 
                 </div>
 
-                <div class="flex justify-end gap-2 pt-2">
+                <div class="flex justify-end gap-2 pt-2 flex-wrap">
 
                     <button onclick="cerrarModalNota()" class="bg-slate-800 text-slate-400 px-3 py-2 rounded font-bold hover:text-white transition">Cerrar</button>
 
@@ -3446,7 +3458,8 @@ function calcularRentabilidadFicha(ficha) {
 
                             const resumenNota = nota ? `<div class="text-[8px] mt-0.5 text-amber-200 truncate opacity-90">${escapeHTML(nota)}</div>` : '';
 
-                            tdCell.innerHTML = `${iconoNota}<div class="text-[11px] text-white uppercase truncate">${escapeHTML(obj.nombre)}</div><div class="text-[9px] mt-0.5 opacity-90">${rent.toFixed(2)}€</div><div class="text-[8px] mt-0.5 opacity-60">45 min</div>${resumenNota}`;
+                            const recurrenteHTML = (obj.recurrente || obj.serieRecurrenteId || obj.recurrenteOrigen) ? '<div class="absolute top-1 left-1 text-[8px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/30">↻</div>' : '';
+                            tdCell.innerHTML = `${iconoNota}${recurrenteHTML}<div class="text-[11px] text-white uppercase truncate ${recurrenteHTML ? 'pt-3' : ''}">${escapeHTML(obj.nombre)}</div><div class="text-[9px] mt-0.5 opacity-90">${rent.toFixed(2)}€</div><div class="text-[8px] mt-0.5 opacity-60">45 min${recurrenteHTML ? ' · semanal' : ''}</div>${resumenNota}`;
 
                             tdCell.onclick = () => {
                                 if (fichaSeleccionadaMovilId) {
@@ -3623,6 +3636,185 @@ function calcularRentabilidadFicha(ficha) {
             document.getElementById('kpi-rentabilidad-total').innerText = ses > 0 ? `${(factMes/ses).toFixed(2)} €` : `0.00 €`;
         }
 
+
+        function fechaDesdeClaveAgenda(clave) {
+            const partes = String(clave || '').split('_');
+            if (partes.length < 2) return null;
+            const fechaISO = partes[0];
+            const minutos = minutosDesdeHorario(partes[1]);
+            if (!fechaISO || Number.isNaN(minutos)) return null;
+            const d = new Date(`${fechaISO}T00:00:00`);
+            if (Number.isNaN(d.getTime())) return null;
+            d.setMinutes(minutos);
+            return d;
+        }
+
+        function claveAgendaDesdeDate(fecha) {
+            if (!fecha || Number.isNaN(fecha.getTime())) return '';
+            return `${formatoFechaLocal(fecha)}_${formatoMinutosHorario(fecha.getHours() * 60 + fecha.getMinutes())}`;
+        }
+
+        function fechaInputISO(fecha) {
+            if (!fecha || Number.isNaN(fecha.getTime())) return '';
+            return formatoFechaLocal(fecha);
+        }
+
+        function fechaHastaRecurrenciaPorDefecto(clave) {
+            const origen = fechaDesdeClaveAgenda(clave) || new Date();
+            const finMes = new Date(origen.getFullYear(), origen.getMonth() + 1, 0);
+            const minimo = new Date(origen.getTime());
+            minimo.setDate(minimo.getDate() + 7);
+            if (finMes >= minimo) return finMes;
+            const futuro = new Date(origen.getTime());
+            futuro.setDate(futuro.getDate() + 28);
+            return futuro;
+        }
+
+        function claveInicioDesdeSeleccionNota() {
+            const cobertura = obtenerCoberturaCitaAgenda(celdaNotaSeleccionada);
+            return cobertura ? cobertura.claveInicio : celdaNotaSeleccionada;
+        }
+
+        function prepararPanelRecurrenciaSesion(clave, obj) {
+            const input = document.getElementById('recurrent-until');
+            if (input) {
+                const origen = fechaDesdeClaveAgenda(clave);
+                const minimo = origen ? new Date(origen.getTime()) : new Date();
+                minimo.setDate(minimo.getDate() + 7);
+                input.min = fechaInputISO(minimo);
+                input.value = fechaInputISO(fechaHastaRecurrenciaPorDefecto(clave));
+            }
+            const info = document.getElementById('nota-info-recurrente');
+            if (info) info.className = obj && (obj.recurrente || obj.serieRecurrenteId || obj.recurrenteOrigen) ? 'text-[10px] text-amber-300 font-bold leading-relaxed' : 'hidden text-[10px] text-amber-300 font-bold leading-relaxed';
+            const btnBorrar = document.getElementById('btn-delete-recurrent-series');
+            if (btnBorrar) {
+                const tieneSerie = !!(obj && (obj.serieRecurrenteId || obj.recurrenteOrigen || obj.recurrente));
+                btnBorrar.className = tieneSerie ? 'bg-red-500/10 text-red-400 border border-red-500/30 px-2 py-1 rounded font-bold text-[10px] hover:bg-red-500/20 transition' : 'hidden bg-red-500/10 text-red-400 border border-red-500/30 px-2 py-1 rounded font-bold text-[10px] hover:bg-red-500/20 transition';
+            }
+        }
+
+        function crearRecurrenciaSemanalSesion() {
+            const claveOrigen = claveInicioDesdeSeleccionNota();
+            if (!dbAgenda[entrenadorVisto] || !dbAgenda[entrenadorVisto][claveOrigen]) {
+                alert('No se ha encontrado la sesión de origen.');
+                return;
+            }
+            const citaOrigen = dbAgenda[entrenadorVisto][claveOrigen];
+            if (esCitaPruebaCRM(citaOrigen)) {
+                alert('Las pruebas CRM se gestionan desde CRM. No se pueden repetir desde Agenda.');
+                return;
+            }
+            const fechaOrigen = fechaDesdeClaveAgenda(claveOrigen);
+            if (!fechaOrigen) {
+                alert('No se ha podido interpretar la fecha de la sesión.');
+                return;
+            }
+            const input = document.getElementById('recurrent-until');
+            const hastaISO = input ? input.value : '';
+            if (!hastaISO) {
+                alert('Indica hasta qué fecha quieres repetir la sesión.');
+                return;
+            }
+            const fechaHasta = new Date(`${hastaISO}T23:59:59`);
+            if (Number.isNaN(fechaHasta.getTime()) || fechaHasta <= fechaOrigen) {
+                alert('La fecha final debe ser posterior a la sesión de origen.');
+                return;
+            }
+            const maxSemanas = 26;
+            const semanasSolicitadas = Math.floor((fechaHasta - fechaOrigen) / (7 * 24 * 60 * 60 * 1000));
+            if (semanasSolicitadas > maxSemanas) {
+                alert(`Por seguridad, crea un máximo de ${maxSemanas} semanas de una vez.`);
+                return;
+            }
+            if (!confirm(`Se repetirá semanalmente "${citaOrigen.nombre || 'esta sesión'}" desde la próxima semana hasta ${hastaISO}.\n\nNo se sobrescribirán huecos ocupados. ¿Continuar?`)) return;
+
+            const serieId = citaOrigen.serieRecurrenteId || `serie_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            const ahoraISO = new Date().toISOString();
+            dbAgenda[entrenadorVisto][claveOrigen] = {
+                ...citaOrigen,
+                duracionMin: 45,
+                recurrente: true,
+                serieRecurrenteId: serieId,
+                recurrenteOrigen: citaOrigen.recurrenteOrigen || claveOrigen,
+                recurrenteCreadaEn: citaOrigen.recurrenteCreadaEn || ahoraISO
+            };
+
+            const baseFicha = buscarFichaPorId(citaOrigen.id) || citaOrigen;
+            let creadas = 0;
+            const omitidas = [];
+            const cursor = new Date(fechaOrigen.getTime());
+            cursor.setDate(cursor.getDate() + 7);
+            while (cursor <= fechaHasta) {
+                const claveNueva = claveAgendaDesdeDate(cursor);
+                if (clavesBloqueSesion(claveNueva, 45).length !== 3) {
+                    omitidas.push(`${formatoFechaCorta(cursor)} ${formatoMinutosHorario(cursor.getHours() * 60 + cursor.getMinutes())}: fuera de horario`);
+                    cursor.setDate(cursor.getDate() + 7);
+                    continue;
+                }
+                const conflicto = hayConflictoBloqueSesion(claveNueva, '');
+                if (conflicto) {
+                    omitidas.push(`${formatoFechaCorta(cursor)} ${formatoMinutosHorario(cursor.getHours() * 60 + cursor.getMinutes())}: ocupado por ${conflicto.obj?.nombre || 'otra cita'}`);
+                    cursor.setDate(cursor.getDate() + 7);
+                    continue;
+                }
+                dbAgenda[entrenadorVisto][claveNueva] = {
+                    ...baseFicha,
+                    duracionMin: 45,
+                    recurrente: true,
+                    serieRecurrenteId: serieId,
+                    recurrenteOrigen: citaOrigen.recurrenteOrigen || claveOrigen,
+                    recurrenteCreadaEn: ahoraISO
+                };
+                // No copiamos notas para evitar arrastrar información específica de una sesión a todas las semanas.
+                fijarNotaAgenda(claveNueva, '');
+                creadas++;
+                cursor.setDate(cursor.getDate() + 7);
+            }
+
+            localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
+            localStorage.setItem('bs_db_notas_v6', JSON.stringify(dbNotas));
+            programarGuardadoNubeAgenda();
+            cerrarModalNota();
+            recalcularKPIs();
+            renderClientes();
+            renderAgenda();
+            const detalleOmitidas = omitidas.length ? `\n\nOmitidas por conflicto/fuera de horario:\n- ${omitidas.slice(0, 6).join('\n- ')}${omitidas.length > 6 ? '\n- ...' : ''}` : '';
+            alert(`Recurrencia creada.\nSesiones nuevas: ${creadas}\nOmitidas: ${omitidas.length}${detalleOmitidas}`);
+        }
+
+        function borrarFuturasRecurrentesSesion() {
+            const claveActual = claveInicioDesdeSeleccionNota();
+            const citaActual = dbAgenda[entrenadorVisto] ? dbAgenda[entrenadorVisto][claveActual] : null;
+            if (!citaActual) { alert('No se ha encontrado la sesión.'); return; }
+            const serieId = citaActual.serieRecurrenteId || '';
+            const origen = citaActual.recurrenteOrigen || claveActual;
+            const fechaActual = fechaDesdeClaveAgenda(claveActual);
+            if (!fechaActual || (!serieId && !origen)) { alert('Esta sesión no pertenece a una serie recurrente.'); return; }
+            if (!confirm('Se borrarán solo las sesiones futuras de esta serie recurrente. La sesión actual se mantiene. ¿Continuar?')) return;
+            let borradas = 0;
+            Object.keys(dbAgenda[entrenadorVisto] || {}).forEach(clave => {
+                if (clave === claveActual) return;
+                const obj = dbAgenda[entrenadorVisto][clave];
+                if (!obj || esCitaPruebaCRM(obj)) return;
+                const mismaSerie = (serieId && obj.serieRecurrenteId === serieId) || (origen && obj.recurrenteOrigen === origen);
+                if (!mismaSerie) return;
+                const fecha = fechaDesdeClaveAgenda(clave);
+                if (fecha && fecha > fechaActual) {
+                    delete dbAgenda[entrenadorVisto][clave];
+                    fijarNotaAgenda(clave, '');
+                    borradas++;
+                }
+            });
+            localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
+            localStorage.setItem('bs_db_notas_v6', JSON.stringify(dbNotas));
+            programarGuardadoNubeAgenda();
+            cerrarModalNota();
+            recalcularKPIs();
+            renderClientes();
+            renderAgenda();
+            alert(`Sesiones futuras borradas: ${borradas}`);
+        }
+
         function abrirModalNota(clave, obj, rent) {
 
             celdaNotaSeleccionada = clave;
@@ -3636,6 +3828,7 @@ function calcularRentabilidadFicha(ficha) {
             document.getElementById('nota-info-profit').innerText = `${rent.toFixed(2)} €`;
 
             document.getElementById('txt-nota-contenido').value = obtenerNotaAgenda(clave);
+            prepararPanelRecurrenciaSesion(clave, obj);
 
         }
 
