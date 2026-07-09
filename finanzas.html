@@ -1,865 +1,531 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BESOUL Suite - Enterprise Cloud v5.8</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-
-<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-    <style>
-        body { font-family: 'Inter', sans-serif; background-color: #0B0F17; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #111827; }
-        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BESOUL Finanzas · Control 360</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color:#0B0F17; }
+    ::-webkit-scrollbar { width:6px; height:6px; }
+    ::-webkit-scrollbar-track { background:#111827; }
+    ::-webkit-scrollbar-thumb { background:#374151; border-radius:3px; }
+    input, select, textarea { font-size:16px; }
+    @media (min-width:768px){ input, select, textarea { font-size:12px; } }
+  </style>
 </head>
 <body class="text-slate-100 min-h-screen flex flex-col">
 
-    <!-- COMPONENTE DE ACCESO CORPORATIVO SEGURO -->
-    <div id="auth-screen" class="flex-1 flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md space-y-6 shadow-2xl">
-            <div class="flex flex-col items-center bg-white p-2 rounded-xl border border-slate-700 w-32 mx-auto">
-                <div class="text-amber-500 font-extrabold text-xl tracking-tighter italic font-serif">besoul</div>
-                <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
-            </div>
-            <div class="text-center">
-                <h2 class="text-base font-bold text-white tracking-tight">Acceso Corporativo Seguro v5.8 · Firebase Auth</h2>
-                <p class="text-xs text-slate-400 mt-1">Introduce tu email y contraseña de Firebase</p>
-            </div>
-            <div class="space-y-3 text-xs">
-                <div>
-                    <label class="text-slate-400 block mb-1">Email de administrador</label>
-                    <input type="text" id="login-user" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="fran.jmorenomartin@gmail.com">
-                </div>
-                <div>
-                    <label class="text-slate-400 block mb-1">Contraseña</label>
-                    <input type="password" id="login-pass" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="••••••••">
-                </div>
-                <button onclick="ejecutarLogin()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-lg transition uppercase tracking-wider mt-2">
-                    Validar e Ingresar
-                </button>
-            </div>
+  <div id="auth-screen" class="flex-1 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md space-y-6 shadow-2xl">
+      <div class="flex flex-col items-center bg-white p-2 rounded-xl border border-slate-700 w-32 mx-auto">
+        <div class="text-amber-500 font-extrabold text-xl tracking-tighter italic font-serif">besoul</div>
+        <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
+      </div>
+      <div class="text-center">
+        <h2 class="text-base font-bold text-white tracking-tight">Finanzas BESOUL · Firebase Auth</h2>
+        <p class="text-xs text-slate-400 mt-1">Acceso exclusivo administración</p>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="text-slate-400 block mb-1">Email administrador</label>
+          <input type="email" id="login-user" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="administracion@besoulfitness.com">
         </div>
+        <div>
+          <label class="text-slate-400 block mb-1">Contraseña</label>
+          <input type="password" id="login-pass" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="••••••••">
+        </div>
+        <button onclick="ejecutarLogin()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-lg transition uppercase tracking-wider mt-2">Entrar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="app-content" class="hidden flex-1 flex flex-col">
+    <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div class="flex items-center gap-4">
+        <a href="./" class="flex flex-col items-center bg-white p-2 rounded-xl border border-slate-700 shadow-md w-32">
+          <div class="text-amber-500 font-extrabold text-xl tracking-tighter italic font-serif">besoul</div>
+          <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
+        </a>
+        <div>
+          <h1 class="text-lg font-extrabold text-white tracking-tight">Finanzas <span class="text-amber-500 font-medium text-sm">Control 360</span></h1>
+          <p class="text-xs text-slate-400">Admin: <span id="lbl-usuario-logeado" class="text-amber-400 font-bold uppercase">---</span> · <span id="lbl-mes-activo" class="text-slate-300">---</span></p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap justify-center md:justify-end">
+        <a href="./agenda.html" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">Agenda</a>
+        <a href="./crm.html" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">CRM</a>
+        <button onclick="refrescarTodoManual()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition">Actualizar</button>
+        <button onclick="logout()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-400 border border-slate-800 hover:text-white transition">Salir</button>
+      </div>
+    </header>
+
+    <div class="bg-slate-950 px-6 py-3 border-b border-slate-900 flex flex-wrap gap-2">
+      <button id="btn-tab-directo" onclick="switchTab('directo')" class="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950 shadow">Mes en curso</button>
+      <button id="btn-tab-gastos" onclick="switchTab('gastos')" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white bg-slate-900/50 border border-slate-800">Gastos empresa</button>
+      <button id="btn-tab-historico" onclick="switchTab('historico')" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white bg-slate-900/50 border border-slate-800">Histórico mensual</button>
+      <button id="btn-tab-config" onclick="switchTab('config')" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white bg-slate-900/50 border border-slate-800">Centros / PT</button>
     </div>
 
-    <!-- ENTORNO DE TRABAJO PRINCIPAL (OCULTO HASTA PASAR EL LOGIN) -->
-    <div id="app-content" class="hidden flex-1 flex flex-col">
-        <!-- ENCABEZADO -->
-        <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
-            <div class="flex items-center gap-4">
-                <div class="flex flex-col items-center bg-white p-2 rounded-xl border border-slate-700 shadow-md w-32">
-                    <div class="text-amber-500 font-extrabold text-xl tracking-tighter italic font-serif">besoul</div>
-                    <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
-                </div>
-                <div>
-                    <h1 class="text-lg font-extrabold text-white tracking-tight">BESOUL Suite <span class="text-amber-500 font-medium text-sm">v5.8 Firebase Cloud</span></h1>
-                    <p class="text-xs text-slate-400">Panel de Control: Administrador <span id="lbl-usuario-logeado" class="text-amber-400 font-bold uppercase">---</span></p>
-                </div>
-            </div>
-            <div class="flex items-center gap-3">
-                <button onclick="copiarEnlaceSincronizado()" class="px-4 py-2 text-xs font-bold rounded-lg bg-emerald-500 hover:bg-emerald-600 text-slate-950 shadow flex items-center gap-1 transition">
-                    🔗 Compartir / Ver en Móvil
-                </button>
-                <button onclick="logout()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-400 border border-slate-800 hover:text-white transition">
-                    Salir
-                </button>
-                <span id="live-clock" class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-950 text-amber-400 border border-slate-800 tracking-wider">
-                    CARGANDO...
-                </span>
-            </div>
-        </header>
-
-        <!-- PESTAÑAS -->
-        <div class="bg-slate-950 px-6 py-3 border-b border-slate-900 flex flex-wrap gap-2">
-            <button id="btn-tab-directo" onclick="switchTab('directo')" class="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950 shadow">Panel en Directo (Mes Actual)</button>
-            <button id="btn-tab-historico" onclick="switchTab('historico')" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white bg-slate-900/50 border border-slate-800">Histórico de Cierres Reales</button>
+    <main class="flex-1 p-6 space-y-6">
+      <section id="view-directo" class="space-y-6">
+        <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center"><h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Facturación estimada</h3><div id="kpi-fact-total" class="text-lg font-black text-white">0,00 €</div></div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center"><h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Neto PT estimado</h3><div id="kpi-pt-total" class="text-lg font-black text-amber-400">0,00 €</div></div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center"><h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">BESOUL antes gastos</h3><div id="kpi-bs-bruto" class="text-lg font-black text-emerald-400">0,00 €</div></div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center"><h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Cánones centros</h3><div id="kpi-canones-total" class="text-lg font-black text-red-400">0,00 €</div></div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center"><h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Gastos empresa</h3><div id="kpi-gastos-total" class="text-lg font-black text-red-300">0,00 €</div></div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center"><h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Beneficio neto</h3><div id="kpi-beneficio-neto" class="text-lg font-black text-cyan-400">0,00 €</div></div>
         </div>
 
-        <!-- CONTENIDO PRINCIPAL -->
-        <main class="flex-1 p-6 space-y-6">
-            <section id="view-directo" class="space-y-6">
-                <!-- DASHBOARD GLOBAL -->
-                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
-                        <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Facturación Bruta Red</h3>
-                        <div id="kpi-fact-total" class="text-lg font-black text-white">0.00 €</div>
-                    </div>
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
-                        <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Neto Equipo (PT)</h3>
-                        <div id="kpi-pt-total" class="text-lg font-black text-amber-400">0.00 €</div>
-                    </div>
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
-                        <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Neto BESOUL</h3>
-                        <div id="kpi-bs-total" class="text-lg font-black text-emerald-400">0.00 €</div>
-                    </div>
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
-                        <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Total Clientes Red</h3>
-                        <div id="kpi-clientes-total" class="text-lg font-black text-white">0</div>
-                    </div>
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
-                        <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Cánones de Centros</h3>
-                        <div id="kpi-canones-total" class="text-lg font-black text-red-400">0.00 €</div>
-                    </div>
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
-                        <h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Cierre del Mes</h3>
-                        <button onclick="congelarMesEnHistorico()" class="mt-1 w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-[11px] py-1 px-2 rounded transition">Guardar Mes</button>
-                    </div>
-                </div>
-
-                <!-- SECCIÓN CENTROS -->
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[240px]">
-                        <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
-                            <h2 class="text-xs font-bold uppercase text-amber-400 tracking-wider">Centros Deportivos Activos</h2>
-                            <button onclick="agregarCentro()" class="bg-amber-500 text-slate-950 px-2 py-1 rounded font-bold text-[10px] hover:bg-amber-600 transition">+ Añadir Centro</button>
-                        </div>
-                        <div id="center-selector-list" class="flex-1 overflow-y-auto space-y-1.5 pr-1"></div>
-                    </div>
-
-                    <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-4 h-[240px] flex flex-col justify-between">
-                        <div>
-                            <div class="border-b border-slate-800 pb-2 mb-3 flex justify-between items-center">
-                                <h2 id="center-profile-title" class="text-xs font-bold uppercase text-slate-300">Selecciona un centro</h2>
-                                <button id="btn-eliminar-centro" onclick="eliminarCentroActivo()" class="hidden text-red-400 text-xs hover:underline">Eliminar centro</button>
-                            </div>
-                            <div id="center-inputs-area" class="hidden grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <div class="flex flex-col gap-1">
-                                    <label class="text-[11px] text-slate-400">Nombre del Centro</label>
-                                    <input type="text" id="input-center-name" class="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" oninput="actualizarVariablesCentro()">
-                                </div>
-                                <div class="flex flex-col gap-1">
-                                    <label class="text-[11px] text-slate-400">Canon Fijo (€/mes)</label>
-                                    <input type="number" id="input-center-canon-fijo" class="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" oninput="actualizarVariablesCentro()">
-                                </div>
-                                <div class="flex flex-col gap-1">
-                                    <label class="text-[11px] text-slate-400">Canon por PT (€/mes)</label>
-                                    <input type="number" id="input-center-canon-pt" class="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" oninput="actualizarVariablesCentro()">
-                                </div>
-                            </div>
-                        </div>
-                        <div id="center-info-foot" class="text-[11px] text-slate-500 italic">Los cambios en los cánones se indexan de forma inmediata.</div>
-                    </div>
-                </div>
-
-                <!-- SECCIÓN ENTRENADORES -->
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[640px]">
-                        <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
-                            <h2 id="trainer-list-title" class="text-xs font-bold uppercase text-amber-400 tracking-wider">Entrenadores en este centro</h2>
-                            <button id="btn-add-pt" onclick="agregarEntrenador()" class="hidden bg-amber-500 text-slate-950 px-2 py-1 rounded font-bold text-[10px] hover:bg-amber-600 transition">+ Añadir PT</button>
-                        </div>
-                        <div id="trainer-selector-list" class="flex-1 overflow-y-auto space-y-1.5 pr-1"></div>
-                    </div>
-
-                    <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-6 flex flex-col justify-between h-[640px]">
-                        <div>
-                            <div class="border-b border-slate-800 pb-2 mb-4 flex justify-between items-center">
-                                <h2 id="current-profile-title" class="text-sm font-bold text-white">Selecciona un entrenador</h2>
-                                <button id="btn-eliminar-pt" onclick="eliminarEntrenadorActivo()" class="hidden text-red-400 text-xs hover:underline">Dar de baja PT</button>
-                            </div>
-
-                            <div id="profile-inputs-area" class="hidden space-y-4">
-                                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-                                    <div class="col-span-2 md:col-span-1">
-                                        <label class="text-[11px] text-slate-400 block mb-1">Nombre Entrenador</label>
-                                        <input type="text" id="input-nombre-pt" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" oninput="actualizarNombreEnVivo(); calcularTramosEnTiempoReal()">
-                                    </div>
-                                    <div>
-                                        <label class="text-[11px] text-slate-400 block mb-1">Nº Clientes Activos (Stats)</label>
-                                        <input type="number" id="input-clientes" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white font-medium" oninput="calcularTramosEnTiempoReal()">
-                                    </div>
-                                    <div>
-                                        <label class="text-[11px] text-amber-400 block mb-1 font-bold">Horas de Clase Impartidas</label>
-                                        <input type="number" id="input-sesiones-medias" class="w-full bg-slate-950 border border-amber-500/30 rounded p-2 text-xs text-amber-400 font-black" oninput="calcularTramosEnTiempoReal()">
-                                    </div>
-                                    <div>
-                                        <label class="text-[11px] text-slate-400 block mb-1">Precio Hora Medio (€)</label>
-                                        <input type="number" id="input-precio-sesion" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white font-bold" oninput="calcularTramosEnTiempoReal()">
-                                    </div>
-                                    <div>
-                                        <label class="text-[11px] text-slate-400 block mb-1">Aporte / Cliente (€)</label>
-                                        <input type="number" id="input-pt-aporte-individual" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" oninput="calcularTramosEnTiempoReal()">
-                                    </div>
-                                </div>
-
-                                <div class="bg-slate-950 border border-slate-800/80 rounded-lg p-3 flex flex-col md:flex-row gap-4 justify-between items-center">
-                                    <div class="flex items-center gap-3">
-                                        <input type="checkbox" id="chk-pacto-especial" class="w-4 h-4 rounded accent-amber-500 cursor-pointer" onchange="calcularTramosEnTiempoReal()">
-                                        <div class="leading-tight">
-                                            <label for="chk-pacto-especial" class="text-xs font-bold text-amber-400 block cursor-pointer">Tarifa Especial (Pacto Fijo Alternativo)</label>
-                                            <span class="text-[10px] text-slate-500">Abona 500€ fijos + 100€ por cada 500€ extras de facturación real de horas.</span>
-                                        </div>
-                                    </div>
-                                    <div class="text-[11px] text-slate-400 max-w-sm text-right">
-                                        <span class="font-bold text-slate-200">Nueva Lógica Matrix 2026:</span> La facturación bruta real se genera multiplicando **Horas Impartidas** × **Precio Hora Medio**.
-                                    </div>
-                                </div>
-
-                                <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2.5">
-                                    <h3 id="lbl-titulo-tramos" class="text-xs font-bold uppercase text-slate-400 tracking-wider border-b border-slate-900 pb-1.5">Reparto Progresivo por Tramos (Cálculo Marginal s/ Horas Reales)</h3>
-                                    <div id="container-filas-tramos" class="space-y-2"></div>
-                                    <div class="grid grid-cols-2 gap-4 border-t border-slate-800 pt-2 text-xs text-slate-400">
-                                        <div>Facturación de Horas Real: <span id="lbl-fact-calculada-txt" class="font-bold text-white">0.00 €</span></div>
-                                        <div class="text-right">Aporte Adicional s/ Clientes Activos: <span id="lbl-aporte-clientes-txt" class="font-bold text-amber-400">0.00 €</span></div>
-                                    </div>
-                                    <div class="flex justify-between text-sm pt-1 font-bold border-t border-slate-900">
-                                        <span class="uppercase tracking-tight text-slate-200">Aporte Bruto Total a BESOUL por este PT:</span>
-                                        <span id="lbl-total-aporte-bs" class="text-emerald-400 font-mono">PT: 0.00 € | BS: 0.00 €</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="action-area" class="hidden">
-                            <button onclick="guardarRegistroPT()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-2.5 px-4 rounded-lg transition uppercase tracking-wider">Guardar Ficha del Entrenador</button>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section id="view-historico" class="hidden space-y-6">
-                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 overflow-x-auto">
-                    <div class="mb-4">
-                        <h2 class="text-base font-bold text-white">Historial de Cierres de Caja Consolidados</h2>
-                        <p class="text-xs text-slate-400">Datos registrados en la nube de BESOUL.</p>
-                    </div>
-                    <table class="w-full text-left text-xs border-collapse">
-                        <thead>
-                            <tr class="border-b border-slate-800 text-amber-400 font-bold uppercase">
-                                <th class="py-3 px-4">Mes / Año de Cierre</th>
-                                <th class="py-3 px-4">Facturación Bruta Red</th>
-                                <th class="py-3 px-4">Neto de la Plantilla (PT)</th>
-                                <th class="py-3 px-4">Neto BESOUL (Limpio)</th>
-                                <th class="py-3 px-4">Clientes en Red</th>
-                                <th class="py-3 px-4">Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabla-historico-cuerpo" class="divide-y divide-slate-800/50 text-slate-300"></tbody>
-                    </table>
-                </div>
-            </section>
-        </main>
-    </div>
-
-    <script>
-        let centrosDeportivos, entrenadoresPorCentro, historicoCierres;
-        let idCentroSeleccionado = null;
-        let idPTSeleccionado = null;
-        let usuarioFinanzasEmail = '';
-        let perfilFinanzas = null;
-
-        const BS_FIREBASE_CONFIG = {
-            apiKey: "AIzaSyAHp7l39BYkgHTVNNwPaaa21tTksBQ94Zo",
-            authDomain: "besoul-suite.firebaseapp.com",
-            projectId: "besoul-suite",
-            storageBucket: "besoul-suite.firebasestorage.app",
-            messagingSenderId: "215142605598",
-            appId: "1:215142605598:web:943629a7a9c50c034a1f0f"
-        };
-
-
-        window.bsFinanzasCloudDocRef = null;
-        window.bsFinanzasCloudTimer = null;
-        window.bsFinanzasAplicandoNube = false;
-        window.bsFinanzasDatosInicializados = false;
-        window.bsFinanzasCloudUnsub = null;
-
-        function estadoLocalFinanzasParaNube() {
-            return {
-                centros: centrosDeportivos || {},
-                pts: entrenadoresPorCentro || {},
-                historico: historicoCierres || [],
-                ultimaActualizacionLocal: new Date().toISOString()
-            };
-        }
-
-        function guardarEstadoNubeFinanzas() {
-            if (!window.bsFinanzasCloudDocRef || window.bsFinanzasAplicandoNube || !window.bsFinanzasDatosInicializados) return;
-            try {
-                const payload = estadoLocalFinanzasParaNube();
-                payload.actualizadoEn = firebase.firestore.FieldValue.serverTimestamp();
-                window.bsFinanzasCloudDocRef.set(payload, { merge: true }).catch(err => console.error('Error guardando finanzas en Firebase:', err));
-            } catch (err) {
-                console.error('Error preparando finanzas para Firebase:', err);
-            }
-        }
-
-        function programarGuardadoNubeFinanzas() {
-            if (!window.bsFinanzasCloudDocRef || window.bsFinanzasAplicandoNube || !window.bsFinanzasDatosInicializados) return;
-            clearTimeout(window.bsFinanzasCloudTimer);
-            window.bsFinanzasCloudTimer = setTimeout(guardarEstadoNubeFinanzas, 350);
-        }
-
-        function aplicarEstadoNubeFinanzas(data) {
-            if (!data) return;
-            window.bsFinanzasAplicandoNube = true;
-            try {
-                centrosDeportivos = data.centros || centrosDeportivos || {};
-                entrenadoresPorCentro = data.pts || entrenadoresPorCentro || {};
-                historicoCierres = data.historico || historicoCierres || [];
-
-                localStorage.setItem('besoul_v5_centros', JSON.stringify(centrosDeportivos));
-                localStorage.setItem('besoul_v5_pts', JSON.stringify(entrenadoresPorCentro));
-                localStorage.setItem('besoul_v5_history', JSON.stringify(historicoCierres));
-            } finally {
-                window.bsFinanzasAplicandoNube = false;
-            }
-
-            const appVisible = document.getElementById('app-content') && !document.getElementById('app-content').classList.contains('hidden');
-            if (appVisible) {
-                if (idCentroSeleccionado && !centrosDeportivos[idCentroSeleccionado]) idCentroSeleccionado = null;
-                if (idPTSeleccionado && !entrenadoresPorCentro[idPTSeleccionado]) idPTSeleccionado = null;
-                renderCentros();
-                renderEntrenadoresDelCentro();
-                if (idPTSeleccionado) abrirPerfilPT(idPTSeleccionado);
-                recalcularCuadroMandoGlobal();
-                if (!document.getElementById('view-historico').classList.contains('hidden')) renderHistorico();
-            }
-        }
-
-        function inicializarFirebaseFinanzasAuth() {
-            try {
-                if (!window.firebase) {
-                    console.warn('Firebase no está cargado. Finanzas no puede autenticarse.');
-                    alert('Firebase no se ha cargado. Revisa la conexión.');
-                    return;
-                }
-                if (!firebase.apps.length) firebase.initializeApp(BS_FIREBASE_CONFIG);
-
-                firebase.auth().onAuthStateChanged(async user => {
-                    if (!user) {
-                        window.bsFinanzasDatosInicializados = false;
-                        if (window.bsFinanzasCloudUnsub) {
-                            window.bsFinanzasCloudUnsub();
-                            window.bsFinanzasCloudUnsub = null;
-                        }
-                        document.getElementById('auth-screen').classList.remove('hidden');
-                        document.getElementById('app-content').classList.add('hidden');
-                        return;
-                    }
-
-                    try {
-                        const email = String(user.email || '').trim().toLowerCase();
-                        const firestore = firebase.firestore();
-                        const profileSnap = await firestore.collection('besoulUsers').doc(email).get();
-
-                        if (!profileSnap.exists) {
-                            await firebase.auth().signOut();
-                            alert('Tu email existe en Authentication, pero no tiene perfil en besoulUsers. Crea el documento con tu email y rol admin.');
-                            return;
-                        }
-
-                        const perfil = { email, ...profileSnap.data() };
-                        if (!perfil.activo) {
-                            await firebase.auth().signOut();
-                            alert('Tu usuario está desactivado.');
-                            return;
-                        }
-                        if (perfil.rol !== 'admin') {
-                            await firebase.auth().signOut();
-                            alert('Finanzas solo está disponible para usuarios administradores.');
-                            return;
-                        }
-
-                        usuarioFinanzasEmail = email;
-                        perfilFinanzas = perfil;
-                        document.getElementById('auth-screen').classList.add('hidden');
-                        document.getElementById('app-content').classList.remove('hidden');
-                        document.getElementById('lbl-usuario-logeado').innerText = perfil.nombre || email;
-                        await iniciarSincronizacionNubeFinanzas();
-                    } catch (err) {
-                        console.error('Error validando usuario de finanzas:', err);
-                        alert('No se ha podido validar tu usuario de Finanzas. Revisa besoulUsers y las reglas de Firestore.');
-                    }
-                });
-            } catch (err) {
-                console.error('Error iniciando Firebase Auth en Finanzas:', err);
-                alert('Error iniciando Firebase Auth en Finanzas.');
-            }
-        }
-
-        async function iniciarSincronizacionNubeFinanzas() {
-            try {
-                if (!window.firebase) {
-                    console.warn('Firebase no está cargado. Finanzas funcionará solo en este navegador.');
-                    checkUrlAndLoadData(null);
-                    return;
-                }
-                if (!firebase.apps.length) firebase.initializeApp(BS_FIREBASE_CONFIG);
-                const firestore = firebase.firestore();
-                window.bsFinanzasCloudDocRef = firestore.collection('besoulSuite').doc('finanzas');
-
-                const snapshotInicial = await window.bsFinanzasCloudDocRef.get();
-                const datosIniciales = snapshotInicial.exists ? snapshotInicial.data() : null;
-                checkUrlAndLoadData(datosIniciales);
-
-                if (window.bsFinanzasCloudUnsub) window.bsFinanzasCloudUnsub();
-                window.bsFinanzasCloudUnsub = window.bsFinanzasCloudDocRef.onSnapshot(snapshot => {
-                    if (snapshot.exists) {
-                        aplicarEstadoNubeFinanzas(snapshot.data());
-                    }
-                }, err => {
-                    console.error('Error conectando finanzas con Firebase:', err);
-                    alert('No se ha podido conectar Finanzas con Firebase. Revisa las reglas de Firestore.');
-                });
-            } catch (err) {
-                console.error('Error iniciando sincronización de finanzas:', err);
-                alert('No se ha podido conectar Finanzas con Firebase. Revisa las reglas de Firestore.');
-            }
-        }
-
-        function ejecutarLogin() {
-            const email = document.getElementById('login-user').value.trim().toLowerCase();
-            const pass = document.getElementById('login-pass').value.trim();
-            if (!email || !pass) {
-                alert('Introduce email y contraseña.');
-                return;
-            }
-            if (!window.firebase || !firebase.auth) {
-                alert('Firebase Auth no se ha cargado.');
-                return;
-            }
-            firebase.auth().signInWithEmailAndPassword(email, pass).catch(err => {
-                console.error('Error de login en Finanzas:', err);
-                alert('Acceso denegado. Revisa email, contraseña y que el usuario sea administrador en besoulUsers.');
-            });
-        }
-
-        function logout() {
-            if (window.firebase && firebase.auth) {
-                firebase.auth().signOut().finally(() => window.location.reload());
-            } else {
-                window.location.reload();
-            }
-        }
-
-        function checkUrlAndLoadData(datosFirebase = null) {
-            const params = new URLSearchParams(window.location.search);
-            const cloudData = params.get('data');
-
-            if (cloudData) {
-                try {
-                    const decrypted = JSON.parse(decodeURIComponent(atob(cloudData)));
-                    centrosDeportivos = decrypted.centros;
-                    entrenadoresPorCentro = decrypted.pts;
-                    historicoCierres = decrypted.historico;
-                    localStorage.setItem('besoul_v5_centros', JSON.stringify(centrosDeportivos));
-                    localStorage.setItem('besoul_v5_pts', JSON.stringify(entrenadoresPorCentro));
-                    localStorage.setItem('besoul_v5_history', JSON.stringify(historicoCierres));
-                } catch (e) {
-                    if (datosFirebase) aplicarEstadoNubeFinanzas(datosFirebase);
-                    else loadFromLocalStorage();
-                }
-            } else if (datosFirebase) {
-                aplicarEstadoNubeFinanzas(datosFirebase);
-            } else {
-                loadFromLocalStorage();
-            }
-            initApp();
-        }
-
-        function loadFromLocalStorage() {
-            centrosDeportivos = JSON.parse(localStorage.getItem('besoul_v5_centros')) || {
-                "c1": { id: "c1", nombre: "Alfa Prime Málaga", canonFijo: 300, canonPt: 200 },
-                "c2": { id: "c2", nombre: "Lagunillas", canonFijo: 1000, canonPt: 0 },
-                "c3": { id: "c3", nombre: "Inacua", canonFijo: 1000, canonPt: 200 },
-                "c4": { id: "c4", nombre: "Fantasy", canonFijo: 300, canonPt: 200 }
-            };
-
-            // SE CONSERVAN LOS INTEGRANTES DE TRABAJO ORIGINALES AJUSTADOS A LA VARIABLE DE HORAS
-            entrenadoresPorCentro = JSON.parse(localStorage.getItem('besoul_v5_pts')) || {
-                "pt-1": { id: "pt-1", centroId: "c1", nombre: "Carmen", clientes: 25, sesionesMedias: 200, precioSesion: 30, pactoEspecial: true, aporteIndividualCliente: 1 },
-                "pt-2": { id: "pt-2", centroId: "c1", nombre: "Juan Carlos", clientes: 20, sesionesMedias: 160, precioSesion: 30, pactoEspecial: false, aporteIndividualCliente: 1 },
-                "pt-3": { id: "pt-3", centroId: "c2", nombre: "Lillo", clientes: 60, sesionesMedias: 180, precioSesion: 30, pactoEspecial: false, aporteIndividualCliente: 1 },
-                "pt-4": { id: "pt-4", centroId: "c2", nombre: "Rubén", clientes: 50, sesionesMedias: 150, precioSesion: 30, pactoEspecial: false, aporteIndividualCliente: 1 },
-                "pt-5": { id: "pt-5", centroId: "c4", nombre: "Miguel", clientes: 25, sesionesMedias: 120, precioSesion: 25, pactoEspecial: false, aporteIndividualCliente: 1 }
-            };
-
-            historicoCierres = JSON.parse(localStorage.getItem('besoul_v5_history')) || [];
-        }
-
-        function copiarEnlaceSincronizado() {
-            if (window.bsFinanzasCloudDocRef) {
-                const urlLimpia = window.location.origin + window.location.pathname;
-                navigator.clipboard.writeText(urlLimpia).then(() => {
-                    alert('Enlace copiado. Los datos se sincronizan automáticamente con Firebase.');
-                }).catch(() => {
-                    prompt('Copia este enlace manualmente:', urlLimpia);
-                });
-                return;
-            }
-            const paqueteData = { centros: centrosDeportivos, pts: entrenadoresPorCentro, historico: historicoCierres };
-            const stringificado = btoa(encodeURIComponent(JSON.stringify(paqueteData)));
-            const urlCompleta = window.location.origin + window.location.pathname + "?data=" + stringificado;
-
-            navigator.clipboard.writeText(urlCompleta).then(() => {
-                alert("¡Enlace de sincronización copiado! Pégatelo en tu WhatsApp.");
-            }).catch(() => {
-                prompt("Copia este enlace manualmente:", urlCompleta);
-            });
-        }
-
-        function initApp() {
-            window.bsFinanzasDatosInicializados = true;
-            runClock();
-            renderCentros();
-            recalcularCuadroMandoGlobal();
-            programarGuardadoNubeFinanzas();
-        }
-
-        function runClock() {
-            const el = document.getElementById('live-clock');
-            const refresh = () => {
-                const f = new Date();
-                el.innerText = f.toLocaleDateString('es-ES', { weekday: 'long', hour: '2-digit', minute: '2-digit' }).toUpperCase();
-            };
-            setInterval(refresh, 60000); refresh();
-        }
-
-        function switchTab(tab) {
-            document.getElementById('view-directo').className = tab === 'directo' ? 'space-y-6' : 'hidden';
-            document.getElementById('view-historico').className = tab === 'historico' ? 'space-y-6' : 'hidden';
-            document.getElementById('btn-tab-directo').className = tab === 'directo' ? "px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950 shadow" : "px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white bg-slate-900/50 border border-slate-800";
-            document.getElementById('btn-tab-historico').className = tab === 'historico' ? "px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950 shadow" : "px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white bg-slate-900/50 border border-slate-800";
-            if(tab === 'historico') renderHistorico();
-        }
-
-        function renderCentros() {
-            const container = document.getElementById('center-selector-list'); container.innerHTML = '';
-            Object.keys(centrosDeportivos).forEach(key => {
-                const center = centrosDeportivos[key];
-                const btn = document.createElement('div');
-                btn.className = `p-3 rounded-lg text-xs font-bold border cursor-pointer flex justify-between items-center transition-all ${idCentroSeleccionado === key ? 'bg-amber-500/10 border-amber-500 text-amber-400' : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'}`;
-                btn.onclick = () => abrirCentro(key);
-                const totalPTs = Object.values(entrenadoresPorCentro).filter(p => p.centroId === key).length;
-                btn.innerHTML = `<span>${center.nombre}</span><span class="bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded text-[10px]">${totalPTs} PTs</span>`;
-                container.appendChild(btn);
-            });
-        }
-
-        function abrirCentro(key) {
-            idCentroSeleccionado = key; idPTSeleccionado = null;
-            renderCentros(); renderEntrenadoresDelCentro();
-            const center = centrosDeportivos[key];
-            document.getElementById('center-profile-title').innerText = `Configuración Base: ${center.nombre}`;
-            document.getElementById('center-inputs-area').classList.remove('hidden');
-            document.getElementById('btn-eliminar-centro').classList.remove('hidden');
-            document.getElementById('input-center-name').value = center.nombre;
-            document.getElementById('input-center-canon-fijo').value = center.canonFijo;
-            document.getElementById('input-center-canon-pt').value = center.canonPt;
-            document.getElementById('profile-inputs-area').classList.add('hidden');
-            document.getElementById('action-area').classList.add('hidden');
-            document.getElementById('btn-eliminar-pt').classList.add('hidden');
-        }
-
-        function actualizarVariablesCentro() {
-            if (!idCentroSeleccionado) return;
-            centrosDeportivos[idCentroSeleccionado].nombre = document.getElementById('input-center-name').value || "Centro Sin Nombre";
-            centrosDeportivos[idCentroSeleccionado].canonFijo = parseFloat(document.getElementById('input-center-canon-fijo').value) || 0;
-            centrosDeportivos[idCentroSeleccionado].canonPt = parseFloat(document.getElementById('input-center-canon-pt').value) || 0;
-            localStorage.setItem('besoul_v5_centros', JSON.stringify(centrosDeportivos));
-            programarGuardadoNubeFinanzas();
-            renderCentros(); recalcularCuadroMandoGlobal();
-        }
-
-        function agregarCentro() {
-            const id = "c-" + Date.now();
-            centrosDeportivos[id] = { id: id, nombre: "Nuevo Centro Deportivo", canonFijo: 300, canonPt: 200 };
-            localStorage.setItem('besoul_v5_centros', JSON.stringify(centrosDeportivos));
-            programarGuardadoNubeFinanzas();
-            abrirCentro(id); recalcularCuadroMandoGlobal();
-        }
-
-        function eliminarCentroActivo() {
-            if (!idCentroSeleccionado) return;
-            if (confirm(`¿Estás seguro de borrar este centro?`)) {
-                delete centrosDeportivos[idCentroSeleccionado];
-                localStorage.setItem('besoul_v5_centros', JSON.stringify(centrosDeportivos));
-            programarGuardadoNubeFinanzas();
-                idCentroSeleccionado = null;
-                document.getElementById('center-inputs-area').classList.add('hidden');
-                document.getElementById('btn-eliminar-centro').classList.add('hidden');
-                renderCentros(); renderEntrenadoresDelCentro(); recalcularCuadroMandoGlobal();
-            }
-        }
-
-        function renderEntrenadoresDelCentro() {
-            const container = document.getElementById('trainer-selector-list');
-            if (!idCentroSeleccionado) {
-                container.innerHTML = `<div class="text-xs text-slate-500 text-center pt-10">Selecciona un centro para ver a sus entrenadores.</div>`;
-                document.getElementById('btn-add-pt').classList.add('hidden'); return;
-            }
-
-            document.getElementById('btn-add-pt').classList.remove('hidden');
-            const listaFiltrada = Object.values(entrenadoresPorCentro).filter(p => p.centroId === idCentroSeleccionado);
-
-            if (listaFiltrada.length === 0) {
-                container.innerHTML = `<div class="text-xs text-slate-500 text-center pt-10">No hay entrenadores. Añade el primero.</div>`; return;
-            }
-
-            container.innerHTML = '';
-            listaFiltrada.forEach(tr => {
-                const facturacion = tr.sesionesMedias * tr.precioSesion;
-                const btn = document.createElement('div');
-                btn.className = `flex justify-between items-center p-2.5 rounded border text-xs cursor-pointer transition-all ${idPTSeleccionado === tr.id ? 'bg-amber-500/10 border-amber-500 text-amber-400' : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'}`;
-                btn.onclick = () => abrirPerfilPT(tr.id);
-                btn.innerHTML = `<span>${tr.nombre}</span><span class="font-mono text-slate-400">${facturacion.toLocaleString('es-ES')} €</span>`;
-                container.appendChild(btn);
-            });
-        }
-
-        function abrirPerfilPT(id) {
-            idPTSeleccionado = id; renderEntrenadoresDelCentro();
-            const tr = entrenadoresPorCentro[id];
-            document.getElementById('current-profile-title').innerText = `Gestión Operativa: ${tr.nombre}`;
-            document.getElementById('profile-inputs-area').classList.remove('hidden');
-            document.getElementById('action-area').classList.remove('hidden');
-            document.getElementById('btn-eliminar-pt').classList.remove('hidden');
-
-            document.getElementById('input-nombre-pt').value = tr.nombre;
-            document.getElementById('input-clientes').value = tr.clientes;
-            document.getElementById('input-sesiones-medias').value = tr.sesionesMedias;
-            document.getElementById('input-precio-sesion').value = tr.precioSesion;
-            document.getElementById('chk-pacto-especial').checked = tr.pactoEspecial || false;
-            document.getElementById('input-pt-aporte-individual').value = tr.aporteIndividualCliente !== undefined ? tr.aporteIndividualCliente : 1;
-
-            calcularTramosEnTiempoReal();
-        }
-
-        function actualizarNombreEnVivo() {
-            if (!idPTSeleccionado) return;
-            entrenadoresPorCentro[idPTSeleccionado].nombre = document.getElementById('input-nombre-pt').value || "Sin Nombre";
-        }
-
-        function calcularTramosEnTiempoReal() {
-            if (!idPTSeleccionado) return;
-
-            const clientes = parseInt(document.getElementById('input-clientes').value) || 0;
-            const horasImpartidas = parseFloat(document.getElementById('input-sesiones-medias').value) || 0;
-            const precioHora = parseFloat(document.getElementById('input-precio-sesion').value) || 0;
-            const esPactoEspecialCarmen = document.getElementById('chk-pacto-especial').checked;
-            const factorAporteClienteIndividual = parseFloat(document.getElementById('input-pt-aporte-individual').value) || 0;
-
-            const F = horasImpartidas * precioHora;
-            const avanceMarginalClientesActivos = clientes * factorAporteClienteIndividual;
-            const containerFilas = document.getElementById('container-filas-tramos');
-            containerFilas.innerHTML = ''; 
-
-            let aporteBrutoBS = 0;
-
-            if (esPactoEspecialCarmen) {
-                document.getElementById('lbl-titulo-tramos').innerText = "Tarifa Especial (Pacto Fijo Alternativo)";
-                aporteBrutoBS = 500;
-                let exceso = F > 500 ? F - 500 : 0;
-                let bloquesExtras = Math.floor(exceso / 500);
-                let tramosExtrasBS = bloquesExtras * 100;
-                aporteBrutoBS += tramosExtrasBS;
-
-                containerFilas.innerHTML += `
-                    <div class="flex justify-between text-xs border-b border-slate-800/40 pb-1">
-                        <span class="text-slate-400">Canon Base Fijo Inicial Reconocido</span>
-                        <span class="font-mono text-slate-300">PT: 0.00 € | BS: 500.00 €</span>
-                    </div>
-                    <div class="flex justify-between text-xs border-b border-slate-800/40 pb-1">
-                        <span class="text-slate-400">Exceso Marginal por Volumen (${bloquesExtras} bloques de 500€)</span>
-                        <span class="font-mono text-slate-300">PT: ${(exceso - tramosExtrasBS).toFixed(2)} € | BS: ${tramosExtrasBS.toFixed(2)} €</span>
-                    </div>
-                `;
-            } else {
-                document.getElementById('lbl-titulo-tramos').innerText = "Reparto Progresivo por Tramos (Cálculo Marginal s/ Horas Reales)";
-                
-                let pt1 = 0, bs1 = 0, pt2 = 0, bs2 = 0, pt3_total = 0, bs3 = 0;
-
-                let fT1 = Math.min(F, 1400); pt1 = fT1 * 0.50; bs1 = fT1 * 0.50;
-                let fT2 = F > 1400 ? Math.min(F, 1900) - 1400 : 0; pt2 = fT2 * 0.60; bs2 = fT2 * 0.40;
-                let umbralExactoTecho = 1900 + (100 / 0.30); 
-
-                if (F > 1900) {
-                    let facturacionTotalTramo3 = Math.min(F, 2400) - 1900;
-                    if (F <= umbralExactoTecho) {
-                        let fT3_base = facturacionTotalTramo3; bs3 = fT3_base * 0.30; pt3_total = fT3_base * 0.70;
-                    } else {
-                        let fT3_base = umbralExactoTecho - 1900; bs3 = 100.00;
-                        pt3_total = (fT3_base * 0.70) + (facturacionTotalTramo3 - fT3_base);
-                    }
-                }
-
-                aporteBrutoBS = bs1 + bs2 + bs3;
-
-                containerFilas.innerHTML += `
-                    <div class="flex justify-between text-xs border-b border-slate-800/30 pb-1"><span class="text-slate-400">Tramo 1 (0 € a 1.400 €) | Reparto 50% / 50%</span><span class="font-mono">PT: ${pt1.toFixed(2)} € | BS: ${bs1.toFixed(2)} €</span></div>
-                    <div class="flex justify-between text-xs border-b border-slate-800/30 pb-1"><span class="text-slate-400">Tramo 2 (1.400 € a 1.900 €) | Reparto 60% / 40%</span><span class="font-mono">PT: ${pt2.toFixed(2)} € | BS: ${bs2.toFixed(2)} €</span></div>
-                    <div class="flex justify-between text-xs border-b border-slate-800/30 pb-1"><span class="text-slate-400">Tramo 3 (1.900 € a 2.400 €) | Ajuste de Techo Prorrateado</span><span class="font-mono">PT: ${pt3_total.toFixed(2)} € | BS: ${bs3.toFixed(2)} €</span></div>
-                `;
-
-                let facturacionExcesoTecho = F > umbralExactoTecho ? F - umbralExactoTecho : 0;
-                if (facturacionExcesoTecho > 0) {
-                    let numBloquesExtras = Math.floor(facturacionExcesoTecho / 500);
-                    for (let i = 1; i <= numBloquesExtras; i++) {
-                        containerFilas.innerHTML += `
-                            <div class="flex justify-between text-xs border-b border-slate-800/30 pb-1 text-amber-400 font-medium">
-                                <span>Tramo Extra Bloque #${i} (+500 € Horas extra)</span>
-                                <span class="font-mono">PT: 400.00 € | BS: 100.00 €</span>
-                            </div>
-                        `;
-                        aporteBrutoBS += 100;
-                    }
-                    let residuoFacturacion = facturacionExcesoTecho % 500;
-                    if (residuoFacturacion > 0) {
-                        containerFilas.innerHTML += `
-                            <div class="flex justify-between text-xs border-b border-slate-800/30 pb-1 text-slate-400 italic">
-                                <span>Exceso Residual s/ Horas</span>
-                                <span class="font-mono text-slate-300">PT: ${residuoFacturacion.toFixed(2)} € | BS: 0.00 €</span>
-                            </div>
-                        `;
-                    }
-                } else {
-                    containerFilas.innerHTML += `
-                        <div class="flex justify-between text-xs border-b border-slate-800/30 pb-1">
-                            <span class="text-slate-400">Tramo 4 (Facturación > 2.400 €) | Reparto 80% / 20%</span>
-                            <span class="font-mono text-slate-500">PT: 0.00 € | BS: 0.00 €</span>
-                        </div>
-                    `;
-                }
-            }
-
-            const totalRecaudadoPorPT = aporteBrutoBS + avanceMarginalClientesActivos;
-            document.getElementById('lbl-fact-calculada-txt').innerText = `${F.toLocaleString('es-ES', {minimumFractionDigits: 2})} €`;
-            document.getElementById('lbl-aporte-clientes-txt').innerText = `${avanceMarginalClientesActivos.toLocaleString('es-ES', {minimumFractionDigits: 2})} €`;
-            document.getElementById('lbl-total-aporte-bs').innerText = `PT Neto: ${(F - totalRecaudadoPorPT).toFixed(2)} € | BS Neto: ${totalRecaudadoPorPT.toFixed(2)} €`;
-        }
-
-        function guardarRegistroPT() {
-            if (!idPTSeleccionado) return;
-            const tr = entrenadoresPorCentro[idPTSeleccionado];
-            tr.nombre = document.getElementById('input-nombre-pt').value;
-            tr.clientes = parseInt(document.getElementById('input-clientes').value) || 0;
-            tr.sesionesMedias = parseFloat(document.getElementById('input-sesiones-medias').value) || 0;
-            tr.precioSesion = parseFloat(document.getElementById('input-precio-sesion').value) || 0;
-            tr.pactoEspecial = document.getElementById('chk-pacto-especial').checked;
-            tr.aporteIndividualCliente = parseFloat(document.getElementById('input-pt-aporte-individual').value) || 0;
-
-            localStorage.setItem('besoul_v5_pts', JSON.stringify(entrenadoresPorCentro));
-            programarGuardadoNubeFinanzas();
-            renderEntrenadoresDelCentro(); recalcularCuadroMandoGlobal();
-            alert("Ficha técnica consolidada.");
-        }
-
-        function agregarEntrenador() {
-            if (!idCentroSeleccionado) return;
-            const id = "pt-" + Date.now();
-            entrenadoresPorCentro[id] = { id: id, centroId: idCentroSeleccionado, nombre: "Nuevo PT", clientes: 0, sesionesMedias: 0, precioSesion: 0, pactoEspecial: false, aporteIndividualCliente: 1 };
-            localStorage.setItem('besoul_v5_pts', JSON.stringify(entrenadoresPorCentro));
-            programarGuardadoNubeFinanzas();
-            abrirPerfilPT(id);
-        }
-
-        function eliminarEntrenadorActivo() {
-            if (!idPTSeleccionado) return;
-            if (confirm("¿Dar de baja este entrenador?")) {
-                delete entrenadoresPorCentro[idPTSeleccionado];
-                localStorage.setItem('besoul_v5_pts', JSON.stringify(entrenadoresPorCentro));
-            programarGuardadoNubeFinanzas();
-                idPTSeleccionado = null;
-                document.getElementById('profile-inputs-area').classList.add('hidden');
-                document.getElementById('action-area').classList.add('hidden');
-                renderEntrenadoresDelCentro(); recalcularCuadroMandoGlobal();
-            }
-        }
-
-        function recalcularCuadroMandoGlobal() {
-            let redFactTotal = 0, redPtNetoTotal = 0, redBsAporteTotal = 0, redClientesTotal = 0;
-            
-            Object.keys(entrenadoresPorCentro).forEach(ptId => {
-                const tr = entrenadoresPorCentro[ptId];
-                const F = tr.sesionesMedias * tr.precioSesion;
-                const factorInd = tr.aporteIndividualCliente !== undefined ? tr.aporteIndividualCliente : 1;
-                const aporteCli = tr.clientes * factorInd;
-
-                let aporteBrutoBS = 0;
-                if (tr.pactoEspecial) {
-                    aporteBrutoBS = 500; if (F > 500) aporteBrutoBS += Math.floor((F - 500) / 500) * 100;
-                } else {
-                    let bs1 = Math.min(F, 1400) * 0.50;
-                    let fT2 = F > 1400 ? Math.min(F, 1900) - 1400 : 0; let bs2 = fT2 * 0.40;
-                    let umbralTecho = 1900 + (100 / 0.30); let bs3 = 0;
-                    if (F > 1900) bs3 = F <= umbralTecho ? (Math.min(F, 2400) - 1900) * 0.30 : 100.00;
-                    
-                    aporteBrutoBS = bs1 + bs2 + bs3;
-                    if (F > umbralTecho) aporteBrutoBS += Math.floor((F - umbralTecho) / 500) * 100;
-                }
-
-                redFactTotal += F;
-                redBsAporteTotal += (aporteBrutoBS + aporteCli);
-                redPtNetoTotal += (F - (aporteBrutoBS + aporteCli));
-                redClientesTotal += tr.clientes;
-            });
-
-            let redCosteCanonesCentros = 0;
-            Object.keys(centrosDeportivos).forEach(cId => {
-                const center = centrosDeportivos[cId];
-                const numeroPTsEnClub = Object.values(entrenadoresPorCentro).filter(p => p.centroId === cId).length;
-                redCosteCanonesCentros += center.canonFijo + (numeroPTsEnClub * center.canonPt);
-            });
-
-            document.getElementById('kpi-fact-total').innerText = `${redFactTotal.toLocaleString('es-ES')} €`;
-            document.getElementById('kpi-pt-total').innerText = `${redPtNetoTotal.toLocaleString('es-ES')} €`;
-            document.getElementById('kpi-bs-total').innerText = `${(redBsAporteTotal - redCosteCanonesCentros).toLocaleString('es-ES')} €`;
-            document.getElementById('kpi-clientes-total').innerText = redClientesTotal;
-            document.getElementById('kpi-canones-total').innerText = `${redCosteCanonesCentros.toLocaleString('es-ES')} €`;
-        }
-
-        function congelarMesEnHistorico() {
-            const mesAño = prompt("Introduce el nombre del periodo (Ej: Junio 2026):");
-            if (!mesAño) return;
-
-            historicoCierres.push({
-                id: Date.now(), periodo: mesAño,
-                fact: parseFloat(document.getElementById('kpi-fact-total').innerText.replace(/\./g, '').replace(',', '.')),
-                pt: parseFloat(document.getElementById('kpi-pt-total').innerText.replace(/\./g, '').replace(',', '.')),
-                bs: parseFloat(document.getElementById('kpi-bs-total').innerText.replace(/\./g, '').replace(',', '.')),
-                clientes: parseInt(document.getElementById('kpi-clientes-total').innerText)
-            });
-            localStorage.setItem('besoul_v5_history', JSON.stringify(historicoCierres));
-            programarGuardadoNubeFinanzas();
-            alert(`Cierre de ${mesAño} archivado.`);
-        }
-
-        function renderHistorico() {
-            const tbody = document.getElementById('tabla-historico-cuerpo'); tbody.innerHTML = '';
-            if (historicoCierres.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="py-4 text-center text-slate-500">No hay cierres archivados.</td></tr>`; return;
-            }
-            historicoCierres.forEach(item => {
-                const tr = document.createElement('tr');
-                tr.className = "border-b border-slate-800/40 hover:bg-slate-900/40 transition";
-                tr.innerHTML = `
-                    <td class="py-3 px-4 font-bold text-white">${item.periodo}</td>
-                    <td class="py-3 px-4 font-semibold">${item.fact.toLocaleString()} €</td>
-                    <td class="py-3 px-4 text-slate-400">${item.pt.toLocaleString()} €</td>
-                    <td class="py-3 px-4 text-emerald-400 font-bold">${item.bs.toLocaleString()} €</td>
-                    <td class="py-3 px-4 text-slate-400">${item.clientes} usuarios</td>
-                    <td class="py-3 px-4"><button onclick="borrarFilaHistorico(${item.id})" class="text-red-500 hover:underline">Borrar</button></td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        function borrarFilaHistorico(id) {
-            if (confirm("¿Eliminar?")) {
-                historicoCierres = historicoCierres.filter(item => item.id !== id);
-                localStorage.setItem('besoul_v5_history', JSON.stringify(historicoCierres));
-            programarGuardadoNubeFinanzas(); renderHistorico();
-            }
-        }
-
-        // Arranque seguro: primero Firebase Auth; después sincronización con Firestore.
-        inicializarFirebaseFinanzasAuth();
-    </script>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-slate-800 pb-3">
+            <div>
+              <h2 class="text-sm font-bold text-white">Resumen en directo desde Agenda</h2>
+              <p class="text-xs text-slate-400 mt-1">Mensualidades activas se facturan completas aunque el cliente pierda clases. Bonos y sesiones sueltas se computan por sesiones agendadas facturables del mes. Las recuperaciones marcadas por administración no suman facturación.</p>
+            </div>
+            <button onclick="cerrarMesActual()" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black px-4 py-2 rounded-lg text-xs uppercase">Cerrar mes / Guardar histórico</button>
+          </div>
+          <div id="centros-resumen" class="grid grid-cols-1 xl:grid-cols-2 gap-4"></div>
+        </div>
+      </section>
+
+      <section id="view-gastos" class="hidden space-y-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-slate-800 pb-3">
+            <div>
+              <h2 class="text-sm font-bold text-white">Gastos generales del mes</h2>
+              <p class="text-xs text-slate-400 mt-1">Estos gastos se descuentan del neto BESOUL para mostrar beneficio neto real.</p>
+            </div>
+            <button onclick="agregarGasto()" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black px-4 py-2 rounded-lg text-xs uppercase">+ Añadir gasto</button>
+          </div>
+          <div id="gastos-list" class="space-y-2"></div>
+        </div>
+      </section>
+
+      <section id="view-historico" class="hidden space-y-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 overflow-x-auto">
+          <div class="mb-4">
+            <h2 class="text-base font-bold text-white">Histórico de cierres mensuales</h2>
+            <p class="text-xs text-slate-400">Cada cierre queda congelado. Si hay un error, administración puede sobrescribir el cierre con un nuevo cierre del mismo mes.</p>
+          </div>
+          <table class="w-full min-w-[760px] text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-slate-800 text-amber-400 font-bold uppercase">
+                <th class="py-3 px-4">Mes</th><th class="py-3 px-4">Facturación</th><th class="py-3 px-4">Neto PT</th><th class="py-3 px-4">BESOUL antes gastos</th><th class="py-3 px-4">Gastos</th><th class="py-3 px-4">Beneficio neto</th><th class="py-3 px-4">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-historico-cuerpo" class="divide-y divide-slate-800/50 text-slate-300"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="view-config" class="hidden space-y-6">
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+              <div><h2 class="text-sm font-bold text-white">Centros y cánones</h2><p class="text-xs text-slate-400">Editables por negociación.</p></div>
+              <button onclick="guardarConfigFinanzas()" class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-2 rounded-lg text-xs font-bold">Guardar</button>
+            </div>
+            <div id="centros-config" class="space-y-3"></div>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+              <div><h2 class="text-sm font-bold text-white">Entrenadores / centro</h2><p class="text-xs text-slate-400">Puedes mover un entrenador de centro desde aquí.</p></div>
+            </div>
+            <div id="trainers-config" class="space-y-2 max-h-[560px] overflow-y-auto pr-1"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const BS_FIREBASE_CONFIG = {
+      apiKey: "AIzaSyAHp7l39BYkgHTVNNwPaaa21tTksBQ94Zo",
+      authDomain: "besoul-suite.firebaseapp.com",
+      projectId: "besoul-suite",
+      storageBucket: "besoul-suite.firebasestorage.app",
+      messagingSenderId: "215142605598",
+      appId: "1:215142605598:web:943629a7a9c50c034a1f0f"
+    };
+
+    const TARIFAS_2026 = {
+      "Individual Plan": { 1: 120, 2: 210, 3: 300, 4: 380, 5: 450 },
+      "Individual Suelta": { 1: 30 }, "Individual Bono": { 10: 270 },
+      "Pareja": { 1: 90, 2: 160, 3: 210, 4: 270, 5: 300 },
+      "Trío": { 1: 70, 2: 120, 3: 150, 4: 170, 5: 200 },
+      "Grupo Reducido Plan": { 1: 45, 2: 80, 3: 110, 4: 130, 5: 150 },
+      "Grupo Reducido Suelta": { 1: 12 }, "Grupo Reducido Bono": { 10: 105 },
+      "Grupo Aire Libre": { 1: 30, 2: 40, 3: 50, 4: 60, 5: 70 },
+      "Miembro Subordinado": { 1: 0 }
+    };
+
+    const DEFAULT_CENTROS = {
+      alfa_prime: { id:'alfa_prime', nombre:'Alfa Prime', canonFijo:0, canonPt:0, activo:true },
+      inacua: { id:'inacua', nombre:'Inacua', canonFijo:0, canonPt:0, activo:true },
+      fantasy: { id:'fantasy', nombre:'Fantasy', canonFijo:0, canonPt:0, activo:true },
+      lagunillas: { id:'lagunillas', nombre:'Lagunillas', canonFijo:0, canonPt:0, activo:true }
+    };
+
+    const DEFAULT_CENTER_BY_TRAINER = {
+      carmen: 'alfa_prime',
+      lillo: 'lagunillas', ruben: 'lagunillas', carmen_palomo: 'lagunillas', lucia: 'lagunillas',
+      miguel_luna: 'fantasy',
+      eu: 'inacua', alvaro: 'inacua', juancarlos: 'inacua', raul: 'inacua', marina: 'inacua', yosvel: 'inacua', lolo: 'inacua', gonzalo: 'inacua', fernando: 'inacua', cristina: 'inacua', miguel: 'inacua'
+    };
+
+    const GASTO_CATEGORIAS = ['Sueldos','Administración','Seguros','Compras','Material deportivo','Redes sociales','Publicidad','Software','Gestoría','Comisiones bancarias','Otros'];
+
+    let usuarioFinanzasEmail = '';
+    let perfilFinanzas = null;
+    let firestore = null;
+    let finanzasRef = null;
+    let agendaRef = null;
+    let usersUnsub = null, agendaUnsub = null, finanzasUnsub = null;
+
+    let dbFinanzas = { centros: {}, trainerSettings: {}, gastos: {}, historico: {} };
+    let agendaData = { clientes:{}, agenda:{}, historicoClientes:{} };
+    let perfilesUsuarios = [];
+    let calculoActual = null;
+    let tabActivo = 'directo';
+
+    function escapeHTML(valor){ return String(valor ?? '').replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch])); }
+    function dinero(num){ return (Number(num)||0).toLocaleString('es-ES',{minimumFractionDigits:2, maximumFractionDigits:2}) + ' €'; }
+    function numero(num){ return (Number(num)||0).toLocaleString('es-ES',{maximumFractionDigits:0}); }
+    function parseNum(v){ const n = parseFloat(String(v ?? '').replace(',','.')); return Number.isNaN(n) ? 0 : n; }
+    function mesActualKey(){ const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+    function etiquetaMes(key){ const [y,m]=String(key).split('-').map(Number); if(!y||!m) return key; return new Date(y,m-1,1).toLocaleDateString('es-ES',{month:'long', year:'numeric'}).toUpperCase(); }
+    function normalizarEstado(valor){ return ['activo','inactivo','baja'].includes(valor) ? valor : 'activo'; }
+    function obtenerMesGastos(){ return mesActualKey(); }
+
+    function getCentros(){ return { ...DEFAULT_CENTROS, ...(dbFinanzas.centros || {}) }; }
+    function trainerKeyPerfil(p){ return String(p.trainerKey || '').trim(); }
+    function nombrePerfil(p){ return String(p.nombre || p.email || p.trainerKey || '').trim(); }
+    function esPerfilOperativo(p){
+      const key = trainerKeyPerfil(p);
+      if (!key) return false;
+      const rol = String(p.rol || '').toLowerCase();
+      if (rol === 'pt') return true;
+      const clientes = (agendaData.clientes && agendaData.clientes[key]) || [];
+      return Array.isArray(clientes) && clientes.length > 0;
+    }
+    function centroTrainer(key, perfil){
+      const settings = dbFinanzas.trainerSettings?.[key] || {};
+      if (settings.centroId) return settings.centroId;
+      if (perfil?.centroId) return perfil.centroId;
+      if (DEFAULT_CENTER_BY_TRAINER[key]) return DEFAULT_CENTER_BY_TRAINER[key];
+      if (String(perfil?.rol || '').toLowerCase() === 'pt') return 'inacua';
+      return 'sin_centro';
+    }
+    function nombreCentro(id){ const c = getCentros()[id]; return c ? c.nombre : (id === 'sin_centro' ? 'Dirección / sin centro' : id || 'Sin centro'); }
+
+    function tarifaBaseFicha(ficha){
+      if (!ficha || !TARIFAS_2026[ficha.modalidad]) return 0;
+      const factor = parseInt(ficha.factor) || 1;
+      return TARIFAS_2026[ficha.modalidad][factor] || TARIFAS_2026[ficha.modalidad][1] || 0;
+    }
+    function multiplicadorFacturacionFicha(ficha){
+      if (!ficha) return 1;
+      if (ficha.modalidad && ficha.modalidad.includes('Pareja')) return 2;
+      if (ficha.modalidad && ficha.modalidad.includes('Trío')) return 3;
+      if (ficha.tipo === 'grupo') return Math.max(1, ficha.integrantesObj ? ficha.integrantesObj.length : 1);
+      return 1;
+    }
+    function obtenerDescuentoFicha(ficha){ const n = parseFloat(String(ficha?.descuentoPct ?? 0).replace(',','.')); return Number.isNaN(n) ? 0 : Math.max(0, Math.min(100,n)); }
+    function calcularFacturacionFichaSimple(ficha){
+      if (!ficha) return 0;
+      if (ficha.modalidad === 'Miembro Subordinado' || ficha.vinculacion) return 0;
+      const base = tarifaBaseFicha(ficha) * multiplicadorFacturacionFicha(ficha);
+      return Math.max(0, base * (1 - obtenerDescuentoFicha(ficha)/100));
+    }
+    function esBonoFicha(ficha){
+      return !!(ficha && ((ficha.tipoCompra === 'Bono') || String(ficha.modalidad || '').includes('Bono')));
+    }
+    function esSueltaFicha(ficha){
+      return !!(ficha && String(ficha.modalidad || '').includes('Suelta'));
+    }
+    function esMensualFicha(ficha){
+      return !!(ficha && !esBonoFicha(ficha) && !esSueltaFicha(ficha));
+    }
+    function esCitaPruebaCRM(obj){
+      return !!(obj && (obj.esPruebaCRM === true || obj.tipoCita === 'pruebaCRM' || obj.noSumaFacturacion === true || obj.modalidad === 'Prueba CRM'));
+    }
+    function esRecuperacionNoFacturable(obj){
+      return !!(obj && (obj.recuperacionNoFacturable === true || obj.noFacturable === true || obj.tipoFacturacion === 'recuperacion_no_facturable'));
+    }
+    function rangoMes(mesKey){
+      const [y,m] = String(mesKey || mesActualKey()).split('-').map(Number);
+      const inicio = new Date(y, (m || 1) - 1, 1);
+      const fin = new Date(y, (m || 1), 1);
+      const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      return { desde: fmt(inicio), hasta: fmt(fin) };
+    }
+    function sesionesAgendadasFacturablesFichaMes(ficha, trainerKey, mesKey){
+      if (!ficha || !trainerKey) return 0;
+      const agendaEntrenador = agendaData.agenda?.[trainerKey] || {};
+      const { desde, hasta } = rangoMes(mesKey);
+      return Object.keys(agendaEntrenador).reduce((total, clave) => {
+        const fecha = clave.split('_')[0];
+        if (fecha < desde || fecha >= hasta) return total;
+        const cita = agendaEntrenador[clave];
+        if (!cita || cita.id !== ficha.id) return total;
+        if (esCitaPruebaCRM(cita) || esRecuperacionNoFacturable(cita)) return total;
+        return total + 1;
+      }, 0);
+    }
+    function calcularFacturacionFichaFinanzas(ficha, trainerKey, mesKey){
+      const importeBase = calcularFacturacionFichaSimple(ficha);
+      if (!ficha || importeBase <= 0) return { total:0, mensual:0, variable:0, sesiones:0, tipo:'sin_importe' };
+      if (esMensualFicha(ficha)) {
+        return { total:importeBase, mensual:importeBase, variable:0, sesiones:0, tipo:'mensual' };
+      }
+      const sesiones = sesionesAgendadasFacturablesFichaMes(ficha, trainerKey, mesKey);
+      const divisor = esBonoFicha(ficha) ? 10 : 1;
+      const valorSesion = importeBase / divisor;
+      const variable = sesiones * valorSesion;
+      return { total:variable, mensual:0, variable, sesiones, tipo: esBonoFicha(ficha) ? 'bono' : 'suelta' };
+    }
+    function contarPersonasFicha(ficha){
+      if (!ficha || ficha.vinculacion) return 0;
+      if (normalizarEstado(ficha.estadoCliente || 'activo') !== 'activo') return 0;
+      if (ficha.tipo === 'grupo') return Math.max(1, ficha.integrantesObj ? ficha.integrantesObj.length : 1);
+      return 1;
+    }
+    function calcularComision(F, pactoEspecial=false, aporteClientes=0){
+      F = Math.max(0, Number(F)||0); aporteClientes = Number(aporteClientes)||0;
+      let bs = 0;
+      if (pactoEspecial) {
+        bs = 500;
+        if (F > 500) bs += Math.floor((F - 500) / 500) * 100;
+      } else {
+        const bs1 = Math.min(F, 1400) * 0.50;
+        const fT2 = F > 1400 ? Math.min(F, 1900) - 1400 : 0;
+        const bs2 = fT2 * 0.40;
+        const umbralTecho = 1900 + (100 / 0.30);
+        let bs3 = 0;
+        if (F > 1900) bs3 = F <= umbralTecho ? (Math.min(F, 2400) - 1900) * 0.30 : 100;
+        bs = bs1 + bs2 + bs3;
+        if (F > umbralTecho) bs += Math.floor((F - umbralTecho) / 500) * 100;
+      }
+      const bsTotal = Math.min(F, Math.max(0, bs + aporteClientes));
+      return { pt: Math.max(0, F - bsTotal), bs: bsTotal };
+    }
+
+    function construirCalculoActual(){
+      const centrosBase = { ...getCentros(), sin_centro: { id:'sin_centro', nombre:'Dirección / sin centro', canonFijo:0, canonPt:0, activo:true } };
+      const centros = {};
+      Object.keys(centrosBase).forEach(id => centros[id] = { ...centrosBase[id], trainers:[], facturacion:0, ptNeto:0, bsBruto:0, clientes:0, canon:0 });
+      const trainers = [];
+      perfilesUsuarios.filter(esPerfilOperativo).forEach(perfil => {
+        const key = trainerKeyPerfil(perfil);
+        const lista = Array.isArray(agendaData.clientes?.[key]) ? agendaData.clientes[key] : [];
+        let facturacion = 0, clientes = 0, fichasActivas = 0, facturacionMensual = 0, facturacionVariable = 0, sesionesBonosSueltas = 0;
+        lista.forEach(f => {
+          if (f?.vinculacion) return;
+          if (normalizarEstado(f.estadoCliente || 'activo') !== 'activo') return;
+          fichasActivas += 1;
+          clientes += contarPersonasFicha(f);
+          const calcFicha = calcularFacturacionFichaFinanzas(f, key, mesActualKey());
+          facturacion += calcFicha.total;
+          facturacionMensual += calcFicha.mensual;
+          facturacionVariable += calcFicha.variable;
+          sesionesBonosSueltas += calcFicha.sesiones;
+        });
+        const settings = dbFinanzas.trainerSettings?.[key] || {};
+        const centroId = centroTrainer(key, perfil);
+        const pactoEspecial = !!settings.pactoEspecial;
+        const aporteCliente = parseNum(settings.aporteIndividualCliente ?? 0) * clientes;
+        const reparto = calcularComision(facturacion, pactoEspecial, aporteCliente);
+        const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, facturacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, fichasActivas, ptNeto:reparto.pt, bsBruto:reparto.bs, pactoEspecial, aporteCliente };
+        trainers.push(row);
+        if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, ptNeto:0, bsBruto:0, clientes:0, canon:0 };
+        centros[centroId].trainers.push(row);
+        centros[centroId].facturacion += facturacion;
+        centros[centroId].ptNeto += reparto.pt;
+        centros[centroId].bsBruto += reparto.bs;
+        centros[centroId].clientes += clientes;
+      });
+      Object.values(centros).forEach(c => {
+        c.canon = (parseNum(c.canonFijo) || 0) + (c.trainers.length * (parseNum(c.canonPt) || 0));
+      });
+      const gastos = (dbFinanzas.gastos?.[mesActualKey()] || []).reduce((s,g)=>s+parseNum(g.importe),0);
+      const total = Object.values(centros).reduce((acc,c)=>{ acc.facturacion+=c.facturacion; acc.ptNeto+=c.ptNeto; acc.bsBruto+=c.bsBruto; acc.canones+=c.canon; acc.clientes+=c.clientes; return acc; }, {facturacion:0,ptNeto:0,bsBruto:0,canones:0,clientes:0});
+      total.gastos = gastos;
+      total.beneficio = total.bsBruto - total.canones - gastos;
+      return { mes: mesActualKey(), centros, trainers, total, generadoEn:new Date().toISOString() };
+    }
+
+    function pintarTodo(){
+      calculoActual = construirCalculoActual();
+      document.getElementById('lbl-mes-activo').innerText = etiquetaMes(calculoActual.mes);
+      document.getElementById('kpi-fact-total').innerText = dinero(calculoActual.total.facturacion);
+      document.getElementById('kpi-pt-total').innerText = dinero(calculoActual.total.ptNeto);
+      document.getElementById('kpi-bs-bruto').innerText = dinero(calculoActual.total.bsBruto);
+      document.getElementById('kpi-canones-total').innerText = dinero(calculoActual.total.canones);
+      document.getElementById('kpi-gastos-total').innerText = dinero(calculoActual.total.gastos);
+      document.getElementById('kpi-beneficio-neto').innerText = dinero(calculoActual.total.beneficio);
+      renderCentrosResumen(); renderGastos(); renderHistorico(); renderConfigCentros(); renderConfigTrainers();
+    }
+
+    function renderCentrosResumen(){
+      const cont = document.getElementById('centros-resumen');
+      const centrosOrden = Object.values(calculoActual.centros).filter(c => c.id !== 'sin_centro' || c.trainers.length > 0);
+      if (!centrosOrden.length) { cont.innerHTML = '<div class="text-xs text-slate-500">Sin datos.</div>'; return; }
+      cont.innerHTML = centrosOrden.map(c => `
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+          <div class="flex justify-between items-start gap-3">
+            <div><h3 class="text-sm font-black text-white">${escapeHTML(c.nombre)}</h3><p class="text-[10px] text-slate-500">${c.trainers.length} entrenador(es) · ${numero(c.clientes)} cliente(s)</p></div>
+            <div class="text-right"><div class="text-[10px] text-slate-500 uppercase font-bold">Neto centro</div><div class="text-sm font-black text-cyan-400">${dinero(c.bsBruto - c.canon)}</div></div>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-center text-[10px]">
+            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase">Facturación</span><b>${dinero(c.facturacion)}</b></div>
+            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase">PT</span><b class="text-amber-400">${dinero(c.ptNeto)}</b></div>
+            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase">BESOUL</span><b class="text-emerald-400">${dinero(c.bsBruto)}</b></div>
+            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase">Canon</span><b class="text-red-400">-${dinero(c.canon)}</b></div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-[11px] min-w-[620px]"><thead class="text-slate-500 uppercase"><tr><th class="text-left py-2">Entrenador</th><th class="text-right">Clientes</th><th class="text-right">Facturación</th><th class="text-right">Neto PT</th><th class="text-right">BESOUL</th></tr></thead><tbody class="divide-y divide-slate-800/60">
+              ${c.trainers.length ? c.trainers.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(t => `<tr><td class="py-2 text-white font-semibold">${escapeHTML(t.nombre)} <span class="text-[9px] text-slate-500">${escapeHTML(t.key)}</span></td><td class="text-right">${numero(t.clientes)}</td><td class="text-right font-mono"><div>${dinero(t.facturacion)}</div><div class="text-[9px] text-slate-500">Mensual ${dinero(t.facturacionMensual||0)} · bonos/sueltas ${dinero(t.facturacionVariable||0)}${t.sesionesBonosSueltas ? ` · ${t.sesionesBonosSueltas} ses.` : ''}</div></td><td class="text-right font-mono text-amber-400">${dinero(t.ptNeto)}</td><td class="text-right font-mono text-emerald-400">${dinero(t.bsBruto)}</td></tr>`).join('') : '<tr><td colspan="5" class="py-3 text-center text-slate-500">Sin entrenadores asignados.</td></tr>'}
+            </tbody></table>
+          </div>
+        </div>`).join('');
+    }
+
+    function renderGastos(){
+      const cont = document.getElementById('gastos-list');
+      const mes = mesActualKey();
+      const lista = dbFinanzas.gastos?.[mes] || [];
+      if (!lista.length) { cont.innerHTML = '<div class="text-xs text-slate-500 text-center py-6">No hay gastos registrados este mes.</div>'; return; }
+      cont.innerHTML = lista.map((g,idx)=>`
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-xs">
+          <select onchange="editarGasto(${idx}, 'categoria', this.value)" class="md:col-span-2 bg-slate-900 border border-slate-800 rounded p-2 text-white">${GASTO_CATEGORIAS.map(cat=>`<option value="${escapeHTML(cat)}" ${g.categoria===cat?'selected':''}>${escapeHTML(cat)}</option>`).join('')}</select>
+          <input onchange="editarGasto(${idx}, 'concepto', this.value)" value="${escapeHTML(g.concepto||'')}" class="md:col-span-4 bg-slate-900 border border-slate-800 rounded p-2 text-white" placeholder="Concepto">
+          <select onchange="editarGasto(${idx}, 'tipo', this.value)" class="md:col-span-2 bg-slate-900 border border-slate-800 rounded p-2 text-white"><option value="fijo" ${g.tipo==='fijo'?'selected':''}>Fijo</option><option value="variable" ${g.tipo==='variable'?'selected':''}>Variable</option></select>
+          <input onchange="editarGasto(${idx}, 'importe', this.value)" value="${escapeHTML(g.importe||0)}" class="md:col-span-2 bg-slate-900 border border-slate-800 rounded p-2 text-white text-right font-mono" placeholder="0">
+          <button onclick="borrarGasto(${idx})" class="md:col-span-2 bg-red-500/10 text-red-400 border border-red-500/30 rounded p-2 font-bold">Borrar</button>
+        </div>`).join('');
+    }
+    function asegurarGastosMes(){ const m=mesActualKey(); if(!dbFinanzas.gastos) dbFinanzas.gastos={}; if(!Array.isArray(dbFinanzas.gastos[m])) dbFinanzas.gastos[m]=[]; return dbFinanzas.gastos[m]; }
+    function agregarGasto(){ asegurarGastosMes().push({categoria:'Otros', concepto:'Nuevo gasto', tipo:'variable', importe:0, creadoEn:new Date().toISOString()}); guardarConfigFinanzas(); }
+    function editarGasto(idx,campo,valor){ const lista=asegurarGastosMes(); if(!lista[idx]) return; lista[idx][campo]=campo==='importe'?parseNum(valor):valor; guardarConfigFinanzas(); }
+    function borrarGasto(idx){ if(!confirm('¿Borrar este gasto?')) return; asegurarGastosMes().splice(idx,1); guardarConfigFinanzas(); }
+
+    function renderHistorico(){
+      const tbody = document.getElementById('tabla-historico-cuerpo');
+      const hist = dbFinanzas.historico || {};
+      const keys = Object.keys(hist).sort().reverse();
+      if (!keys.length) { tbody.innerHTML = '<tr><td colspan="7" class="py-4 text-center text-slate-500">No hay cierres guardados.</td></tr>'; return; }
+      tbody.innerHTML = keys.map(k=>{ const h=hist[k]; const t=h.total||{}; return `<tr class="hover:bg-slate-900/40"><td class="py-3 px-4 font-bold text-white">${escapeHTML(etiquetaMes(k))}</td><td class="py-3 px-4">${dinero(t.facturacion)}</td><td class="py-3 px-4 text-amber-400">${dinero(t.ptNeto)}</td><td class="py-3 px-4 text-emerald-400">${dinero(t.bsBruto)}</td><td class="py-3 px-4 text-red-300">${dinero(t.gastos)}</td><td class="py-3 px-4 text-cyan-400 font-bold">${dinero(t.beneficio)}</td><td class="py-3 px-4"><button onclick="borrarHistorico('${k}')" class="text-red-400 hover:underline">Borrar</button></td></tr>`; }).join('');
+    }
+    function cerrarMesActual(){
+      const key = mesActualKey();
+      const msg = dbFinanzas.historico?.[key] ? `Ya existe un cierre de ${etiquetaMes(key)}. ¿Sobrescribirlo con los datos actuales?` : `¿Guardar cierre de ${etiquetaMes(key)} con los datos actuales?`;
+      if(!confirm(msg)) return;
+      if(!dbFinanzas.historico) dbFinanzas.historico = {};
+      dbFinanzas.historico[key] = JSON.parse(JSON.stringify(calculoActual || construirCalculoActual()));
+      dbFinanzas.historico[key].cerradoPor = usuarioFinanzasEmail;
+      dbFinanzas.historico[key].cerradoEn = new Date().toISOString();
+      guardarConfigFinanzas();
+      alert('Cierre guardado.');
+    }
+    function borrarHistorico(key){ if(!confirm(`¿Borrar cierre de ${etiquetaMes(key)}?`)) return; delete dbFinanzas.historico[key]; guardarConfigFinanzas(); }
+
+    function renderConfigCentros(){
+      const cont=document.getElementById('centros-config'); const centros=getCentros();
+      cont.innerHTML = Object.values(centros).map(c=>`
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-4 gap-2 text-xs items-center">
+          <input value="${escapeHTML(c.nombre)}" onchange="editarCentro('${c.id}','nombre',this.value)" class="bg-slate-900 border border-slate-800 rounded p-2 text-white md:col-span-2">
+          <input value="${escapeHTML(c.canonFijo||0)}" onchange="editarCentro('${c.id}','canonFijo',this.value)" class="bg-slate-900 border border-slate-800 rounded p-2 text-white text-right" placeholder="Canon fijo">
+          <input value="${escapeHTML(c.canonPt||0)}" onchange="editarCentro('${c.id}','canonPt',this.value)" class="bg-slate-900 border border-slate-800 rounded p-2 text-white text-right" placeholder="Canon/PT">
+        </div>`).join('');
+    }
+    function editarCentro(id,campo,valor){ if(!dbFinanzas.centros) dbFinanzas.centros={}; if(!dbFinanzas.centros[id]) dbFinanzas.centros[id]={...(DEFAULT_CENTROS[id]||{id,nombre:id,canonFijo:0,canonPt:0,activo:true})}; dbFinanzas.centros[id][campo] = campo.includes('canon') ? parseNum(valor) : valor; guardarConfigFinanzas(); }
+
+    function renderConfigTrainers(){
+      const cont=document.getElementById('trainers-config'); const centros=getCentros();
+      const opciones = Object.values(centros).map(c=>`<option value="${c.id}">${escapeHTML(c.nombre)}</option>`).join('') + '<option value="sin_centro">Dirección / sin centro</option>';
+      const perfiles = perfilesUsuarios.filter(esPerfilOperativo).sort((a,b)=>nombrePerfil(a).localeCompare(nombrePerfil(b)));
+      cont.innerHTML = perfiles.map(p=>{ const key=trainerKeyPerfil(p); const settings=dbFinanzas.trainerSettings?.[key]||{}; const centro=centroTrainer(key,p); return `
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-xs">
+          <div class="md:col-span-3"><b class="text-white">${escapeHTML(nombrePerfil(p))}</b><div class="text-[10px] text-slate-500">${escapeHTML(key)} · ${escapeHTML(p.rol||'')}</div></div>
+          <select onchange="editarTrainer('${key}','centroId',this.value)" class="md:col-span-3 bg-slate-900 border border-slate-800 rounded p-2 text-white">${opciones.replace(`value="${centro}"`,`value="${centro}" selected`)}</select>
+          <label class="md:col-span-2 flex items-center gap-2 text-slate-300"><input type="checkbox" onchange="editarTrainer('${key}','pactoEspecial',this.checked)" ${settings.pactoEspecial?'checked':''} class="accent-amber-500"> Pacto especial</label>
+          <div class="md:col-span-2"><input value="${escapeHTML(settings.aporteIndividualCliente ?? 0)}" onchange="editarTrainer('${key}','aporteIndividualCliente',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right" placeholder="€/cliente"></div>
+          <div class="md:col-span-2 text-right font-mono text-slate-400">${dinero((calculoActual?.trainers||[]).find(t=>t.key===key)?.facturacion||0)}</div>
+        </div>`; }).join('') || '<div class="text-xs text-slate-500 text-center py-6">Sin entrenadores operativos.</div>';
+    }
+    function editarTrainer(key,campo,valor){ if(!dbFinanzas.trainerSettings) dbFinanzas.trainerSettings={}; if(!dbFinanzas.trainerSettings[key]) dbFinanzas.trainerSettings[key]={}; dbFinanzas.trainerSettings[key][campo] = campo==='aporteIndividualCliente'?parseNum(valor):valor; guardarConfigFinanzas(); }
+
+    function switchTab(tab){
+      tabActivo=tab;
+      ['directo','gastos','historico','config'].forEach(t=>{
+        document.getElementById('view-'+t).className = t===tab ? 'space-y-6' : 'hidden space-y-6';
+        document.getElementById('btn-tab-'+t).className = t===tab ? 'px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950 shadow' : 'px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white bg-slate-900/50 border border-slate-800';
+      });
+      pintarTodo();
+    }
+
+    function guardarConfigFinanzas(){
+      if(!finanzasRef) return;
+      const payload = { ...dbFinanzas, actualizadoEn: firebase.firestore.FieldValue.serverTimestamp(), actualizadoPor: usuarioFinanzasEmail };
+      finanzasRef.set(payload,{merge:true}).catch(err=>{ console.error(err); alert('Error guardando Finanzas.'); });
+      pintarTodo();
+    }
+    async function refrescarTodoManual(){ await cargarInstantaneas(); pintarTodo(); }
+
+    async function cargarInstantaneas(){
+      const [finSnap, agSnap, usersSnap] = await Promise.all([finanzasRef.get(), agendaRef.get(), firestore.collection('besoulUsers').get()]);
+      if (finSnap.exists) dbFinanzas = normalizarFinanzas(finSnap.data());
+      else dbFinanzas = normalizarFinanzas({});
+      agendaData = agSnap.exists ? (agSnap.data() || {}) : {clientes:{}};
+      perfilesUsuarios = usersSnap.docs.map(d=>({email:d.id, ...d.data()})).filter(p=>p.activo !== false);
+    }
+    function normalizarFinanzas(data){
+      const res = { centros:{}, trainerSettings:{}, gastos:{}, historico:{}, ...(data || {}) };
+      res.centros = { ...(data?.centros || {}) };
+      Object.keys(DEFAULT_CENTROS).forEach(id=>{ if(!res.centros[id]) res.centros[id] = {...DEFAULT_CENTROS[id]}; else res.centros[id] = {...DEFAULT_CENTROS[id], ...res.centros[id]}; });
+      res.trainerSettings = res.trainerSettings || {};
+      res.gastos = res.gastos || {};
+      res.historico = res.historico || {};
+      return res;
+    }
+
+    function ejecutarLogin(){
+      const email=document.getElementById('login-user').value.trim().toLowerCase(); const pass=document.getElementById('login-pass').value.trim();
+      if(!email || !pass){ alert('Introduce email y contraseña.'); return; }
+      firebase.auth().signInWithEmailAndPassword(email,pass).catch(err=>{ console.error(err); alert('Acceso denegado. Revisa usuario, contraseña y rol admin.'); });
+    }
+    function logout(){ firebase.auth().signOut().finally(()=>window.location.reload()); }
+
+    function inicializar(){
+      if(!firebase.apps.length) firebase.initializeApp(BS_FIREBASE_CONFIG);
+      firestore=firebase.firestore(); finanzasRef=firestore.collection('besoulSuite').doc('finanzas'); agendaRef=firestore.collection('besoulSuite').doc('agenda');
+      firebase.auth().onAuthStateChanged(async user=>{
+        if(!user){ document.getElementById('auth-screen').classList.remove('hidden'); document.getElementById('app-content').classList.add('hidden'); return; }
+        try{
+          usuarioFinanzasEmail=String(user.email||'').toLowerCase();
+          const prof=await firestore.collection('besoulUsers').doc(usuarioFinanzasEmail).get();
+          if(!prof.exists || prof.data().activo===false || prof.data().rol!=='admin'){
+            await firebase.auth().signOut(); alert('Finanzas solo está disponible para administradores activos.'); return;
+          }
+          perfilFinanzas={email:usuarioFinanzasEmail,...prof.data()};
+          document.getElementById('lbl-usuario-logeado').innerText=perfilFinanzas.nombre||usuarioFinanzasEmail;
+          document.getElementById('auth-screen').classList.add('hidden'); document.getElementById('app-content').classList.remove('hidden');
+          await cargarInstantaneas(); pintarTodo();
+          if(finanzasUnsub) finanzasUnsub(); if(agendaUnsub) agendaUnsub(); if(usersUnsub) usersUnsub();
+          finanzasUnsub=finanzasRef.onSnapshot(s=>{ if(s.exists){ dbFinanzas=normalizarFinanzas(s.data()); pintarTodo(); }});
+          agendaUnsub=agendaRef.onSnapshot(s=>{ agendaData=s.exists?(s.data()||{}):{clientes:{}}; pintarTodo(); });
+          usersUnsub=firestore.collection('besoulUsers').onSnapshot(s=>{ perfilesUsuarios=s.docs.map(d=>({email:d.id,...d.data()})).filter(p=>p.activo!==false); pintarTodo(); });
+        }catch(err){ console.error(err); alert('Error cargando Finanzas. Revisa permisos/reglas.'); }
+      });
+    }
+
+    inicializar();
+  </script>
 </body>
 </html>
