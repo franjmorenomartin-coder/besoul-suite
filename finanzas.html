@@ -173,11 +173,15 @@
     };
 
     const DEFAULT_CENTER_BY_TRAINER = {
+      // Asignación oficial actual. Todo lo que no esté aquí cae por defecto en Inacua, salvo Fran, que se excluye de Finanzas.
       carmen: 'alfa_prime',
-      lillo: 'lagunillas', ruben: 'lagunillas', carmen_palomo: 'lagunillas', lucia: 'lagunillas',
+      lillo: 'lagunillas', miguel_fenech: 'lagunillas', ruben: 'lagunillas', carmen_palomo: 'lagunillas', lucia: 'lagunillas',
       miguel_luna: 'fantasy',
-      eu: 'inacua', alvaro: 'inacua', juancarlos: 'inacua', raul: 'inacua', marina: 'inacua', yosvel: 'inacua', lolo: 'inacua', gonzalo: 'inacua', fernando: 'inacua', cristina: 'inacua', miguel: 'inacua'
+      bea: 'inacua', soraya: 'inacua', eu: 'inacua', alvaro: 'inacua', juancarlos: 'inacua', raul: 'inacua', marina: 'inacua', yosvel: 'inacua', lolo: 'inacua', gonzalo: 'inacua', fernando: 'inacua', cristina: 'inacua', miguel: 'lagunillas'
     };
+    const TRAINERS_EXCLUIDOS_FINANZAS = ['fran', 'fran_moreno', 'franmoreno'];
+    function centrosValidos(){ return Object.keys(DEFAULT_CENTROS).concat(['sin_centro']); }
+    function centroValido(id){ return centrosValidos().includes(String(id || '')); }
 
     const GASTO_CATEGORIAS = ['Sueldos','Administración','Seguros','Compras','Material deportivo','Redes sociales','Publicidad','Software','Gestoría','Comisiones bancarias','Otros'];
 
@@ -203,12 +207,19 @@
     function normalizarEstado(valor){ return ['activo','inactivo','baja'].includes(valor) ? valor : 'activo'; }
     function obtenerMesGastos(){ return mesActualKey(); }
 
-    function getCentros(){ return { ...DEFAULT_CENTROS, ...(dbFinanzas.centros || {}) }; }
+    function getCentros(){
+      // Evita duplicados antiguos de simulaciones. Finanzas solo debe trabajar con los 4 centros oficiales.
+      const res = {};
+      Object.keys(DEFAULT_CENTROS).forEach(id => {
+        res[id] = { ...DEFAULT_CENTROS[id], ...((dbFinanzas.centros || {})[id] || {}) };
+      });
+      return res;
+    }
     function trainerKeyPerfil(p){ return String(p.trainerKey || '').trim(); }
     function nombrePerfil(p){ return String(p.nombre || p.email || p.trainerKey || '').trim(); }
     function esPerfilOperativo(p){
       const key = trainerKeyPerfil(p);
-      if (!key) return false;
+      if (!key || TRAINERS_EXCLUIDOS_FINANZAS.includes(key)) return false;
       const rol = String(p.rol || '').toLowerCase();
       if (rol === 'pt') return true;
       const clientes = (agendaData.clientes && agendaData.clientes[key]) || [];
@@ -216,9 +227,17 @@
     }
     function centroTrainer(key, perfil){
       const settings = dbFinanzas.trainerSettings?.[key] || {};
-      if (settings.centroId) return settings.centroId;
-      if (perfil?.centroId) return perfil.centroId;
+      const nombre = nombrePerfil(perfil).toLowerCase();
+      // Primero respetamos una asignación manual, pero solo si apunta a un centro oficial.
+      if (settings.centroId && centroValido(settings.centroId) && settings.centroId !== 'sin_centro') return settings.centroId;
+      // Después, asignación oficial por trainerKey.
       if (DEFAULT_CENTER_BY_TRAINER[key]) return DEFAULT_CENTER_BY_TRAINER[key];
+      // Compatibilidad por si Miguel Fenech/Lillo fue creado con otra clave.
+      if ((key === 'miguel' || nombre.includes('fenech') || nombre.includes('lillo')) && !nombre.includes('luna')) return 'lagunillas';
+      if (nombre.includes('miguel') && nombre.includes('luna')) return 'fantasy';
+      // Si el perfil de Firestore tiene centro oficial, lo usamos.
+      if (perfil?.centroId && centroValido(perfil.centroId) && perfil.centroId !== 'sin_centro') return perfil.centroId;
+      // Resto de entrenadores actuales: Inacua.
       if (String(perfil?.rol || '').toLowerCase() === 'pt') return 'inacua';
       return 'sin_centro';
     }
@@ -487,9 +506,18 @@
     }
     function normalizarFinanzas(data){
       const res = { centros:{}, trainerSettings:{}, gastos:{}, historico:{}, ...(data || {}) };
-      res.centros = { ...(data?.centros || {}) };
-      Object.keys(DEFAULT_CENTROS).forEach(id=>{ if(!res.centros[id]) res.centros[id] = {...DEFAULT_CENTROS[id]}; else res.centros[id] = {...DEFAULT_CENTROS[id], ...res.centros[id]}; });
+      // Limpieza lógica: solo conservamos los centros oficiales para evitar duplicados de simulaciones antiguas.
+      const centrosLimpios = {};
+      Object.keys(DEFAULT_CENTROS).forEach(id => {
+        centrosLimpios[id] = { ...DEFAULT_CENTROS[id], ...((data?.centros || {})[id] || {}) };
+      });
+      res.centros = centrosLimpios;
       res.trainerSettings = res.trainerSettings || {};
+      Object.keys(res.trainerSettings).forEach(key => {
+        if (res.trainerSettings[key]?.centroId && !centroValido(res.trainerSettings[key].centroId)) {
+          delete res.trainerSettings[key].centroId;
+        }
+      });
       res.gastos = res.gastos || {};
       res.historico = res.historico || {};
       return res;
