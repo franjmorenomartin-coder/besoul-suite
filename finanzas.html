@@ -184,11 +184,11 @@
     const TRAINERS_EXCLUIDOS_FINANZAS = ['fran', 'fran_moreno', 'franmoreno'];
     const TRAINERS_ADMIN_CON_CARTERA = ['bea', 'soraya'];
     const SISTEMAS_PAGO = {
-      auto: 'Automático por antigüedad',
-      base: 'Base por tramos',
-      bonus_15: 'Base + bonus 15%',
-      canon_1000: 'Canon fijo 1.000 €',
-      coordinador: 'Coordinador personalizado'
+      auto: 'Automático por rango Besoul',
+      rango1: 'Rango I · 0-1 año',
+      rango2: 'Rango II · desde 1 año',
+      rango3: 'Rango III · canon 1.000 €',
+      coordinador: 'Rango IV · coordinador de sede'
     };
     function centrosValidos(){ return Object.keys(DEFAULT_CENTROS).concat(['sin_centro']); }
     function centroValido(id){ return centrosValidos().includes(String(id || '')); }
@@ -326,21 +326,38 @@
       if (ficha.tipo === 'grupo') return Math.max(1, ficha.integrantesObj ? ficha.integrantesObj.length : 1);
       return 1;
     }
-    function calcularComisionBase(F, pactoEspecial=false, aporteClientes=0){
-      F = Math.max(0, Number(F)||0); aporteClientes = Number(aporteClientes)||0;
-      let bs = 0;
-      if (pactoEspecial) {
-        bs = 500;
-        if (F > 500) bs += Math.floor((F - 500) / 500) * 100;
-      } else {
-        const t1 = Math.min(F, 1400);
-        const t2 = F > 1400 ? Math.min(F, 1900) - 1400 : 0;
-        const t3 = F > 1900 ? Math.min(F, 2400) - 1900 : 0;
-        const t4 = F > 2400 ? F - 2400 : 0;
-        bs = (t1 * 0.50) + (t2 * 0.40) + (t3 * 0.20) + (t4 * 0.20);
-      }
+    function calcularRepartoPorTramosBesoul(F, rango='rango1', aporteClientes=0){
+      F = Math.max(0, Number(F)||0);
+      aporteClientes = Number(aporteClientes)||0;
+      const esRango2 = rango === 'rango2';
+      const tercerTramoBsPct = esRango2 ? 0.15 : 0.30;
+      const tercerTramoPtPct = esRango2 ? 0.85 : 0.70;
+      const t1 = Math.min(F, 1400);
+      const t2 = F > 1400 ? Math.min(F, 1900) - 1400 : 0;
+      const t3 = F > 1900 ? F - 1900 : 0;
+      let bs = (t1 * 0.50) + (t2 * 0.40) + (t3 * tercerTramoBsPct);
       const bsTotal = Math.min(F, Math.max(0, bs + aporteClientes));
-      return { pt: Math.max(0, F - bsTotal), bs: bsTotal, bonus:0, sistemaAplicado: pactoEspecial ? 'Pacto especial' : 'Base por tramos' };
+      return {
+        pt: Math.max(0, F - bsTotal),
+        bs: bsTotal,
+        bonus: 0,
+        coordinacionBonus: 0,
+        sistemaAplicado: esRango2 ? 'Rango II · 50/50 · 60/40 · 85/15' : 'Rango I · 50/50 · 60/40 · 70/30',
+        repartoDetalle: esRango2 ? `0-1.400: 50/50 · 1.400-1.900: 60/40 · +1.900: 85/15 PT/Besoul` : `0-1.400: 50/50 · 1.400-1.900: 60/40 · +1.900: 70/30 PT/Besoul`,
+        tercerTramoPtPct,
+        tercerTramoBsPct
+      };
+    }
+    function calcularComisionBase(F, pactoEspecial=false, aporteClientes=0){
+      // Compatibilidad: si hay pacto especial antiguo marcado, se mantiene como excepción manual.
+      F = Math.max(0, Number(F)||0); aporteClientes = Number(aporteClientes)||0;
+      if (pactoEspecial) {
+        let bs = 500;
+        if (F > 500) bs += Math.floor((F - 500) / 500) * 100;
+        const bsTotal = Math.min(F, Math.max(0, bs + aporteClientes));
+        return { pt: Math.max(0, F - bsTotal), bs: bsTotal, bonus:0, coordinacionBonus:0, sistemaAplicado: 'Pacto especial', repartoDetalle:'Pacto fijo alternativo' };
+      }
+      return calcularRepartoPorTramosBesoul(F, 'rango1', aporteClientes);
     }
     function fechaAltaSettings(settings){
       const raw = String(settings?.fechaAlta || '').trim();
@@ -373,37 +390,82 @@
         return f && f > fechaAlta;
       }).length;
     }
+    function contarActivosCentroParaCoordinacion(key, centroId){
+      return perfilesUsuarios.filter(esPerfilOperativo).filter(p => {
+        const k = trainerKeyPerfil(p);
+        if (!k || k === key) return false;
+        return centroTrainer(k, p) === centroId;
+      }).length;
+    }
+    function rangoAutomaticoBesoul(antiguedad){
+      if (antiguedad >= 3) return 'rango3';
+      if (antiguedad >= 1) return 'rango2';
+      return 'rango1';
+    }
+    function etiquetaRangoBesoul(rango){
+      return SISTEMAS_PAGO[rango] || SISTEMAS_PAGO.rango1;
+    }
     function calcularComisionAvanzada(F, settings={}, contexto={}){
       F = Math.max(0, Number(F)||0);
       const pactoEspecial = !!settings.pactoEspecial;
       const aporteClientes = Number(contexto.aporteClientes)||0;
-      const base = calcularComisionBase(F, pactoEspecial, aporteClientes);
       const fechaAlta = fechaAltaSettings(settings);
       const antiguedad = yearsBetween(fechaAlta);
       const posteriores = contarPosterioresCentro(contexto.key, contexto.centroId, fechaAlta);
-      const canonObjetivo = parseNum(settings.canonObjetivo ?? 1000) || 1000;
-      const bonusPct = parseNum(settings.bonusPct ?? 15) || 15;
       const canonFijo = parseNum(settings.canonFijoIndependiente ?? 1000) || 1000;
-      const sistema = settings.sistemaPago || 'auto';
-      const elegibleBonus = !!fechaAlta && antiguedad >= 1 && base.bs >= canonObjetivo;
-      const elegibleCanon = !!fechaAlta && antiguedad >= 3 && posteriores >= 3;
-      const sistemaEfectivo = sistema === 'auto' ? (elegibleCanon ? 'canon_1000' : (elegibleBonus ? 'bonus_15' : 'base')) : sistema;
-      let res = { ...base, sistemaAplicado: SISTEMAS_PAGO[sistemaEfectivo] || 'Base por tramos', fechaAlta: settings.fechaAlta || '', antiguedad, posteriores, elegibleBonus, elegibleCanon };
-      if (sistemaEfectivo === 'bonus_15') {
-        const bonus = F * (bonusPct / 100);
-        res = { ...res, bonus, pt: Math.max(0, base.pt + bonus), bs: Math.max(0, base.bs - bonus), sistemaAplicado: `Base + bonus ${bonusPct}%` };
-      }
-      if (sistemaEfectivo === 'canon_1000') {
+      const bonusCoordPorPt = parseNum(settings.coordBonusPorPt ?? 50) || 50;
+      const coordMaxPts = parseNum(settings.coordMaxPts ?? 5) || 5;
+      const coordMaxBonus = parseNum(settings.coordMaxBonus ?? 250) || 250;
+      let sistema = settings.sistemaPago || 'auto';
+      // Compatibilidad con configuraciones antiguas guardadas en Firestore.
+      if (sistema === 'base') sistema = 'rango1';
+      if (sistema === 'bonus_15') sistema = 'rango2';
+      if (sistema === 'canon_1000') sistema = 'rango3';
+      const coordinadorAutorizado = !!settings.coordinadorAutorizado || sistema === 'coordinador';
+      const elegibleRango2 = !!fechaAlta && antiguedad >= 1;
+      const elegibleRango3 = !!fechaAlta && antiguedad >= 3;
+      const elegibleCoordinador = !!fechaAlta && antiguedad >= 4 && posteriores >= 3;
+
+      let sistemaEfectivo = sistema;
+      if (sistema === 'auto') sistemaEfectivo = rangoAutomaticoBesoul(antiguedad);
+      if ((sistema === 'auto' && coordinadorAutorizado && elegibleCoordinador) || sistema === 'coordinador') sistemaEfectivo = 'coordinador';
+
+      let res;
+      if (pactoEspecial && sistemaEfectivo !== 'coordinador') {
+        res = calcularComisionBase(F, true, aporteClientes);
+      } else if (sistemaEfectivo === 'rango2') {
+        res = calcularRepartoPorTramosBesoul(F, 'rango2', aporteClientes);
+      } else if (sistemaEfectivo === 'rango3') {
         const bs = Math.min(F, canonFijo);
-        res = { ...res, bonus:0, bs, pt: Math.max(0, F - bs), sistemaAplicado: `Canon fijo ${dinero(canonFijo)}` };
+        res = { pt: Math.max(0, F - bs), bs, bonus:0, coordinacionBonus:0, sistemaAplicado:`Rango III · canon ${dinero(canonFijo)}`, repartoDetalle:'Canon fijo Besoul; el resto queda para el PT' };
+      } else if (sistemaEfectivo === 'coordinador') {
+        const ptsActivosCentro = contarActivosCentroParaCoordinacion(contexto.key, contexto.centroId);
+        const ptsComputables = Math.min(Math.max(0, ptsActivosCentro), coordMaxPts);
+        const coordinacionBonus = Math.min(coordMaxBonus, ptsComputables * bonusCoordPorPt);
+        const canonReducido = Math.max(0, canonFijo - coordinacionBonus);
+        const bs = Math.min(F, canonReducido);
+        res = { pt: Math.max(0, F - bs), bs, bonus:0, coordinacionBonus, ptsActivosCentro, sistemaAplicado:`Rango IV · coordinador · canon ${dinero(canonReducido)}`, repartoDetalle:`Canon ${dinero(canonFijo)} - coordinación ${dinero(coordinacionBonus)} (${ptsComputables} PT activos computables)` };
+      } else {
+        res = calcularRepartoPorTramosBesoul(F, 'rango1', aporteClientes);
       }
-      if (sistemaEfectivo === 'coordinador') {
-        const canon = parseNum(settings.coordCanon ?? 1000) || 0;
-        const pctExtra = Math.max(0, Math.min(100, parseNum(settings.coordBesoulPct ?? 0)));
-        const bs = Math.min(F, canon + Math.max(0, F - canon) * (pctExtra / 100));
-        res = { ...res, bonus:0, bs, pt: Math.max(0, F - bs), sistemaAplicado: `Coordinador · canon ${dinero(canon)} + ${pctExtra}% extra` };
-      }
-      return res;
+
+      const rangoTeorico = elegibleCoordinador && coordinadorAutorizado ? 'coordinador' : rangoAutomaticoBesoul(antiguedad);
+      return {
+        ...res,
+        fechaAlta: settings.fechaAlta || '',
+        antiguedad,
+        posteriores,
+        elegibleRango2,
+        elegibleRango3,
+        elegibleCoordinador,
+        coordinadorAutorizado,
+        rangoTeorico,
+        sistemaEfectivo,
+        canonFijo,
+        coordMaxBonus,
+        bonusCoordPorPt,
+        coordMaxPts
+      };
     }
 
     function construirCalculoActual(){
@@ -431,7 +493,7 @@
         const pactoEspecial = !!settings.pactoEspecial;
         const aporteCliente = parseNum(settings.aporteIndividualCliente ?? 0) * clientes;
         const reparto = calcularComisionAvanzada(facturacion, settings, { key, centroId, aporteClientes: aporteCliente });
-        const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, facturacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, fichasActivas, ptNeto:reparto.pt, bsBruto:reparto.bs, pactoEspecial, aporteCliente, bonus:reparto.bonus || 0, sistemaAplicado:reparto.sistemaAplicado, fechaAlta:reparto.fechaAlta, antiguedad:reparto.antiguedad, posteriores:reparto.posteriores, elegibleBonus:reparto.elegibleBonus, elegibleCanon:reparto.elegibleCanon };
+        const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, facturacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, fichasActivas, ptNeto:reparto.pt, bsBruto:reparto.bs, pactoEspecial, aporteCliente, bonus:reparto.bonus || 0, coordinacionBonus:reparto.coordinacionBonus || 0, sistemaAplicado:reparto.sistemaAplicado, repartoDetalle:reparto.repartoDetalle || '', fechaAlta:reparto.fechaAlta, antiguedad:reparto.antiguedad, posteriores:reparto.posteriores, elegibleRango2:reparto.elegibleRango2, elegibleRango3:reparto.elegibleRango3, elegibleCoordinador:reparto.elegibleCoordinador, coordinadorAutorizado:reparto.coordinadorAutorizado, sistemaEfectivo:reparto.sistemaEfectivo, ptsActivosCentro:reparto.ptsActivosCentro || 0 };
         trainers.push(row);
         if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, ptNeto:0, bsBruto:0, clientes:0, canon:0 };
         centros[centroId].trainers.push(row);
@@ -469,29 +531,30 @@
       const alertas = [];
       perfilesUsuarios.filter(esPerfilOperativo).forEach(p => {
         const key = trainerKeyPerfil(p);
-        const nombre = nombrePerfil(p);
         const settings = dbFinanzas.trainerSettings?.[key] || {};
+        const nombre = nombrePerfil(p);
         const fecha = fechaAltaSettings(settings);
         const centroId = centroTrainer(key, p);
+        const row = (calculoActual?.trainers || []).find(t => t.key === key);
         if (!fecha) {
-          alertas.push(`⚠️ ${escapeHTML(nombre)} no tiene fecha de alta configurada. No se podrán calcular avisos de 1 año / 3 años.`);
+          alertas.push(`⚠️ ${escapeHTML(nombre)} no tiene fecha de alta configurada. No se podrán calcular rangos ni avisos.`);
           return;
         }
         const d1 = daysUntilAnniversary(fecha, 1);
         const d3 = daysUntilAnniversary(fecha, 3);
+        const d4 = daysUntilAnniversary(fecha, 4);
         const posteriores = contarPosterioresCentro(key, centroId, fecha);
-        const row = (calculoActual?.trainers || []).find(t => t.key === key);
-        if (d1 !== null && d1 > 0 && d1 <= 60) alertas.push(`⏳ ${escapeHTML(nombre)} cumple 1 año en ${d1} días. Revisar posible bonus del 15%.`);
-        if (d1 !== null && d1 <= 0 && row?.elegibleBonus) alertas.push(`✅ ${escapeHTML(nombre)} cumple condiciones de bonus 15%: 1 año y canon BESOUL ≥ objetivo.`);
-        if (d3 !== null && d3 > 0 && d3 <= 90) alertas.push(`⏳ ${escapeHTML(nombre)} cumple 3 años en ${d3} días. Entrenadores incorporados después en ${escapeHTML(nombreCentro(centroId))}: ${posteriores}/3.`);
-        if (d3 !== null && d3 <= 0 && posteriores < 3) alertas.push(`ℹ️ ${escapeHTML(nombre)} supera 3 años, pero solo hay ${posteriores}/3 entrenadores posteriores en ${escapeHTML(nombreCentro(centroId))}.`);
-        if (d3 !== null && d3 <= 0 && posteriores >= 3) alertas.push(`✅ ${escapeHTML(nombre)} cumple condición de canon fijo: 3 años + ${posteriores} entrenadores posteriores en ${escapeHTML(nombreCentro(centroId))}.`);
+        if (d1 !== null && d1 > 0 && d1 <= 60) alertas.push(`⏳ ${escapeHTML(nombre)} cumple 1 año en ${d1} días. Preparar paso a Rango II.`);
+        if (d1 !== null && d1 <= 0 && d3 > 0) alertas.push(`✅ ${escapeHTML(nombre)} está en Rango II por antigüedad: 50/50 · 60/40 · 85/15.`);
+        if (d3 !== null && d3 > 0 && d3 <= 90) alertas.push(`⏳ ${escapeHTML(nombre)} cumple 3 años en ${d3} días. Revisar paso a Rango III canon 1.000 €.`);
+        if (d3 !== null && d3 <= 0 && d4 > 0) alertas.push(`✅ ${escapeHTML(nombre)} cumple Rango III: canon fijo 1.000 €.`);
+        if (d4 !== null && d4 > 0 && d4 <= 120) alertas.push(`⏳ ${escapeHTML(nombre)} cumple 4 años en ${d4} días. Revisar posible coordinación si hay 3 PT posteriores.`);
+        if (d4 !== null && d4 <= 0 && posteriores < 3) alertas.push(`ℹ️ ${escapeHTML(nombre)} cumple antigüedad para Rango IV, pero solo tiene ${posteriores}/3 PT posteriores en ${escapeHTML(nombreCentro(centroId))}.`);
+        if (d4 !== null && d4 <= 0 && posteriores >= 3 && !settings.coordinadorAutorizado && settings.sistemaPago !== 'coordinador') alertas.push(`⭐ ${escapeHTML(nombre)} cumple condición para posible Coordinador/a de Sede: 4 años + ${posteriores} PT posteriores en ${escapeHTML(nombreCentro(centroId))}. Falta autorización de gerencia.`);
+        if ((settings.coordinadorAutorizado || settings.sistemaPago === 'coordinador') && row?.sistemaEfectivo === 'coordinador') alertas.push(`🏅 ${escapeHTML(nombre)} tiene Rango IV aplicado. Reducción coordinación: ${dinero(row.coordinacionBonus || 0)}.`);
       });
-      if (!alertas.length) { box.classList.add('hidden'); box.innerHTML=''; return; }
-      box.classList.remove('hidden');
-      box.innerHTML = `<div class="font-black uppercase text-amber-400 mb-2">Alertas carrera PT</div><div class="space-y-1">${alertas.slice(0,8).map(a=>`<div>${a}</div>`).join('')}</div>${alertas.length>8?`<div class="text-slate-400 mt-2">+${alertas.length-8} alertas más en Centros / PT.</div>`:''}`;
+      box.innerHTML = alertas.length ? alertas.map(a=>`<div class="text-xs p-2 bg-slate-950 border border-slate-800 rounded text-slate-300">${a}</div>`).join('') : '<div class="text-xs text-slate-500 text-center py-4">Sin alertas de carrera.</div>';
     }
-
     function renderCentrosResumen(){
       const cont = document.getElementById('centros-resumen');
       const centrosOrden = Object.values(calculoActual.centros).filter(c => c.id !== 'sin_centro' || c.trainers.length > 0);
@@ -510,7 +573,7 @@
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-[11px] min-w-[620px]"><thead class="text-slate-500 uppercase"><tr><th class="text-left py-2">Entrenador</th><th class="text-right">Clientes</th><th class="text-right">Facturación</th><th class="text-right">Neto PT</th><th class="text-right">BESOUL</th></tr></thead><tbody class="divide-y divide-slate-800/60">
-              ${c.trainers.length ? c.trainers.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(t => `<tr><td class="py-2 text-white font-semibold"><div>${escapeHTML(t.nombre)} <span class="text-[9px] text-slate-500">${escapeHTML(t.key)}</span></div><div class="text-[9px] text-cyan-400">${escapeHTML(t.sistemaAplicado || 'Base por tramos')}</div></td><td class="text-right">${numero(t.clientes)}</td><td class="text-right font-mono"><div>${dinero(t.facturacion)}</div><div class="text-[9px] text-slate-500">Mensual ${dinero(t.facturacionMensual||0)} · bonos/sueltas ${dinero(t.facturacionVariable||0)}${t.sesionesBonosSueltas ? ` · ${t.sesionesBonosSueltas} ses.` : ''}${t.bonus ? ` · bonus ${dinero(t.bonus)}` : ''}</div></td><td class="text-right font-mono text-amber-400">${dinero(t.ptNeto)}</td><td class="text-right font-mono text-emerald-400">${dinero(t.bsBruto)}</td></tr>`).join('') : '<tr><td colspan="5" class="py-3 text-center text-slate-500">Sin entrenadores asignados.</td></tr>'}
+              ${c.trainers.length ? c.trainers.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(t => `<tr><td class="py-2 text-white font-semibold"><div>${escapeHTML(t.nombre)} <span class="text-[9px] text-slate-500">${escapeHTML(t.key)}</span></div><div class="text-[9px] text-cyan-400">${escapeHTML(t.sistemaAplicado || 'Base por tramos')}</div></td><td class="text-right">${numero(t.clientes)}</td><td class="text-right font-mono"><div>${dinero(t.facturacion)}</div><div class="text-[9px] text-slate-500">Mensual ${dinero(t.facturacionMensual||0)} · bonos/sueltas ${dinero(t.facturacionVariable||0)}${t.sesionesBonosSueltas ? ` · ${t.sesionesBonosSueltas} ses.` : ''}${t.coordinacionBonus ? ` · coord. ${dinero(t.coordinacionBonus)}` : ''}</div></td><td class="text-right font-mono text-amber-400">${dinero(t.ptNeto)}</td><td class="text-right font-mono text-emerald-400">${dinero(t.bsBruto)}</td></tr>`).join('') : '<tr><td colspan="5" class="py-3 text-center text-slate-500">Sin entrenadores asignados.</td></tr>'}
             </tbody></table>
           </div>
         </div>`).join('');
@@ -574,7 +637,9 @@
       cont.innerHTML = perfiles.map(p=>{
         const key=trainerKeyPerfil(p); const settings=dbFinanzas.trainerSettings?.[key]||{}; const centro=centroTrainer(key,p);
         const row=(calculoActual?.trainers||[]).find(t=>t.key===key) || {};
+        const sistemaSeleccionado = settings.sistemaPago === 'base' ? 'rango1' : (settings.sistemaPago === 'bonus_15' ? 'rango2' : (settings.sistemaPago === 'canon_1000' ? 'rango3' : (settings.sistemaPago || 'auto')));
         const posteriores = contarPosterioresCentro(key, centro, fechaAltaSettings(settings));
+        const activosCentroCoord = contarActivosCentroParaCoordinacion(key, centro);
         return `
         <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-3 text-xs">
           <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
@@ -586,18 +651,20 @@
           </div>
           <div class="grid grid-cols-2 md:grid-cols-7 gap-2 items-end">
             <label class="flex items-center gap-2 text-slate-300 bg-slate-900 border border-slate-800 rounded p-2"><input type="checkbox" onchange="editarTrainer('${key}','pactoEspecial',this.checked)" ${settings.pactoEspecial?'checked':''} class="accent-amber-500"> Pacto especial</label>
+            <label class="flex items-center gap-2 text-slate-300 bg-slate-900 border border-slate-800 rounded p-2"><input type="checkbox" onchange="editarTrainer('${key}','coordinadorAutorizado',this.checked)" ${settings.coordinadorAutorizado?'checked':''} class="accent-emerald-500"> Coord. autorizado</label>
             <div><label class="text-[10px] text-slate-500 block mb-1">€/cliente extra</label><input value="${escapeHTML(settings.aporteIndividualCliente ?? 0)}" onchange="editarTrainer('${key}','aporteIndividualCliente',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right"></div>
-            <div><label class="text-[10px] text-slate-500 block mb-1">Canon objetivo bonus</label><input value="${escapeHTML(settings.canonObjetivo ?? 1000)}" onchange="editarTrainer('${key}','canonObjetivo',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right"></div>
-            <div><label class="text-[10px] text-slate-500 block mb-1">Bonus %</label><input value="${escapeHTML(settings.bonusPct ?? 15)}" onchange="editarTrainer('${key}','bonusPct',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right"></div>
-            <div><label class="text-[10px] text-slate-500 block mb-1">Canon fijo</label><input value="${escapeHTML(settings.canonFijoIndependiente ?? 1000)}" onchange="editarTrainer('${key}','canonFijoIndependiente',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right"></div>
-            <div><label class="text-[10px] text-slate-500 block mb-1">Canon coordinador</label><input value="${escapeHTML(settings.coordCanon ?? 1000)}" onchange="editarTrainer('${key}','coordCanon',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right"></div>
-            <div><label class="text-[10px] text-slate-500 block mb-1">% extra coord.</label><input value="${escapeHTML(settings.coordBesoulPct ?? 0)}" onchange="editarTrainer('${key}','coordBesoulPct',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right"></div>
+            <div><label class="text-[10px] text-slate-500 block mb-1">Canon Rango III</label><input value="${escapeHTML(settings.canonFijoIndependiente ?? 1000)}" onchange="editarTrainer('${key}','canonFijoIndependiente',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right"></div>
+            <div><label class="text-[10px] text-slate-500 block mb-1">€/PT coord.</label><input value="${escapeHTML(settings.coordBonusPorPt ?? 50)}" onchange="editarTrainer('${key}','coordBonusPorPt',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right"></div>
+            <div><label class="text-[10px] text-slate-500 block mb-1">Máx. PT coord.</label><input value="${escapeHTML(settings.coordMaxPts ?? 5)}" onchange="editarTrainer('${key}','coordMaxPts',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right"></div>
+            <div><label class="text-[10px] text-slate-500 block mb-1">Máx. descuento</label><input value="${escapeHTML(settings.coordMaxBonus ?? 250)}" onchange="editarTrainer('${key}','coordMaxBonus',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right"></div>
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-2 items-center text-[11px] text-slate-400">
+          <div class="grid grid-cols-1 md:grid-cols-6 gap-2 items-center text-[11px] text-slate-400">
             <div>Antigüedad: <b class="text-slate-200">${row.antiguedad ?? yearsBetween(fechaAltaSettings(settings))} años</b></div>
             <div>Posteriores centro: <b class="text-slate-200">${posteriores}/3</b></div>
-            <div>Bonus aplicado: <b class="text-amber-400">${dinero(row.bonus||0)}</b></div>
-            <input value="${escapeHTML(settings.coordNotas||'')}" onchange="editarTrainer('${key}','coordNotas',this.value)" class="bg-slate-900 border border-slate-800 rounded p-2 text-white" placeholder="Notas gerencia/coordinador">
+            <div>PT sede coord.: <b class="text-slate-200">${activosCentroCoord}</b></div>
+            <div>Coord. aplicado: <b class="text-amber-400">${dinero(row.coordinacionBonus||0)}</b></div>
+            <div class="md:col-span-2 text-[10px] text-slate-500">${escapeHTML(row.repartoDetalle || 'Configura fecha de alta para calcular rango automático.')}</div>
+            <input value="${escapeHTML(settings.coordNotas||'')}" onchange="editarTrainer('${key}','coordNotas',this.value)" class="md:col-span-5 bg-slate-900 border border-slate-800 rounded p-2 text-white" placeholder="Notas gerencia/coordinador">
           </div>
         </div>`; }).join('') || '<div class="text-xs text-slate-500 text-center py-6">Sin entrenadores operativos.</div>';
     }
@@ -605,7 +672,7 @@
     function editarTrainer(key,campo,valor){
       if(!dbFinanzas.trainerSettings) dbFinanzas.trainerSettings={};
       if(!dbFinanzas.trainerSettings[key]) dbFinanzas.trainerSettings[key]={};
-      const numericFields = ['aporteIndividualCliente','canonObjetivo','bonusPct','canonFijoIndependiente','coordCanon','coordBesoulPct'];
+      const numericFields = ['aporteIndividualCliente','canonFijoIndependiente','coordBonusPorPt','coordMaxPts','coordMaxBonus'];
       dbFinanzas.trainerSettings[key][campo] = numericFields.includes(campo) ? parseNum(valor) : valor;
       guardarConfigFinanzas();
     }
