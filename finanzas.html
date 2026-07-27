@@ -169,10 +169,11 @@
     };
 
     const DEFAULT_CENTROS = {
-      alfa_prime: { id:'alfa_prime', nombre:'Alfa Prime', canonFijo:0, canonPt:0, activo:true },
-      inacua: { id:'inacua', nombre:'Inacua', canonFijo:0, canonPt:0, activo:true },
-      fantasy: { id:'fantasy', nombre:'Fantasy', canonFijo:0, canonPt:0, activo:true },
-      lagunillas: { id:'lagunillas', nombre:'Lagunillas', canonFijo:0, canonPt:0, activo:true }
+      alfa_prime: { id:'alfa_prime', nombre:'Alfa Prime', canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true },
+      // Inacua: 1.200 € fijos incluyendo hasta 6 entrenadores; del 7º al 11º son 200 €/PT; desde el 12º son 60 €/PT.
+      inacua: { id:'inacua', nombre:'Inacua', canonFijo:1200, ptsIncluidos:6, canonPt:200, canonPtReducidoDesde:12, canonPtReducido:60, reglaCanon:'inacua_2026_v1', activo:true },
+      fantasy: { id:'fantasy', nombre:'Fantasy', canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true },
+      lagunillas: { id:'lagunillas', nombre:'Lagunillas', canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true }
     };
 
     const DEFAULT_CENTER_BY_TRAINER = {
@@ -254,6 +255,65 @@
       return 'sin_centro';
     }
     function nombreCentro(id){ const c = getCentros()[id]; return c ? c.nombre : (id === 'sin_centro' ? 'Dirección / sin centro' : id || 'Sin centro'); }
+    function fechaMsOrdenTrainer(t){
+      const raw = String(t?.fechaAlta || '').trim();
+      if (!raw) return Number.POSITIVE_INFINITY;
+      const d = new Date(raw + 'T00:00:00');
+      return Number.isNaN(d.getTime()) ? Number.POSITIVE_INFINITY : d.getTime();
+    }
+    function ordenarTrainersParaCanon(a,b){
+      const fa = fechaMsOrdenTrainer(a), fb = fechaMsOrdenTrainer(b);
+      if (fa !== fb) return fa - fb;
+      return String(a.nombre || a.key || '').localeCompare(String(b.nombre || b.key || ''));
+    }
+    function calcularCanonCentroYAsignar(c){
+      const trainers = Array.isArray(c.trainers) ? c.trainers : [];
+      const numTrainers = trainers.length;
+      const canonFijoCentro = parseNum(c.canonFijo) || 0;
+      const ptsIncluidos = Math.max(0, Math.floor(parseNum(c.ptsIncluidos) || 0));
+      const canonPtRegular = parseNum(c.canonPt) || 0;
+      const canonPtReducidoDesde = Math.max(0, Math.floor(parseNum(c.canonPtReducidoDesde) || 0));
+      const canonPtReducido = parseNum(c.canonPtReducido) || 0;
+      const fijoShare = numTrainers ? canonFijoCentro / numTrainers : 0;
+      let canonVariableTotal = 0;
+      const ordenados = [...trainers].sort(ordenarTrainersParaCanon);
+      ordenados.forEach((t, idx) => {
+        const posicion = idx + 1;
+        let costeVariablePt = 0;
+        if (posicion > ptsIncluidos) {
+          costeVariablePt = (canonPtReducidoDesde && posicion >= canonPtReducidoDesde) ? canonPtReducido : canonPtRegular;
+        }
+        canonVariableTotal += costeVariablePt;
+        t.canonPosicionCentro = posicion;
+        t.canonFijoShare = fijoShare;
+        t.canonPtShare = costeVariablePt;
+        t.canonCentroShare = fijoShare + costeVariablePt;
+        t.bsNetoCentro = (t.bsBruto || 0) - t.canonCentroShare;
+      });
+      c.canonFijoTotal = canonFijoCentro;
+      c.ptsIncluidos = ptsIncluidos;
+      c.canonPorPt = canonPtRegular;
+      c.canonPorPtReducidoDesde = canonPtReducidoDesde;
+      c.canonPorPtReducido = canonPtReducido;
+      c.canonVariableTotal = canonVariableTotal;
+      c.canonPorPtTotal = canonVariableTotal;
+      c.canonFijoProrrateado = fijoShare;
+      c.canonProrrateado = fijoShare;
+      c.canon = canonFijoCentro + canonVariableTotal;
+      return c;
+    }
+    function descripcionCanonCentro(c){
+      const partes = [`Fijo ${dinero(c.canonFijoTotal||0)}`];
+      if ((c.canonFijoProrrateado||0) && c.trainers?.length) partes.push(`${dinero(c.canonFijoProrrateado)}/PT fijo`);
+      if ((c.ptsIncluidos||0) > 0) partes.push(`incluye ${numero(c.ptsIncluidos)} PT`);
+      if ((c.canonPorPt||0) > 0) {
+        const desde = Math.max(1, (c.ptsIncluidos||0) + 1);
+        const hasta = (c.canonPorPtReducidoDesde||0) > 0 ? `-${(c.canonPorPtReducidoDesde||0)-1}` : '+';
+        partes.push(`${desde}${hasta}: ${dinero(c.canonPorPt)}/PT`);
+      }
+      if ((c.canonPorPtReducidoDesde||0) > 0 && (c.canonPorPtReducido||0) > 0) partes.push(`desde ${numero(c.canonPorPtReducidoDesde)}º: ${dinero(c.canonPorPtReducido)}/PT`);
+      return partes.join(' · ');
+    }
 
     function tarifaBaseFicha(ficha){
       if (!ficha || !TARIFAS_2026[ficha.modalidad]) return 0;
@@ -507,26 +567,11 @@
         centros[centroId].clientes += clientes;
       });
       Object.values(centros).forEach(c => {
-        // Doble lógica de coste por sede:
-        // 1) Canon fijo de la sede: se paga una sola vez al centro y se prorratea entre los PT activos.
-        //    Ejemplo: Inacua 1.000 € con 12 PT => 83,33 €/PT.
-        // 2) Canon por PT: si el centro cobra una cantidad por cada entrenador, se imputa íntegra a cada PT.
-        //    Ejemplo: 50 €/PT con 12 PT => 600 € total y 50 € de coste individual para cada entrenador.
-        const canonFijoCentro = parseNum(c.canonFijo) || 0;
-        const canonPorPtCentro = parseNum(c.canonPt) || 0;
-        const numTrainers = c.trainers.length;
-        c.canonFijoTotal = canonFijoCentro;
-        c.canonPorPt = canonPorPtCentro;
-        c.canonPorPtTotal = canonPorPtCentro * numTrainers;
-        c.canonFijoProrrateado = numTrainers ? canonFijoCentro / numTrainers : 0;
-        c.canonProrrateado = c.canonFijoProrrateado; // compatibilidad visual/histórica
-        c.canon = canonFijoCentro + c.canonPorPtTotal;
-        c.trainers.forEach(t => {
-          t.canonFijoShare = c.canonFijoProrrateado;
-          t.canonPtShare = canonPorPtCentro;
-          t.canonCentroShare = c.canonFijoProrrateado + canonPorPtCentro;
-          t.bsNetoCentro = (t.bsBruto || 0) - t.canonCentroShare;
-        });
+        // Coste de sede separado en dos capas:
+        // 1) Canon fijo de sede: se paga una vez y se prorratea entre los PT activos.
+        // 2) Coste ligado al PT: puede tener tramos por posición dentro de la sede.
+        //    Ejemplo Inacua: 1.200 € fijos incluyen 6 PT; del 7º al 11º son 200 €/PT; desde el 12º son 60 €/PT.
+        calcularCanonCentroYAsignar(c);
       });
       const gastos = (dbFinanzas.gastos?.[mesActualKey()] || []).reduce((s,g)=>s+parseNum(g.importe),0);
       const total = Object.values(centros).reduce((acc,c)=>{ acc.facturacion+=c.facturacion; acc.ptNeto+=c.ptNeto; acc.bsBruto+=c.bsBruto; acc.canones+=c.canon; acc.clientes+=c.clientes; return acc; }, {facturacion:0,ptNeto:0,bsBruto:0,canones:0,clientes:0});
@@ -592,11 +637,11 @@
             <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase">Facturación</span><b>${dinero(c.facturacion)}</b></div>
             <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase">PT</span><b class="text-amber-400">${dinero(c.ptNeto)}</b></div>
             <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase">BESOUL</span><b class="text-emerald-400">${dinero(c.bsBruto)}</b></div>
-            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase">Coste sede</span><b class="text-red-400">-${dinero(c.canon)}</b><small class="block text-[9px] text-slate-500">Fijo ${dinero(c.canonFijoTotal||0)}${c.trainers.length ? ' · ' + dinero(c.canonFijoProrrateado||0) + '/PT' : ''} · Por PT ${dinero(c.canonPorPt||0)}</small></div>
+            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase">Coste sede</span><b class="text-red-400">-${dinero(c.canon)}</b><small class="block text-[9px] text-slate-500">${escapeHTML(descripcionCanonCentro(c))}</small></div>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-[11px] min-w-[760px]"><thead class="text-slate-500 uppercase"><tr><th class="text-left py-2">Entrenador</th><th class="text-right">Clientes</th><th class="text-right">Facturación</th><th class="text-right">Neto PT</th><th class="text-right">BESOUL bruto</th><th class="text-right">Coste sede</th><th class="text-right">BESOUL neto</th></tr></thead><tbody class="divide-y divide-slate-800/60">
-              ${c.trainers.length ? c.trainers.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(t => `<tr><td class="py-2 text-white font-semibold"><div>${escapeHTML(t.nombre)} <span class="text-[9px] text-slate-500">${escapeHTML(t.key)}</span></div><div class="text-[9px] text-cyan-400">${escapeHTML(t.sistemaAplicado || 'Base por tramos')}</div></td><td class="text-right">${numero(t.clientes)}</td><td class="text-right font-mono"><div>${dinero(t.facturacion)}</div><div class="text-[9px] text-slate-500">Mensual ${dinero(t.facturacionMensual||0)} · bonos/sueltas ${dinero(t.facturacionVariable||0)}${t.sesionesBonosSueltas ? ` · ${t.sesionesBonosSueltas} ses.` : ''}${t.coordinacionBonus ? ` · coord. ${dinero(t.coordinacionBonus)}` : ''}</div></td><td class="text-right font-mono text-amber-400">${dinero(t.ptNeto)}</td><td class="text-right font-mono text-emerald-400">${dinero(t.bsBruto)}</td><td class="text-right font-mono text-red-300"><div>-${dinero(t.canonCentroShare||0)}</div><div class="text-[9px] text-slate-500">Fijo ${dinero(t.canonFijoShare||0)} · PT ${dinero(t.canonPtShare||0)}</div></td><td class="text-right font-mono ${(t.bsNetoCentro||0) >= 0 ? 'text-cyan-400' : 'text-red-400'}">${dinero(t.bsNetoCentro||0)}</td></tr>`).join('') : '<tr><td colspan="7" class="py-3 text-center text-slate-500">Sin entrenadores asignados.</td></tr>'}
+              ${c.trainers.length ? c.trainers.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(t => `<tr><td class="py-2 text-white font-semibold"><div>${escapeHTML(t.nombre)} <span class="text-[9px] text-slate-500">${escapeHTML(t.key)}</span></div><div class="text-[9px] text-cyan-400">${escapeHTML(t.sistemaAplicado || 'Base por tramos')}</div></td><td class="text-right">${numero(t.clientes)}</td><td class="text-right font-mono"><div>${dinero(t.facturacion)}</div><div class="text-[9px] text-slate-500">Mensual ${dinero(t.facturacionMensual||0)} · bonos/sueltas ${dinero(t.facturacionVariable||0)}${t.sesionesBonosSueltas ? ` · ${t.sesionesBonosSueltas} ses.` : ''}${t.coordinacionBonus ? ` · coord. ${dinero(t.coordinacionBonus)}` : ''}</div></td><td class="text-right font-mono text-amber-400">${dinero(t.ptNeto)}</td><td class="text-right font-mono text-emerald-400">${dinero(t.bsBruto)}</td><td class="text-right font-mono text-red-300"><div>-${dinero(t.canonCentroShare||0)}</div><div class="text-[9px] text-slate-500">Fijo ${dinero(t.canonFijoShare||0)} · PT ${dinero(t.canonPtShare||0)}${t.canonPosicionCentro ? ` · #${t.canonPosicionCentro}` : ''}</div></td><td class="text-right font-mono ${(t.bsNetoCentro||0) >= 0 ? 'text-cyan-400' : 'text-red-400'}">${dinero(t.bsNetoCentro||0)}</td></tr>`).join('') : '<tr><td colspan="7" class="py-3 text-center text-slate-500">Sin entrenadores asignados.</td></tr>'}
             </tbody></table>
           </div>
         </div>`).join('');
@@ -644,14 +689,27 @@
     function renderConfigCentros(){
       const cont=document.getElementById('centros-config'); const centros=getCentros();
       cont.innerHTML = Object.values(centros).map(c=>`
-        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-5 gap-2 text-xs items-center">
-          <input value="${escapeHTML(c.nombre)}" onchange="editarCentro('${c.id}','nombre',this.value)" class="bg-slate-900 border border-slate-800 rounded p-2 text-white md:col-span-2">
-          <input value="${escapeHTML(c.canonFijo||0)}" onchange="editarCentro('${c.id}','canonFijo',this.value)" class="bg-slate-900 border border-slate-800 rounded p-2 text-white text-right" placeholder="Canon fijo mensual de sede" title="Se paga una vez por sede y se prorratea entre los PT activos">
-          <input value="${escapeHTML(c.canonPt||0)}" onchange="editarCentro('${c.id}','canonPt',this.value)" class="bg-slate-900 border border-slate-800 rounded p-2 text-white text-right" placeholder="Canon por PT" title="Se aplica completo a cada entrenador del centro">
-          <div class="bg-slate-900 border border-slate-800 rounded p-2 text-slate-400">Fijo sede = prorrateado. Canon por PT = coste individual ligado a cada entrenador.</div>
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2 text-xs">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
+            <input value="${escapeHTML(c.nombre)}" onchange="editarCentro('${c.id}','nombre',this.value)" class="bg-slate-900 border border-slate-800 rounded p-2 text-white md:col-span-2">
+            <div class="bg-slate-900 border border-slate-800 rounded p-2 text-slate-400">${escapeHTML(c.id === 'inacua' ? 'Regla Inacua: 1.200 € incluyen 6 PT; 7º-11º: 200 €/PT; desde 12º: 60 €/PT.' : 'Fijo sede prorrateado + coste por PT editable.')}</div>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+            <div><label class="text-[10px] text-slate-500 block mb-1">Fijo sede</label><input value="${escapeHTML(c.canonFijo||0)}" onchange="editarCentro('${c.id}','canonFijo',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right" title="Se paga una vez por sede y se prorratea entre los PT activos"></div>
+            <div><label class="text-[10px] text-slate-500 block mb-1">PT incluidos</label><input value="${escapeHTML(c.ptsIncluidos||0)}" onchange="editarCentro('${c.id}','ptsIncluidos',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right" title="Número de entrenadores incluidos dentro del fijo de sede"></div>
+            <div><label class="text-[10px] text-slate-500 block mb-1">€/PT extra</label><input value="${escapeHTML(c.canonPt||0)}" onchange="editarCentro('${c.id}','canonPt',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right" title="Coste ligado a cada PT que supera los incluidos"></div>
+            <div><label class="text-[10px] text-slate-500 block mb-1">Reducido desde PT nº</label><input value="${escapeHTML(c.canonPtReducidoDesde||0)}" onchange="editarCentro('${c.id}','canonPtReducidoDesde',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right" title="A partir de qué número de entrenador cambia el coste por PT. 0 = no aplica"></div>
+            <div><label class="text-[10px] text-slate-500 block mb-1">€/PT reducido</label><input value="${escapeHTML(c.canonPtReducido||0)}" onchange="editarCentro('${c.id}','canonPtReducido',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right" title="Coste por PT desde el tramo reducido"></div>
+          </div>
         </div>`).join('');
     }
-    function editarCentro(id,campo,valor){ if(!dbFinanzas.centros) dbFinanzas.centros={}; if(!dbFinanzas.centros[id]) dbFinanzas.centros[id]={...(DEFAULT_CENTROS[id]||{id,nombre:id,canonFijo:0,canonPt:0,activo:true})}; dbFinanzas.centros[id][campo] = campo.includes('canon') ? parseNum(valor) : valor; guardarConfigFinanzas(); }
+    function editarCentro(id,campo,valor){
+      if(!dbFinanzas.centros) dbFinanzas.centros={};
+      if(!dbFinanzas.centros[id]) dbFinanzas.centros[id]={...(DEFAULT_CENTROS[id]||{id,nombre:id,canonFijo:0,ptsIncluidos:0,canonPt:0,canonPtReducidoDesde:0,canonPtReducido:0,activo:true})};
+      const numericFields = ['canonFijo','ptsIncluidos','canonPt','canonPtReducidoDesde','canonPtReducido'];
+      dbFinanzas.centros[id][campo] = numericFields.includes(campo) ? parseNum(valor) : valor;
+      guardarConfigFinanzas();
+    }
 
     function renderConfigTrainers(){
       const cont=document.getElementById('trainers-config'); const centros=getCentros();
@@ -732,6 +790,10 @@
       Object.keys(DEFAULT_CENTROS).forEach(id => {
         centrosLimpios[id] = { ...DEFAULT_CENTROS[id], ...((data?.centros || {})[id] || {}) };
       });
+      // Migración de la regla negociada de Inacua. Si veníamos de una configuración antigua sin regla, aplicamos la nueva.
+      if (!centrosLimpios.inacua.reglaCanon || centrosLimpios.inacua.reglaCanon !== 'inacua_2026_v1') {
+        centrosLimpios.inacua = { ...centrosLimpios.inacua, canonFijo:1200, ptsIncluidos:6, canonPt:200, canonPtReducidoDesde:12, canonPtReducido:60, reglaCanon:'inacua_2026_v1' };
+      }
       res.centros = centrosLimpios;
       res.trainerSettings = res.trainerSettings || {};
       Object.keys(res.trainerSettings).forEach(key => {
