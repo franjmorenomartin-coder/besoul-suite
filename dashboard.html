@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BESOUL Dashboard · Dirección</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color:#0B0F17; }
+    ::-webkit-scrollbar { width:6px; height:6px; }
+    ::-webkit-scrollbar-track { background:#111827; }
+    ::-webkit-scrollbar-thumb { background:#374151; border-radius:3px; }
+    input, select, textarea { font-size:16px; }
+    @media (min-width:768px){ input, select, textarea { font-size:12px; } }
+    .chart-card canvas { max-height: 280px; }
+    .heat-cell { min-width: 42px; height: 34px; }
+  </style>
+</head>
+<body class="text-slate-100 min-h-screen flex flex-col">
+
+  <div id="auth-screen" class="flex-1 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md space-y-6 shadow-2xl">
+      <div class="flex flex-col items-center bg-white p-2 rounded-xl border border-slate-700 w-32 mx-auto">
+        <div class="text-amber-500 font-extrabold text-xl tracking-tighter italic font-serif">besoul</div>
+        <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
+      </div>
+      <div class="text-center">
+        <h2 class="text-base font-bold text-white tracking-tight">Dashboard BESOUL · Dirección</h2>
+        <p class="text-xs text-slate-400 mt-1">Acceso exclusivo administración</p>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="text-slate-400 block mb-1">Email administrador</label>
+          <input type="email" id="login-email" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="administracion@besoulfitness.com">
+        </div>
+        <div>
+          <label class="text-slate-400 block mb-1">Contraseña</label>
+          <input type="password" id="login-pass" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="••••••••">
+        </div>
+        <p id="auth-error" class="hidden text-red-400 text-[11px] leading-relaxed"></p>
+        <button onclick="loginDashboard()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-lg transition uppercase tracking-wider mt-2">Entrar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="app-content" class="hidden flex-1 flex flex-col">
+    <header class="bg-slate-900 border-b border-slate-800 px-4 md:px-6 py-4 flex flex-col xl:flex-row justify-between items-center gap-4">
+      <div class="flex items-center gap-4 w-full xl:w-auto">
+        <a href="./" class="flex flex-col items-center bg-white p-2 rounded-xl border border-slate-700 shadow-md w-28 shrink-0">
+          <div class="text-amber-500 font-extrabold text-lg tracking-tighter italic font-serif">besoul</div>
+          <div class="text-slate-950 font-black text-[8px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
+        </a>
+        <div>
+          <h1 class="text-lg font-extrabold text-white tracking-tight">Dashboard <span class="text-cyan-400 font-medium text-sm">Dirección 360</span></h1>
+          <p class="text-xs text-slate-400">Usuario: <span id="lbl-usuario" class="text-amber-400 font-bold uppercase">---</span> · <span id="lbl-rango" class="text-slate-300">---</span></p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap justify-center xl:justify-end">
+        <a href="./agenda.html" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">Agenda</a>
+        <a href="./crm.html" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">CRM</a>
+        <a href="./finanzas.html" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">Finanzas</a>
+        <button onclick="refrescarDashboard()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/20 transition">Actualizar</button>
+        <button onclick="logoutDashboard()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-400 border border-slate-800 hover:text-white transition">Salir</button>
+      </div>
+    </header>
+
+    <section class="bg-slate-950 border-b border-slate-900 px-4 md:px-6 py-4 space-y-3">
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3 text-xs">
+        <div>
+          <label class="text-slate-400 block mb-1">Periodo</label>
+          <select id="filter-period" onchange="cambiarPeriodo()" class="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white">
+            <option value="month">Mes actual</option>
+            <option value="previousMonth">Mes anterior</option>
+            <option value="week">Semana actual</option>
+            <option value="today">Hoy</option>
+            <option value="year">Año actual</option>
+            <option value="custom">Personalizado</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-slate-400 block mb-1">Desde</label>
+          <input type="date" id="filter-start" onchange="aplicarDashboard()" class="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white">
+        </div>
+        <div>
+          <label class="text-slate-400 block mb-1">Hasta</label>
+          <input type="date" id="filter-end" onchange="aplicarDashboard()" class="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white">
+        </div>
+        <div>
+          <label class="text-slate-400 block mb-1">Centro</label>
+          <select id="filter-center" onchange="aplicarDashboard()" class="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white"></select>
+        </div>
+        <div>
+          <label class="text-slate-400 block mb-1">Entrenador</label>
+          <select id="filter-trainer" onchange="aplicarDashboard()" class="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white"></select>
+        </div>
+        <div>
+          <label class="text-slate-400 block mb-1">Vista</label>
+          <select id="filter-view" onchange="aplicarDashboard()" class="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white">
+            <option value="general">General</option>
+            <option value="finanzas">Finanzas</option>
+            <option value="agenda">Ocupación Agenda</option>
+            <option value="crm">CRM Growth</option>
+          </select>
+        </div>
+        <div class="flex items-end">
+          <button onclick="exportarResumenCSV()" class="w-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 rounded-lg p-2 font-bold hover:bg-emerald-500/20">Export CSV</button>
+        </div>
+      </div>
+      <p class="text-[11px] text-slate-500 leading-relaxed">Dashboard de solo lectura. Finanzas sigue siendo el módulo para configurar centros, gastos, rangos y cierres.</p>
+    </section>
+
+    <main class="flex-1 p-4 md:p-6 space-y-6">
+      <section class="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-8 gap-3">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Facturación</p><p id="kpi-facturacion" class="text-lg font-black text-white font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">BESOUL bruto</p><p id="kpi-besoul" class="text-lg font-black text-emerald-400 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Coste sede</p><p id="kpi-coste" class="text-lg font-black text-red-300 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Beneficio neto</p><p id="kpi-beneficio" class="text-lg font-black text-cyan-400 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Clientes activos</p><p id="kpi-clientes" class="text-lg font-black text-amber-400 font-mono mt-1">0</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Entrenadores</p><p id="kpi-trainers" class="text-lg font-black text-white font-mono mt-1">0</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Sesiones</p><p id="kpi-sesiones" class="text-lg font-black text-blue-300 font-mono mt-1">0</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Conversión CRM</p><p id="kpi-conversion" class="text-lg font-black text-purple-300 font-mono mt-1">0%</p></div>
+      </section>
+
+      <section id="insights" class="bg-slate-900 border border-slate-800 rounded-xl p-4 hidden"></section>
+
+      <section class="grid grid-cols-1 2xl:grid-cols-2 gap-4">
+        <div class="chart-card bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3"><h2 class="text-sm font-black text-white">Evolución mensual</h2><span class="text-[10px] text-slate-500">Facturación · gastos · neto</span></div>
+          <canvas id="chartMonthly"></canvas>
+        </div>
+        <div class="chart-card bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3"><h2 class="text-sm font-black text-white">Distribución por centro</h2><span class="text-[10px] text-slate-500">% facturación</span></div>
+          <canvas id="chartCenters"></canvas>
+        </div>
+        <div class="chart-card bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3"><h2 class="text-sm font-black text-white">CRM Growth</h2><span class="text-[10px] text-slate-500">Embudo comercial</span></div>
+          <canvas id="chartCrm"></canvas>
+        </div>
+        <div class="chart-card bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3"><h2 class="text-sm font-black text-white">Fuentes de captación</h2><span class="text-[10px] text-slate-500">Leads por canal</span></div>
+          <canvas id="chartSources"></canvas>
+        </div>
+        <div class="chart-card bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3"><h2 class="text-sm font-black text-white">Ocupación por hora</h2><span class="text-[10px] text-slate-500">Sesiones y pruebas</span></div>
+          <canvas id="chartHours"></canvas>
+        </div>
+        <div class="chart-card bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3"><h2 class="text-sm font-black text-white">Gastos por categoría</h2><span class="text-[10px] text-slate-500">Periodo seleccionado</span></div>
+          <canvas id="chartExpenses"></canvas>
+        </div>
+      </section>
+
+      <section class="grid grid-cols-1 2xl:grid-cols-2 gap-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 overflow-x-auto">
+          <h2 class="text-sm font-black text-white mb-1">Mapa de ocupación</h2>
+          <p class="text-[11px] text-slate-500 mb-4">Detecta días y horas con más demanda. Se agrupa por hora de inicio de sesión/prueba.</p>
+          <div id="heatmap" class="min-w-[700px]"></div>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 overflow-x-auto">
+          <h2 class="text-sm font-black text-white mb-1">Top entrenadores</h2>
+          <p class="text-[11px] text-slate-500 mb-4">Ranking del periodo/mes por facturación, clientes y margen Besoul.</p>
+          <table class="w-full min-w-[760px] text-left text-xs">
+            <thead class="text-[10px] uppercase text-slate-500 border-b border-slate-800"><tr><th class="py-2">Entrenador</th><th>Centro</th><th>Clientes</th><th>Facturación</th><th>BESOUL bruto</th><th>Sistema</th></tr></thead>
+            <tbody id="tabla-trainers" class="divide-y divide-slate-800/70"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="grid grid-cols-1 2xl:grid-cols-2 gap-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 overflow-x-auto">
+          <h2 class="text-sm font-black text-white mb-4">Centros</h2>
+          <table class="w-full min-w-[760px] text-left text-xs">
+            <thead class="text-[10px] uppercase text-slate-500 border-b border-slate-800"><tr><th class="py-2">Centro</th><th>PT</th><th>Clientes</th><th>Facturación</th><th>% Fact.</th><th>Coste sede</th><th>Neto centro</th></tr></thead>
+            <tbody id="tabla-centros" class="divide-y divide-slate-800/70"></tbody>
+          </table>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 overflow-x-auto">
+          <h2 class="text-sm font-black text-white mb-4">Huecos y oportunidades</h2>
+          <div id="slots-oportunidad" class="space-y-2 text-xs"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+<script>
+const BS_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAHp7l39BYkgHTVNNwPaaa21tTksBQ94Zo",
+  authDomain: "besoul-suite.firebaseapp.com",
+  projectId: "besoul-suite",
+  storageBucket: "besoul-suite.firebasestorage.app",
+  messagingSenderId: "215142605598",
+  appId: "1:215142605598:web:943629a7a9c50c034a1f0f"
+};
+
+const TARIFAS_2026 = {
+  "Individual Plan": { 1: 120, 2: 210, 3: 300, 4: 380, 5: 450 },
+  "Individual Suelta": { 1: 30 }, "Individual Bono": { 10: 270 },
+  "Pareja": { 1: 90, 2: 160, 3: 210, 4: 270, 5: 300 },
+  "Trío": { 1: 70, 2: 120, 3: 150, 4: 170, 5: 200 },
+  "Grupo Reducido Plan": { 1: 45, 2: 80, 3: 110, 4: 130, 5: 150 },
+  "Grupo Reducido Suelta": { 1: 12 }, "Grupo Reducido Bono": { 10: 105 },
+  "Grupo Aire Libre": { 1: 30, 2: 40, 3: 50, 4: 60, 5: 70 },
+  "Miembro Subordinado": { 1: 0 }
+};
+const DEFAULT_CENTROS = {
+  alfa_prime: { id:'alfa_prime', nombre:'Alfa Prime', canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true },
+  inacua: { id:'inacua', nombre:'Inacua', canonFijo:1200, ptsIncluidos:6, canonPt:200, canonPtReducidoDesde:12, canonPtReducido:60, reglaCanon:'inacua_2026_v1', activo:true },
+  fantasy: { id:'fantasy', nombre:'Fantasy', canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true },
+  lagunillas: { id:'lagunillas', nombre:'Lagunillas', canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true }
+};
+const DEFAULT_CENTER_BY_TRAINER = {
+  carmen: 'alfa_prime',
+  lillo: 'lagunillas', miguel_fenech: 'lagunillas', ruben: 'lagunillas', carmen_palomo: 'lagunillas', lucia: 'lagunillas', miguel: 'lagunillas',
+  miguel_luna: 'fantasy',
+  bea: 'inacua', soraya: 'inacua', eu: 'inacua', alvaro: 'inacua', juancarlos: 'inacua', raul: 'inacua', marina: 'inacua', yosvel: 'inacua', lolo: 'inacua', gonzalo: 'inacua', fernando: 'inacua', cristina: 'inacua'
+};
+const TRAINERS_EXCLUIDOS_FINANZAS = ['fran', 'fran_moreno', 'franmoreno'];
+const TRAINERS_ADMIN_CON_CARTERA = ['bea', 'soraya'];
+const TRAINERS_SOLO_IMPUTACION_GASTOS = ['bea', 'soraya'];
+const SISTEMAS_PAGO = { auto:'Automático por rango Besoul', rango1:'Rango I · 0-1 año', rango2:'Rango II · desde 1 año', rango3:'Rango III · canon fijo', coordinador:'Rango IV · coordinador de sede' };
+const DIAS = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+let auth, db, perfil = null, usuario = null;
+let dbFinanzas = { centros:{}, trainerSettings:{}, gastos:{}, historico:{} };
+let agendaData = { clientes:{}, agenda:{}, pruebasCRM:{} };
+let perfilesUsuarios = [];
+let leads = [];
+let charts = {};
+let ultimoResumen = null;
+let unsubs = [];
+
+function escapeHTML(valor){ return String(valor ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch])); }
+function dinero(num){ return (Number(num)||0).toLocaleString('es-ES',{minimumFractionDigits:2, maximumFractionDigits:2}) + ' €'; }
+function numero(num){ return (Number(num)||0).toLocaleString('es-ES',{maximumFractionDigits:0}); }
+function pct(num){ return `${((Number(num)||0)*100).toLocaleString('es-ES',{minimumFractionDigits:0,maximumFractionDigits:1})}%`; }
+function parseNum(v){ const n = parseFloat(String(v ?? '').replace(',','.')); return Number.isNaN(n) ? 0 : n; }
+function normalizarEmail(email){ return String(email || '').trim().toLowerCase(); }
+function dateISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function mesKeyFromDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+function mesActualKey(){ return mesKeyFromDate(new Date()); }
+function etiquetaMes(key){ const [y,m]=String(key).split('-').map(Number); if(!y||!m) return key; return new Date(y,m-1,1).toLocaleDateString('es-ES',{month:'short', year:'2-digit'}); }
+function fechaInicioMes(key){ const [y,m]=String(key).split('-').map(Number); return new Date(y, m-1, 1); }
+function addDays(d, days){ const x = new Date(d); x.setDate(x.getDate()+days); return x; }
+function startOfWeek(d){ const x = new Date(d); const day = (x.getDay()+6)%7; x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x; }
+function endOfDay(d){ const x = new Date(d); x.setHours(23,59,59,999); return x; }
+function normalizarEstado(valor){ return ['activo','inactivo','baja'].includes(valor) ? valor : 'activo'; }
+function centrosValidos(){ return Object.keys(DEFAULT_CENTROS).concat(['sin_centro','sin-centro']); }
+function centroValido(id){ return centrosValidos().includes(String(id || '')); }
+function getCentros(){ const res={}; Object.keys(DEFAULT_CENTROS).forEach(id => res[id] = { ...DEFAULT_CENTROS[id], ...((dbFinanzas.centros || {})[id] || {}) }); return res; }
+function trainerKeyPerfil(p){ return String(p?.trainerKey || '').trim(); }
+function nombrePerfil(p){ return String(p?.nombre || p?.email || p?.trainerKey || '').trim(); }
+function trainerByKey(key){ return perfilesUsuarios.find(p => trainerKeyPerfil(p) === key); }
+function esAdmin(){ return perfil?.rol === 'admin'; }
+function esPerfilOperativo(p){
+  const key = trainerKeyPerfil(p);
+  if (!key || TRAINERS_EXCLUIDOS_FINANZAS.includes(key)) return false;
+  const rol = String(p.rol || '').toLowerCase();
+  if (rol === 'pt') return true;
+  if (TRAINERS_ADMIN_CON_CARTERA.includes(key)) return true;
+  const clientes = (agendaData.clientes && agendaData.clientes[key]) || [];
+  return Array.isArray(clientes) && clientes.length > 0;
+}
+function centroTrainer(key, perfilObj){
+  const settings = dbFinanzas.trainerSettings?.[key] || {};
+  const nombre = nombrePerfil(perfilObj).toLowerCase();
+  if (settings.centroId && centroValido(settings.centroId) && settings.centroId !== 'sin_centro' && settings.centroId !== 'sin-centro') return settings.centroId;
+  if (DEFAULT_CENTER_BY_TRAINER[key]) return DEFAULT_CENTER_BY_TRAINER[key];
+  if ((key === 'miguel' || nombre.includes('fenech') || nombre.includes('lillo')) && !nombre.includes('luna')) return 'lagunillas';
+  if (nombre.includes('miguel') && nombre.includes('luna')) return 'fantasy';
+  if (perfilObj?.centroId && centroValido(perfilObj.centroId) && perfilObj.centroId !== 'sin_centro') return perfilObj.centroId;
+  if (String(perfilObj?.rol || '').toLowerCase() === 'pt') return 'inacua';
+  return 'sin_centro';
+}
+function nombreCentro(id){ const c = getCentros()[id]; if (c) return c.nombre; if (id === 'sin_centro' || id === 'sin-centro') return 'Dirección / sin centro'; return id || 'Sin centro'; }
+function tarifaBaseFicha(ficha){ if (!ficha || !TARIFAS_2026[ficha.modalidad]) return 0; const factor=parseInt(ficha.factor)||1; return TARIFAS_2026[ficha.modalidad][factor] || TARIFAS_2026[ficha.modalidad][1] || 0; }
+function multiplicadorFacturacionFicha(ficha){ if (!ficha) return 1; if (String(ficha.modalidad||'').includes('Pareja')) return 2; if (String(ficha.modalidad||'').includes('Trío')) return 3; if (ficha.tipo === 'grupo') return Math.max(1, ficha.integrantesObj ? ficha.integrantesObj.length : 1); return 1; }
+function obtenerDescuentoFicha(ficha){ const n=parseFloat(String(ficha?.descuentoPct??0).replace(',','.')); return Number.isNaN(n)?0:Math.max(0, Math.min(100,n)); }
+function calcularFacturacionFichaSimple(ficha){ if (!ficha || ficha.modalidad === 'Miembro Subordinado' || ficha.vinculacion) return 0; const base = tarifaBaseFicha(ficha) * multiplicadorFacturacionFicha(ficha); return Math.max(0, base * (1 - obtenerDescuentoFicha(ficha)/100)); }
+function esBonoFicha(ficha){ return !!(ficha && (ficha.tipoCompra === 'Bono' || String(ficha.modalidad||'').includes('Bono'))); }
+function esSueltaFicha(ficha){ return !!(ficha && String(ficha.modalidad||'').includes('Suelta')); }
+function esMensualFicha(ficha){ return !!(ficha && !esBonoFicha(ficha) && !esSueltaFicha(ficha)); }
+function esCitaPruebaCRM(obj){ return !!(obj && (obj.esPruebaCRM === true || obj.tipoCita === 'pruebaCRM' || obj.noSumaFacturacion === true || obj.modalidad === 'Prueba CRM')); }
+function esRecuperacionNoFacturable(obj){ return !!(obj && (obj.recuperacionNoFacturable === true || obj.noFacturable === true || obj.tipoFacturacion === 'recuperacion_no_facturable')); }
+function rangoMes(mesKey){ const [y,m]=String(mesKey||mesActualKey()).split('-').map(Number); const ini=new Date(y,(m||1)-1,1); const fin=new Date(y,(m||1),1); return { desde:dateISO(ini), hasta:dateISO(fin) }; }
+function sesionesAgendadasFacturablesFichaMes(ficha, trainerKey, mesKey){
+  if (!ficha || !trainerKey) return 0;
+  const agendaEntrenador = agendaData.agenda?.[trainerKey] || {};
+  const {desde,hasta} = rangoMes(mesKey);
+  return Object.keys(agendaEntrenador).reduce((total, clave) => {
+    const fecha = clave.split('_')[0];
+    if (fecha < desde || fecha >= hasta) return total;
+    const cita = agendaEntrenador[clave];
+    if (!cita || cita.id !== ficha.id) return total;
+    if (esCitaPruebaCRM(cita) || esRecuperacionNoFacturable(cita)) return total;
+    return total + 1;
+  }, 0);
+}
+function calcularFacturacionFichaFinanzas(ficha, trainerKey, mesKey){
+  const importeBase = calcularFacturacionFichaSimple(ficha);
+  if (!ficha || importeBase <= 0) return { total:0, mensual:0, variable:0, sesiones:0, tipo:'sin_importe' };
+  if (esMensualFicha(ficha)) return { total:importeBase, mensual:importeBase, variable:0, sesiones:0, tipo:'mensual' };
+  const sesiones = sesionesAgendadasFacturablesFichaMes(ficha, trainerKey, mesKey);
+  const divisor = esBonoFicha(ficha) ? 10 : 1;
+  const variable = sesiones * (importeBase / divisor);
+  return { total:variable, mensual:0, variable, sesiones, tipo: esBonoFicha(ficha) ? 'bono' : 'suelta' };
+}
+function contarPersonasFicha(ficha){ if (!ficha || ficha.vinculacion) return 0; if (normalizarEstado(ficha.estadoCliente||'activo') !== 'activo') return 0; if (ficha.tipo === 'grupo') return Math.max(1, ficha.integrantesObj ? ficha.integrantesObj.length : 1); return 1; }
+function calcularRepartoPorTramosBesoul(F, rango='rango1', aporteClientes=0){
+  F = Math.max(0, Number(F)||0); aporteClientes = Number(aporteClientes)||0;
+  const esRango2 = rango === 'rango2';
+  const bsPct3 = esRango2 ? 0.15 : 0.30;
+  const t1 = Math.min(F, 1400);
+  const t2 = F > 1400 ? Math.min(F,1900)-1400 : 0;
+  const t3 = F > 1900 ? F-1900 : 0;
+  const bsTotal = Math.min(F, Math.max(0, (t1*0.50)+(t2*0.40)+(t3*bsPct3)+aporteClientes));
+  return { pt: Math.max(0, F-bsTotal), bs: bsTotal, sistemaAplicado: esRango2 ? 'Rango II' : 'Rango I' };
+}
+function fechaAltaSettings(settings){ const raw=String(settings?.fechaAlta||'').trim(); if(!raw) return null; const d=new Date(raw+'T00:00:00'); return Number.isNaN(d.getTime()) ? null : d; }
+function yearsBetween(fecha, now=new Date()){ if(!fecha) return 0; let y=now.getFullYear()-fecha.getFullYear(); const m=now.getMonth()-fecha.getMonth(); if(m<0 || (m===0 && now.getDate()<fecha.getDate())) y--; return Math.max(0,y); }
+function contarPosterioresCentro(key, centroId, fechaAlta){ if(!fechaAlta) return 0; return perfilesUsuarios.filter(esPerfilOperativo).filter(p=>{ const k=trainerKeyPerfil(p); if(!k || k===key) return false; if(centroTrainer(k,p)!==centroId) return false; const f=fechaAltaSettings(dbFinanzas.trainerSettings?.[k]||{}); return f && f > fechaAlta; }).length; }
+function contarActivosCentroParaCoordinacion(key, centroId){ return perfilesUsuarios.filter(esPerfilOperativo).filter(p=>{ const k=trainerKeyPerfil(p); return k && k!==key && centroTrainer(k,p)===centroId; }).length; }
+function rangoAutomaticoBesoul(antiguedad){ if (antiguedad >= 3) return 'rango3'; if (antiguedad >= 1) return 'rango2'; return 'rango1'; }
+function calcularComisionAvanzada(F, settings={}, contexto={}){
+  F = Math.max(0, Number(F)||0);
+  const pactoEspecial = !!settings.pactoEspecial;
+  const aporteClientes = Number(contexto.aporteClientes)||0;
+  const fechaAlta = fechaAltaSettings(settings);
+  const antiguedad = yearsBetween(fechaAlta);
+  const posteriores = contarPosterioresCentro(contexto.key, contexto.centroId, fechaAlta);
+  const canonFijo = parseNum(settings.canonFijoIndependiente ?? 1000) || 1000;
+  const bonusCoordPorPt = parseNum(settings.coordBonusPorPt ?? 50) || 50;
+  const coordMaxPts = parseNum(settings.coordMaxPts ?? 5) || 5;
+  const coordMaxBonus = parseNum(settings.coordMaxBonus ?? 250) || 250;
+  let sistema = settings.sistemaPago || 'auto';
+  if (sistema === 'base') sistema = 'rango1';
+  if (sistema === 'bonus_15') sistema = 'rango2';
+  if (sistema === 'canon_1000') sistema = 'rango3';
+  const coordinadorAutorizado = !!settings.coordinadorAutorizado || sistema === 'coordinador';
+  const elegibleCoordinador = !!fechaAlta && antiguedad >= 4 && posteriores >= 3;
+  let sistemaEfectivo = sistema === 'auto' ? rangoAutomaticoBesoul(antiguedad) : sistema;
+  if ((sistema === 'auto' && coordinadorAutorizado && elegibleCoordinador) || sistema === 'coordinador') sistemaEfectivo = 'coordinador';
+  let res;
+  if (pactoEspecial && sistemaEfectivo !== 'coordinador') {
+    const bs = Math.max(0, canonFijo + aporteClientes);
+    res = { pt: Math.max(0, F-bs), bs, sistemaAplicado:`Pacto especial · canon ${dinero(canonFijo)}` };
+  } else if (sistemaEfectivo === 'rango2') res = calcularRepartoPorTramosBesoul(F, 'rango2', aporteClientes);
+  else if (sistemaEfectivo === 'rango3') res = { pt: Math.max(0, F-canonFijo), bs: Math.max(0, canonFijo), sistemaAplicado:`Rango III · canon ${dinero(canonFijo)}` };
+  else if (sistemaEfectivo === 'coordinador') {
+    const ptsActivosCentro = contarActivosCentroParaCoordinacion(contexto.key, contexto.centroId);
+    const ptsComputables = Math.min(Math.max(0, ptsActivosCentro), coordMaxPts);
+    const coordinacionBonus = Math.min(coordMaxBonus, ptsComputables * bonusCoordPorPt);
+    const canonReducido = Math.max(0, canonFijo - coordinacionBonus);
+    res = { pt: Math.max(0, F-canonReducido), bs: canonReducido, sistemaAplicado:`Rango IV · coordinador` };
+  } else res = calcularRepartoPorTramosBesoul(F, 'rango1', aporteClientes);
+  return { ...res, fechaAlta:settings.fechaAlta||'', antiguedad, posteriores, sistemaEfectivo };
+}
+function calcularCanonCentroYAsignar(c){
+  const trainers = Array.isArray(c.trainers) ? c.trainers : [];
+  const n = trainers.length;
+  const fijo = parseNum(c.canonFijo) || 0;
+  const incluidos = Math.max(0, Math.floor(parseNum(c.ptsIncluidos)||0));
+  const extra = parseNum(c.canonPt) || 0;
+  const reducidoDesde = Math.max(0, Math.floor(parseNum(c.canonPtReducidoDesde)||0));
+  const reducido = parseNum(c.canonPtReducido) || 0;
+  let variable = 0;
+  if (n > incluidos) {
+    const primerExtra = incluidos + 1;
+    const ultimoRegular = reducidoDesde > 0 ? Math.min(n, reducidoDesde - 1) : n;
+    const extrasRegulares = Math.max(0, ultimoRegular - primerExtra + 1);
+    const extrasReducidos = reducidoDesde > 0 ? Math.max(0, n - reducidoDesde + 1) : 0;
+    variable = extrasRegulares * extra + extrasReducidos * reducido;
+  }
+  const share = n ? (fijo + variable) / n : 0;
+  trainers.forEach(t => { t.canonCentroShare = share; t.bsNetoCentro = (t.bsBruto||0) - share; });
+  c.canonFijoTotal = fijo; c.canonVariableTotal = variable; c.canon = fijo + variable; c.canonProrrateado = share;
+  return c;
+}
+function construirCalculoMes(mesKey){
+  const centrosBase = { ...getCentros(), sin_centro:{id:'sin_centro', nombre:'Dirección / sin centro', canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true} };
+  const centros = {}; Object.keys(centrosBase).forEach(id => centros[id] = { ...centrosBase[id], trainers:[], facturacion:0, ptNeto:0, bsBruto:0, clientes:0, canon:0 });
+  const trainers = [];
+  perfilesUsuarios.filter(esPerfilOperativo).forEach(p => {
+    const key = trainerKeyPerfil(p);
+    const lista = Array.isArray(agendaData.clientes?.[key]) ? agendaData.clientes[key] : [];
+    let facturacion=0, clientes=0, facturacionMensual=0, facturacionVariable=0, sesionesBonosSueltas=0;
+    lista.forEach(f => {
+      if (f?.vinculacion) return;
+      if (normalizarEstado(f.estadoCliente||'activo') !== 'activo') return;
+      clientes += contarPersonasFicha(f);
+      const calc = calcularFacturacionFichaFinanzas(f, key, mesKey);
+      facturacion += calc.total; facturacionMensual += calc.mensual; facturacionVariable += calc.variable; sesionesBonosSueltas += calc.sesiones;
+    });
+    const settings = dbFinanzas.trainerSettings?.[key] || {};
+    const centroId = centroTrainer(key,p);
+    const soloGastos = TRAINERS_SOLO_IMPUTACION_GASTOS.includes(key);
+    const clientesAgendaNoComputados = soloGastos ? clientes : 0;
+    if (soloGastos) { facturacion=0; facturacionMensual=0; facturacionVariable=0; sesionesBonosSueltas=0; clientes=0; }
+    const aporteCliente = soloGastos ? 0 : parseNum(settings.aporteIndividualCliente ?? 0) * clientes;
+    const reparto = soloGastos ? {pt:0, bs:0, sistemaAplicado:'CEO · solo imputación gastos', fechaAlta:settings.fechaAlta || '', antiguedad:yearsBetween(fechaAltaSettings(settings)), sistemaEfectivo:'solo_gastos'} : calcularComisionAvanzada(facturacion, settings, {key, centroId, aporteClientes:aporteCliente});
+    const row = {key, nombre:nombrePerfil(p), email:p.email||'', centroId, facturacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, soloImputacionGastos:soloGastos, ptNeto:reparto.pt||0, bsBruto:reparto.bs||0, sistemaAplicado:reparto.sistemaAplicado||'', antiguedad:reparto.antiguedad||0, sistemaEfectivo:reparto.sistemaEfectivo||''};
+    trainers.push(row);
+    if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), trainers:[], facturacion:0, ptNeto:0, bsBruto:0, clientes:0, canon:0 };
+    centros[centroId].trainers.push(row); centros[centroId].facturacion += facturacion; centros[centroId].ptNeto += row.ptNeto; centros[centroId].bsBruto += row.bsBruto; centros[centroId].clientes += clientes;
+  });
+  Object.values(centros).forEach(c => calcularCanonCentroYAsignar(c));
+  const gastos = gastosMes(mesKey);
+  const total = Object.values(centros).reduce((a,c)=>{ a.facturacion += c.facturacion; a.ptNeto += c.ptNeto; a.bsBruto += c.bsBruto; a.canones += c.canon; a.clientes += c.clientes; return a; }, {facturacion:0, ptNeto:0, bsBruto:0, canones:0, clientes:0});
+  total.gastos = gastos; total.beneficio = total.bsBruto - total.canones - gastos;
+  return {mes:mesKey, centros, trainers, total, generadoEn:new Date().toISOString()};
+}
+function gastosMes(mesKey){ return (dbFinanzas.gastos?.[mesKey] || []).reduce((s,g)=>s+parseNum(g.importe),0); }
+function gastosCategoriasPeriodo(meses){ const res={}; meses.forEach(m=>{ (dbFinanzas.gastos?.[m]||[]).forEach(g=>{ const cat=g.categoria||'Otros'; res[cat]=(res[cat]||0)+parseNum(g.importe); }); }); return res; }
+function normalizarFinanzas(data){
+  const res = { centros:{}, trainerSettings:{}, gastos:{}, historico:{}, ...(data || {}) };
+  const centros = {}; Object.keys(DEFAULT_CENTROS).forEach(id => centros[id] = { ...DEFAULT_CENTROS[id], ...((data?.centros || {})[id] || {}) });
+  if (!centros.inacua.reglaCanon || centros.inacua.reglaCanon !== 'inacua_2026_v1') centros.inacua = { ...centros.inacua, canonFijo:1200, ptsIncluidos:6, canonPt:200, canonPtReducidoDesde:12, canonPtReducido:60, reglaCanon:'inacua_2026_v1' };
+  res.centros = centros; res.trainerSettings = res.trainerSettings || {}; res.gastos = res.gastos || {}; res.historico = res.historico || {}; return res;
+}
+function rangoSeleccionadoFechas(){
+  const start = document.getElementById('filter-start').value;
+  const end = document.getElementById('filter-end').value;
+  return { start, end, startDate: new Date(start+'T00:00:00'), endDate: endOfDay(new Date(end+'T00:00:00')) };
+}
+function mesesEntreFechas(start, end){
+  const res=[]; let d = new Date(start.getFullYear(), start.getMonth(), 1); const last = new Date(end.getFullYear(), end.getMonth(), 1);
+  while (d <= last) { res.push(mesKeyFromDate(d)); d.setMonth(d.getMonth()+1); }
+  return res;
+}
+function cambiarPeriodo(){
+  const p=document.getElementById('filter-period').value; const hoy=new Date(); let ini, fin;
+  if (p==='today') { ini=new Date(hoy); fin=new Date(hoy); }
+  else if (p==='week') { ini=startOfWeek(hoy); fin=addDays(ini,6); }
+  else if (p==='previousMonth') { ini=new Date(hoy.getFullYear(), hoy.getMonth()-1, 1); fin=new Date(hoy.getFullYear(), hoy.getMonth(), 0); }
+  else if (p==='year') { ini=new Date(hoy.getFullYear(),0,1); fin=new Date(hoy.getFullYear(),11,31); }
+  else if (p==='custom') { aplicarDashboard(); return; }
+  else { ini=new Date(hoy.getFullYear(), hoy.getMonth(), 1); fin=new Date(hoy.getFullYear(), hoy.getMonth()+1, 0); }
+  document.getElementById('filter-start').value = dateISO(ini); document.getElementById('filter-end').value = dateISO(fin); aplicarDashboard();
+}
+function obtenerMesData(mesKey){
+  if (mesKey === mesActualKey()) return construirCalculoMes(mesKey);
+  const h = dbFinanzas.historico?.[mesKey];
+  if (h && h.total) return h;
+  return construirCalculoMes(mesKey);
+}
+function aplicarFiltroFinanzasMes(data, centroId, trainerKey){
+  if (trainerKey) {
+    const t = (data.trainers || []).find(x => x.key === trainerKey);
+    if (!t) return { facturacion:0, ptNeto:0, bsBruto:0, canones:0, gastos:0, beneficio:0, clientes:0, trainers:0 };
+    const canones = t.canonCentroShare || 0;
+    return { facturacion:t.facturacion||0, ptNeto:t.ptNeto||0, bsBruto:t.bsBruto||0, canones, gastos:0, beneficio:(t.bsBruto||0)-canones, clientes:t.clientes||0, trainers:1 };
+  }
+  if (centroId) {
+    const c = data.centros?.[centroId]; if (!c) return { facturacion:0, ptNeto:0, bsBruto:0, canones:0, gastos:0, beneficio:0, clientes:0, trainers:0 };
+    return { facturacion:c.facturacion||0, ptNeto:c.ptNeto||0, bsBruto:c.bsBruto||0, canones:c.canon||0, gastos:0, beneficio:(c.bsBruto||0)-(c.canon||0), clientes:c.clientes||0, trainers:(c.trainers||[]).length };
+  }
+  const t=data.total||{}; return { facturacion:t.facturacion||0, ptNeto:t.ptNeto||0, bsBruto:t.bsBruto||0, canones:t.canones||0, gastos:t.gastos||0, beneficio:t.beneficio||0, clientes:t.clientes||0, trainers:(data.trainers||[]).length };
+}
+function fechaDeClaveAgenda(clave){ return String(clave||'').split('_')[0] || ''; }
+function horaDeClaveAgenda(clave){ return String(clave||'').split('_')[1] || ''; }
+function citaEnRango(clave, start, end){ const f=fechaDeClaveAgenda(clave); if(!f) return false; return f >= dateISO(start) && f <= dateISO(end); }
+function trainerIncluidoPorFiltro(trainerKey, centroIdFiltro, trainerFiltro){ if (trainerFiltro && trainerKey !== trainerFiltro) return false; if (centroIdFiltro) { const p=trainerByKey(trainerKey); if (centroTrainer(trainerKey,p) !== centroIdFiltro) return false; } return true; }
+function analizarAgenda(startDate, endDate, centroId, trainerKey){
+  const sesiones=[]; const slots={}; const heat={}; const byHour={}; const byDay={};
+  Object.keys(agendaData.agenda || {}).forEach(tKey=>{
+    if (!trainerIncluidoPorFiltro(tKey, centroId, trainerKey)) return;
+    const ag = agendaData.agenda[tKey] || {};
+    Object.keys(ag).forEach(clave=>{
+      if (!citaEnRango(clave,startDate,endDate)) return;
+      const obj=ag[clave] || {};
+      if (obj.bloqueoParteDe) return;
+      const fecha=fechaDeClaveAgenda(clave); const hora=horaDeClaveAgenda(clave);
+      const d=new Date(fecha+'T00:00:00'); if(Number.isNaN(d.getTime())) return;
+      const dow=(d.getDay()+6)%7;
+      const tipo=esCitaPruebaCRM(obj)?'prueba':(esRecuperacionNoFacturable(obj)?'recuperacion':'sesion');
+      sesiones.push({trainerKey:tKey, clave, fecha, hora, dow, tipo, nombre:obj.nombre||''});
+      const hour=hora.slice(0,2)+':00';
+      slots[`${DIAS[dow]} ${hora}`]=(slots[`${DIAS[dow]} ${hora}`]||0)+1;
+      if(!heat[dow]) heat[dow]={}; heat[dow][hour]=(heat[dow][hour]||0)+1;
+      byHour[hour]=(byHour[hour]||0)+1; byDay[DIAS[dow]]=(byDay[DIAS[dow]]||0)+1;
+    });
+  });
+  return { sesiones, slots, heat, byHour, byDay, total:sesiones.length, pruebas:sesiones.filter(s=>s.tipo==='prueba').length, recuperaciones:sesiones.filter(s=>s.tipo==='recuperacion').length, reales:sesiones.filter(s=>s.tipo==='sesion').length };
+}
+function analizarLeads(startDate,endDate,centroId,trainerKey){
+  const ini=startDate.getTime(); const fin=endDate.getTime();
+  const filtrados = leads.filter(l=>{
+    const ts = new Date(l.createdAt || l.updatedAt || '').getTime(); if(Number.isNaN(ts) || ts < ini || ts > fin) return false;
+    if (centroId && l.centroId !== centroId) return false;
+    if (trainerKey && l.trainerKey !== trainerKey) return false;
+    return true;
+  });
+  const fuente={}; filtrados.forEach(l=>{ const f=l.fuente||'Sin fuente'; fuente[f]=(fuente[f]||0)+1; });
+  return { leads:filtrados, total:filtrados.length, contactados:filtrados.filter(l=>l.estado && l.estado!=='Nuevo lead').length, pruebasSolicitadas:filtrados.filter(l=>['Prueba solicitada','Prueba agendada','Prueba realizada','Convertido a cliente'].includes(l.estado)).length, pruebasRealizadas:filtrados.filter(l=>['Prueba realizada','Convertido a cliente'].includes(l.estado)).length, convertidos:filtrados.filter(l=>l.estado==='Convertido a cliente'||l.convertido===true).length, perdidos:filtrados.filter(l=>l.estado==='Perdido').length, fuente };
+}
+function pintarKPIs(res){
+  document.getElementById('kpi-facturacion').innerText = dinero(res.total.facturacion);
+  document.getElementById('kpi-besoul').innerText = dinero(res.total.bsBruto);
+  document.getElementById('kpi-coste').innerText = dinero(res.total.canones + (res.total.gastos||0));
+  document.getElementById('kpi-beneficio').innerText = dinero(res.total.beneficio);
+  document.getElementById('kpi-clientes').innerText = numero(res.total.clientes);
+  document.getElementById('kpi-trainers').innerText = numero(res.total.trainers);
+  document.getElementById('kpi-sesiones').innerText = numero(res.agenda.total);
+  const conv = res.crm.total ? res.crm.convertidos / res.crm.total : 0;
+  document.getElementById('kpi-conversion').innerText = pct(conv);
+}
+function chartOptions(){ return { responsive:true, maintainAspectRatio:false, plugins:{ legend:{labels:{color:'#cbd5e1', boxWidth:10}}, tooltip:{callbacks:{label:(ctx)=>`${ctx.dataset?.label || ctx.label}: ${typeof ctx.raw==='number' ? ctx.raw.toLocaleString('es-ES') : ctx.raw}`}}}, scales:{ x:{ticks:{color:'#94a3b8'}, grid:{color:'#1e293b'}}, y:{ticks:{color:'#94a3b8'}, grid:{color:'#1e293b'}} } }; }
+function setChart(id, config){ if(charts[id]) charts[id].destroy(); const ctx=document.getElementById(id); if(!ctx || !window.Chart) return; charts[id]=new Chart(ctx, config); }
+function colorList(n){ const base=['#f59e0b','#06b6d4','#10b981','#8b5cf6','#f43f5e','#84cc16','#f97316','#60a5fa','#e879f9','#22d3ee']; return Array.from({length:n},(_,i)=>base[i%base.length]); }
+function pintarGraficas(res){
+  const meses=res.meses;
+  setChart('chartMonthly', { type:'line', data:{ labels:meses.map(etiquetaMes), datasets:[{label:'Facturación', data:res.monthly.map(m=>m.facturacion), borderColor:'#f59e0b', tension:.35}, {label:'Gastos/costes', data:res.monthly.map(m=>m.canones+m.gastos), borderColor:'#f43f5e', tension:.35}, {label:'Beneficio neto', data:res.monthly.map(m=>m.beneficio), borderColor:'#06b6d4', tension:.35}]}, options:chartOptions() });
+  const centros = Object.values(res.current.centros || {}).filter(c => c.id !== 'sin_centro' && (c.facturacion || c.trainers?.length));
+  setChart('chartCenters', { type:'doughnut', data:{ labels:centros.map(c=>c.nombre), datasets:[{ data:centros.map(c=>c.facturacion||0), backgroundColor:colorList(centros.length), borderColor:'#0f172a' }]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{color:'#cbd5e1', boxWidth:10}}} } });
+  setChart('chartCrm', { type:'bar', data:{ labels:['Leads','Contactados','Pruebas solic.','Pruebas real.','Convertidos','Perdidos'], datasets:[{label:'CRM', data:[res.crm.total,res.crm.contactados,res.crm.pruebasSolicitadas,res.crm.pruebasRealizadas,res.crm.convertidos,res.crm.perdidos], backgroundColor:'#8b5cf6'}]}, options:chartOptions() });
+  const fuentes = Object.keys(res.crm.fuente).sort((a,b)=>res.crm.fuente[b]-res.crm.fuente[a]);
+  setChart('chartSources', { type:'doughnut', data:{ labels:fuentes.length?fuentes:['Sin datos'], datasets:[{data:fuentes.length?fuentes.map(f=>res.crm.fuente[f]):[1], backgroundColor:colorList(Math.max(1,fuentes.length)), borderColor:'#0f172a'}]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{color:'#cbd5e1', boxWidth:10}}} } });
+  const horas = Object.keys(res.agenda.byHour).sort();
+  setChart('chartHours', { type:'bar', data:{ labels:horas, datasets:[{label:'Sesiones/pruebas', data:horas.map(h=>res.agenda.byHour[h]), backgroundColor:'#06b6d4'}]}, options:chartOptions() });
+  const cats = Object.keys(res.gastosCategorias).sort((a,b)=>res.gastosCategorias[b]-res.gastosCategorias[a]);
+  setChart('chartExpenses', { type:'bar', data:{ labels:cats.length?cats:['Sin gastos'], datasets:[{label:'Gastos', data:cats.length?cats.map(c=>res.gastosCategorias[c]):[0], backgroundColor:'#f43f5e'}]}, options:chartOptions() });
+}
+function pintarTablas(res){
+  const totalFact = res.current.total.facturacion || 0;
+  const centros = Object.values(res.current.centros || {}).filter(c=>c.id !== 'sin_centro' && ((c.trainers||[]).length || c.facturacion || c.canon));
+  document.getElementById('tabla-centros').innerHTML = centros.map(c=>`<tr class="hover:bg-slate-950/50"><td class="py-2 font-bold text-white">${escapeHTML(c.nombre)}</td><td>${numero((c.trainers||[]).length)}</td><td>${numero(c.clientes||0)}</td><td class="font-mono">${dinero(c.facturacion||0)}</td><td>${pct(totalFact ? (c.facturacion||0)/totalFact : 0)}</td><td class="font-mono text-red-300">${dinero(c.canon||0)}</td><td class="font-mono ${(c.bsBruto-c.canon)>=0?'text-cyan-300':'text-red-300'}">${dinero((c.bsBruto||0)-(c.canon||0))}</td></tr>`).join('') || '<tr><td colspan="7" class="py-8 text-center text-slate-500">Sin datos.</td></tr>';
+  const trainers = (res.current.trainers || []).filter(t => !document.getElementById('filter-trainer').value || t.key === document.getElementById('filter-trainer').value).filter(t => !document.getElementById('filter-center').value || t.centroId === document.getElementById('filter-center').value).sort((a,b)=>(b.facturacion||0)-(a.facturacion||0)).slice(0,20);
+  document.getElementById('tabla-trainers').innerHTML = trainers.map(t=>`<tr class="hover:bg-slate-950/50"><td class="py-2 font-bold text-white">${escapeHTML(t.nombre)}<div class="text-[10px] text-slate-500">${escapeHTML(t.key)}</div></td><td>${escapeHTML(nombreCentro(t.centroId))}</td><td>${numero(t.clientes||0)}</td><td class="font-mono">${dinero(t.facturacion||0)}</td><td class="font-mono text-emerald-300">${dinero(t.bsBruto||0)}</td><td class="text-cyan-300 text-[10px]">${escapeHTML(t.sistemaAplicado||'---')}</td></tr>`).join('') || '<tr><td colspan="6" class="py-8 text-center text-slate-500">Sin datos.</td></tr>';
+}
+function pintarHeatmap(res){
+  const hours=[]; for(let h=6; h<22; h++) hours.push(`${String(h).padStart(2,'0')}:00`);
+  const max = Math.max(1, ...Object.values(res.agenda.heat).flatMap(x=>Object.values(x||{})));
+  let html = '<table class="w-full text-[10px] text-center"><thead><tr><th class="text-left text-slate-500 py-2">Día/Hora</th>' + hours.map(h=>`<th class="text-slate-500 py-2">${h}</th>`).join('') + '</tr></thead><tbody>';
+  for(let d=0; d<7; d++) {
+    html += `<tr><td class="text-left text-slate-300 font-bold py-1 pr-2">${DIAS[d]}</td>`;
+    hours.forEach(h=>{ const val=(res.agenda.heat[d]||{})[h]||0; const op=val?Math.max(.16, val/max):.04; html += `<td class="heat-cell border border-slate-800" style="background:rgba(6,182,212,${op})"><span class="${val?'text-white':'text-slate-700'} font-mono">${val||''}</span></td>`; });
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  document.getElementById('heatmap').innerHTML = html;
+}
+function pintarOportunidades(res){
+  const slots = Object.entries(res.agenda.slots).sort((a,b)=>b[1]-a[1]);
+  const top = slots.slice(0,8);
+  const low = [];
+  const heat = res.agenda.heat;
+  for(let d=0; d<5; d++) { for(let h=8; h<=20; h++) { const key=`${String(h).padStart(2,'0')}:00`; low.push([`${DIAS[d]} ${key}`, (heat[d]||{})[key]||0]); } }
+  low.sort((a,b)=>a[1]-b[1] || a[0].localeCompare(b[0]));
+  document.getElementById('slots-oportunidad').innerHTML = `
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div class="bg-slate-950 border border-slate-800 rounded-xl p-3"><h3 class="font-black text-amber-400 mb-2">Franjas más ocupadas</h3>${top.length?top.map(([k,v])=>`<div class="flex justify-between border-b border-slate-800/50 py-1"><span>${escapeHTML(k)}</span><b>${v}</b></div>`).join(''):'<p class="text-slate-500">Sin sesiones en el periodo.</p>'}</div>
+      <div class="bg-slate-950 border border-slate-800 rounded-xl p-3"><h3 class="font-black text-cyan-400 mb-2">Huecos potenciales</h3>${low.slice(0,8).map(([k,v])=>`<div class="flex justify-between border-b border-slate-800/50 py-1"><span>${escapeHTML(k)}</span><b>${v}</b></div>`).join('')}</div>
+    </div>`;
+}
+function pintarInsights(res){
+  const ideas=[];
+  const centros=Object.values(res.current.centros||{}).filter(c=>c.id!=='sin_centro' && c.trainers?.length);
+  const topCentro=centros.slice().sort((a,b)=>(b.facturacion||0)-(a.facturacion||0))[0];
+  if(topCentro) ideas.push(`Centro con mayor facturación: <b>${escapeHTML(topCentro.nombre)}</b> (${dinero(topCentro.facturacion)}).`);
+  const topFuente=Object.entries(res.crm.fuente).sort((a,b)=>b[1]-a[1])[0];
+  if(topFuente) ideas.push(`Fuente principal de leads: <b>${escapeHTML(topFuente[0])}</b> (${topFuente[1]} lead/s).`);
+  const slots=Object.entries(res.agenda.slots).sort((a,b)=>b[1]-a[1])[0];
+  if(slots) ideas.push(`Franja más ocupada: <b>${escapeHTML(slots[0])}</b> con ${slots[1]} sesión/es o prueba/s.`);
+  if(res.total.beneficio < 0) ideas.push(`El beneficio neto del periodo está en negativo: <b class="text-red-300">${dinero(res.total.beneficio)}</b>. Revisa costes de sede y gastos.`);
+  const box=document.getElementById('insights');
+  if(!ideas.length){ box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  box.innerHTML = `<h2 class="text-sm font-black text-white mb-2">Lecturas rápidas de dirección</h2><div class="grid grid-cols-1 md:grid-cols-${Math.min(3,ideas.length)} gap-2">${ideas.map(i=>`<div class="bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-300">${i}</div>`).join('')}</div>`;
+}
+function aplicarDashboard(){
+  if(!perfil) return;
+  const {startDate,endDate}=rangoSeleccionadoFechas();
+  if(Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return;
+  const centroId=document.getElementById('filter-center').value;
+  const trainerKey=document.getElementById('filter-trainer').value;
+  const meses=mesesEntreFechas(startDate,endDate);
+  const monthly=meses.map(m=>aplicarFiltroFinanzasMes(obtenerMesData(m), centroId, trainerKey));
+  const total=monthly.reduce((a,m)=>{ a.facturacion+=m.facturacion; a.ptNeto+=m.ptNeto; a.bsBruto+=m.bsBruto; a.canones+=m.canones; a.gastos+=m.gastos; a.beneficio+=m.beneficio; a.clientes=Math.max(a.clientes,m.clientes); a.trainers=Math.max(a.trainers,m.trainers); return a; }, {facturacion:0,ptNeto:0,bsBruto:0,canones:0,gastos:0,beneficio:0,clientes:0,trainers:0});
+  const current=obtenerMesData(mesActualKey());
+  const agenda=analizarAgenda(startDate,endDate,centroId,trainerKey);
+  const crm=analizarLeads(startDate,endDate,centroId,trainerKey);
+  const gastosCategorias=gastosCategoriasPeriodo(meses);
+  const res={meses, monthly, total, current, agenda, crm, gastosCategorias};
+  ultimoResumen=res;
+  pintarKPIs(res); pintarGraficas(res); pintarTablas(res); pintarHeatmap(res); pintarOportunidades(res); pintarInsights(res);
+}
+function poblarFiltros(){
+  const center=document.getElementById('filter-center'); const trainer=document.getElementById('filter-trainer');
+  center.innerHTML = '<option value="">Todos los centros</option>' + Object.values(getCentros()).map(c=>`<option value="${c.id}">${escapeHTML(c.nombre)}</option>`).join('');
+  const perfiles=perfilesUsuarios.filter(esPerfilOperativo).sort((a,b)=>nombrePerfil(a).localeCompare(nombrePerfil(b),'es'));
+  trainer.innerHTML = '<option value="">Todos los entrenadores</option>' + perfiles.map(p=>`<option value="${escapeHTML(trainerKeyPerfil(p))}">${escapeHTML(nombrePerfil(p))}</option>`).join('');
+}
+function exportarResumenCSV(){
+  if(!ultimoResumen) return;
+  const rows=[['Métrica','Valor'],['Facturación',ultimoResumen.total.facturacion],['Besoul bruto',ultimoResumen.total.bsBruto],['Coste sede',ultimoResumen.total.canones],['Gastos',ultimoResumen.total.gastos],['Beneficio',ultimoResumen.total.beneficio],['Clientes',ultimoResumen.total.clientes],['Entrenadores',ultimoResumen.total.trainers],['Sesiones/pruebas',ultimoResumen.agenda.total],['Leads',ultimoResumen.crm.total],['Convertidos',ultimoResumen.crm.convertidos]];
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`besoul_dashboard_${dateISO(new Date())}.csv`; a.click(); URL.revokeObjectURL(url);
+}
+function mostrarAuthError(msg){ const el=document.getElementById('auth-error'); el.innerText=msg; el.classList.remove('hidden'); }
+function loginDashboard(){ const email=normalizarEmail(document.getElementById('login-email').value); const pass=document.getElementById('login-pass').value; if(!email||!pass){mostrarAuthError('Introduce email y contraseña.'); return;} auth.signInWithEmailAndPassword(email,pass).catch(()=>mostrarAuthError('Acceso denegado. Revisa email, contraseña y perfil admin.')); }
+function logoutDashboard(){ unsubs.forEach(fn=>{try{fn();}catch(e){}}); auth.signOut().finally(()=>location.reload()); }
+async function iniciarApp(user){
+  usuario=user; const email=normalizarEmail(user.email); const snap=await db.collection('besoulUsers').doc(email).get();
+  if(!snap.exists) throw new Error('Tu usuario no tiene perfil en besoulUsers.');
+  perfil={email,...snap.data()}; if(perfil.activo!==true) throw new Error('Usuario inactivo.'); if(perfil.rol!=='admin') throw new Error('El Dashboard está reservado a administración.');
+  document.getElementById('auth-screen').classList.add('hidden'); document.getElementById('app-content').classList.remove('hidden');
+  document.getElementById('lbl-usuario').innerText = perfil.nombre || email; document.getElementById('lbl-rango').innerText = 'Administrador';
+  cambiarPeriodo();
+  await refrescarDashboard();
+  unsubs.forEach(fn=>{try{fn();}catch(e){}}); unsubs=[];
+  unsubs.push(db.collection('besoulSuite').doc('finanzas').onSnapshot(s=>{ dbFinanzas=normalizarFinanzas(s.exists?s.data():{}); poblarFiltros(); aplicarDashboard(); }));
+  unsubs.push(db.collection('besoulSuite').doc('agenda').onSnapshot(s=>{ agendaData=s.exists?(s.data()||{}):{clientes:{},agenda:{}}; poblarFiltros(); aplicarDashboard(); }));
+  unsubs.push(db.collection('besoulUsers').onSnapshot(s=>{ perfilesUsuarios=s.docs.map(d=>({email:d.id,...d.data()})).filter(p=>p.activo!==false); poblarFiltros(); aplicarDashboard(); }));
+  unsubs.push(db.collection('besoulLeads').onSnapshot(s=>{ leads=s.docs.map(d=>({id:d.id,...d.data()})); aplicarDashboard(); }));
+}
+async function refrescarDashboard(){
+  if(!db) return;
+  const [fin, ag, users, leadsSnap] = await Promise.all([db.collection('besoulSuite').doc('finanzas').get(), db.collection('besoulSuite').doc('agenda').get(), db.collection('besoulUsers').get(), db.collection('besoulLeads').get()]);
+  dbFinanzas=normalizarFinanzas(fin.exists?fin.data():{}); agendaData=ag.exists?(ag.data()||{}):{clientes:{},agenda:{}}; perfilesUsuarios=users.docs.map(d=>({email:d.id,...d.data()})).filter(p=>p.activo!==false); leads=leadsSnap.docs.map(d=>({id:d.id,...d.data()}));
+  poblarFiltros(); aplicarDashboard();
+}
+function inicializar(){
+  if(!firebase.apps.length) firebase.initializeApp(BS_FIREBASE_CONFIG);
+  auth=firebase.auth(); db=firebase.firestore();
+  auth.onAuthStateChanged(async user=>{
+    if(!user){ document.getElementById('auth-screen').classList.remove('hidden'); document.getElementById('app-content').classList.add('hidden'); return; }
+    try { await iniciarApp(user); } catch(err) { console.error(err); mostrarAuthError(err.message || 'No se ha podido abrir Dashboard.'); await auth.signOut(); }
+  });
+}
+window.addEventListener('DOMContentLoaded', inicializar);
+</script>
+</body>
+</html>
