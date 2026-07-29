@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BESOUL Reservas</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#0B0F17">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="BESOUL">
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; background:#0B0F17; }
+    input, select, textarea, button { font-size:16px; }
+    @media (min-width:768px){ input, select, textarea, button { font-size:12px; } }
+    .slot-btn[disabled] { opacity:.4; cursor:not-allowed; }
+  </style>
+</head>
+<body class="min-h-screen text-white bg-slate-950">
+  <main class="max-w-5xl mx-auto p-4 md:p-8">
+    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 md:p-7 shadow-2xl">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5 mb-5">
+        <div class="flex items-center gap-4">
+          <div class="bg-white rounded-xl p-2 w-28 border border-slate-700 text-center">
+            <div class="text-amber-500 font-extrabold text-xl tracking-tighter italic font-serif">besoul</div>
+            <div class="text-slate-950 font-black text-[9px] tracking-[0.25em] border-t border-slate-950 mt-0.5">FIT</div>
+          </div>
+          <div>
+            <h1 class="text-xl md:text-2xl font-black">Reservas BESOUL</h1>
+            <p class="text-xs text-slate-400 mt-1">Solicita un hueco disponible con tu entrenador. La solicitud quedará pendiente de confirmación.</p>
+          </div>
+        </div>
+        <span class="inline-flex w-fit px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-[11px] font-bold uppercase tracking-wider">Solicitud de reserva</span>
+      </div>
+
+      <div id="token-screen" class="hidden bg-slate-950/70 border border-slate-800 rounded-xl p-4 mb-4">
+        <h2 class="text-sm font-black text-amber-400 uppercase">Introduce tu código de reserva</h2>
+        <p class="text-xs text-slate-400 mt-1 mb-3">Normalmente debes entrar desde el enlace que te ha enviado BESOUL. Si solo tienes el código, escríbelo aquí.</p>
+        <div class="flex flex-col md:flex-row gap-2">
+          <input id="manual-token" type="text" class="flex-1 bg-slate-900 border border-slate-800 rounded p-3 text-white" placeholder="Código / token de reserva">
+          <button onclick="usarTokenManual()" class="bg-amber-500 text-slate-950 font-black rounded px-4 py-3">Continuar</button>
+        </div>
+      </div>
+
+      <div id="loading" class="text-center text-slate-400 text-sm py-10">Cargando disponibilidad...</div>
+
+      <div id="app" class="hidden space-y-5">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+            <span class="text-[10px] text-slate-500 font-bold uppercase">Cliente</span>
+            <div id="client-name" class="text-lg font-black text-white mt-1">---</div>
+          </div>
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+            <span class="text-[10px] text-slate-500 font-bold uppercase">Entrenador</span>
+            <div id="trainer-name" class="text-lg font-black text-cyan-300 mt-1">---</div>
+          </div>
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+            <span class="text-[10px] text-slate-500 font-bold uppercase">Centro</span>
+            <div id="center-name" class="text-lg font-black text-amber-400 mt-1">---</div>
+          </div>
+        </div>
+
+        <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4">
+          <h2 class="text-sm font-black text-white uppercase">1. Elige un hueco disponible</h2>
+          <p class="text-xs text-slate-400 mt-1">Mostramos únicamente horarios dentro de la disponibilidad marcada por tu entrenador y que no figuran ocupados.</p>
+          <div id="slots" class="mt-4 space-y-4"></div>
+        </div>
+
+        <div id="selected-panel" class="hidden bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-4">
+          <h2 class="text-sm font-black text-cyan-300 uppercase">2. Confirmar solicitud</h2>
+          <p class="text-xs text-slate-300 mt-1">Hueco seleccionado: <span id="selected-slot" class="font-black text-white">---</span></p>
+          <label class="block text-xs text-slate-400 mt-4 mb-1">Comentario para el entrenador, si lo necesitas</label>
+          <textarea id="comments" class="w-full bg-slate-950 border border-slate-800 rounded p-3 text-white h-24" placeholder="Ej.: preferiría intensidad suave, tengo una molestia, puedo llegar 5 minutos antes..."></textarea>
+          <div class="flex flex-col md:flex-row justify-end gap-2 mt-4">
+            <button onclick="cancelarSeleccion()" class="bg-slate-800 text-slate-300 font-bold rounded px-4 py-3">Cambiar hora</button>
+            <button onclick="enviarSolicitud()" id="send-btn" class="bg-cyan-400 text-slate-950 font-black rounded px-4 py-3">Enviar solicitud</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="success" class="hidden bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-5 text-center">
+        <div class="text-3xl mb-2">✅</div>
+        <h2 class="text-lg font-black text-emerald-300">Solicitud enviada</h2>
+        <p class="text-sm text-slate-300 mt-2">Tu entrenador o BESOUL revisará la solicitud y te confirmará la reserva. Recuerda que todavía no está confirmada.</p>
+      </div>
+
+      <div id="error" class="hidden bg-red-500/10 border border-red-500/30 rounded-xl p-5 text-center text-red-200"></div>
+    </section>
+  </main>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAHp7l39BYkgHTVNNwPaaa21tTksBQ94Zo",
+      authDomain: "besoul-suite.firebaseapp.com",
+      projectId: "besoul-suite",
+      storageBucket: "besoul-suite.firebasestorage.app",
+      messagingSenderId: "215142605598",
+      appId: "1:215142605598:web:943629a7a9c50c034a1f0f"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let token = new URLSearchParams(location.search).get('t') || new URLSearchParams(location.search).get('token') || '';
+    let clientData = null;
+    let scheduleData = null;
+    let selected = null;
+
+    function showError(msg){
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('app').classList.add('hidden');
+      const e=document.getElementById('error'); e.textContent=msg; e.classList.remove('hidden');
+    }
+    function dateISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+    function timeToMin(t){ const [h,m]=String(t||'0:0').split(':').map(Number); return h*60+m; }
+    function minToTime(min){ return `${String(Math.floor(min/60)).padStart(2,'0')}:${String(min%60).padStart(2,'0')}`; }
+    function dayIndexMonSun(d){ const x=d.getDay(); return x===0?7:x; }
+    function labelFecha(iso){ const d=new Date(`${iso}T00:00:00`); return d.toLocaleDateString('es-ES',{weekday:'long', day:'numeric', month:'long'}); }
+    function escapeHTML(str){ return String(str||'').replace(/[&<>'"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[s])); }
+
+    function usarTokenManual(){
+      const t=document.getElementById('manual-token').value.trim();
+      if(!t) return;
+      location.href = `${location.pathname}?t=${encodeURIComponent(t)}`;
+    }
+
+    async function init(){
+      if(!token){
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('token-screen').classList.remove('hidden');
+        return;
+      }
+      try{
+        const clientSnap = await db.collection('besoulPublicClients').doc(token).get();
+        if(!clientSnap.exists) return showError('No se ha encontrado tu enlace de reservas. Pide a BESOUL que te envíe un enlace actualizado.');
+        clientData = clientSnap.data();
+        if(clientData.activo === false) return showError('Tu enlace de reservas no está activo. Contacta con BESOUL.');
+        const scheduleSnap = await db.collection('besoulPublicSchedule').doc(clientData.trainerKey).get();
+        if(!scheduleSnap.exists) return showError('Tu entrenador todavía no tiene disponibilidad publicada.');
+        scheduleData = scheduleSnap.data();
+        document.getElementById('client-name').textContent = clientData.clientName || 'Cliente';
+        document.getElementById('trainer-name').textContent = clientData.trainerName || scheduleData.trainerName || 'Entrenador';
+        document.getElementById('center-name').textContent = clientData.centroNombre || scheduleData.centroNombre || 'Centro BESOUL';
+        renderSlots();
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+      } catch(err){
+        console.error(err);
+        showError('No se ha podido cargar la disponibilidad. Revisa el enlace o inténtalo más tarde.');
+      }
+    }
+
+    function slotOcupado(clave){ return !!(scheduleData.ocupados && scheduleData.ocupados[clave]); }
+    function bloqueLibre(iso, min){
+      return !slotOcupado(`${iso}_${minToTime(min)}`) && !slotOcupado(`${iso}_${minToTime(min+15)}`) && !slotOcupado(`${iso}_${minToTime(min+30)}`);
+    }
+
+    function generarSlots(){
+      const out=[]; const hoy=new Date(); hoy.setHours(0,0,0,0);
+      const now=new Date(); const minNow=now.getHours()*60+now.getMinutes();
+      const disp = scheduleData.disponibilidad || {}; const semanal=disp.semanal || {};
+      for(let i=0;i<30;i++){
+        const d=new Date(hoy); d.setDate(hoy.getDate()+i);
+        const iso=dateISO(d); const cfg=semanal[dayIndexMonSun(d)];
+        if(!cfg || !cfg.activo) continue;
+        (cfg.bloques||[]).forEach(b=>{
+          const start=timeToMin(b.inicio), end=timeToMin(b.fin);
+          for(let m=start; m+45<=end; m+=15){
+            if(i===0 && m <= minNow+120) continue; // margen mínimo 2h
+            if(bloqueLibre(iso,m)) out.push({iso, hora:minToTime(m), label:`${labelFecha(iso)} · ${minToTime(m)}`});
+          }
+        });
+      }
+      return out;
+    }
+
+    function renderSlots(){
+      const cont=document.getElementById('slots'); const slots=generarSlots();
+      if(!slots.length){ cont.innerHTML='<div class="text-xs text-slate-500 text-center py-8 border border-dashed border-slate-800 rounded-xl">No hay huecos disponibles publicados ahora mismo. Contacta con tu entrenador para revisar opciones.</div>'; return; }
+      const grupos={}; slots.forEach(s=>{ if(!grupos[s.iso]) grupos[s.iso]=[]; grupos[s.iso].push(s); });
+      cont.innerHTML='';
+      Object.keys(grupos).slice(0,14).forEach(iso=>{
+        const wrap=document.createElement('div');
+        wrap.innerHTML=`<h3 class="text-xs font-black text-amber-400 uppercase mb-2">${escapeHTML(labelFecha(iso))}</h3><div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">${grupos[iso].map(s=>`<button class="slot-btn bg-slate-900 hover:bg-cyan-500/20 border border-slate-800 hover:border-cyan-500/40 rounded-lg py-2 text-xs font-black text-white" onclick="seleccionarSlot('${s.iso}','${s.hora}')">${s.hora}</button>`).join('')}</div>`;
+        cont.appendChild(wrap);
+      });
+    }
+
+    function seleccionarSlot(iso,hora){
+      selected={iso,hora,clave:`${iso}_${hora}`};
+      document.getElementById('selected-slot').textContent = `${labelFecha(iso)} a las ${hora}`;
+      document.getElementById('selected-panel').classList.remove('hidden');
+      document.getElementById('selected-panel').scrollIntoView({behavior:'smooth', block:'start'});
+    }
+    function cancelarSeleccion(){ selected=null; document.getElementById('selected-panel').classList.add('hidden'); }
+
+    async function enviarSolicitud(){
+      if(!selected) return;
+      if(!bloqueLibre(selected.iso, timeToMin(selected.hora))){ alert('Ese hueco acaba de dejar de estar disponible. Elige otro.'); await init(); return; }
+      const btn=document.getElementById('send-btn'); btn.disabled=true; btn.textContent='Enviando...';
+      try{
+        const id = `${token}_${selected.iso}_${selected.hora.replace(':','')}_${Date.now()}`;
+        await db.collection('besoulReservas').doc(id).set({
+          token,
+          clientId: clientData.clientId,
+          clientName: clientData.clientName,
+          email: clientData.email || '',
+          telefono: clientData.telefono || '',
+          trainerKey: clientData.trainerKey,
+          trainerName: clientData.trainerName || scheduleData.trainerName || '',
+          centroId: clientData.centroId || scheduleData.centroId || '',
+          centroNombre: clientData.centroNombre || scheduleData.centroNombre || '',
+          fechaISO: selected.iso,
+          hora: selected.hora,
+          clave: selected.clave,
+          duracionMin: 45,
+          comentarios: document.getElementById('comments').value.trim(),
+          estado: 'pendiente',
+          source: 'portalCliente',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        document.getElementById('app').classList.add('hidden');
+        document.getElementById('success').classList.remove('hidden');
+      }catch(err){
+        console.error(err);
+        alert('No se ha podido enviar la solicitud. Inténtalo de nuevo o contacta con BESOUL.');
+        btn.disabled=false; btn.textContent='Enviar solicitud';
+      }
+    }
+
+    if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+    init();
+  </script>
+</body>
+</html>
