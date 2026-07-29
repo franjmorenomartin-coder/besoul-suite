@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 
 <html lang="es">
@@ -9,6 +10,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>BESOUL - Scheduler & Profit Suite v4.1</title>
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#0B0F17">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="BESOUL">
 
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -129,6 +134,8 @@
 
             <div class="flex items-center gap-3">
 
+                <button onclick="abrirModalDisponibilidadReservas()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/20 transition">Disponibilidad</button>
+                <button onclick="abrirModalSolicitudesReservas()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20 transition">Reservas <span id="badge-reservas-pendientes" class="hidden ml-1 bg-emerald-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[9px] font-black">0</span></button>
                 <button id="btn-admin-entrenadores" onclick="abrirModalEntrenadores()" class="hidden px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition">Entrenadores</button>
 
                 <button onclick="logout()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-400 border border-slate-800 hover:text-white transition">Salir</button>
@@ -318,12 +325,15 @@
 
                 
 
-                <div id="field-individual-phone">
-
-                    <label class="text-slate-400 block mb-1">Teléfono (Opcional)</label>
-
-                    <input type="tel" id="cust-phone" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
-
+                <div id="field-individual-contact" class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-slate-400 block mb-1">Teléfono *</label>
+                        <input type="tel" id="cust-phone" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="Teléfono obligatorio">
+                    </div>
+                    <div>
+                        <label class="text-slate-400 block mb-1">Email *</label>
+                        <input type="email" id="cust-email" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="Email obligatorio para reservas">
+                    </div>
                 </div>
 
                 <div id="crm-origin-block" class="hidden p-3 bg-cyan-500/5 border border-cyan-500/20 rounded space-y-2">
@@ -683,7 +693,47 @@
 
     </div>
 
-    <!-- MODAL HISTÓRICO / ESTIMACIÓN CLIENTE -->
+
+
+    <!-- MODAL DISPONIBILIDAD / RESERVAS -->
+    <div id="modal-disponibilidad-reservas" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 w-full max-w-4xl space-y-4 my-2 sm:my-8 max-h-[calc(100dvh-1rem)] overflow-y-auto">
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <h3 class="text-sm font-bold text-cyan-300 uppercase tracking-wider">Disponibilidad semanal del entrenador</h3>
+                    <p class="text-[11px] text-slate-400 mt-1">Marca los días y franjas en los que el entrenador acepta solicitudes de reserva. El portal del cliente solo mostrará huecos libres dentro de esta disponibilidad.</p>
+                </div>
+                <button onclick="cerrarModalDisponibilidadReservas()" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
+            </div>
+            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 text-xs flex flex-col md:flex-row md:items-center gap-3">
+                <div class="flex-1">
+                    <span class="text-slate-500 text-[10px] uppercase font-bold block">Entrenador configurado</span>
+                    <span id="disp-trainer-label" class="text-white font-black">---</span>
+                </div>
+                <button type="button" onclick="copiarLinkPortalReservasGenerico()" class="bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-3 py-2 rounded font-bold text-[10px] hover:bg-cyan-500/20 transition">Copiar link portal clientes</button>
+            </div>
+            <div id="disponibilidad-grid" class="space-y-2"></div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="cerrarModalDisponibilidadReservas()" class="bg-slate-800 text-slate-400 px-3 py-2 rounded font-bold hover:text-white transition">Cancelar</button>
+                <button onclick="guardarDisponibilidadReservas()" class="bg-cyan-400 text-slate-950 px-4 py-2 rounded font-black hover:bg-cyan-500 transition">Guardar disponibilidad</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-solicitudes-reservas" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 w-full max-w-5xl space-y-4 my-2 sm:my-8 max-h-[calc(100dvh-1rem)] overflow-y-auto">
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <h3 class="text-sm font-bold text-emerald-300 uppercase tracking-wider">Solicitudes de reserva</h3>
+                    <p class="text-[11px] text-slate-400 mt-1">Las reservas de cliente entran como solicitud pendiente. Administración o el entrenador asignado pueden aceptarlas si la franja sigue libre.</p>
+                </div>
+                <button onclick="cerrarModalSolicitudesReservas()" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
+            </div>
+            <div id="reservas-lista" class="space-y-2"></div>
+        </div>
+    </div>
+
+        <!-- MODAL HISTÓRICO / ESTIMACIÓN CLIENTE -->
     <div id="modal-historico-cliente" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-2xl space-y-4 my-8">
             <div class="flex items-start justify-between gap-4">
@@ -778,6 +828,8 @@
         let dbAgenda = JSON.parse(localStorage.getItem('bs_db_agenda_v6')) || {};
         let dbPruebasCRM = JSON.parse(localStorage.getItem('bs_db_pruebas_crm_v6')) || {};
         let dbLeadsPruebasCRM = JSON.parse(localStorage.getItem('bs_db_leads_pruebas_crm_v6')) || {};
+        let dbDisponibilidadReservas = JSON.parse(localStorage.getItem('bs_db_disponibilidad_reservas_v6')) || {};
+        let dbSolicitudesReservas = {};
 
         let dbNotas = JSON.parse(localStorage.getItem('bs_db_notas_v6')) || {};
         let dbHistoricoClientes = JSON.parse(localStorage.getItem('bs_db_historico_clientes_v6')) || {};
@@ -827,6 +879,7 @@
 
                 agenda: dbAgenda || {},
                 pruebasCRM: dbPruebasCRM || {},
+                disponibilidadReservas: dbDisponibilidadReservas || {},
 
                 notas: dbNotas || {},
                 historicoClientes: dbHistoricoClientes || {},
@@ -849,7 +902,9 @@
 
                 payload.actualizadoEn = firebase.firestore.FieldValue.serverTimestamp();
 
-                window.bsAgendaCloudDocRef.set(payload).catch(err => console.error('Error guardando agenda en Firebase:', err));
+                window.bsAgendaCloudDocRef.set(payload)
+                    .then(() => publicarReservasPublicas())
+                    .catch(err => console.error('Error guardando agenda en Firebase:', err));
 
             } catch (err) {
 
@@ -889,6 +944,7 @@
 
                 dbAgenda = data.agenda || {};
                 dbPruebasCRM = data.pruebasCRM || {};
+                dbDisponibilidadReservas = data.disponibilidadReservas || {};
                 sincronizarPruebasCRMDentroDeAgenda();
 
                 dbNotas = data.notas || {};
@@ -902,6 +958,7 @@
 
                 localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
                 localStorage.setItem('bs_db_pruebas_crm_v6', JSON.stringify(dbPruebasCRM));
+                localStorage.setItem('bs_db_disponibilidad_reservas_v6', JSON.stringify(dbDisponibilidadReservas));
 
                 localStorage.setItem('bs_db_notas_v6', JSON.stringify(dbNotas));
                 localStorage.setItem('bs_db_historico_clientes_v6', JSON.stringify(dbHistoricoClientes));
@@ -1973,6 +2030,7 @@ function calcularRentabilidadFicha(ficha) {
 
                 iniciarSincronizacionNubeAgenda();
                 iniciarSincronizacionLeadsCRMAgenda();
+                iniciarModuloReservasAgenda();
                 buildColorPicker(); 
                 irSemanaActual();
 
@@ -2519,6 +2577,7 @@ function calcularRentabilidadFicha(ficha) {
             document.getElementById('cust-name').value = '';
 
             document.getElementById('cust-phone').value = '';
+            if (document.getElementById('cust-email')) document.getElementById('cust-email').value = '';
 
             document.getElementById('members-container').innerHTML = '';
 
@@ -2542,7 +2601,7 @@ function calcularRentabilidadFicha(ficha) {
 
             if(tabFichaActiva === 'grupo') {
 
-                document.getElementById('field-individual-phone').classList.add('hidden');
+                document.getElementById('field-individual-contact').classList.add('hidden');
 
                 document.getElementById('group-members-field').classList.remove('hidden');
 
@@ -2550,7 +2609,7 @@ function calcularRentabilidadFicha(ficha) {
 
             } else {
 
-                document.getElementById('field-individual-phone').classList.remove('hidden');
+                document.getElementById('field-individual-contact').classList.remove('hidden');
 
                 document.getElementById('group-members-field').classList.add('hidden');
 
@@ -2587,6 +2646,7 @@ function calcularRentabilidadFicha(ficha) {
             document.getElementById('cust-name').value = c.nombre;
 
             document.getElementById('cust-phone').value = c.telefono || "";
+            if (document.getElementById('cust-email')) document.getElementById('cust-email').value = c.email || "";
 
             document.getElementById('cust-mod').value = c.modalidad;
 
@@ -2624,7 +2684,7 @@ function calcularRentabilidadFicha(ficha) {
 
             if(c.tipo === 'grupo') {
 
-                document.getElementById('field-individual-phone').classList.add('hidden');
+                document.getElementById('field-individual-contact').classList.add('hidden');
 
                 document.getElementById('group-members-field').classList.remove('hidden');
 
@@ -2638,7 +2698,7 @@ function calcularRentabilidadFicha(ficha) {
 
             } else {
 
-                document.getElementById('field-individual-phone').classList.remove('hidden');
+                document.getElementById('field-individual-contact').classList.remove('hidden');
 
                 document.getElementById('group-members-field').classList.add('hidden');
 
@@ -2754,6 +2814,7 @@ function calcularRentabilidadFicha(ficha) {
             const name = document.getElementById('cust-name').value.trim();
 
             const phone = document.getElementById('cust-phone').value.trim();
+            const emailCliente = (document.getElementById('cust-email')?.value || '').trim().toLowerCase();
 
             const mod = document.getElementById('cust-mod').value;
 
@@ -2777,6 +2838,20 @@ function calcularRentabilidadFicha(ficha) {
                 alert('El nombre es obligatorio. En móvil está en el primer campo de la ficha.');
                 const nameInput = document.getElementById('cust-name');
                 if (nameInput) { nameInput.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => nameInput.focus(), 50); }
+                return;
+            }
+
+            if (tabFichaActiva !== 'grupo' && (!phone || !emailCliente)) {
+                alert('Para activar reservas, el teléfono y el email del cliente son obligatorios.');
+                const contactInput = !phone ? document.getElementById('cust-phone') : document.getElementById('cust-email');
+                if (contactInput) { contactInput.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => contactInput.focus(), 50); }
+                return;
+            }
+
+            if (tabFichaActiva !== 'grupo' && emailCliente && !/^\S+@\S+\.\S+$/.test(emailCliente)) {
+                alert('Introduce un email válido para el cliente.');
+                const emailInput = document.getElementById('cust-email');
+                if (emailInput) { emailInput.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => emailInput.focus(), 50); }
                 return;
             }
 
@@ -2821,6 +2896,8 @@ function calcularRentabilidadFicha(ficha) {
                 nombre: name,
 
                 telefono: tipoReal === 'grupo' ? '' : phone,
+                email: tipoReal === 'grupo' ? '' : emailCliente,
+                reservaToken: tipoReal === 'grupo' ? '' : (fichaAnterior?.reservaToken || generarTokenReservaCliente()),
 
                 modalidad: mod,
 
@@ -3057,6 +3134,9 @@ function calcularRentabilidadFicha(ficha) {
                 const botonBorrarHTML = (rolActivo === 'admin' && !esVinculado)
                     ? `<button onclick="event.stopPropagation(); borrarFichaCliente('${c.id}')" class="text-red-400 text-[10px] mt-1 font-bold hover:underline">Borrar</button>`
                     : '';
+                const botonReservasHTML = (!esVinculado && c.tipo === 'individual' && clienteActivoParaAgenda(c))
+                    ? `<button onclick="event.stopPropagation(); copiarLinkReservaCliente('${c.id}')" class="text-cyan-300 text-[10px] mt-1 font-bold hover:underline">Link reservas</button>`
+                    : '';
 
                 const contadorHTML = renderContadorHTML(c);
 
@@ -3092,6 +3172,7 @@ function calcularRentabilidadFicha(ficha) {
 
                             <button onclick="event.stopPropagation(); editarFicha('${botonEditarId}')" class="text-cyan-500 text-[10px] mt-2 font-bold hover:underline">${textoBoton}</button>
                             <button onclick="event.stopPropagation(); abrirModalHistoricoCliente('${botonEditarId}')" class="text-amber-400 text-[10px] mt-1 font-bold hover:underline">Histórico</button>
+                            ${botonReservasHTML}
                             ${botonBorrarHTML}
 
                         </div>
@@ -3601,6 +3682,314 @@ function calcularRentabilidadFicha(ficha) {
         }
 
 
+
+
+        // === BESOUL RESERVAS CLIENTE · disponibilidad PT + solicitudes ===
+        const BS_RESERVAS_COLLECTION = 'besoulReservas';
+        const BS_PUBLIC_CLIENTS_COLLECTION = 'besoulPublicClients';
+        const BS_PUBLIC_SCHEDULE_COLLECTION = 'besoulPublicSchedule';
+        window.bsReservasUnsub = null;
+        window.bsReservasPublishTimer = null;
+
+        function generarTokenReservaCliente() {
+            const a = Math.random().toString(36).slice(2, 10);
+            const b = Date.now().toString(36);
+            return `res_${a}_${b}`;
+        }
+
+        function urlBaseBesoul() {
+            const path = window.location.pathname.replace(/agenda\.html.*$/,'');
+            return `${window.location.origin}${path}`;
+        }
+
+        function urlReservasCliente(token) {
+            return `${urlBaseBesoul()}reservas.html?t=${encodeURIComponent(token || '')}`;
+        }
+
+        async function copiarTextoBesoul(texto, mensajeOk='Copiado') {
+            try {
+                await navigator.clipboard.writeText(texto);
+                alert(mensajeOk);
+            } catch(e) {
+                prompt('Copia este enlace:', texto);
+            }
+        }
+
+        function copiarLinkPortalReservasGenerico() {
+            copiarTextoBesoul(`${urlBaseBesoul()}reservas.html`, 'Link del portal de reservas copiado. Para clientes reales, usa el botón “Link reservas” de su ficha.');
+        }
+
+        function copiarLinkReservaCliente(idCliente) {
+            const c = (dbClientes[entrenadorVisto] || []).find(x => x.id === idCliente);
+            if (!c) return;
+            if (!c.email || !c.telefono) {
+                alert('Este cliente necesita email y teléfono antes de generar/enviar el enlace de reservas.');
+                return;
+            }
+            if (!c.reservaToken) {
+                c.reservaToken = generarTokenReservaCliente();
+                localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
+                guardarEstadoNubeAgenda();
+            } else {
+                publicarReservasPublicas();
+            }
+            copiarTextoBesoul(urlReservasCliente(c.reservaToken), `Link de reservas de ${c.nombre} copiado.`);
+        }
+
+        function disponibilidadReservasPorDefecto() {
+            const semanal = {};
+            for (let d=1; d<=7; d++) {
+                semanal[d] = { activo: d <= 5, bloques: [{inicio:'08:00', fin:'14:00'}, {inicio:'16:00', fin:'21:00'}] };
+            }
+            return { semanal, actualizadoEn: new Date().toISOString() };
+        }
+
+        function disponibilidadTrainerActual() {
+            if (!dbDisponibilidadReservas[entrenadorVisto]) dbDisponibilidadReservas[entrenadorVisto] = disponibilidadReservasPorDefecto();
+            return dbDisponibilidadReservas[entrenadorVisto];
+        }
+
+        function abrirModalDisponibilidadReservas() {
+            const modal = document.getElementById('modal-disponibilidad-reservas');
+            if (!modal) return;
+            document.getElementById('disp-trainer-label').innerText = nombreEntrenador(entrenadorVisto);
+            renderDisponibilidadReservasForm();
+            modal.classList.remove('hidden');
+        }
+
+        function cerrarModalDisponibilidadReservas() {
+            const modal = document.getElementById('modal-disponibilidad-reservas');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function renderDisponibilidadReservasForm() {
+            const cont = document.getElementById('disponibilidad-grid');
+            if (!cont) return;
+            const disp = disponibilidadTrainerActual();
+            const dias = ['','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+            cont.innerHTML = '';
+            for (let d=1; d<=7; d++) {
+                const cfg = disp.semanal?.[d] || {activo:false, bloques:[{inicio:'08:00',fin:'14:00'},{inicio:'16:00',fin:'21:00'}]};
+                const b1 = cfg.bloques?.[0] || {inicio:'08:00', fin:'14:00'};
+                const b2 = cfg.bloques?.[1] || {inicio:'16:00', fin:'21:00'};
+                const row = document.createElement('div');
+                row.className = 'bg-slate-950/70 border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-xs';
+                row.innerHTML = `
+                    <label class="md:col-span-2 flex items-center gap-2 font-bold text-white"><input type="checkbox" id="disp-active-${d}" ${cfg.activo ? 'checked' : ''} class="accent-cyan-400"> ${dias[d]}</label>
+                    <div class="md:col-span-5 grid grid-cols-2 gap-2">
+                        <div><span class="text-[9px] text-slate-500 uppercase font-bold">Bloque 1 inicio</span><input type="time" step="900" id="disp-${d}-b1-start" value="${escapeHTML(b1.inicio)}" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white"></div>
+                        <div><span class="text-[9px] text-slate-500 uppercase font-bold">Bloque 1 fin</span><input type="time" step="900" id="disp-${d}-b1-end" value="${escapeHTML(b1.fin)}" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white"></div>
+                    </div>
+                    <div class="md:col-span-5 grid grid-cols-2 gap-2">
+                        <div><span class="text-[9px] text-slate-500 uppercase font-bold">Bloque 2 inicio</span><input type="time" step="900" id="disp-${d}-b2-start" value="${escapeHTML(b2.inicio)}" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white"></div>
+                        <div><span class="text-[9px] text-slate-500 uppercase font-bold">Bloque 2 fin</span><input type="time" step="900" id="disp-${d}-b2-end" value="${escapeHTML(b2.fin)}" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white"></div>
+                    </div>
+                `;
+                cont.appendChild(row);
+            }
+        }
+
+        function guardarDisponibilidadReservas() {
+            const semanal = {};
+            for (let d=1; d<=7; d++) {
+                const activo = !!document.getElementById(`disp-active-${d}`)?.checked;
+                const b1s = document.getElementById(`disp-${d}-b1-start`)?.value || '';
+                const b1e = document.getElementById(`disp-${d}-b1-end`)?.value || '';
+                const b2s = document.getElementById(`disp-${d}-b2-start`)?.value || '';
+                const b2e = document.getElementById(`disp-${d}-b2-end`)?.value || '';
+                const bloques = [];
+                if (b1s && b1e && b1s < b1e) bloques.push({inicio:b1s, fin:b1e});
+                if (b2s && b2e && b2s < b2e) bloques.push({inicio:b2s, fin:b2e});
+                semanal[d] = { activo, bloques };
+            }
+            dbDisponibilidadReservas[entrenadorVisto] = { semanal, actualizadoEn: new Date().toISOString(), actualizadoPor: usuarioLogeado };
+            localStorage.setItem('bs_db_disponibilidad_reservas_v6', JSON.stringify(dbDisponibilidadReservas));
+            guardarEstadoNubeAgenda();
+            publicarReservasPublicas();
+            cerrarModalDisponibilidadReservas();
+            alert('Disponibilidad de reservas guardada.');
+        }
+
+        function estadoReservaActivo(reserva) {
+            return ['pendiente','aceptada'].includes(String(reserva?.estado || '').toLowerCase());
+        }
+
+        function reservasPendientesVisibles() {
+            return Object.values(dbSolicitudesReservas || {}).filter(r => {
+                if (String(r.estado || 'pendiente').toLowerCase() !== 'pendiente') return false;
+                if (rolActivo === 'admin') return true;
+                return String(r.trainerKey || '') === usuarioLogeado;
+            });
+        }
+
+        function actualizarBadgeReservas() {
+            const badge = document.getElementById('badge-reservas-pendientes');
+            if (!badge) return;
+            const n = reservasPendientesVisibles().length;
+            badge.textContent = n;
+            badge.classList.toggle('hidden', n === 0);
+        }
+
+        function abrirModalSolicitudesReservas() {
+            renderSolicitudesReservas();
+            const modal = document.getElementById('modal-solicitudes-reservas');
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function cerrarModalSolicitudesReservas() {
+            const modal = document.getElementById('modal-solicitudes-reservas');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function renderSolicitudesReservas() {
+            const cont = document.getElementById('reservas-lista');
+            if (!cont) return;
+            const lista = Object.entries(dbSolicitudesReservas || {}).map(([id,r]) => ({id, ...r})).filter(r => {
+                if (rolActivo === 'admin') return true;
+                return String(r.trainerKey || '') === usuarioLogeado;
+            }).sort((a,b) => String(a.fechaISO || '').localeCompare(String(b.fechaISO || '')) || String(a.hora || '').localeCompare(String(b.hora || '')));
+            if (!lista.length) {
+                cont.innerHTML = '<div class="text-xs text-slate-500 text-center py-8 border border-dashed border-slate-800 rounded-xl">No hay solicitudes de reserva.</div>';
+                actualizarBadgeReservas();
+                return;
+            }
+            cont.innerHTML = '';
+            lista.forEach(r => {
+                const estado = String(r.estado || 'pendiente').toLowerCase();
+                const color = estado === 'pendiente' ? 'amber' : estado === 'aceptada' ? 'emerald' : 'slate';
+                const row = document.createElement('div');
+                row.className = 'bg-slate-950/70 border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-12 gap-3 items-center text-xs';
+                row.innerHTML = `
+                    <div class="md:col-span-3"><div class="text-white font-black uppercase">${escapeHTML(r.clientName || 'Cliente')}</div><div class="text-slate-500 text-[10px]">${escapeHTML(r.email || '')} · ${escapeHTML(r.telefono || '')}</div></div>
+                    <div class="md:col-span-2"><span class="text-slate-500 text-[9px] uppercase font-bold block">Entrenador</span><span class="text-white font-bold">${escapeHTML(r.trainerName || nombreEntrenador(r.trainerKey))}</span></div>
+                    <div class="md:col-span-2"><span class="text-slate-500 text-[9px] uppercase font-bold block">Fecha y hora</span><span class="text-cyan-300 font-mono font-bold">${escapeHTML(r.fechaISO || '')} · ${escapeHTML(r.hora || '')}</span></div>
+                    <div class="md:col-span-2"><span class="text-slate-500 text-[9px] uppercase font-bold block">Estado</span><span class="text-${color}-300 font-bold uppercase">${escapeHTML(estado)}</span></div>
+                    <div class="md:col-span-3 flex flex-wrap md:justify-end gap-2">
+                        ${estado === 'pendiente' ? `<button onclick="aceptarSolicitudReserva('${r.id}')" class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-2 py-1.5 rounded font-bold text-[10px]">Aceptar</button><button onclick="rechazarSolicitudReserva('${r.id}')" class="bg-red-500/10 text-red-300 border border-red-500/30 px-2 py-1.5 rounded font-bold text-[10px]">Rechazar</button>` : ''}
+                    </div>
+                    ${r.comentarios ? `<div class="md:col-span-12 text-[10px] text-slate-400 border-t border-slate-800 pt-2">${escapeHTML(r.comentarios)}</div>` : ''}
+                `;
+                cont.appendChild(row);
+            });
+            actualizarBadgeReservas();
+        }
+
+        async function aceptarSolicitudReserva(id) {
+            const r = dbSolicitudesReservas[id];
+            if (!r) return;
+            const trainer = r.trainerKey;
+            if (rolActivo !== 'admin' && trainer !== usuarioLogeado) { alert('Solo puedes aceptar solicitudes de tu agenda.'); return; }
+            const clave = r.clave || `${r.fechaISO}_${r.hora}`;
+            const cliente = (dbClientes[trainer] || []).find(c => c.id === r.clientId);
+            if (!cliente) { alert('No se ha encontrado el cliente asociado a esta reserva.'); return; }
+            const oldTrainer = entrenadorVisto;
+            entrenadorVisto = trainer;
+            const conflicto = hayConflictoBloqueSesion(clave, '');
+            entrenadorVisto = oldTrainer;
+            if (conflicto) { alert(`La franja ya no está libre. Se solapa con ${conflicto.obj?.nombre || 'otra cita'}.`); return; }
+            if (!dbAgenda[trainer]) dbAgenda[trainer] = {};
+            dbAgenda[trainer][clave] = { ...cliente, duracionMin: 45, origenReservaCliente: true, solicitudReservaId: id };
+            localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
+            try {
+                const fs = firebase.firestore();
+                await fs.collection(BS_RESERVAS_COLLECTION).doc(id).set({ estado:'aceptada', aceptadaEn: firebase.firestore.FieldValue.serverTimestamp(), aceptadaPor: usuarioLogeado }, { merge:true });
+            } catch(e) { console.error(e); }
+            guardarEstadoNubeAgenda();
+            publicarReservasPublicas();
+            recalcularKPIs(); renderAgenda(); renderSolicitudesReservas();
+        }
+
+        async function rechazarSolicitudReserva(id) {
+            const motivo = prompt('Motivo de rechazo/cancelación (opcional):') || '';
+            try {
+                const fs = firebase.firestore();
+                await fs.collection(BS_RESERVAS_COLLECTION).doc(id).set({ estado:'rechazada', rechazadaEn: firebase.firestore.FieldValue.serverTimestamp(), rechazadaPor: usuarioLogeado, motivoRechazo: motivo }, { merge:true });
+            } catch(e) { alert('No se pudo rechazar la solicitud.'); console.error(e); }
+        }
+
+        function iniciarModuloReservasAgenda() {
+            try {
+                if (!window.firebase || !firebase.apps.length) return;
+                const fs = firebase.firestore();
+                if (window.bsReservasUnsub) { try { window.bsReservasUnsub(); } catch(e) {} }
+                window.bsReservasUnsub = fs.collection(BS_RESERVAS_COLLECTION).onSnapshot(snapshot => {
+                    const mapa = {};
+                    snapshot.forEach(doc => mapa[doc.id] = { id: doc.id, ...(doc.data() || {}) });
+                    dbSolicitudesReservas = mapa;
+                    actualizarBadgeReservas();
+                    if (document.getElementById('modal-solicitudes-reservas') && !document.getElementById('modal-solicitudes-reservas').classList.contains('hidden')) renderSolicitudesReservas();
+                    publicarReservasPublicasDebounced();
+                }, err => console.error('Error leyendo solicitudes de reservas:', err));
+                publicarReservasPublicasDebounced();
+            } catch(err) { console.error('Error iniciando módulo de reservas:', err); }
+        }
+
+        function publicarReservasPublicasDebounced() {
+            clearTimeout(window.bsReservasPublishTimer);
+            window.bsReservasPublishTimer = setTimeout(publicarReservasPublicas, 800);
+        }
+
+        function claveFechaDesdeDateYMin(fecha, min) {
+            return `${formatoFechaLocal(fecha)}_${formatoMinutosHorario(min)}`;
+        }
+
+        async function publicarReservasPublicas() {
+            try {
+                if (!window.firebase || !firebase.apps.length || !usuarioFirebaseActual) return;
+                const fs = firebase.firestore();
+                const batch = fs.batch();
+                const hoy = new Date(); hoy.setHours(0,0,0,0);
+                const diasPublicar = 60;
+                Object.keys(dbCredenciales || {}).forEach(trainerKey => {
+                    if (!dbClientes[trainerKey]) return;
+                    const disp = dbDisponibilidadReservas[trainerKey] || disponibilidadReservasPorDefecto();
+                    const ocupados = {};
+                    Object.keys(dbAgenda[trainerKey] || {}).forEach(clave => {
+                        clavesBloqueSesion(clave, 45).forEach(k => ocupados[k] = true);
+                    });
+                    Object.values(dbSolicitudesReservas || {}).forEach(r => {
+                        if (r.trainerKey === trainerKey && estadoReservaActivo(r)) {
+                            clavesBloqueSesion(r.clave || `${r.fechaISO}_${r.hora}`, 45).forEach(k => ocupados[k] = true);
+                        }
+                    });
+                    const scheduleRef = fs.collection(BS_PUBLIC_SCHEDULE_COLLECTION).doc(trainerKey);
+                    batch.set(scheduleRef, {
+                        trainerKey,
+                        trainerName: nombreEntrenador(trainerKey),
+                        centroId: dbCredenciales[trainerKey]?.centroId || '',
+                        centroNombre: dbCredenciales[trainerKey]?.centroNombre || '',
+                        disponibilidad: disp,
+                        ocupados,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                    (dbClientes[trainerKey] || []).forEach(c => {
+                        if (!c || c.tipo !== 'individual' || c.vinculacion || !clienteActivoParaAgenda(c)) return;
+                        if (!c.email || !c.telefono) return;
+                        if (!c.reservaToken) c.reservaToken = generarTokenReservaCliente();
+                        const ref = fs.collection(BS_PUBLIC_CLIENTS_COLLECTION).doc(c.reservaToken);
+                        batch.set(ref, {
+                            token: c.reservaToken,
+                            clientId: c.id,
+                            clientName: c.nombre,
+                            trainerKey,
+                            trainerName: nombreEntrenador(trainerKey),
+                            centroId: dbCredenciales[trainerKey]?.centroId || '',
+                            centroNombre: dbCredenciales[trainerKey]?.centroNombre || '',
+                            email: c.email || '',
+                            telefono: c.telefono || '',
+                            activo: true,
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        }, { merge: true });
+                    });
+                });
+                await batch.commit();
+                localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
+            } catch(err) {
+                console.warn('No se pudieron publicar datos públicos de reservas:', err);
+            }
+        }
+
+
         function recalcularKPIs() {
             actualizarLabelsKPIMes();
             const inicioMes = inicioMesVisible();
@@ -4079,6 +4468,14 @@ function calcularRentabilidadFicha(ficha) {
 
 
         function logout() { try { firebase.auth().signOut(); } catch(e) {} window.location.reload(); }
+
+
+        // Registro PWA básico
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(() => {});
+            });
+        }
 
     </script>
 
