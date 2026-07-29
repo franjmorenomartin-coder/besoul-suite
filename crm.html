@@ -5,6 +5,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BESOUL CRM - Captación y Crecimiento</title>
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#0B0F17">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="BESOUL">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
@@ -37,7 +41,7 @@
       </div>
       <div class="space-y-3 text-xs">
         <div>
-          <label class="text-slate-400 block mb-1">Email</label>
+          <label class="text-slate-400 block mb-1">Email *</label>
           <input type="email" id="login-email" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="tu@email.com" autocomplete="email">
         </div>
         <div>
@@ -170,8 +174,8 @@
               <input type="tel" id="lead-telefono" autocomplete="tel" placeholder="Teléfono" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
             </div>
             <div>
-              <label class="text-slate-400 block mb-1">Email</label>
-              <input type="email" id="lead-email" autocomplete="email" placeholder="Email opcional" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+              <label class="text-slate-400 block mb-1">Email *</label>
+              <input type="email" id="lead-email" autocomplete="email" placeholder="Email obligatorio" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
             </div>
           </div>
 
@@ -740,11 +744,14 @@ function enfocarCampoLead(id, mensaje) {
 function recogerLeadFormulario() {
   const nombre = document.getElementById('lead-nombre').value.trim();
   const telefono = document.getElementById('lead-telefono').value.trim();
+  const email = document.getElementById('lead-email').value.trim().toLowerCase();
   const centroId = document.getElementById('lead-centro').value || 'sin-centro';
   const fuente = document.getElementById('lead-fuente').value;
   const estado = document.getElementById('lead-estado').value;
   if (!nombre) enfocarCampoLead('lead-nombre', 'El nombre del lead es obligatorio.');
   if (!telefono) enfocarCampoLead('lead-telefono', 'El teléfono del lead es obligatorio.');
+  if (!email) enfocarCampoLead('lead-email', 'El email del lead es obligatorio para reservas y avisos.');
+  if (email && !/^\S+@\S+\.\S+$/.test(email)) enfocarCampoLead('lead-email', 'Introduce un email válido.');
   if (!centroId) enfocarCampoLead('lead-centro', 'El centro de interés es obligatorio.');
   if (!fuente) enfocarCampoLead('lead-fuente', 'La fuente de captación es obligatoria.');
   if (!estado) enfocarCampoLead('lead-estado', 'El estado comercial es obligatorio.');
@@ -753,7 +760,7 @@ function recogerLeadFormulario() {
   return {
     nombre,
     telefono,
-    email: document.getElementById('lead-email').value.trim(),
+    email,
     centroId,
     centroNombre: textoCentro(centroId),
     trainerKey: tKey,
@@ -1139,5 +1146,10 @@ function exportarLeadsCSV() {
 
 window.addEventListener('DOMContentLoaded', initFirebase);
 </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+    }
+  </script>
 </body>
 </html>
