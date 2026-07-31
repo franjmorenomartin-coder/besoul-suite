@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -312,17 +313,30 @@ const BS_FIREBASE_CONFIG = {
 };
 
 const ESTADOS = ['Nuevo lead','Contactado','Pendiente de respuesta','Prueba solicitada','Prueba agendada','Prueba realizada','Convertido a cliente','Perdido','Reactivar más adelante'];
-const FUENTES = ['Instagram','WhatsApp','Página web','Google','Recomendación de cliente','Recomendación de entrenador','Recepción del centro deportivo','Campañas pagadas','Clientes antiguos','Otros'];
+const FUENTES = ['Instagram','WhatsApp','Página web','Google','QR prueba gratis','Recomendación de cliente','Recomendación de entrenador','Recepción del centro deportivo','Campañas pagadas','Clientes antiguos','Otros'];
 const OBJETIVOS = ['','Pérdida de peso','Fuerza','Salud','Dolor / lesión','Rendimiento','Estética','Preparación física','Bienestar general','Otro'];
 const HORARIOS = ['','Mañana','Mediodía','Tarde','Noche','Flexible'];
 const MOTIVOS_PERDIDA = ['','Precio','Horario','Distancia','No responde','Eligió otro centro','No encaja el servicio','Solo quería información','Otro'];
 const ACCIONES = ['','Llamar','Enviar WhatsApp','Enviar email','Esperar respuesta','Agendar prueba','Confirmar prueba','Reactivar en 30 días','Otra'];
 const CENTROS_FALLBACK = {
-  'c1': { id:'c1', nombre:'Alfa Prime Málaga' },
-  'c2': { id:'c2', nombre:'Lagunillas' },
-  'c3': { id:'c3', nombre:'Inacua' },
-  'c4': { id:'c4', nombre:'Fantasy' },
+  'alfa_prime': { id:'alfa_prime', nombre:'Alfa Prime' },
+  'inacua': { id:'inacua', nombre:'Inacua' },
+  'fantasy': { id:'fantasy', nombre:'Fantasy' },
+  'lagunillas': { id:'lagunillas', nombre:'Lagunillas' },
   'sin-centro': { id:'sin-centro', nombre:'Sin centro asignado' }
+};
+const CENTRO_ALIASES = {
+  'c1':'alfa_prime',
+  'alfa':'alfa_prime',
+  'alfa-prime':'alfa_prime',
+  'alfa_prime_malaga':'alfa_prime',
+  'alfa_prime_málaga':'alfa_prime',
+  'c2':'lagunillas',
+  'c3':'inacua',
+  'c4':'fantasy',
+  'sin_centro':'sin-centro',
+  'sin-centro':'sin-centro',
+  'sin centro':'sin-centro'
 };
 
 let auth, db;
@@ -368,7 +382,39 @@ function inicioFinMes(valorMes) {
 function esAdmin() { return perfil && perfil.rol === 'admin'; }
 function trainerKeyActual() { return perfil && perfil.trainerKey ? perfil.trainerKey : ''; }
 function nombreUsuarioPerfil() { return perfil?.nombre || usuario?.email || 'Usuario'; }
-function textoCentro(id) { return centros[id]?.nombre || id || 'Sin centro'; }
+function slugCentro(valor) {
+  return String(valor || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/&/g, ' y ')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+function detectarCentroCanon(id, nombre='') {
+  const idSlug = slugCentro(id);
+  const nombreSlug = slugCentro(nombre);
+  const combinado = `${idSlug} ${nombreSlug}`;
+  if (CENTRO_ALIASES[id] || CENTRO_ALIASES[idSlug]) return CENTRO_ALIASES[id] || CENTRO_ALIASES[idSlug];
+  if (combinado.includes('alfa_prime')) return 'alfa_prime';
+  if (combinado.includes('inacua')) return 'inacua';
+  if (combinado.includes('fantasy')) return 'fantasy';
+  if (combinado.includes('lagunillas')) return 'lagunillas';
+  if (combinado.includes('sin_centro')) return 'sin-centro';
+  return idSlug || 'sin-centro';
+}
+function normalizarCentroId(id) {
+  const raw = String(id || '').trim();
+  if (!raw) return 'sin-centro';
+  const slug = slugCentro(raw);
+  if (CENTRO_ALIASES[raw] || CENTRO_ALIASES[slug]) return CENTRO_ALIASES[raw] || CENTRO_ALIASES[slug];
+  if (centros[raw]) return raw;
+  return detectarCentroCanon(raw, raw);
+}
+function textoCentro(id) {
+  const canon = normalizarCentroId(id);
+  return centros[canon]?.nombre || centros[id]?.nombre || id || 'Sin centro';
+}
 function textoTrainer(key) {
   if (!key) return 'Sin asignar';
   const u = usuariosBesoul.find(x => x.trainerKey === key);
@@ -437,20 +483,29 @@ async function iniciarSesionAutenticada(user) {
 }
 
 async function cargarCentros() {
+  const centrosLimpios = {};
+  const insertarCentro = (id, centro={}, origen='') => {
+    const nombre = String(centro?.nombre || id || '').trim();
+    const canon = detectarCentroCanon(id, nombre);
+    if (!nombre || centro?.activo === false) return;
+    const nombreFinal = CENTROS_FALLBACK[canon]?.nombre || nombre;
+    centrosLimpios[canon] = { id: canon, nombre: nombreFinal, origen };
+  };
+
+  Object.keys(CENTROS_FALLBACK).forEach(id => insertarCentro(id, CENTROS_FALLBACK[id], 'base'));
+
   try {
     const snap = await db.collection('besoulSuite').doc('finanzas').get();
     const data = snap.exists ? snap.data() : null;
     if (data && data.centros && Object.keys(data.centros).length) {
-      centros = { ...CENTROS_FALLBACK };
-      Object.keys(data.centros).forEach(k => {
-        centros[k] = { id:k, nombre:data.centros[k].nombre || k };
-      });
-      if (!centros['sin-centro']) centros['sin-centro'] = CENTROS_FALLBACK['sin-centro'];
+      Object.keys(data.centros).forEach(k => insertarCentro(k, data.centros[k], 'finanzas'));
     }
   } catch (err) {
     console.warn('No se pudieron cargar centros de finanzas. Uso fallback.', err);
-    centros = { ...CENTROS_FALLBACK };
   }
+
+  if (!centrosLimpios['sin-centro']) centrosLimpios['sin-centro'] = CENTROS_FALLBACK['sin-centro'];
+  centros = centrosLimpios;
 }
 async function cargarUsuariosBesoul() {
   usuariosBesoul = [];
@@ -481,7 +536,19 @@ function poblarSelect(selectId, valores, opts={}) {
   });
 }
 function centrosValores() {
-  return Object.keys(centros).map(id => ({ value:id, label:centros[id].nombre })).sort((a,b) => a.label.localeCompare(b.label,'es'));
+  const vistos = new Set();
+  return Object.keys(centros)
+    .map(id => ({ value:normalizarCentroId(id), label:centros[id].nombre || id }))
+    .filter(v => {
+      if (vistos.has(v.value)) return false;
+      vistos.add(v.value);
+      return true;
+    })
+    .sort((a,b) => {
+      if (a.value === 'sin-centro') return 1;
+      if (b.value === 'sin-centro') return -1;
+      return a.label.localeCompare(b.label,'es');
+    });
 }
 function trainersValores() {
   return usuariosBesoul.map(u => ({ value:u.trainerKey, label:`${u.nombre || u.trainerKey} (${u.rol === 'admin' ? 'Admin' : 'PT'})` }));
@@ -530,7 +597,7 @@ function aplicarFiltros() {
   leadsFiltrados = leads.filter(l => {
     const created = l.createdAt || l.updatedAt || '';
     if (created && (created < iniISO || created >= finISO)) return false;
-    if (centro && l.centroId !== centro) return false;
+    if (centro && normalizarCentroId(l.centroId) !== centro) return false;
     if (trainer && l.trainerKey !== trainer) return false;
     if (estado && l.estado !== estado) return false;
     if (fuente && l.fuente !== fuente) return false;
@@ -598,7 +665,10 @@ function renderTablaLeads() {
 
 function contarPor(lista, campo) {
   const c = {};
-  lista.forEach(l => { const v = l[campo] || '---'; c[v] = (c[v] || 0) + 1; });
+  lista.forEach(l => {
+    const v = campo === 'centroId' ? normalizarCentroId(l[campo]) : (l[campo] || '---');
+    c[v] = (c[v] || 0) + 1;
+  });
   return c;
 }
 function topLabel(lista, campo, traductor=null) {
@@ -681,7 +751,7 @@ function abrirModalLead(id=null) {
     document.getElementById('lead-nombre').value = lead.nombre || '';
     document.getElementById('lead-telefono').value = lead.telefono || '';
     document.getElementById('lead-email').value = lead.email || '';
-    document.getElementById('lead-centro').value = lead.centroId || 'sin-centro';
+    document.getElementById('lead-centro').value = normalizarCentroId(lead.centroId || 'sin-centro');
     document.getElementById('lead-trainer').value = lead.trainerKey || '';
     document.getElementById('lead-captador').value = lead.captadorNombre || '';
     document.getElementById('lead-estado').value = lead.estado || 'Nuevo lead';
@@ -748,7 +818,7 @@ function recogerLeadFormulario() {
   const nombre = document.getElementById('lead-nombre').value.trim();
   const telefono = document.getElementById('lead-telefono').value.trim();
   const email = document.getElementById('lead-email').value.trim().toLowerCase();
-  const centroId = document.getElementById('lead-centro').value || 'sin-centro';
+  const centroId = normalizarCentroId(document.getElementById('lead-centro').value || 'sin-centro');
   const fuente = document.getElementById('lead-fuente').value;
   const estado = document.getElementById('lead-estado').value;
   if (!nombre) enfocarCampoLead('lead-nombre', 'El nombre del lead es obligatorio.');
