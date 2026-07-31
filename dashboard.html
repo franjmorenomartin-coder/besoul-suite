@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -216,10 +217,10 @@ const TARIFAS_2026 = {
   "Miembro Subordinado": { 1: 0 }
 };
 const DEFAULT_CENTROS = {
-  alfa_prime: { id:'alfa_prime', nombre:'Alfa Prime', canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true },
-  inacua: { id:'inacua', nombre:'Inacua', canonFijo:1200, ptsIncluidos:6, canonPt:200, canonPtReducidoDesde:12, canonPtReducido:60, reglaCanon:'inacua_2026_v1', activo:true },
-  fantasy: { id:'fantasy', nombre:'Fantasy', canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true },
-  lagunillas: { id:'lagunillas', nombre:'Lagunillas', canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true }
+  alfa_prime: { id:'alfa_prime', nombre:'Alfa Prime', orden:1, canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true, visibleCRM:true, visibleAgenda:true, visibleReservas:true, visibleQR:true },
+  fantasy: { id:'fantasy', nombre:'Fantasy', orden:2, canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true, visibleCRM:true, visibleAgenda:true, visibleReservas:true, visibleQR:true },
+  inacua: { id:'inacua', nombre:'Inacua', orden:3, canonFijo:1200, ptsIncluidos:6, canonPt:200, canonPtReducidoDesde:12, canonPtReducido:60, reglaCanon:'inacua_2026_v1', activo:true, visibleCRM:true, visibleAgenda:true, visibleReservas:true, visibleQR:true },
+  lagunillas: { id:'lagunillas', nombre:'Lagunillas', orden:4, canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true, visibleCRM:true, visibleAgenda:true, visibleReservas:true, visibleQR:true }
 };
 const DEFAULT_CENTER_BY_TRAINER = {
   carmen: 'alfa_prime',
@@ -256,9 +257,12 @@ function addDays(d, days){ const x = new Date(d); x.setDate(x.getDate()+days); r
 function startOfWeek(d){ const x = new Date(d); const day = (x.getDay()+6)%7; x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x; }
 function endOfDay(d){ const x = new Date(d); x.setHours(23,59,59,999); return x; }
 function normalizarEstado(valor){ return ['activo','inactivo','baja'].includes(valor) ? valor : 'activo'; }
-function centrosValidos(){ return Object.keys(DEFAULT_CENTROS).concat(['sin_centro','sin-centro']); }
+function slugCentro(valor){ return String(valor || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/&/g,' y ').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,''); }
+function esCentroTecnicoDescartable(id,nombre=''){ return /(^|_)(test|demo|prueba)(_|$)/.test(slugCentro(`${id||''} ${nombre||''}`)); }
+function defaultsCentro(id,nombre=''){ return {id, nombre:nombre||id, orden:99, canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true, visibleCRM:true, visibleAgenda:true, visibleReservas:true, visibleQR:true}; }
+function centrosValidos(){ return Object.keys(getCentros({incluirInactivos:true})).concat(['sin_centro','sin-centro']); }
 function centroValido(id){ return centrosValidos().includes(String(id || '')); }
-function getCentros(){ const res={}; Object.keys(DEFAULT_CENTROS).forEach(id => res[id] = { ...DEFAULT_CENTROS[id], ...((dbFinanzas.centros || {})[id] || {}) }); return res; }
+function getCentros(opts={}){ const {incluirInactivos=false}=opts; const res={}; const source={...DEFAULT_CENTROS, ...(dbFinanzas.centros||{})}; Object.keys(source).forEach(rawId=>{ const c={...(DEFAULT_CENTROS[rawId]||defaultsCentro(rawId, source[rawId]?.nombre||rawId)), ...(source[rawId]||{})}; c.id=String(c.id||rawId); c.nombre=String(c.nombre||c.id).trim(); c.orden=parseNum(c.orden??99); if(esCentroTecnicoDescartable(c.id,c.nombre)) return; if(!incluirInactivos && c.activo===false) return; res[c.id]=c; }); return Object.fromEntries(Object.entries(res).sort((a,b)=>{ const ao=Number(a[1].orden??99), bo=Number(b[1].orden??99); if(ao!==bo) return ao-bo; return String(a[1].nombre||'').localeCompare(String(b[1].nombre||''),'es'); })); }
 function trainerKeyPerfil(p){ return String(p?.trainerKey || '').trim(); }
 function nombrePerfil(p){ return String(p?.nombre || p?.email || p?.trainerKey || '').trim(); }
 function trainerByKey(key){ return perfilesUsuarios.find(p => trainerKeyPerfil(p) === key); }
@@ -283,7 +287,7 @@ function centroTrainer(key, perfilObj){
   if (String(perfilObj?.rol || '').toLowerCase() === 'pt') return 'inacua';
   return 'sin_centro';
 }
-function nombreCentro(id){ const c = getCentros()[id]; if (c) return c.nombre; if (id === 'sin_centro' || id === 'sin-centro') return 'Dirección / sin centro'; return id || 'Sin centro'; }
+function nombreCentro(id){ const c = getCentros({incluirInactivos:true})[id] || getCentros()[id]; if (c) return c.nombre; if (id === 'sin_centro' || id === 'sin-centro') return 'Dirección / sin centro'; return id || 'Sin centro'; }
 function tarifaBaseFicha(ficha){ if (!ficha || !TARIFAS_2026[ficha.modalidad]) return 0; const factor=parseInt(ficha.factor)||1; return TARIFAS_2026[ficha.modalidad][factor] || TARIFAS_2026[ficha.modalidad][1] || 0; }
 function multiplicadorFacturacionFicha(ficha){ if (!ficha) return 1; if (String(ficha.modalidad||'').includes('Pareja')) return 2; if (String(ficha.modalidad||'').includes('Trío')) return 3; if (ficha.tipo === 'grupo') return Math.max(1, ficha.integrantesObj ? ficha.integrantesObj.length : 1); return 1; }
 function obtenerDescuentoFicha(ficha){ const n=parseFloat(String(ficha?.descuentoPct??0).replace(',','.')); return Number.isNaN(n)?0:Math.max(0, Math.min(100,n)); }
@@ -424,7 +428,8 @@ function gastosMes(mesKey){ return (dbFinanzas.gastos?.[mesKey] || []).reduce((s
 function gastosCategoriasPeriodo(meses){ const res={}; meses.forEach(m=>{ (dbFinanzas.gastos?.[m]||[]).forEach(g=>{ const cat=g.categoria||'Otros'; res[cat]=(res[cat]||0)+parseNum(g.importe); }); }); return res; }
 function normalizarFinanzas(data){
   const res = { centros:{}, trainerSettings:{}, gastos:{}, historico:{}, ...(data || {}) };
-  const centros = {}; Object.keys(DEFAULT_CENTROS).forEach(id => centros[id] = { ...DEFAULT_CENTROS[id], ...((data?.centros || {})[id] || {}) });
+  const centros = {}; const source={...DEFAULT_CENTROS, ...(data?.centros||{})};
+  Object.keys(source).forEach(id=>{ const c={...(DEFAULT_CENTROS[id]||defaultsCentro(id, source[id]?.nombre||id)), ...(source[id]||{})}; c.id=String(c.id||id); c.nombre=String(c.nombre||c.id).trim(); c.orden=parseNum(c.orden??99); if(typeof c.activo==='undefined') c.activo=true; ['visibleCRM','visibleAgenda','visibleReservas','visibleQR'].forEach(k=>{ if(typeof c[k]==='undefined') c[k]=true; }); if(esCentroTecnicoDescartable(c.id,c.nombre)) return; centros[c.id]=c; });
   if (!centros.inacua.reglaCanon || centros.inacua.reglaCanon !== 'inacua_2026_v1') centros.inacua = { ...centros.inacua, canonFijo:1200, ptsIncluidos:6, canonPt:200, canonPtReducidoDesde:12, canonPtReducido:60, reglaCanon:'inacua_2026_v1' };
   res.centros = centros; res.trainerSettings = res.trainerSettings || {}; res.gastos = res.gastos || {}; res.historico = res.historico || {}; return res;
 }
