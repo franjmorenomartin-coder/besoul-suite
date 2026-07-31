@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -138,8 +139,11 @@
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
             <div class="flex justify-between items-center border-b border-slate-800 pb-3">
-              <div><h2 class="text-sm font-bold text-white">Centros y cánones</h2><p class="text-xs text-slate-400">Editables por negociación.</p></div>
-              <button onclick="guardarConfigFinanzas()" class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-2 rounded-lg text-xs font-bold">Guardar</button>
+              <div><h2 class="text-sm font-bold text-white">Centros y cánones</h2><p class="text-xs text-slate-400">Maestro único de centros. Desde aquí nacen CRM, Agenda, Reservas, Dashboard y QR.</p></div>
+              <div class="flex gap-2 flex-wrap justify-end">
+                <button onclick="agregarCentro()" class="bg-amber-500 text-slate-950 px-3 py-2 rounded-lg text-xs font-black">+ Añadir centro</button>
+                <button onclick="guardarConfigFinanzas()" class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-2 rounded-lg text-xs font-bold">Guardar</button>
+              </div>
             </div>
             <div id="centros-config" class="space-y-3"></div>
           </div>
@@ -176,11 +180,11 @@
     };
 
     const DEFAULT_CENTROS = {
-      alfa_prime: { id:'alfa_prime', nombre:'Alfa Prime', canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true },
+      alfa_prime: { id:'alfa_prime', nombre:'Alfa Prime', orden:1, canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true, visibleCRM:true, visibleAgenda:true, visibleReservas:true, visibleQR:true },
       // Inacua: 1.200 € fijos incluyendo hasta 6 entrenadores; del 7º al 11º son 200 €/PT; desde el 12º son 60 €/PT.
-      inacua: { id:'inacua', nombre:'Inacua', canonFijo:1200, ptsIncluidos:6, canonPt:200, canonPtReducidoDesde:12, canonPtReducido:60, reglaCanon:'inacua_2026_v1', activo:true },
-      fantasy: { id:'fantasy', nombre:'Fantasy', canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true },
-      lagunillas: { id:'lagunillas', nombre:'Lagunillas', canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true }
+      inacua: { id:'inacua', nombre:'Inacua', orden:3, canonFijo:1200, ptsIncluidos:6, canonPt:200, canonPtReducidoDesde:12, canonPtReducido:60, reglaCanon:'inacua_2026_v1', activo:true, visibleCRM:true, visibleAgenda:true, visibleReservas:true, visibleQR:true },
+      fantasy: { id:'fantasy', nombre:'Fantasy', orden:2, canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true, visibleCRM:true, visibleAgenda:true, visibleReservas:true, visibleQR:true },
+      lagunillas: { id:'lagunillas', nombre:'Lagunillas', orden:4, canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true, visibleCRM:true, visibleAgenda:true, visibleReservas:true, visibleQR:true }
     };
 
     const DEFAULT_CENTER_BY_TRAINER = {
@@ -201,7 +205,21 @@
       rango3: 'Rango III · canon fijo',
       coordinador: 'Rango IV · coordinador de sede'
     };
-    function centrosValidos(){ return Object.keys(DEFAULT_CENTROS).concat(['sin_centro']); }
+    function slugCentro(valor){
+      return String(valor || '').trim().toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+        .replace(/&/g,' y ')
+        .replace(/[^a-z0-9]+/g,'_')
+        .replace(/^_+|_+$/g,'');
+    }
+    function esCentroTecnicoDescartable(id, nombre=''){
+      const combinado = slugCentro(`${id || ''} ${nombre || ''}`);
+      return /(^|_)(test|demo|prueba)(_|$)/.test(combinado);
+    }
+    function defaultsCentro(id, nombre=''){
+      return { id, nombre:nombre || id, orden:99, canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true, visibleCRM:true, visibleAgenda:true, visibleReservas:true, visibleQR:true };
+    }
+    function centrosValidos(){ return Object.keys(getCentros({incluirInactivos:true})).concat(['sin_centro']); }
     function centroValido(id){ return centrosValidos().includes(String(id || '')); }
 
     const GASTO_CATEGORIAS = ['Sueldos','Administración','Seguros','Compras','Material deportivo','Redes sociales','Publicidad','Software','Gestoría','Comisiones bancarias','Otros'];
@@ -228,13 +246,26 @@
     function normalizarEstado(valor){ return ['activo','inactivo','baja'].includes(valor) ? valor : 'activo'; }
     function obtenerMesGastos(){ return mesActualKey(); }
 
-    function getCentros(){
-      // Evita duplicados antiguos de simulaciones. Finanzas solo debe trabajar con los 4 centros oficiales.
+    function getCentros(opts={}){
+      const { incluirInactivos=false, soloVisibles=null } = opts;
       const res = {};
-      Object.keys(DEFAULT_CENTROS).forEach(id => {
-        res[id] = { ...DEFAULT_CENTROS[id], ...((dbFinanzas.centros || {})[id] || {}) };
+      const source = { ...DEFAULT_CENTROS, ...(dbFinanzas.centros || {}) };
+      Object.keys(source).forEach(rawId => {
+        const base = DEFAULT_CENTROS[rawId] || defaultsCentro(rawId, source[rawId]?.nombre || rawId);
+        const c = { ...base, ...(source[rawId] || {}) };
+        c.id = String(c.id || rawId);
+        c.nombre = String(c.nombre || c.id).trim();
+        c.orden = parseNum(c.orden ?? 99);
+        if (esCentroTecnicoDescartable(c.id, c.nombre)) return;
+        if (!incluirInactivos && c.activo === false) return;
+        if (soloVisibles && c[soloVisibles] === false) return;
+        res[c.id] = c;
       });
-      return res;
+      return Object.fromEntries(Object.entries(res).sort((a,b) => {
+        const ao = Number(a[1].orden ?? 99), bo = Number(b[1].orden ?? 99);
+        if (ao !== bo) return ao - bo;
+        return String(a[1].nombre||'').localeCompare(String(b[1].nombre||''),'es');
+      }));
     }
     function trainerKeyPerfil(p){ return String(p.trainerKey || '').trim(); }
     function nombrePerfil(p){ return String(p.nombre || p.email || p.trainerKey || '').trim(); }
@@ -250,20 +281,20 @@
     function centroTrainer(key, perfil){
       const settings = dbFinanzas.trainerSettings?.[key] || {};
       const nombre = nombrePerfil(perfil).toLowerCase();
-      // Primero respetamos una asignación manual, pero solo si apunta a un centro oficial.
+      // Primero respetamos una asignación manual, siempre que apunte al maestro de centros.
       if (settings.centroId && centroValido(settings.centroId) && settings.centroId !== 'sin_centro') return settings.centroId;
       // Después, asignación oficial por trainerKey.
       if (DEFAULT_CENTER_BY_TRAINER[key]) return DEFAULT_CENTER_BY_TRAINER[key];
       // Compatibilidad por si Miguel Fenech/Lillo fue creado con otra clave.
       if ((key === 'miguel' || nombre.includes('fenech') || nombre.includes('lillo')) && !nombre.includes('luna')) return 'lagunillas';
       if (nombre.includes('miguel') && nombre.includes('luna')) return 'fantasy';
-      // Si el perfil de Firestore tiene centro oficial, lo usamos.
+      // Si el perfil de Firestore tiene centro válido del maestro, lo usamos.
       if (perfil?.centroId && centroValido(perfil.centroId) && perfil.centroId !== 'sin_centro') return perfil.centroId;
       // Resto de entrenadores actuales: Inacua.
       if (String(perfil?.rol || '').toLowerCase() === 'pt') return 'inacua';
       return 'sin_centro';
     }
-    function nombreCentro(id){ const c = getCentros()[id]; return c ? c.nombre : (id === 'sin_centro' ? 'Dirección / sin centro' : id || 'Sin centro'); }
+    function nombreCentro(id){ const c = getCentros({incluirInactivos:true})[id] || getCentros()[id]; return c ? c.nombre : (id === 'sin_centro' ? 'Dirección / sin centro' : id || 'Sin centro'); }
     function fechaMsOrdenTrainer(t){
       const raw = String(t?.fechaAlta || '').trim();
       if (!raw) return Number.POSITIVE_INFINITY;
@@ -715,12 +746,39 @@
     function borrarHistorico(key){ if(!confirm(`¿Borrar cierre de ${etiquetaMes(key)}?`)) return; delete dbFinanzas.historico[key]; guardarConfigFinanzas(); }
 
     function renderConfigCentros(){
-      const cont=document.getElementById('centros-config'); const centros=getCentros();
-      cont.innerHTML = Object.values(centros).map(c=>`
-        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2 text-xs">
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
-            <input value="${escapeHTML(c.nombre)}" onchange="editarCentro('${c.id}','nombre',this.value)" class="bg-slate-900 border border-slate-800 rounded p-2 text-white md:col-span-2">
-            <div class="bg-slate-900 border border-slate-800 rounded p-2 text-slate-400">${escapeHTML(c.id === 'inacua' ? 'Regla Inacua: 1.200 € incluyen 6 PT; 7º-11º: 200 €/PT; desde 12º: 60 €/PT.' : 'Fijo sede prorrateado + coste por PT editable.')}</div>
+      const cont=document.getElementById('centros-config');
+      const centros=getCentros({incluirInactivos:true});
+      const items=Object.values(centros);
+      cont.innerHTML = items.map(c=>{
+        const esBase = !!DEFAULT_CENTROS[c.id];
+        const activo = c.activo !== false;
+        const disabledClass = activo ? 'border-slate-800' : 'border-red-500/30 opacity-70';
+        return `
+        <div class="bg-slate-950 border ${disabledClass} rounded-xl p-3 space-y-3 text-xs">
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
+            <div class="md:col-span-2">
+              <label class="text-[10px] text-slate-500 block mb-1">ID interno</label>
+              <input value="${escapeHTML(c.id)}" disabled class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-slate-500 font-mono">
+            </div>
+            <div class="md:col-span-4">
+              <label class="text-[10px] text-slate-500 block mb-1">Nombre visible</label>
+              <input value="${escapeHTML(c.nombre)}" onchange="editarCentro('${c.id}','nombre',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-500 block mb-1">Orden</label>
+              <input value="${escapeHTML(c.orden ?? 99)}" onchange="editarCentro('${c.id}','orden',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right">
+            </div>
+            <label class="flex items-center gap-2 text-slate-300 bg-slate-900 border border-slate-800 rounded p-2 md:mt-4"><input type="checkbox" onchange="editarCentro('${c.id}','activo',this.checked)" ${activo?'checked':''} class="accent-emerald-500"> Activo</label>
+            <div class="md:col-span-4 text-right md:mt-4 flex gap-2 justify-end flex-wrap">
+              <button onclick="desactivarCentro('${c.id}')" class="px-3 py-2 rounded bg-red-500/10 text-red-300 border border-red-500/30 font-bold">${activo?'Desactivar':'Reactivar'}</button>
+              ${esBase ? '' : `<button onclick="eliminarCentro('${c.id}')" class="px-3 py-2 rounded bg-slate-800 text-slate-300 border border-slate-700 font-bold">Eliminar</button>`}
+            </div>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <label class="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded p-2"><input type="checkbox" onchange="editarCentro('${c.id}','visibleCRM',this.checked)" ${c.visibleCRM!==false?'checked':''} class="accent-cyan-500"> CRM</label>
+            <label class="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded p-2"><input type="checkbox" onchange="editarCentro('${c.id}','visibleAgenda',this.checked)" ${c.visibleAgenda!==false?'checked':''} class="accent-amber-500"> Agenda</label>
+            <label class="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded p-2"><input type="checkbox" onchange="editarCentro('${c.id}','visibleReservas',this.checked)" ${c.visibleReservas!==false?'checked':''} class="accent-pink-500"> Reservas</label>
+            <label class="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded p-2"><input type="checkbox" onchange="editarCentro('${c.id}','visibleQR',this.checked)" ${c.visibleQR!==false?'checked':''} class="accent-emerald-500"> QR prueba</label>
           </div>
           <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
             <div><label class="text-[10px] text-slate-500 block mb-1">Fijo sede</label><input value="${escapeHTML(c.canonFijo||0)}" onchange="editarCentro('${c.id}','canonFijo',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right" title="Se paga una vez por sede y se prorratea entre los PT activos"></div>
@@ -729,23 +787,64 @@
             <div><label class="text-[10px] text-slate-500 block mb-1">Reducido desde PT nº</label><input value="${escapeHTML(c.canonPtReducidoDesde||0)}" onchange="editarCentro('${c.id}','canonPtReducidoDesde',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right" title="A partir de qué número de entrenador cambia el coste por PT. 0 = no aplica"></div>
             <div><label class="text-[10px] text-slate-500 block mb-1">€/PT reducido</label><input value="${escapeHTML(c.canonPtReducido||0)}" onchange="editarCentro('${c.id}','canonPtReducido',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right" title="Coste por PT desde el tramo reducido"></div>
           </div>
-        </div>`).join('');
+          <input value="${escapeHTML(c.notas||'')}" onchange="editarCentro('${c.id}','notas',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" placeholder="Notas internas del centro">
+        </div>`;
+      }).join('') || '<div class="text-xs text-slate-500">No hay centros configurados.</div>';
+    }
+    function asegurarCentroEditable(id){
+      if(!dbFinanzas.centros) dbFinanzas.centros={};
+      if(!dbFinanzas.centros[id]) dbFinanzas.centros[id]={...(DEFAULT_CENTROS[id] || defaultsCentro(id,id))};
+      if(!dbFinanzas.centros[id].id) dbFinanzas.centros[id].id=id;
+      return dbFinanzas.centros[id];
+    }
+    function agregarCentro(){
+      const nombre = prompt('Nombre del nuevo centro:');
+      if(!nombre || !nombre.trim()) return;
+      const idBase = slugCentro(nombre);
+      if(!idBase){ alert('Nombre de centro no válido.'); return; }
+      if(esCentroTecnicoDescartable(idBase, nombre)){ alert('Ese nombre parece de prueba/test. Usa el nombre real del centro.'); return; }
+      if(getCentros({incluirInactivos:true})[idBase]){ alert('Ya existe un centro con ese nombre/ID.'); return; }
+      if(!dbFinanzas.centros) dbFinanzas.centros={};
+      dbFinanzas.centros[idBase] = defaultsCentro(idBase, nombre.trim());
+      dbFinanzas.centros[idBase].orden = Object.keys(getCentros({incluirInactivos:true})).length + 1;
+      guardarConfigFinanzas();
+      switchTab('config');
     }
     function editarCentro(id,campo,valor){
-      if(!dbFinanzas.centros) dbFinanzas.centros={};
-      if(!dbFinanzas.centros[id]) dbFinanzas.centros[id]={...(DEFAULT_CENTROS[id]||{id,nombre:id,canonFijo:0,ptsIncluidos:0,canonPt:0,canonPtReducidoDesde:0,canonPtReducido:0,activo:true})};
-      const numericFields = ['canonFijo','ptsIncluidos','canonPt','canonPtReducidoDesde','canonPtReducido'];
-      dbFinanzas.centros[id][campo] = numericFields.includes(campo) ? parseNum(valor) : valor;
+      const c = asegurarCentroEditable(id);
+      const numericFields = ['canonFijo','ptsIncluidos','canonPt','canonPtReducidoDesde','canonPtReducido','orden'];
+      const boolFields = ['activo','visibleCRM','visibleAgenda','visibleReservas','visibleQR'];
+      if (numericFields.includes(campo)) c[campo] = parseNum(valor);
+      else if (boolFields.includes(campo)) c[campo] = !!valor;
+      else c[campo] = valor;
+      guardarConfigFinanzas();
+    }
+    function desactivarCentro(id){
+      const c = asegurarCentroEditable(id);
+      const siguiente = c.activo === false;
+      const msg = siguiente ? `¿Reactivar el centro ${c.nombre}?` : `¿Desactivar ${c.nombre}? No aparecerá para nuevos leads/reservas, pero se conserva el histórico.`;
+      if(!confirm(msg)) return;
+      c.activo = siguiente;
+      guardarConfigFinanzas();
+    }
+    function eliminarCentro(id){
+      if(DEFAULT_CENTROS[id]){ alert('Los centros base se desactivan, no se eliminan.'); return; }
+      const usadoPorTrainer = Object.values(dbFinanzas.trainerSettings||{}).some(s => s.centroId === id);
+      if(usadoPorTrainer){ alert('No se puede eliminar porque hay entrenadores asignados. Desactívalo si ya no se usa.'); return; }
+      if(!confirm('¿Eliminar definitivamente este centro personalizado? Solo hazlo si fue creado por error y no tiene datos.')) return;
+      delete dbFinanzas.centros[id];
       guardarConfigFinanzas();
     }
 
     function renderConfigTrainers(){
-      const cont=document.getElementById('trainers-config'); const centros=getCentros();
-      const opcionesCentro = Object.values(centros).map(c=>`<option value="${c.id}">${escapeHTML(c.nombre)}</option>`).join('') + '<option value="sin_centro">Dirección / sin centro</option>';
+      const cont=document.getElementById('trainers-config'); const centros=getCentros({soloVisibles:'visibleAgenda'});
+      const opcionesCentroBase = Object.values(centros).map(c=>`<option value="${c.id}">${escapeHTML(c.nombre)}</option>`).join('') + '<option value="sin_centro">Dirección / sin centro</option>';
       const opcionesSistema = Object.keys(SISTEMAS_PAGO).map(k=>`<option value="${k}">${SISTEMAS_PAGO[k]}</option>`).join('');
       const perfiles = perfilesUsuarios.filter(esPerfilOperativo).sort((a,b)=>nombrePerfil(a).localeCompare(nombrePerfil(b)));
       cont.innerHTML = perfiles.map(p=>{
         const key=trainerKeyPerfil(p); const settings=dbFinanzas.trainerSettings?.[key]||{}; const centro=centroTrainer(key,p);
+        let opcionesCentro = opcionesCentroBase;
+        if (centro && centro !== 'sin_centro' && !centros[centro]) opcionesCentro = `<option value="${centro}">${escapeHTML(nombreCentro(centro))} (inactivo)</option>` + opcionesCentroBase;
         const row=(calculoActual?.trainers||[]).find(t=>t.key===key) || {};
         const sistemaSeleccionado = settings.sistemaPago === 'base' ? 'rango1' : (settings.sistemaPago === 'bonus_15' ? 'rango2' : (settings.sistemaPago === 'canon_1000' ? 'rango3' : (settings.sistemaPago || 'auto')));
         const posteriores = contarPosterioresCentro(key, centro, fechaAltaSettings(settings));
@@ -796,10 +895,25 @@
       pintarTodo();
     }
 
+    function centrosPublicosMinimos(){
+      return Object.values(getCentros({incluirInactivos:false}))
+        .filter(c => c.visibleQR !== false || c.visibleReservas !== false || c.visibleCRM !== false)
+        .map(c => ({ id:c.id, nombre:c.nombre, activo:c.activo !== false, orden:c.orden || 99, visibleCRM:c.visibleCRM !== false, visibleAgenda:c.visibleAgenda !== false, visibleReservas:c.visibleReservas !== false, visibleQR:c.visibleQR !== false }));
+    }
+    async function sincronizarCentrosPublicos(){
+      if(!firestore) return;
+      await firestore.collection('besoulPublicConfig').doc('centros').set({
+        centros: centrosPublicosMinimos(),
+        actualizadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+        actualizadoPor: usuarioFinanzasEmail
+      }, { merge:true });
+    }
     function guardarConfigFinanzas(){
       if(!finanzasRef) return;
       const payload = { ...dbFinanzas, actualizadoEn: firebase.firestore.FieldValue.serverTimestamp(), actualizadoPor: usuarioFinanzasEmail };
-      finanzasRef.set(payload,{merge:true}).catch(err=>{ console.error(err); alert('Error guardando Finanzas.'); });
+      finanzasRef.set(payload,{merge:true})
+        .then(() => sincronizarCentrosPublicos().catch(err => console.warn('No se pudieron sincronizar centros públicos. Revisa reglas besoulPublicConfig.', err)))
+        .catch(err=>{ console.error(err); alert('Error guardando Finanzas.'); });
       pintarTodo();
     }
     async function refrescarTodoManual(){ await cargarInstantaneas(); pintarTodo(); }
@@ -813,12 +927,18 @@
     }
     function normalizarFinanzas(data){
       const res = { centros:{}, trainerSettings:{}, gastos:{}, historico:{}, ...(data || {}) };
-      // Limpieza lógica: solo conservamos los centros oficiales para evitar duplicados de simulaciones antiguas.
       const centrosLimpios = {};
-      Object.keys(DEFAULT_CENTROS).forEach(id => {
-        centrosLimpios[id] = { ...DEFAULT_CENTROS[id], ...((data?.centros || {})[id] || {}) };
+      const source = { ...DEFAULT_CENTROS, ...(data?.centros || {}) };
+      Object.keys(source).forEach(id => {
+        const c = { ...(DEFAULT_CENTROS[id] || defaultsCentro(id, source[id]?.nombre || id)), ...(source[id] || {}) };
+        c.id = String(c.id || id);
+        c.nombre = String(c.nombre || c.id).trim();
+        c.orden = parseNum(c.orden ?? 99);
+        if (typeof c.activo === 'undefined') c.activo = true;
+        ['visibleCRM','visibleAgenda','visibleReservas','visibleQR'].forEach(k => { if (typeof c[k] === 'undefined') c[k] = true; });
+        if (esCentroTecnicoDescartable(c.id, c.nombre)) return;
+        centrosLimpios[c.id] = c;
       });
-      // Migración de la regla negociada de Inacua. Si veníamos de una configuración antigua sin regla, aplicamos la nueva.
       if (!centrosLimpios.inacua.reglaCanon || centrosLimpios.inacua.reglaCanon !== 'inacua_2026_v1') {
         centrosLimpios.inacua = { ...centrosLimpios.inacua, canonFijo:1200, ptsIncluidos:6, canonPt:200, canonPtReducidoDesde:12, canonPtReducido:60, reglaCanon:'inacua_2026_v1' };
       }
