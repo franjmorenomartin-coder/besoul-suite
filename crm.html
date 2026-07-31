@@ -319,11 +319,11 @@ const HORARIOS = ['','Mañana','Mediodía','Tarde','Noche','Flexible'];
 const MOTIVOS_PERDIDA = ['','Precio','Horario','Distancia','No responde','Eligió otro centro','No encaja el servicio','Solo quería información','Otro'];
 const ACCIONES = ['','Llamar','Enviar WhatsApp','Enviar email','Esperar respuesta','Agendar prueba','Confirmar prueba','Reactivar en 30 días','Otra'];
 const CENTROS_FALLBACK = {
-  'alfa_prime': { id:'alfa_prime', nombre:'Alfa Prime' },
-  'inacua': { id:'inacua', nombre:'Inacua' },
-  'fantasy': { id:'fantasy', nombre:'Fantasy' },
-  'lagunillas': { id:'lagunillas', nombre:'Lagunillas' },
-  'sin-centro': { id:'sin-centro', nombre:'Sin centro asignado' }
+  'alfa_prime': { id:'alfa_prime', nombre:'Alfa Prime', orden:1, activo:true, visibleCRM:true },
+  'fantasy': { id:'fantasy', nombre:'Fantasy', orden:2, activo:true, visibleCRM:true },
+  'inacua': { id:'inacua', nombre:'Inacua', orden:3, activo:true, visibleCRM:true },
+  'lagunillas': { id:'lagunillas', nombre:'Lagunillas', orden:4, activo:true, visibleCRM:true },
+  'sin-centro': { id:'sin-centro', nombre:'Sin centro asignado', orden:999, activo:true, visibleCRM:true }
 };
 const CENTRO_ALIASES = {
   'c1':'alfa_prime',
@@ -336,7 +336,12 @@ const CENTRO_ALIASES = {
   'c4':'fantasy',
   'sin_centro':'sin-centro',
   'sin-centro':'sin-centro',
-  'sin centro':'sin-centro'
+  'sin centro':'sin-centro',
+  'sin_centro_asignado':'sin-centro',
+  'test':'sin-centro',
+  'test_1':'sin-centro',
+  'demo':'sin-centro',
+  'prueba':'sin-centro'
 };
 
 let auth, db;
@@ -391,10 +396,15 @@ function slugCentro(valor) {
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '');
 }
+function esCentroTecnicoDescartable(id, nombre='') {
+  const combinado = slugCentro(`${id || ''} ${nombre || ''}`);
+  return /(^|_)(test|demo|prueba)(_|$)/.test(combinado);
+}
 function detectarCentroCanon(id, nombre='') {
   const idSlug = slugCentro(id);
   const nombreSlug = slugCentro(nombre);
   const combinado = `${idSlug} ${nombreSlug}`;
+  if (esCentroTecnicoDescartable(id, nombre)) return 'sin-centro';
   if (CENTRO_ALIASES[id] || CENTRO_ALIASES[idSlug]) return CENTRO_ALIASES[id] || CENTRO_ALIASES[idSlug];
   if (combinado.includes('alfa_prime')) return 'alfa_prime';
   if (combinado.includes('inacua')) return 'inacua';
@@ -486,10 +496,12 @@ async function cargarCentros() {
   const centrosLimpios = {};
   const insertarCentro = (id, centro={}, origen='') => {
     const nombre = String(centro?.nombre || id || '').trim();
+    if (!nombre || centro?.activo === false || centro?.visibleCRM === false) return;
+    // Evita que centros creados para pruebas internas aparezcan en filtros y formularios.
+    if (esCentroTecnicoDescartable(id, nombre)) return;
     const canon = detectarCentroCanon(id, nombre);
-    if (!nombre || centro?.activo === false) return;
     const nombreFinal = CENTROS_FALLBACK[canon]?.nombre || nombre;
-    centrosLimpios[canon] = { id: canon, nombre: nombreFinal, origen };
+    centrosLimpios[canon] = { id: canon, nombre: nombreFinal, orden: Number(centro?.orden ?? CENTROS_FALLBACK[canon]?.orden ?? 99), origen };
   };
 
   Object.keys(CENTROS_FALLBACK).forEach(id => insertarCentro(id, CENTROS_FALLBACK[id], 'base'));
@@ -547,6 +559,9 @@ function centrosValores() {
     .sort((a,b) => {
       if (a.value === 'sin-centro') return 1;
       if (b.value === 'sin-centro') return -1;
+      const ca = centros[a.value] || {}, cb = centros[b.value] || {};
+      const oa = Number(ca.orden ?? 99), ob = Number(cb.orden ?? 99);
+      if (oa !== ob) return oa - ob;
       return a.label.localeCompare(b.label,'es');
     });
 }
