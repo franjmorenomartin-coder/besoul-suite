@@ -1,4 +1,4 @@
-const CACHE_NAME = 'besoul-suite-v2-centros-qr';
+const CACHE_NAME = 'besoul-suite-v2-valoracion';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const CORE_ASSETS = [
   './dashboard.html',
   './reservas.html',
   './prueba.html',
+  './valoracion.html',
   './manifest.json',
   './icon-192.png',
   './icon-512.png'
@@ -29,4 +30,3 @@ self.addEventListener('fetch', event => {
     return res;
   }).catch(() => caches.match(req).then(cached => cached || caches.match('./index.html'))));
 });
-

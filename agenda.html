@@ -1134,7 +1134,7 @@
                 telefono: lead.telefono || '',
                 email: lead.email || '',
                 modalidad: 'Prueba CRM',
-                tipoPrueba: lead.tipoPrueba || 'Prueba gratuita',
+                tipoPrueba: lead.tipoPrueba || 'Valoración inicial',
                 duracionPrueba: lead.duracionPrueba || '45 min',
                 factor: 1,
                 tipoCompra: 'Prueba CRM',
@@ -3477,7 +3477,7 @@ function calcularRentabilidadFicha(ficha) {
 
                         if (esPruebaCRM) {
 
-                            tdCell.title = 'Prueba comercial procedente del CRM. No suma facturación ni sesiones. Gestionar cambios desde CRM.';
+                            tdCell.title = 'Valoración comercial procedente del CRM. No suma facturación ni sesiones. Gestionar cambios desde CRM.';
 
                             const detalle = textoDetallePruebaCRM(objOriginal);
 
@@ -3487,7 +3487,7 @@ function calcularRentabilidadFicha(ficha) {
 
                             const notaHTML = notaEntrenador ? `<div class="text-[8px] mt-0.5 text-amber-200 truncate opacity-95">⚠ ${escapeHTML(notaEntrenador)}</div>` : '';
 
-                            tdCell.innerHTML = `<div class="absolute top-1 left-1 text-[8px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-500/30">PRUEBA</div><div class="pt-3 text-[11px] text-white uppercase truncate">${escapeHTML(objOriginal.nombre)}</div><div class="text-[8px] mt-0.5 text-cyan-200 truncate">${escapeHTML(detalle)}</div>${objetivo}${notaHTML}`;
+                            tdCell.innerHTML = `<div class="absolute top-1 left-1 text-[8px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-500/30">VALORACIÓN</div><div class="pt-3 text-[11px] text-white uppercase truncate">${escapeHTML(objOriginal.nombre)}</div><div class="text-[8px] mt-0.5 text-cyan-200 truncate">${escapeHTML(detalle)}</div>${objetivo}${notaHTML}`;
 
                             tdCell.onclick = () => {
                                 if (fichaSeleccionadaMovilId) {
@@ -3497,7 +3497,7 @@ function calcularRentabilidadFicha(ficha) {
 
                                 const lineas = [
 
-                                    'Prueba asignada desde CRM.',
+                                    'Valoración asignada desde CRM.',
 
                                     `Lead: ${objOriginal.nombre || '---'}`,
 

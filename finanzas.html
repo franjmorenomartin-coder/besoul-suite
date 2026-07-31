@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -81,6 +80,25 @@
     </div>
 
     <main class="flex-1 p-6 space-y-6">
+      <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-4 mb-6">
+        <div class="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4">
+          <div>
+            <h2 class="text-sm font-black text-white uppercase tracking-wide">Mes de trabajo</h2>
+            <p class="text-xs text-slate-400 mt-1">Selecciona el mes que quieres revisar, editar en gastos o cerrar en histórico. Los gastos quedan guardados por mes.</p>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2 items-end">
+            <label class="text-[10px] font-bold uppercase text-slate-500 tracking-wider">
+              Mes seleccionado
+              <input id="selector-mes-trabajo" type="month" onchange="cambiarMesTrabajo(this.value)" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white">
+            </label>
+            <button onclick="moverMesTrabajo(-1)" class="bg-slate-950 hover:bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-3 py-2 text-xs font-bold">← Mes anterior</button>
+            <button onclick="irMesActual()" class="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg px-3 py-2 text-xs font-bold">Mes actual</button>
+            <button onclick="moverMesTrabajo(1)" class="bg-slate-950 hover:bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-3 py-2 text-xs font-bold">Mes siguiente →</button>
+            <div id="estado-mes-trabajo" class="text-xs text-slate-300 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 min-h-[38px]">---</div>
+          </div>
+        </div>
+      </div>
+
       <section id="view-directo" class="space-y-6">
         <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
           <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center"><h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Facturación estimada</h3><div id="kpi-fact-total" class="text-lg font-black text-white">0,00 €</div></div>
@@ -99,7 +117,7 @@
               <h2 class="text-sm font-bold text-white">Resumen en directo desde Agenda</h2>
               <p class="text-xs text-slate-400 mt-1">Mensualidades activas se facturan completas aunque el cliente pierda clases. Bonos y sesiones sueltas se computan por sesiones agendadas facturables del mes. Las recuperaciones marcadas por administración no suman facturación.</p>
             </div>
-            <button onclick="cerrarMesActual()" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black px-4 py-2 rounded-lg text-xs uppercase">Cerrar mes / Guardar histórico</button>
+            <button onclick="cerrarMesActual()" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black px-4 py-2 rounded-lg text-xs uppercase">Cerrar mes seleccionado / Guardar histórico</button>
           </div>
           <div id="centros-resumen" class="grid grid-cols-1 xl:grid-cols-2 gap-4"></div>
         </div>
@@ -112,7 +130,15 @@
               <h2 class="text-sm font-bold text-white">Gastos generales del mes</h2>
               <p class="text-xs text-slate-400 mt-1">Estos gastos se descuentan del neto BESOUL para mostrar beneficio neto real.</p>
             </div>
-            <button onclick="agregarGasto()" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black px-4 py-2 rounded-lg text-xs uppercase">+ Añadir gasto</button>
+            <div class="flex flex-wrap gap-2">
+              <button onclick="agregarGasto()" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black px-4 py-2 rounded-lg text-xs uppercase">+ Añadir gasto</button>
+              <button onclick="copiarGastosFijosMesAnterior()" class="bg-slate-950 hover:bg-slate-800 text-slate-200 border border-slate-700 font-bold px-4 py-2 rounded-lg text-xs uppercase">Copiar fijos mes anterior</button>
+              <button onclick="crearMesGastosVacio()" class="bg-slate-950 hover:bg-slate-800 text-slate-200 border border-slate-700 font-bold px-4 py-2 rounded-lg text-xs uppercase">Crear mes vacío</button>
+            </div>
+          </div>
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2 text-xs">
+            <div><span class="text-slate-500">Editando gastos de:</span> <span id="lbl-gastos-mes" class="font-black text-amber-300">---</span></div>
+            <div><span class="text-slate-500">Total gastos del mes:</span> <span id="lbl-gastos-total-mes" class="font-black text-red-300">0,00 €</span></div>
           </div>
           <div id="gastos-list" class="space-y-2"></div>
         </div>
@@ -242,9 +268,40 @@
     function numero(num){ return (Number(num)||0).toLocaleString('es-ES',{maximumFractionDigits:0}); }
     function parseNum(v){ const n = parseFloat(String(v ?? '').replace(',','.')); return Number.isNaN(n) ? 0 : n; }
     function mesActualKey(){ const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+    let mesSeleccionadoFinanzas = mesActualKey();
+    function mesTrabajoKey(){ return mesSeleccionadoFinanzas || mesActualKey(); }
     function etiquetaMes(key){ const [y,m]=String(key).split('-').map(Number); if(!y||!m) return key; return new Date(y,m-1,1).toLocaleDateString('es-ES',{month:'long', year:'numeric'}).toUpperCase(); }
     function normalizarEstado(valor){ return ['activo','inactivo','baja'].includes(valor) ? valor : 'activo'; }
-    function obtenerMesGastos(){ return mesActualKey(); }
+    function obtenerMesGastos(){ return mesTrabajoKey(); }
+    function desplazarMesKey(key, delta){
+      const [y,m]=String(key || mesActualKey()).split('-').map(Number);
+      const d = new Date(y || new Date().getFullYear(), (m || 1)-1 + delta, 1);
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    }
+    function fechaReferenciaMes(key){
+      const [y,m]=String(key || mesTrabajoKey()).split('-').map(Number);
+      const d = new Date(y || new Date().getFullYear(), m || 1, 0);
+      d.setHours(23,59,59,999);
+      return d;
+    }
+    function cambiarMesTrabajo(valor){
+      if(!/^\d{4}-\d{2}$/.test(String(valor || ''))) return;
+      mesSeleccionadoFinanzas = valor;
+      pintarTodo();
+    }
+    function moverMesTrabajo(delta){ mesSeleccionadoFinanzas = desplazarMesKey(mesTrabajoKey(), delta); pintarTodo(); }
+    function irMesActual(){ mesSeleccionadoFinanzas = mesActualKey(); pintarTodo(); }
+    function renderControlMes(){
+      const key = mesTrabajoKey();
+      const input = document.getElementById('selector-mes-trabajo');
+      if(input && input.value !== key) input.value = key;
+      const estado = document.getElementById('estado-mes-trabajo');
+      if(estado){
+        const cerrado = !!dbFinanzas.historico?.[key];
+        const gastosCount = Array.isArray(dbFinanzas.gastos?.[key]) ? dbFinanzas.gastos[key].length : 0;
+        estado.innerHTML = `${cerrado ? '<span class="text-emerald-300 font-bold">Mes cerrado</span>' : '<span class="text-amber-300 font-bold">Mes abierto</span>'}<br><span class="text-slate-500">${gastosCount} gasto(s) registrados</span>`;
+      }
+    }
 
     function getCentros(opts={}){
       const { incluirInactivos=false, soloVisibles=null } = opts;
@@ -519,7 +576,7 @@
       const pactoEspecial = !!settings.pactoEspecial;
       const aporteClientes = Number(contexto.aporteClientes)||0;
       const fechaAlta = fechaAltaSettings(settings);
-      const antiguedad = yearsBetween(fechaAlta);
+      const antiguedad = yearsBetween(fechaAlta, contexto.fechaReferencia || new Date());
       const posteriores = contarPosterioresCentro(contexto.key, contexto.centroId, fechaAlta);
       const canonFijo = parseNum(settings.canonFijoIndependiente ?? 1000) || 1000;
       const bonusCoordPorPt = parseNum(settings.coordBonusPorPt ?? 50) || 50;
@@ -580,7 +637,7 @@
       };
     }
 
-    function construirCalculoActual(){
+    function construirCalculoActual(mesKey = mesTrabajoKey()){
       const centrosBase = { ...getCentros(), sin_centro: { id:'sin_centro', nombre:'Dirección / sin centro', canonFijo:0, canonPt:0, activo:true } };
       const centros = {};
       Object.keys(centrosBase).forEach(id => centros[id] = { ...centrosBase[id], trainers:[], facturacion:0, ptNeto:0, bsBruto:0, clientes:0, canon:0 });
@@ -594,7 +651,7 @@
           if (normalizarEstado(f.estadoCliente || 'activo') !== 'activo') return;
           fichasActivas += 1;
           clientes += contarPersonasFicha(f);
-          const calcFicha = calcularFacturacionFichaFinanzas(f, key, mesActualKey());
+          const calcFicha = calcularFacturacionFichaFinanzas(f, key, mesKey);
           facturacion += calcFicha.total;
           facturacionMensual += calcFicha.mensual;
           facturacionVariable += calcFicha.variable;
@@ -614,8 +671,8 @@
         }
         const aporteCliente = soloImputacionGastos ? 0 : parseNum(settings.aporteIndividualCliente ?? 0) * clientes;
         const reparto = soloImputacionGastos
-          ? { pt:0, bs:0, bonus:0, coordinacionBonus:0, sistemaAplicado:'CEO · solo imputación gastos', repartoDetalle:'Bea/Soraya computan como coste de sede, pero sus carteras no generan ingresos BESOUL ni liquidación PT en Finanzas.', fechaAlta:settings.fechaAlta || '', antiguedad:yearsBetween(fechaAltaSettings(settings)), posteriores:0, elegibleRango2:false, elegibleRango3:false, elegibleCoordinador:false, coordinadorAutorizado:false, sistemaEfectivo:'solo_gastos', ptsActivosCentro:0 }
-          : calcularComisionAvanzada(facturacion, settings, { key, centroId, aporteClientes: aporteCliente });
+          ? { pt:0, bs:0, bonus:0, coordinacionBonus:0, sistemaAplicado:'CEO · solo imputación gastos', repartoDetalle:'Bea/Soraya computan como coste de sede, pero sus carteras no generan ingresos BESOUL ni liquidación PT en Finanzas.', fechaAlta:settings.fechaAlta || '', antiguedad:yearsBetween(fechaAltaSettings(settings), fechaReferenciaMes(mesKey)), posteriores:0, elegibleRango2:false, elegibleRango3:false, elegibleCoordinador:false, coordinadorAutorizado:false, sistemaEfectivo:'solo_gastos', ptsActivosCentro:0 }
+          : calcularComisionAvanzada(facturacion, settings, { key, centroId, aporteClientes: aporteCliente, fechaReferencia: fechaReferenciaMes(mesKey) });
         const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, facturacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, fichasActivas, soloImputacionGastos, ptNeto:reparto.pt, bsBruto:reparto.bs, pactoEspecial, aporteCliente, bonus:reparto.bonus || 0, coordinacionBonus:reparto.coordinacionBonus || 0, sistemaAplicado:reparto.sistemaAplicado, repartoDetalle:reparto.repartoDetalle || '', fechaAlta:reparto.fechaAlta, antiguedad:reparto.antiguedad, posteriores:reparto.posteriores, elegibleRango2:reparto.elegibleRango2, elegibleRango3:reparto.elegibleRango3, elegibleCoordinador:reparto.elegibleCoordinador, coordinadorAutorizado:reparto.coordinadorAutorizado, sistemaEfectivo:reparto.sistemaEfectivo, ptsActivosCentro:reparto.ptsActivosCentro || 0 };
         trainers.push(row);
         if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, ptNeto:0, bsBruto:0, clientes:0, canon:0 };
@@ -632,15 +689,16 @@
         //    Ejemplo Inacua: 1.200 € fijos incluyen 6 PT; del 7º al 11º son 200 €/PT; desde el 12º son 60 €/PT.
         calcularCanonCentroYAsignar(c);
       });
-      const gastos = (dbFinanzas.gastos?.[mesActualKey()] || []).reduce((s,g)=>s+parseNum(g.importe),0);
+      const gastos = (dbFinanzas.gastos?.[mesKey] || []).reduce((s,g)=>s+parseNum(g.importe),0);
       const total = Object.values(centros).reduce((acc,c)=>{ acc.facturacion+=c.facturacion; acc.ptNeto+=c.ptNeto; acc.bsBruto+=c.bsBruto; acc.canones+=c.canon; acc.clientes+=c.clientes; return acc; }, {facturacion:0,ptNeto:0,bsBruto:0,canones:0,clientes:0});
       total.gastos = gastos;
       total.beneficio = total.bsBruto - total.canones - gastos;
-      return { mes: mesActualKey(), centros, trainers, total, generadoEn:new Date().toISOString() };
+      return { mes: mesKey, centros, trainers, total, generadoEn:new Date().toISOString() };
     }
 
     function pintarTodo(){
       calculoActual = construirCalculoActual();
+      renderControlMes();
       document.getElementById('lbl-mes-activo').innerText = etiquetaMes(calculoActual.mes);
       document.getElementById('kpi-fact-total').innerText = dinero(calculoActual.total.facturacion);
       document.getElementById('kpi-pt-total').innerText = dinero(calculoActual.total.ptNeto);
@@ -708,9 +766,14 @@
 
     function renderGastos(){
       const cont = document.getElementById('gastos-list');
-      const mes = mesActualKey();
+      const mes = obtenerMesGastos();
       const lista = dbFinanzas.gastos?.[mes] || [];
-      if (!lista.length) { cont.innerHTML = '<div class="text-xs text-slate-500 text-center py-6">No hay gastos registrados este mes.</div>'; return; }
+      const totalMes = lista.reduce((s,g)=>s+parseNum(g.importe),0);
+      const lblMes = document.getElementById('lbl-gastos-mes');
+      const lblTotal = document.getElementById('lbl-gastos-total-mes');
+      if(lblMes) lblMes.innerText = etiquetaMes(mes);
+      if(lblTotal) lblTotal.innerText = dinero(totalMes);
+      if (!lista.length) { cont.innerHTML = '<div class="text-xs text-slate-500 text-center py-6">No hay gastos registrados en el mes seleccionado.</div>'; return; }
       cont.innerHTML = lista.map((g,idx)=>`
         <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-xs">
           <select onchange="editarGasto(${idx}, 'categoria', this.value)" class="md:col-span-2 bg-slate-900 border border-slate-800 rounded p-2 text-white">${GASTO_CATEGORIAS.map(cat=>`<option value="${escapeHTML(cat)}" ${g.categoria===cat?'selected':''}>${escapeHTML(cat)}</option>`).join('')}</select>
@@ -720,28 +783,56 @@
           <button onclick="borrarGasto(${idx})" class="md:col-span-2 bg-red-500/10 text-red-400 border border-red-500/30 rounded p-2 font-bold">Borrar</button>
         </div>`).join('');
     }
-    function asegurarGastosMes(){ const m=mesActualKey(); if(!dbFinanzas.gastos) dbFinanzas.gastos={}; if(!Array.isArray(dbFinanzas.gastos[m])) dbFinanzas.gastos[m]=[]; return dbFinanzas.gastos[m]; }
-    function agregarGasto(){ asegurarGastosMes().push({categoria:'Otros', concepto:'Nuevo gasto', tipo:'variable', importe:0, creadoEn:new Date().toISOString()}); guardarConfigFinanzas(); }
+    function asegurarGastosMes(){ const m=obtenerMesGastos(); if(!dbFinanzas.gastos) dbFinanzas.gastos={}; if(!Array.isArray(dbFinanzas.gastos[m])) dbFinanzas.gastos[m]=[]; return dbFinanzas.gastos[m]; }
+    function agregarGasto(){ asegurarGastosMes().push({categoria:'Otros', concepto:'Nuevo gasto', tipo:'variable', importe:0, creadoEn:new Date().toISOString(), mes:obtenerMesGastos()}); guardarConfigFinanzas(); }
     function editarGasto(idx,campo,valor){ const lista=asegurarGastosMes(); if(!lista[idx]) return; lista[idx][campo]=campo==='importe'?parseNum(valor):valor; guardarConfigFinanzas(); }
     function borrarGasto(idx){ if(!confirm('¿Borrar este gasto?')) return; asegurarGastosMes().splice(idx,1); guardarConfigFinanzas(); }
+    function crearMesGastosVacio(){
+      const mes = obtenerMesGastos();
+      if(!dbFinanzas.gastos) dbFinanzas.gastos = {};
+      if(Array.isArray(dbFinanzas.gastos[mes]) && dbFinanzas.gastos[mes].length){ alert(`El mes ${etiquetaMes(mes)} ya tiene gastos.`); return; }
+      dbFinanzas.gastos[mes] = [];
+      guardarConfigFinanzas();
+    }
+    function copiarGastosFijosMesAnterior(){
+      const mes = obtenerMesGastos();
+      const anterior = desplazarMesKey(mes, -1);
+      const origen = Array.isArray(dbFinanzas.gastos?.[anterior]) ? dbFinanzas.gastos[anterior] : [];
+      const fijos = origen.filter(g => String(g.tipo || '').toLowerCase() === 'fijo');
+      if(!fijos.length){ alert(`No hay gastos fijos en ${etiquetaMes(anterior)} para copiar.`); return; }
+      if(!dbFinanzas.gastos) dbFinanzas.gastos = {};
+      if(!Array.isArray(dbFinanzas.gastos[mes])) dbFinanzas.gastos[mes] = [];
+      const existentes = new Set(dbFinanzas.gastos[mes].map(g => `${String(g.categoria||'').toLowerCase()}__${String(g.concepto||'').toLowerCase()}__${parseNum(g.importe)}`));
+      let añadidos = 0;
+      fijos.forEach(g => {
+        const key = `${String(g.categoria||'').toLowerCase()}__${String(g.concepto||'').toLowerCase()}__${parseNum(g.importe)}`;
+        if(existentes.has(key)) return;
+        dbFinanzas.gastos[mes].push({ ...JSON.parse(JSON.stringify(g)), creadoEn:new Date().toISOString(), copiadoDe:anterior, mes });
+        añadidos += 1;
+      });
+      guardarConfigFinanzas();
+      alert(añadidos ? `Copiados ${añadidos} gasto(s) fijo(s) de ${etiquetaMes(anterior)}.` : `Los gastos fijos de ${etiquetaMes(anterior)} ya estaban copiados.`);
+    }
 
     function renderHistorico(){
       const tbody = document.getElementById('tabla-historico-cuerpo');
       const hist = dbFinanzas.historico || {};
       const keys = Object.keys(hist).sort().reverse();
       if (!keys.length) { tbody.innerHTML = '<tr><td colspan="7" class="py-4 text-center text-slate-500">No hay cierres guardados.</td></tr>'; return; }
-      tbody.innerHTML = keys.map(k=>{ const h=hist[k]; const t=h.total||{}; return `<tr class="hover:bg-slate-900/40"><td class="py-3 px-4 font-bold text-white">${escapeHTML(etiquetaMes(k))}</td><td class="py-3 px-4">${dinero(t.facturacion)}</td><td class="py-3 px-4 text-amber-400">${dinero(t.ptNeto)}</td><td class="py-3 px-4 text-emerald-400">${dinero(t.bsBruto)}</td><td class="py-3 px-4 text-red-300">${dinero(t.gastos)}</td><td class="py-3 px-4 text-cyan-400 font-bold">${dinero(t.beneficio)}</td><td class="py-3 px-4"><button onclick="borrarHistorico('${k}')" class="text-red-400 hover:underline">Borrar</button></td></tr>`; }).join('');
+      tbody.innerHTML = keys.map(k=>{ const h=hist[k]; const t=h.total||{}; return `<tr class="hover:bg-slate-900/40"><td class="py-3 px-4 font-bold text-white">${escapeHTML(etiquetaMes(k))}</td><td class="py-3 px-4">${dinero(t.facturacion)}</td><td class="py-3 px-4 text-amber-400">${dinero(t.ptNeto)}</td><td class="py-3 px-4 text-emerald-400">${dinero(t.bsBruto)}</td><td class="py-3 px-4 text-red-300">${dinero(t.gastos)}</td><td class="py-3 px-4 text-cyan-400 font-bold">${dinero(t.beneficio)}</td><td class="py-3 px-4"><div class="flex gap-2"><button onclick="cargarMesHistorico('${k}')" class="text-amber-300 hover:underline">Ver/editar mes</button><button onclick="borrarHistorico('${k}')" class="text-red-400 hover:underline">Borrar</button></div></td></tr>`; }).join('');
     }
+    function cargarMesHistorico(key){ mesSeleccionadoFinanzas = key; switchTab('directo'); }
     function cerrarMesActual(){
-      const key = mesActualKey();
-      const msg = dbFinanzas.historico?.[key] ? `Ya existe un cierre de ${etiquetaMes(key)}. ¿Sobrescribirlo con los datos actuales?` : `¿Guardar cierre de ${etiquetaMes(key)} con los datos actuales?`;
+      const key = mesTrabajoKey();
+      const snapshot = construirCalculoActual(key);
+      const msg = dbFinanzas.historico?.[key] ? `Ya existe un cierre de ${etiquetaMes(key)}. ¿Sobrescribirlo con los datos del mes seleccionado?` : `¿Guardar cierre de ${etiquetaMes(key)} con los datos del mes seleccionado?`;
       if(!confirm(msg)) return;
       if(!dbFinanzas.historico) dbFinanzas.historico = {};
-      dbFinanzas.historico[key] = JSON.parse(JSON.stringify(calculoActual || construirCalculoActual()));
+      dbFinanzas.historico[key] = JSON.parse(JSON.stringify(snapshot));
       dbFinanzas.historico[key].cerradoPor = usuarioFinanzasEmail;
       dbFinanzas.historico[key].cerradoEn = new Date().toISOString();
       guardarConfigFinanzas();
-      alert('Cierre guardado.');
+      alert(`Cierre guardado para ${etiquetaMes(key)}.`);
     }
     function borrarHistorico(key){ if(!confirm(`¿Borrar cierre de ${etiquetaMes(key)}?`)) return; delete dbFinanzas.historico[key]; guardarConfigFinanzas(); }
 
@@ -950,6 +1041,7 @@
         }
       });
       res.gastos = res.gastos || {};
+      Object.keys(res.gastos).forEach(k => { if (!/^\d{4}-\d{2}$/.test(k) || !Array.isArray(res.gastos[k])) delete res.gastos[k]; });
       res.historico = res.historico || {};
       return res;
     }

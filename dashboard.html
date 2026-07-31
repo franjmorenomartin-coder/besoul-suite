@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -507,7 +506,7 @@ function analizarLeads(startDate,endDate,centroId,trainerKey){
     return true;
   });
   const fuente={}; filtrados.forEach(l=>{ const f=l.fuente||'Sin fuente'; fuente[f]=(fuente[f]||0)+1; });
-  return { leads:filtrados, total:filtrados.length, contactados:filtrados.filter(l=>l.estado && l.estado!=='Nuevo lead').length, pruebasSolicitadas:filtrados.filter(l=>['Prueba solicitada','Prueba agendada','Prueba realizada','Convertido a cliente'].includes(l.estado)).length, pruebasRealizadas:filtrados.filter(l=>['Prueba realizada','Convertido a cliente'].includes(l.estado)).length, convertidos:filtrados.filter(l=>l.estado==='Convertido a cliente'||l.convertido===true).length, perdidos:filtrados.filter(l=>l.estado==='Perdido').length, fuente };
+  return { leads:filtrados, total:filtrados.length, contactados:filtrados.filter(l=>l.estado && l.estado!=='Nuevo lead').length, valoracionesSolicitadas:filtrados.filter(l=>['Prueba solicitada','Prueba agendada','Prueba realizada','Convertido a cliente'].includes(l.estado)).length, valoracionesRealizadas:filtrados.filter(l=>['Prueba realizada','Convertido a cliente'].includes(l.estado)).length, convertidos:filtrados.filter(l=>l.estado==='Convertido a cliente'||l.convertido===true).length, perdidos:filtrados.filter(l=>l.estado==='Perdido').length, fuente };
 }
 function pintarKPIs(res){
   document.getElementById('kpi-facturacion').innerText = dinero(res.total.facturacion);
@@ -528,7 +527,7 @@ function pintarGraficas(res){
   setChart('chartMonthly', { type:'line', data:{ labels:meses.map(etiquetaMes), datasets:[{label:'Facturación', data:res.monthly.map(m=>m.facturacion), borderColor:'#f59e0b', tension:.35}, {label:'Gastos/costes', data:res.monthly.map(m=>m.canones+m.gastos), borderColor:'#f43f5e', tension:.35}, {label:'Beneficio neto', data:res.monthly.map(m=>m.beneficio), borderColor:'#06b6d4', tension:.35}]}, options:chartOptions() });
   const centros = Object.values(res.current.centros || {}).filter(c => c.id !== 'sin_centro' && (c.facturacion || c.trainers?.length));
   setChart('chartCenters', { type:'doughnut', data:{ labels:centros.map(c=>c.nombre), datasets:[{ data:centros.map(c=>c.facturacion||0), backgroundColor:colorList(centros.length), borderColor:'#0f172a' }]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{color:'#cbd5e1', boxWidth:10}}} } });
-  setChart('chartCrm', { type:'bar', data:{ labels:['Leads','Contactados','Pruebas solic.','Pruebas real.','Convertidos','Perdidos'], datasets:[{label:'CRM', data:[res.crm.total,res.crm.contactados,res.crm.pruebasSolicitadas,res.crm.pruebasRealizadas,res.crm.convertidos,res.crm.perdidos], backgroundColor:'#8b5cf6'}]}, options:chartOptions() });
+  setChart('chartCrm', { type:'bar', data:{ labels:['Leads','Contactados','Valorac. solic.','Valorac. real.','Convertidos','Perdidos'], datasets:[{label:'CRM', data:[res.crm.total,res.crm.contactados,res.crm.valoracionesSolicitadas,res.crm.valoracionesRealizadas,res.crm.convertidos,res.crm.perdidos], backgroundColor:'#8b5cf6'}]}, options:chartOptions() });
   const fuentes = Object.keys(res.crm.fuente).sort((a,b)=>res.crm.fuente[b]-res.crm.fuente[a]);
   setChart('chartSources', { type:'doughnut', data:{ labels:fuentes.length?fuentes:['Sin datos'], datasets:[{data:fuentes.length?fuentes.map(f=>res.crm.fuente[f]):[1], backgroundColor:colorList(Math.max(1,fuentes.length)), borderColor:'#0f172a'}]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{color:'#cbd5e1', boxWidth:10}}} } });
   const horas = Object.keys(res.agenda.byHour).sort();

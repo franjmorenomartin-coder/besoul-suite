@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -82,8 +81,8 @@
       <div class="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-10 gap-3 text-center text-xs">
         <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Leads mes</span><span id="kpi-leads" class="text-sm font-black text-white font-mono">0</span></div>
         <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Contactados</span><span id="kpi-contactados" class="text-sm font-black text-cyan-400 font-mono">0</span></div>
-        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Pruebas solicit.</span><span id="kpi-pruebas-sol" class="text-sm font-black text-amber-400 font-mono">0</span></div>
-        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Pruebas real.</span><span id="kpi-pruebas-real" class="text-sm font-black text-blue-400 font-mono">0</span></div>
+        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Valorac. solicit.</span><span id="kpi-pruebas-sol" class="text-sm font-black text-amber-400 font-mono">0</span></div>
+        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Valorac. real.</span><span id="kpi-pruebas-real" class="text-sm font-black text-blue-400 font-mono">0</span></div>
         <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Convertidos</span><span id="kpi-convertidos" class="text-sm font-black text-emerald-400 font-mono">0</span></div>
         <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Conversión</span><span id="kpi-conversion" class="text-sm font-black text-emerald-400 font-mono">0%</span></div>
         <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Perdidos</span><span id="kpi-perdidos" class="text-sm font-black text-red-400 font-mono">0</span></div>
@@ -223,15 +222,15 @@
 
           <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div>
-              <label class="text-slate-400 block mb-1">Tipo de prueba</label>
+              <label class="text-slate-400 block mb-1">Tipo de valoración</label>
               <select id="lead-tipo-prueba" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
-                <option value="Prueba gratuita">Prueba gratuita</option>
                 <option value="Valoración inicial">Valoración inicial</option>
+                <option value="Prueba gratuita">Valoración inicial (dato antiguo)</option>
                 <option value="No aplica">No aplica</option>
               </select>
             </div>
             <div>
-              <label class="text-slate-400 block mb-1">Duración prueba</label>
+              <label class="text-slate-400 block mb-1">Duración valoración</label>
               <select id="lead-duracion-prueba" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
                 <option value="45 min">45 min</option>
                 <option value="30 min">30 min</option>
@@ -240,9 +239,9 @@
               </select>
             </div>
             <div>
-              <label class="text-slate-400 block mb-1">Fecha prueba</label>
+              <label class="text-slate-400 block mb-1">Fecha valoración</label>
               <input type="datetime-local" id="lead-fecha-prueba" step="2700" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
-              <p class="text-[9px] text-cyan-400/80 mt-1 leading-tight">Si el estado es "Prueba agendada", se mostrará en la agenda del entrenador como PRUEBA y no sumará facturación.</p>
+              <p class="text-[9px] text-cyan-400/80 mt-1 leading-tight">Si el estado es “Valoración agendada”, se mostrará en la agenda del entrenador como VALORACIÓN y no sumará facturación.</p>
             </div>
             <div>
               <label class="text-slate-400 block mb-1">Motivo pérdida</label>
@@ -253,7 +252,7 @@
           <div>
             <label class="text-cyan-300 block mb-1 font-bold">Notas para el entrenador / salud</label>
             <textarea id="lead-nota-entrenador" class="w-full bg-slate-950 border border-cyan-500/30 rounded p-2 text-white h-20" placeholder="Ej.: lesión de rodilla, dolor lumbar, embarazo, preferencia de intensidad, limitaciones, objetivo sensible, etc."></textarea>
-            <p class="text-[9px] text-cyan-400/80 mt-1 leading-tight">Estas notas se verán en la Agenda dentro del bloque PRUEBA para que el entrenador prepare la sesión.</p>
+            <p class="text-[9px] text-cyan-400/80 mt-1 leading-tight">Estas notas se verán en la Agenda dentro del bloque VALORACIÓN para que el entrenador prepare la sesión.</p>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -313,11 +312,15 @@ const BS_FIREBASE_CONFIG = {
 };
 
 const ESTADOS = ['Nuevo lead','Contactado','Pendiente de respuesta','Prueba solicitada','Prueba agendada','Prueba realizada','Convertido a cliente','Perdido','Reactivar más adelante'];
-const FUENTES = ['Instagram','WhatsApp','Página web','Google','QR prueba gratis','Recomendación de cliente','Recomendación de entrenador','Recepción del centro deportivo','Campañas pagadas','Clientes antiguos','Otros'];
+const FUENTES = ['Instagram','WhatsApp','Página web','Google','QR valoración','Recomendación de cliente','Recomendación de entrenador','Recepción del centro deportivo','Campañas pagadas','Clientes antiguos','Otros'];
 const OBJETIVOS = ['','Pérdida de peso','Fuerza','Salud','Dolor / lesión','Rendimiento','Estética','Preparación física','Bienestar general','Otro'];
 const HORARIOS = ['','Mañana','Mediodía','Tarde','Noche','Flexible'];
 const MOTIVOS_PERDIDA = ['','Precio','Horario','Distancia','No responde','Eligió otro centro','No encaja el servicio','Solo quería información','Otro'];
-const ACCIONES = ['','Llamar','Enviar WhatsApp','Enviar email','Esperar respuesta','Agendar prueba','Confirmar prueba','Reactivar en 30 días','Otra'];
+const ACCIONES = ['','Llamar','Enviar WhatsApp','Enviar email','Esperar respuesta','Agendar valoración','Confirmar valoración','Reactivar en 30 días','Otra'];
+const LABEL_ESTADO_CRM = { 'Prueba solicitada':'Valoración solicitada', 'Prueba agendada':'Valoración agendada', 'Prueba realizada':'Valoración realizada' };
+const LABEL_FUENTE_CRM = { 'QR prueba gratis':'QR valoración', 'QR valoración':'QR valoración' };
+function labelEstadoCRM(v){ return LABEL_ESTADO_CRM[v] || v || 'Nuevo lead'; }
+function labelFuenteCRM(v){ return LABEL_FUENTE_CRM[v] || v || '---'; }
 const CENTROS_FALLBACK = {
   'alfa_prime': { id:'alfa_prime', nombre:'Alfa Prime', orden:1, activo:true, visibleCRM:true },
   'fantasy': { id:'fantasy', nombre:'Fantasy', orden:2, activo:true, visibleCRM:true },
@@ -542,7 +545,7 @@ function poblarSelect(selectId, valores, opts={}) {
   }
   valores.forEach(v => {
     const o = document.createElement('option');
-    if (typeof v === 'string') { o.value = v; o.innerText = v || opts.vacio || '---'; }
+    if (typeof v === 'string') { o.value = v; o.innerText = opts.labeler ? opts.labeler(v) : (v || opts.vacio || '---'); }
     else { o.value = v.value; o.innerText = v.label; }
     select.appendChild(o);
   });
@@ -572,13 +575,13 @@ function poblarSelectsBase() {
   poblarSelect('filter-center', centrosValores(), { todos:'Todos los centros' });
   poblarSelect('filter-trainer', trainersValores(), { todos: esAdmin() ? 'Todos los entrenadores' : '' });
   if (!esAdmin()) document.getElementById('filter-trainer').value = trainerKeyActual();
-  poblarSelect('filter-status', ESTADOS, { todos:'Todos los estados' });
-  poblarSelect('filter-source', FUENTES, { todos:'Todas las fuentes' });
+  poblarSelect('filter-status', ESTADOS, { todos:'Todos los estados', labeler: labelEstadoCRM });
+  poblarSelect('filter-source', FUENTES, { todos:'Todas las fuentes', labeler: labelFuenteCRM });
 
   poblarSelect('lead-centro', centrosValores());
   poblarSelect('lead-trainer', trainersValores(), { todos:'Sin asignar todavía' });
-  poblarSelect('lead-estado', ESTADOS);
-  poblarSelect('lead-fuente', FUENTES);
+  poblarSelect('lead-estado', ESTADOS, { labeler: labelEstadoCRM });
+  poblarSelect('lead-fuente', FUENTES, { labeler: labelFuenteCRM });
   poblarSelect('lead-objetivo', OBJETIVOS, { vacio:'Sin objetivo' });
   poblarSelect('lead-horario', HORARIOS, { vacio:'Sin preferencia' });
   poblarSelect('lead-motivo-perdida', MOTIVOS_PERDIDA, { vacio:'No aplica' });
@@ -639,7 +642,7 @@ function badgeEstado(estado) {
     'Perdido':'bg-red-500/10 text-red-400 border-red-500/30',
     'Reactivar más adelante':'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/30'
   };
-  return `<span class="inline-flex px-2 py-1 rounded-full border text-[10px] font-bold ${map[estado] || map['Nuevo lead']}">${escapeHTML(estado || 'Nuevo lead')}</span>`;
+  return `<span class="inline-flex px-2 py-1 rounded-full border text-[10px] font-bold ${map[estado] || map['Nuevo lead']}">${escapeHTML(labelEstadoCRM(estado))}</span>`;
 }
 function renderTablaLeads() {
   const tbody = document.getElementById('lead-table-body');
@@ -661,7 +664,7 @@ function renderTablaLeads() {
       <td class="py-3 px-3">${badgeEstado(l.estado)}</td>
       <td class="py-3 px-3">${escapeHTML(textoCentro(l.centroId))}</td>
       <td class="py-3 px-3">${escapeHTML(textoTrainer(l.trainerKey))}</td>
-      <td class="py-3 px-3">${escapeHTML(l.fuente || '---')}</td>
+      <td class="py-3 px-3">${escapeHTML(labelFuenteCRM(l.fuente))}</td>
       <td class="py-3 px-3">${escapeHTML(l.objetivo || '---')}</td>
       <td class="py-3 px-3">
         <div class="font-semibold text-slate-200">${escapeHTML(l.proximaAccion || '---')}</div>
@@ -690,7 +693,7 @@ function topLabel(lista, campo, traductor=null) {
   const c = contarPor(lista, campo);
   const keys = Object.keys(c).sort((a,b) => c[b]-c[a]);
   if (!keys.length) return '---';
-  return `${traductor ? traductor(keys[0]) : keys[0]} (${c[keys[0]]})`;
+  return `${traductor ? traductor(keys[0]) : (campo === 'fuente' ? labelFuenteCRM(keys[0]) : keys[0])} (${c[keys[0]]})`;
 }
 function recalcularKPIs() {
   const total = leadsFiltrados.length;
@@ -722,7 +725,7 @@ function renderAlertas() {
     if (l.estado === 'Nuevo lead' && now - created > 24*60*60*1000) alertas.push({ tipo:'Lead sin contactar', texto:`${l.nombre} lleva más de 24 h como nuevo lead.`, id:l.id, color:'text-red-400' });
     if (l.estado === 'Pendiente de respuesta' && now - updated > 3*24*60*60*1000) alertas.push({ tipo:'Pendiente >3 días', texto:`${l.nombre} lleva más de 3 días pendiente.`, id:l.id, color:'text-amber-400' });
     if (l.estado === 'Perdido' && !l.motivoPerdida) alertas.push({ tipo:'Perdido sin motivo', texto:`${l.nombre} está perdido sin motivo registrado.`, id:l.id, color:'text-red-400' });
-    if (fechaPrueba && fechaPrueba.toDateString() === new Date().toDateString() && l.estado === 'Prueba agendada') alertas.push({ tipo:'Prueba hoy', texto:`${l.nombre} tiene prueba hoy.`, id:l.id, color:'text-blue-400' });
+    if (fechaPrueba && fechaPrueba.toDateString() === new Date().toDateString() && l.estado === 'Prueba agendada') alertas.push({ tipo:'Valoración hoy', texto:`${l.nombre} tiene valoración hoy.`, id:l.id, color:'text-blue-400' });
     if (fechaAccion && fechaAccion.getTime() < now && !['Convertido a cliente','Perdido'].includes(l.estado)) alertas.push({ tipo:'Acción vencida', texto:`${l.nombre} tiene acción pendiente vencida.`, id:l.id, color:'text-red-400' });
   });
   if (!alertas.length) {
@@ -744,7 +747,7 @@ function resetLeadForm() {
   document.getElementById('lead-fuente').value = 'Instagram';
   document.getElementById('lead-objetivo').value = '';
   document.getElementById('lead-horario').value = '';
-  document.getElementById('lead-tipo-prueba').value = 'Prueba gratuita';
+  document.getElementById('lead-tipo-prueba').value = 'Valoración inicial';
   document.getElementById('lead-duracion-prueba').value = '45 min';
   document.getElementById('lead-motivo-perdida').value = '';
   document.getElementById('lead-proxima-accion').value = '';
@@ -774,7 +777,7 @@ function abrirModalLead(id=null) {
     document.getElementById('lead-medio').value = lead.medioCaptacion || lead.medio || '';
     document.getElementById('lead-objetivo').value = lead.objetivo || '';
     document.getElementById('lead-horario').value = lead.horarioPreferido || '';
-    document.getElementById('lead-tipo-prueba').value = lead.tipoPrueba || 'Prueba gratuita';
+    document.getElementById('lead-tipo-prueba').value = lead.tipoPrueba || 'Valoración inicial';
     document.getElementById('lead-duracion-prueba').value = lead.duracionPrueba || '45 min';
     document.getElementById('lead-fecha-prueba').value = fechaLocalInputDesdeISO(lead.fechaPrueba);
     document.getElementById('lead-motivo-perdida').value = lead.motivoPerdida || '';
@@ -925,7 +928,7 @@ function objetoPruebaAgendaCRM(leadId, leadData, claveInfo) {
     telefono: leadData.telefono || '',
     email: leadData.email || '',
     modalidad: 'Prueba CRM',
-    tipoPrueba: leadData.tipoPrueba || 'Prueba gratuita',
+    tipoPrueba: leadData.tipoPrueba || 'Valoración inicial',
     duracionPrueba: leadData.duracionPrueba || '45 min',
     factor: 1,
     tipoCompra: 'Prueba CRM',
