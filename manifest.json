@@ -1,8 +1,8 @@
 {
   "name": "BESOUL Suite",
   "short_name": "BESOUL",
-  "description": "Sistema operativo BESOUL para agenda, CRM, finanzas, dashboard y reservas.",
-  "start_url": "./index.html?v=pwa-logo2",
+  "description": "Sistema operativo BESOUL para agenda, CRM, finanzas, dashboard, reservas y solicitudes de prueba gratis.",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0B0F17",
@@ -10,28 +10,16 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "./besoul-icon-192.png",
+      "src": "./icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
-      "src": "./besoul-icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "./besoul-icon-512.png",
+      "src": "./icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "./besoul-icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     }
   ]
 }
