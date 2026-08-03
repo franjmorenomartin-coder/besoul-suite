@@ -138,6 +138,17 @@ function qs(name){ return new URLSearchParams(window.location.search).get(name) 
 function limpiar(v){ return String(v || '').trim(); }
 function slug(v){ return limpiar(v).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,''); }
 function escapeHTML(v){ return String(v || '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[ch])); }
+function normalizarTelefono(v){ return String(v || '').replace(/[^0-9+]/g,'').replace(/^00/,'+'); }
+function soloDigitosTelefono(v){ return String(v || '').replace(/\D/g,''); }
+function hashFNV1a(str){
+  let h = 0x811c9dc5;
+  for (let i=0; i<String(str).length; i++) { h ^= String(str).charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (h >>> 0).toString(36);
+}
+function keyEmailValoracion(email){ return `email_${hashFNV1a(String(email||'').trim().toLowerCase())}`; }
+function keyTelefonoValoracion(tel){ return `phone_${hashFNV1a(soloDigitosTelefono(tel))}`; }
+function maskEmail(email){ const [a,b]=String(email||'').split('@'); if(!b) return 'email registrado'; return `${a.slice(0,2)}***@${b}`; }
+function maskTelefono(t){ const d=soloDigitosTelefono(t); return d.length > 4 ? `***${d.slice(-4)}` : 'teléfono registrado'; }
 function normalizarCentroId(v){
   const raw = limpiar(v);
   if (!raw) return '';
@@ -146,7 +157,7 @@ function normalizarCentroId(v){
   return match ? match.id : s;
 }
 function centroNombre(id){ return centrosDisponibles.find(c => c.id === id)?.nombre || id; }
-function campañaActual(){ return limpiar(qs('campana') || qs('campaña') || qs('utm_campaign') || qs('medio') || 'qr_prueba_gratis'); }
+function campañaActual(){ return limpiar(qs('campana') || qs('campaña') || qs('utm_campaign') || qs('medio') || 'qr_valoracion'); }
 function fuenteActual(){ return limpiar(qs('src') || qs('utm_source') || 'qr'); }
 function mostrarMensaje(tipo, texto){
   const el = document.getElementById('form-msg');
@@ -181,7 +192,7 @@ async function cargarCentros(){
 }
 function validarFormulario(){
   const nombre = limpiar(document.getElementById('nombre').value);
-  const telefono = limpiar(document.getElementById('telefono').value);
+  const telefono = normalizarTelefono(document.getElementById('telefono').value);
   const email = limpiar(document.getElementById('email').value).toLowerCase();
   const centroId = normalizarCentroId(document.getElementById('centro').value);
   if (!nombre || nombre.length < 2) throw new Error('Introduce tu nombre y apellidos.');
@@ -222,6 +233,34 @@ function validarFormulario(){
     campana: campañaActual()
   };
 }
+
+async function registrarValoracionUnica(data){
+  const emailKey = keyEmailValoracion(data.email);
+  const phoneKey = keyTelefonoValoracion(data.telefono);
+  const emailRef = db.collection('besoulValoracionRegistry').doc(emailKey);
+  const phoneRef = db.collection('besoulValoracionRegistry').doc(phoneKey);
+  const leadRef = db.collection('besoulLeads').doc();
+  await db.runTransaction(async tx => {
+    const emailSnap = await tx.get(emailRef);
+    if (emailSnap.exists) throw new Error('Ya existe una valoración registrada con este email. Si necesitas modificarla, contacta con BESOUL.');
+    const phoneSnap = await tx.get(phoneRef);
+    if (phoneSnap.exists) throw new Error('Ya existe una valoración registrada con este teléfono. Si necesitas modificarla, contacta con BESOUL.');
+    const payload = { ...data, valoracionUnica: true, leadId: leadRef.id };
+    tx.set(leadRef, payload);
+    const base = {
+      leadId: leadRef.id,
+      nombre: data.nombre,
+      centroId: data.centroId,
+      centroNombre: data.centroNombre,
+      estado: 'registrada',
+      source: 'valoracion_publica',
+      createdAt: data.createdAt
+    };
+    tx.set(emailRef, { ...base, kind:'email', masked: maskEmail(data.email) });
+    tx.set(phoneRef, { ...base, kind:'phone', masked: maskTelefono(data.telefono) });
+  });
+}
+
 async function enviarSolicitud(evt){
   evt.preventDefault();
   const btn = document.getElementById('btn-submit');
@@ -230,10 +269,10 @@ async function enviarSolicitud(evt){
     const data = validarFormulario();
     btn.disabled = true;
     btn.innerText = 'Enviando solicitud...';
-    await db.collection('besoulLeads').add(data);
+    await registrarValoracionUnica(data);
     document.getElementById('trial-form').reset();
     pintarCentros();
-    mostrarMensaje('ok', `<b>Solicitud recibida.</b><br>Gracias, ${escapeHTML(data.nombre)}. El equipo BESOUL contactará contigo para confirmar tu prueba en ${escapeHTML(data.centroNombre)}.`);
+    mostrarMensaje('ok', `<b>Solicitud recibida.</b><br>Gracias, ${escapeHTML(data.nombre)}. El equipo BESOUL contactará contigo para confirmar tu valoración en ${escapeHTML(data.centroNombre)}.`);
   } catch (err) {
     console.error(err);
     mostrarMensaje('error', escapeHTML(err.message || 'No se ha podido enviar la solicitud. Inténtalo de nuevo.'));

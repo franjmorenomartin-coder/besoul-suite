@@ -1,7 +1,7 @@
 {
   "name": "BESOUL Suite",
   "short_name": "BESOUL",
-  "description": "Sistema operativo BESOUL para agenda, CRM, finanzas, dashboard y reservas y valoraciones.",
+  "description": "Sistema operativo BESOUL para agenda, CRM, finanzas, dashboard y reservas.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

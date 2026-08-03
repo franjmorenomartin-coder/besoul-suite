@@ -288,7 +288,7 @@ function centroTrainer(key, perfilObj){
 }
 function nombreCentro(id){ const c = getCentros({incluirInactivos:true})[id] || getCentros()[id]; if (c) return c.nombre; if (id === 'sin_centro' || id === 'sin-centro') return 'Dirección / sin centro'; return id || 'Sin centro'; }
 function tarifaBaseFicha(ficha){ if (!ficha || !TARIFAS_2026[ficha.modalidad]) return 0; const factor=parseInt(ficha.factor)||1; return TARIFAS_2026[ficha.modalidad][factor] || TARIFAS_2026[ficha.modalidad][1] || 0; }
-function multiplicadorFacturacionFicha(ficha){ if (!ficha) return 1; if (String(ficha.modalidad||'').includes('Pareja')) return 2; if (String(ficha.modalidad||'').includes('Trío')) return 3; if (ficha.tipo === 'grupo') return Math.max(1, ficha.integrantesObj ? ficha.integrantesObj.length : 1); return 1; }
+function multiplicadorFacturacionFicha(ficha){ if (!ficha) return 1; if (ficha.grupoAbierto === true || ficha.tipoCita === 'grupo_abierto') return 0; if (String(ficha.modalidad||'').includes('Pareja')) return 2; if (String(ficha.modalidad||'').includes('Trío')) return 3; if (ficha.tipo === 'grupo') return Math.max(1, ficha.integrantesObj ? ficha.integrantesObj.length : 1); return 1; }
 function obtenerDescuentoFicha(ficha){ const n=parseFloat(String(ficha?.descuentoPct??0).replace(',','.')); return Number.isNaN(n)?0:Math.max(0, Math.min(100,n)); }
 function calcularFacturacionFichaSimple(ficha){ if (!ficha || ficha.modalidad === 'Miembro Subordinado' || ficha.vinculacion) return 0; const base = tarifaBaseFicha(ficha) * multiplicadorFacturacionFicha(ficha); return Math.max(0, base * (1 - obtenerDescuentoFicha(ficha)/100)); }
 function esBonoFicha(ficha){ return !!(ficha && (ficha.tipoCompra === 'Bono' || String(ficha.modalidad||'').includes('Bono'))); }
@@ -296,6 +296,8 @@ function esSueltaFicha(ficha){ return !!(ficha && String(ficha.modalidad||'').in
 function esMensualFicha(ficha){ return !!(ficha && !esBonoFicha(ficha) && !esSueltaFicha(ficha)); }
 function esCitaPruebaCRM(obj){ return !!(obj && (obj.esPruebaCRM === true || obj.tipoCita === 'pruebaCRM' || obj.noSumaFacturacion === true || obj.modalidad === 'Prueba CRM')); }
 function esRecuperacionNoFacturable(obj){ return !!(obj && (obj.recuperacionNoFacturable === true || obj.noFacturable === true || obj.tipoFacturacion === 'recuperacion_no_facturable')); }
+function esGrupoAbiertoAgenda(obj){ return !!(obj && (obj.grupoAbierto === true || obj.tipoCita === 'grupo_abierto')); }
+function asistentesGrupoAbiertoAgenda(obj){ return Array.isArray(obj?.asistentesGrupoAbierto) ? obj.asistentesGrupoAbierto : []; }
 function rangoMes(mesKey){ const [y,m]=String(mesKey||mesActualKey()).split('-').map(Number); const ini=new Date(y,(m||1)-1,1); const fin=new Date(y,(m||1),1); return { desde:dateISO(ini), hasta:dateISO(fin) }; }
 function sesionesAgendadasFacturablesFichaMes(ficha, trainerKey, mesKey){
   if (!ficha || !trainerKey) return 0;
@@ -305,9 +307,11 @@ function sesionesAgendadasFacturablesFichaMes(ficha, trainerKey, mesKey){
     const fecha = clave.split('_')[0];
     if (fecha < desde || fecha >= hasta) return total;
     const cita = agendaEntrenador[clave];
-    if (!cita || cita.id !== ficha.id) return total;
+    if (!cita) return total;
     if (esCitaPruebaCRM(cita) || esRecuperacionNoFacturable(cita)) return total;
-    return total + 1;
+    if (cita.id === ficha.id) return total + 1;
+    if (esGrupoAbiertoAgenda(cita) && asistentesGrupoAbiertoAgenda(cita).some(a => (a.id || a.clientId) === ficha.id)) return total + 1;
+    return total;
   }, 0);
 }
 function calcularFacturacionFichaFinanzas(ficha, trainerKey, mesKey){

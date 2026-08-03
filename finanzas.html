@@ -84,9 +84,9 @@
         <div class="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4">
           <div>
             <h2 class="text-sm font-black text-white uppercase tracking-wide">Mes de trabajo</h2>
-            <p class="text-xs text-slate-400 mt-1">Selecciona el mes que quieres trabajar. La facturación/finanzas solo aparece cuando generas y guardas los datos de ese mes; los gastos siguen guardados por mes.</p>
+            <p class="text-xs text-slate-400 mt-1">Selecciona el mes que quieres revisar, editar en gastos o cerrar en histórico. Los gastos quedan guardados por mes.</p>
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-7 gap-2 items-end">
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2 items-end">
             <label class="text-[10px] font-bold uppercase text-slate-500 tracking-wider">
               Mes seleccionado
               <input id="selector-mes-trabajo" type="month" onchange="cambiarMesTrabajo(this.value)" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white">
@@ -94,8 +94,6 @@
             <button onclick="moverMesTrabajo(-1)" class="bg-slate-950 hover:bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-3 py-2 text-xs font-bold">← Mes anterior</button>
             <button onclick="irMesActual()" class="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg px-3 py-2 text-xs font-bold">Mes actual</button>
             <button onclick="moverMesTrabajo(1)" class="bg-slate-950 hover:bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-3 py-2 text-xs font-bold">Mes siguiente →</button>
-            <button onclick="guardarDatosMesDesdeAgenda()" class="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-lg px-3 py-2 text-xs font-black uppercase">Generar / actualizar mes</button>
-            <button onclick="borrarDatosMesFinanciero()" class="bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 rounded-lg px-3 py-2 text-xs font-black uppercase">Vaciar mes</button>
             <div id="estado-mes-trabajo" class="text-xs text-slate-300 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 min-h-[38px]">---</div>
           </div>
         </div>
@@ -116,13 +114,10 @@
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
           <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-slate-800 pb-3">
             <div>
-              <h2 class="text-sm font-bold text-white">Resumen financiero del mes seleccionado</h2>
-              <p class="text-xs text-slate-400 mt-1">Los datos de facturación solo se muestran si has generado/guardado ese mes. Esto evita que meses antiguos o de prueba aparezcan como si estuvieran cerrados.</p>
+              <h2 class="text-sm font-bold text-white">Resumen en directo desde Agenda</h2>
+              <p class="text-xs text-slate-400 mt-1">Mensualidades activas se facturan completas aunque el cliente pierda clases. Bonos y sesiones sueltas se computan por sesiones agendadas facturables del mes. Las recuperaciones marcadas por administración no suman facturación.</p>
             </div>
-            <div class="flex flex-col sm:flex-row gap-2">
-              <button onclick="guardarDatosMesDesdeAgenda()" class="bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-black px-4 py-2 rounded-lg text-xs uppercase">Guardar datos del mes</button>
-              <button onclick="cerrarMesActual()" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black px-4 py-2 rounded-lg text-xs uppercase">Cerrar mes / Histórico</button>
-            </div>
+            <button onclick="cerrarMesActual()" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black px-4 py-2 rounded-lg text-xs uppercase">Cerrar mes seleccionado / Guardar histórico</button>
           </div>
           <div id="centros-resumen" class="grid grid-cols-1 xl:grid-cols-2 gap-4"></div>
         </div>
@@ -262,7 +257,7 @@
     let agendaRef = null;
     let usersUnsub = null, agendaUnsub = null, finanzasUnsub = null;
 
-    let dbFinanzas = { centros: {}, trainerSettings: {}, gastos: {}, meses: {}, historico: {} };
+    let dbFinanzas = { centros: {}, trainerSettings: {}, gastos: {}, historico: {} };
     let agendaData = { clientes:{}, agenda:{}, historicoClientes:{} };
     let perfilesUsuarios = [];
     let calculoActual = null;
@@ -296,9 +291,6 @@
     }
     function moverMesTrabajo(delta){ mesSeleccionadoFinanzas = desplazarMesKey(mesTrabajoKey(), delta); pintarTodo(); }
     function irMesActual(){ mesSeleccionadoFinanzas = mesActualKey(); pintarTodo(); }
-    function tieneDatosMesFinanciero(key = mesTrabajoKey()){
-      return !!(dbFinanzas.meses && dbFinanzas.meses[key]);
-    }
     function renderControlMes(){
       const key = mesTrabajoKey();
       const input = document.getElementById('selector-mes-trabajo');
@@ -306,12 +298,8 @@
       const estado = document.getElementById('estado-mes-trabajo');
       if(estado){
         const cerrado = !!dbFinanzas.historico?.[key];
-        const guardado = tieneDatosMesFinanciero(key);
         const gastosCount = Array.isArray(dbFinanzas.gastos?.[key]) ? dbFinanzas.gastos[key].length : 0;
-        const estadoMes = cerrado
-          ? '<span class="text-emerald-300 font-bold">Mes cerrado en histórico</span>'
-          : (guardado ? '<span class="text-cyan-300 font-bold">Mes guardado como borrador</span>' : '<span class="text-slate-400 font-bold">Mes sin datos financieros</span>');
-        estado.innerHTML = `${estadoMes}<br><span class="text-slate-500">${gastosCount} gasto(s) registrado(s)</span>`;
+        estado.innerHTML = `${cerrado ? '<span class="text-emerald-300 font-bold">Mes cerrado</span>' : '<span class="text-amber-300 font-bold">Mes abierto</span>'}<br><span class="text-slate-500">${gastosCount} gasto(s) registrados</span>`;
       }
     }
 
@@ -439,6 +427,7 @@
     }
     function multiplicadorFacturacionFicha(ficha){
       if (!ficha) return 1;
+      if (ficha.grupoAbierto === true || ficha.tipoCita === 'grupo_abierto') return 0;
       if (ficha.modalidad && ficha.modalidad.includes('Pareja')) return 2;
       if (ficha.modalidad && ficha.modalidad.includes('Trío')) return 3;
       if (ficha.tipo === 'grupo') return Math.max(1, ficha.integrantesObj ? ficha.integrantesObj.length : 1);
@@ -466,6 +455,12 @@
     function esRecuperacionNoFacturable(obj){
       return !!(obj && (obj.recuperacionNoFacturable === true || obj.noFacturable === true || obj.tipoFacturacion === 'recuperacion_no_facturable'));
     }
+    function esGrupoAbiertoAgenda(obj){
+      return !!(obj && (obj.grupoAbierto === true || obj.tipoCita === 'grupo_abierto'));
+    }
+    function asistentesGrupoAbiertoAgenda(obj){
+      return Array.isArray(obj?.asistentesGrupoAbierto) ? obj.asistentesGrupoAbierto : [];
+    }
     function rangoMes(mesKey){
       const [y,m] = String(mesKey || mesActualKey()).split('-').map(Number);
       const inicio = new Date(y, (m || 1) - 1, 1);
@@ -481,9 +476,11 @@
         const fecha = clave.split('_')[0];
         if (fecha < desde || fecha >= hasta) return total;
         const cita = agendaEntrenador[clave];
-        if (!cita || cita.id !== ficha.id) return total;
+        if (!cita) return total;
         if (esCitaPruebaCRM(cita) || esRecuperacionNoFacturable(cita)) return total;
-        return total + 1;
+        if (cita.id === ficha.id) return total + 1;
+        if (esGrupoAbiertoAgenda(cita) && asistentesGrupoAbiertoAgenda(cita).some(a => (a.id || a.clientId) === ficha.id)) return total + 1;
+        return total;
       }, 0);
     }
     function calcularFacturacionFichaFinanzas(ficha, trainerKey, mesKey){
@@ -649,7 +646,7 @@
       };
     }
 
-    function construirCalculoDesdeAgenda(mesKey = mesTrabajoKey()){
+    function construirCalculoActual(mesKey = mesTrabajoKey()){
       const centrosBase = { ...getCentros(), sin_centro: { id:'sin_centro', nombre:'Dirección / sin centro', canonFijo:0, canonPt:0, activo:true } };
       const centros = {};
       Object.keys(centrosBase).forEach(id => centros[id] = { ...centrosBase[id], trainers:[], facturacion:0, ptNeto:0, bsBruto:0, clientes:0, canon:0 });
@@ -705,59 +702,7 @@
       const total = Object.values(centros).reduce((acc,c)=>{ acc.facturacion+=c.facturacion; acc.ptNeto+=c.ptNeto; acc.bsBruto+=c.bsBruto; acc.canones+=c.canon; acc.clientes+=c.clientes; return acc; }, {facturacion:0,ptNeto:0,bsBruto:0,canones:0,clientes:0});
       total.gastos = gastos;
       total.beneficio = total.bsBruto - total.canones - gastos;
-      return { mes: mesKey, centros, trainers, total, generadoEn:new Date().toISOString(), origen:'agenda' };
-    }
-
-    function construirCalculoVacio(mesKey = mesTrabajoKey()){
-      const centrosBase = { ...getCentros(), sin_centro: { id:'sin_centro', nombre:'Dirección / sin centro', canonFijo:0, canonPt:0, activo:true } };
-      const centros = {};
-      Object.keys(centrosBase).forEach(id => centros[id] = { ...centrosBase[id], trainers:[], facturacion:0, ptNeto:0, bsBruto:0, clientes:0, canon:0 });
-      const gastos = (dbFinanzas.gastos?.[mesKey] || []).reduce((s,g)=>s+parseNum(g.importe),0);
-      const total = { facturacion:0, ptNeto:0, bsBruto:0, canones:0, clientes:0, gastos, beneficio: 0 - gastos };
-      return { mes: mesKey, centros, trainers:[], total, generadoEn:null, origen:'sin_datos', sinDatos:true };
-    }
-
-    function actualizarSnapshotMesConGastos(snapshot, mesKey = mesTrabajoKey()){
-      const copy = JSON.parse(JSON.stringify(snapshot || construirCalculoVacio(mesKey)));
-      copy.mes = mesKey;
-      copy.total = copy.total || { facturacion:0, ptNeto:0, bsBruto:0, canones:0, clientes:0 };
-      const gastos = (dbFinanzas.gastos?.[mesKey] || []).reduce((s,g)=>s+parseNum(g.importe),0);
-      copy.total.gastos = gastos;
-      copy.total.beneficio = (parseNum(copy.total.bsBruto) - parseNum(copy.total.canones) - gastos);
-      copy.origen = copy.origen || 'guardado';
-      return copy;
-    }
-
-    function construirCalculoActual(mesKey = mesTrabajoKey()){
-      if (dbFinanzas.meses && dbFinanzas.meses[mesKey]) return actualizarSnapshotMesConGastos(dbFinanzas.meses[mesKey], mesKey);
-      return construirCalculoVacio(mesKey);
-    }
-
-    function guardarDatosMesDesdeAgenda(){
-      const key = mesTrabajoKey();
-      const existe = tieneDatosMesFinanciero(key);
-      const msg = existe
-        ? `Ya hay datos guardados para ${etiquetaMes(key)}. ¿Actualizar este mes con los datos actuales de Agenda/CRM/centros?`
-        : `¿Generar y guardar los datos financieros de ${etiquetaMes(key)} desde la Agenda actual?`;
-      if(!confirm(msg)) return;
-      if(!dbFinanzas.meses) dbFinanzas.meses = {};
-      const snapshot = construirCalculoDesdeAgenda(key);
-      snapshot.guardadoPor = usuarioFinanzasEmail;
-      snapshot.guardadoEn = new Date().toISOString();
-      snapshot.estadoMes = 'borrador';
-      dbFinanzas.meses[key] = JSON.parse(JSON.stringify(snapshot));
-      guardarConfigFinanzas();
-      alert(`Datos financieros guardados para ${etiquetaMes(key)}.`);
-    }
-
-    function borrarDatosMesFinanciero(){
-      const key = mesTrabajoKey();
-      if(!tieneDatosMesFinanciero(key)){ alert(`No hay datos financieros guardados para ${etiquetaMes(key)}.`); return; }
-      if(dbFinanzas.historico?.[key] && !confirm(`${etiquetaMes(key)} está cerrado en histórico. Si vacías el borrador mensual, el cierre histórico seguirá guardado. ¿Continuar?`)) return;
-      if(!confirm(`¿Vaciar los datos financieros guardados para ${etiquetaMes(key)}? Los gastos del mes no se borrarán.`)) return;
-      delete dbFinanzas.meses[key];
-      guardarConfigFinanzas();
-      alert(`Datos financieros de ${etiquetaMes(key)} vaciados. Los gastos se mantienen.`);
+      return { mes: mesKey, centros, trainers, total, generadoEn:new Date().toISOString() };
     }
 
     function pintarTodo(){
@@ -806,13 +751,6 @@
     }
     function renderCentrosResumen(){
       const cont = document.getElementById('centros-resumen');
-      if (calculoActual?.sinDatos) {
-        cont.innerHTML = `<div class="xl:col-span-2 bg-slate-950 border border-slate-800 rounded-xl p-6 text-center">
-          <div class="text-amber-300 font-black text-sm uppercase mb-2">Mes sin datos financieros guardados</div>
-          <p class="text-slate-400 text-sm max-w-2xl mx-auto">Este mes no mostrará facturación ni liquidaciones hasta que pulses <b>Generar / actualizar mes</b>. Así evitamos que meses antiguos o de prueba se calculen automáticamente con datos actuales.</p>
-        </div>`;
-        return;
-      }
       const centrosOrden = Object.values(calculoActual.centros).filter(c => c.id !== 'sin_centro' || c.trainers.length > 0);
       if (!centrosOrden.length) { cont.innerHTML = '<div class="text-xs text-slate-500">Sin datos.</div>'; return; }
       cont.innerHTML = centrosOrden.map(c => `
@@ -895,20 +833,15 @@
     function cargarMesHistorico(key){ mesSeleccionadoFinanzas = key; switchTab('directo'); }
     function cerrarMesActual(){
       const key = mesTrabajoKey();
-      if(!tieneDatosMesFinanciero(key)){
-        alert(`Antes de cerrar ${etiquetaMes(key)}, primero debes pulsar “Generar / actualizar mes”. Así el histórico solo guarda meses trabajados y no calcula meses antiguos automáticamente.`);
-        return;
-      }
       const snapshot = construirCalculoActual(key);
-      const msg = dbFinanzas.historico?.[key] ? `Ya existe un cierre de ${etiquetaMes(key)}. ¿Sobrescribirlo con el borrador guardado de ese mes?` : `¿Cerrar ${etiquetaMes(key)} y guardar el histórico con el borrador mensual actual?`;
+      const msg = dbFinanzas.historico?.[key] ? `Ya existe un cierre de ${etiquetaMes(key)}. ¿Sobrescribirlo con los datos del mes seleccionado?` : `¿Guardar cierre de ${etiquetaMes(key)} con los datos del mes seleccionado?`;
       if(!confirm(msg)) return;
       if(!dbFinanzas.historico) dbFinanzas.historico = {};
       dbFinanzas.historico[key] = JSON.parse(JSON.stringify(snapshot));
-      dbFinanzas.historico[key].estadoMes = 'cerrado';
       dbFinanzas.historico[key].cerradoPor = usuarioFinanzasEmail;
       dbFinanzas.historico[key].cerradoEn = new Date().toISOString();
       guardarConfigFinanzas();
-      alert(`Cierre histórico guardado para ${etiquetaMes(key)}.`);
+      alert(`Cierre guardado para ${etiquetaMes(key)}.`);
     }
     function borrarHistorico(key){ if(!confirm(`¿Borrar cierre de ${etiquetaMes(key)}?`)) return; delete dbFinanzas.historico[key]; guardarConfigFinanzas(); }
 
@@ -945,7 +878,7 @@
             <label class="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded p-2"><input type="checkbox" onchange="editarCentro('${c.id}','visibleCRM',this.checked)" ${c.visibleCRM!==false?'checked':''} class="accent-cyan-500"> CRM</label>
             <label class="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded p-2"><input type="checkbox" onchange="editarCentro('${c.id}','visibleAgenda',this.checked)" ${c.visibleAgenda!==false?'checked':''} class="accent-amber-500"> Agenda</label>
             <label class="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded p-2"><input type="checkbox" onchange="editarCentro('${c.id}','visibleReservas',this.checked)" ${c.visibleReservas!==false?'checked':''} class="accent-pink-500"> Reservas</label>
-            <label class="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded p-2"><input type="checkbox" onchange="editarCentro('${c.id}','visibleQR',this.checked)" ${c.visibleQR!==false?'checked':''} class="accent-emerald-500"> QR valoración</label>
+            <label class="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded p-2"><input type="checkbox" onchange="editarCentro('${c.id}','visibleQR',this.checked)" ${c.visibleQR!==false?'checked':''} class="accent-emerald-500"> QR prueba</label>
           </div>
           <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
             <div><label class="text-[10px] text-slate-500 block mb-1">Fijo sede</label><input value="${escapeHTML(c.canonFijo||0)}" onchange="editarCentro('${c.id}','canonFijo',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right" title="Se paga una vez por sede y se prorratea entre los PT activos"></div>
@@ -969,7 +902,7 @@
       if(!nombre || !nombre.trim()) return;
       const idBase = slugCentro(nombre);
       if(!idBase){ alert('Nombre de centro no válido.'); return; }
-      if(esCentroTecnicoDescartable(idBase, nombre)){ alert('Ese nombre parece de test/demo. Usa el nombre real del centro.'); return; }
+      if(esCentroTecnicoDescartable(idBase, nombre)){ alert('Ese nombre parece de prueba/test. Usa el nombre real del centro.'); return; }
       if(getCentros({incluirInactivos:true})[idBase]){ alert('Ya existe un centro con ese nombre/ID.'); return; }
       if(!dbFinanzas.centros) dbFinanzas.centros={};
       dbFinanzas.centros[idBase] = defaultsCentro(idBase, nombre.trim());
@@ -1093,7 +1026,7 @@
       perfilesUsuarios = usersSnap.docs.map(d=>({email:d.id, ...d.data()})).filter(p=>p.activo !== false);
     }
     function normalizarFinanzas(data){
-      const res = { centros:{}, trainerSettings:{}, gastos:{}, meses:{}, historico:{}, ...(data || {}) };
+      const res = { centros:{}, trainerSettings:{}, gastos:{}, historico:{}, ...(data || {}) };
       const centrosLimpios = {};
       const source = { ...DEFAULT_CENTROS, ...(data?.centros || {}) };
       Object.keys(source).forEach(id => {
@@ -1118,8 +1051,6 @@
       });
       res.gastos = res.gastos || {};
       Object.keys(res.gastos).forEach(k => { if (!/^\d{4}-\d{2}$/.test(k) || !Array.isArray(res.gastos[k])) delete res.gastos[k]; });
-      res.meses = res.meses || {};
-      Object.keys(res.meses).forEach(k => { if (!/^\d{4}-\d{2}$/.test(k)) delete res.meses[k]; });
       res.historico = res.historico || {};
       return res;
     }

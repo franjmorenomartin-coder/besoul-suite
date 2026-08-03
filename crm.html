@@ -362,6 +362,13 @@ function escapeHTML(valor) {
   return String(valor || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
 }
 function normalizarEmail(email) { return String(email || '').trim().toLowerCase(); }
+function soloDigitosTelefono(v){ return String(v || '').replace(/\D/g,''); }
+function hashFNV1a(str){ let h = 0x811c9dc5; for (let i=0; i<String(str).length; i++) { h ^= String(str).charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); }
+function keyEmailValoracion(email){ const e = normalizarEmail(email); return e ? `email_${hashFNV1a(e)}` : ''; }
+function keyTelefonoValoracion(tel){ const d = soloDigitosTelefono(tel); return d ? `phone_${hashFNV1a(d)}` : ''; }
+function maskEmail(email){ const [a,b]=String(email||'').split('@'); if(!b) return 'email registrado'; return `${a.slice(0,2)}***@${b}`; }
+function maskTelefono(t){ const d=soloDigitosTelefono(t); return d.length > 4 ? `***${d.slice(-4)}` : 'teléfono registrado'; }
+function esLeadValoracion(l){ const e=String(l?.estado||''); const t=String(l?.tipoPrueba||''); const f=String(l?.fuente||''); return e.includes('Prueba') || e.includes('Valoración') || t.includes('Valoración') || f.includes('QR valoración') || f.includes('QR prueba'); }
 function ahoraISO() { return new Date().toISOString(); }
 function fechaLocalInputDesdeISO(iso) {
   if (!iso) return '';
@@ -588,6 +595,55 @@ function poblarSelectsBase() {
   poblarSelect('lead-proxima-accion', ACCIONES, { vacio:'Sin próxima acción' });
 }
 
+
+let bsValoracionRegistryTimer = null;
+function programarSincronizacionRegistroValoraciones() {
+  if (!esAdmin() || !db) return;
+  clearTimeout(bsValoracionRegistryTimer);
+  bsValoracionRegistryTimer = setTimeout(sincronizarRegistroValoraciones, 1200);
+}
+async function sincronizarRegistroValoraciones() {
+  try {
+    if (!esAdmin() || !db) return;
+    const batch = db.batch();
+    let writes = 0;
+    const registrar = (kind, value, meta={}) => {
+      const key = kind === 'email' ? keyEmailValoracion(value) : keyTelefonoValoracion(value);
+      if (!key) return;
+      const ref = db.collection('besoulValoracionRegistry').doc(key);
+      batch.set(ref, {
+        kind,
+        masked: kind === 'email' ? maskEmail(value) : maskTelefono(value),
+        nombre: meta.nombre || '',
+        leadId: meta.leadId || '',
+        clientId: meta.clientId || '',
+        centroId: meta.centroId || '',
+        centroNombre: meta.centroNombre || '',
+        source: meta.source || 'crm_backfill',
+        updatedAt: ahoraISO()
+      }, { merge:true });
+      writes++;
+    };
+    leads.filter(esLeadValoracion).forEach(l => {
+      registrar('email', l.email, { nombre:l.nombre, leadId:l.id, centroId:l.centroId, centroNombre:l.centroNombre, source:'lead_valoracion' });
+      registrar('phone', l.telefono, { nombre:l.nombre, leadId:l.id, centroId:l.centroId, centroNombre:l.centroNombre, source:'lead_valoracion' });
+    });
+    const agendaSnap = await db.collection('besoulSuite').doc('agenda').get();
+    const agenda = agendaSnap.exists ? (agendaSnap.data() || {}) : {};
+    const clientes = agenda.clientes || {};
+    Object.keys(clientes).forEach(trainerKey => {
+      (clientes[trainerKey] || []).forEach(c => {
+        if (!c || c.tipo !== 'individual' || c.vinculacion) return;
+        registrar('email', c.email, { nombre:c.nombre, clientId:c.id, source:'cliente_agenda' });
+        registrar('phone', c.telefono, { nombre:c.nombre, clientId:c.id, source:'cliente_agenda' });
+      });
+    });
+    if (writes) await batch.commit();
+  } catch(err) {
+    console.warn('No se pudo sincronizar el registro de valoraciones únicas:', err);
+  }
+}
+
 function iniciarEscuchaLeads() {
   if (unsubscribeLeads) unsubscribeLeads();
   let ref = db.collection('besoulLeads');
@@ -596,6 +652,7 @@ function iniciarEscuchaLeads() {
     leads = [];
     snapshot.forEach(doc => leads.push({ id:doc.id, ...doc.data() }));
     leads.sort((a,b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    programarSincronizacionRegistroValoraciones();
     aplicarFiltros();
   }, err => {
     console.error(err);
@@ -1127,6 +1184,7 @@ async function guardarLead() {
       const ref = await db.collection('besoulLeads').add(data);
       docId = ref.id;
     }
+    if (esLeadValoracion(data)) programarSincronizacionRegistroValoraciones();
     await sincronizarPruebaAgendaDesdeLead(docId, { id: docId, ...data }, true);
     await sincronizarClienteAgendaDesdeLeadConvertido(docId);
     cerrarModalLead();

@@ -34,7 +34,7 @@
           </div>
           <div>
             <h1 class="text-xl md:text-2xl font-black">Reservas BESOUL</h1>
-            <p class="text-xs text-slate-400 mt-1">Solicita un hueco disponible con tu entrenador. La solicitud quedará pendiente de confirmación.</p>
+            <p class="text-xs text-slate-400 mt-1">Solicita una sesión individual o una plaza en un grupo abierto. Todo queda pendiente de confirmación.</p>
           </div>
         </div>
         <span class="inline-flex w-fit px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-[11px] font-bold uppercase tracking-wider">Solicitud de reserva</span>
@@ -69,8 +69,14 @@
 
         <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4">
           <h2 class="text-sm font-black text-white uppercase">1. Elige un hueco disponible</h2>
-          <p class="text-xs text-slate-400 mt-1">Mostramos únicamente horarios dentro de la disponibilidad marcada por tu entrenador y que no figuran ocupados.</p>
+          <p class="text-xs text-slate-400 mt-1">Mostramos huecos libres individuales y grupos abiertos con plazas disponibles, respetando las condiciones de reserva de tu ficha.</p>
           <div id="slots" class="mt-4 space-y-4"></div>
+        </div>
+
+        <div class="bg-slate-950/70 border border-emerald-500/20 rounded-xl p-4">
+          <h2 class="text-sm font-black text-white uppercase">Grupos abiertos con plazas</h2>
+          <p class="text-xs text-slate-400 mt-1">Son horas fijas creadas por tu entrenador. Puedes solicitar una plaza y BESOUL confirmará la asistencia.</p>
+          <div id="group-slots" class="mt-4 space-y-4"></div>
         </div>
 
         <div id="selected-panel" class="hidden bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-4">
@@ -123,6 +129,24 @@
     function dayIndexMonSun(d){ const x=d.getDay(); return x===0?7:x; }
     function labelFecha(iso){ const d=new Date(`${iso}T00:00:00`); return d.toLocaleDateString('es-ES',{weekday:'long', day:'numeric', month:'long'}); }
     function escapeHTML(str){ return String(str||'').replace(/[&<>'"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[s])); }
+    function normalizarDiaTexto(v){ return String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+    function parseBloqueosCliente(){
+      const texto = clientData?.reservasBloqueadasTexto || clientData?.restriccionesReservas?.bloquesTexto || '';
+      return String(texto||'').split('\n').map(linea=>linea.trim()).filter(Boolean).map(linea=>{
+        const l = normalizarDiaTexto(linea);
+        const m = l.match(/(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo|[1-7])\s+([0-2]?\d:[0-5]\d)\s*-\s*([0-2]?\d:[0-5]\d)/i);
+        if(!m) return null;
+        const dias = {lunes:1,martes:2,miercoles:3,miércoles:3,jueves:4,viernes:5,sabado:6,sábado:6,domingo:7};
+        const dia = dias[m[1]] || Number(m[1]);
+        return { dia, inicio:m[2].padStart(5,'0'), fin:m[3].padStart(5,'0') };
+      }).filter(Boolean);
+    }
+    function bloqueadoPorCliente(iso, min){
+      const d = new Date(`${iso}T00:00:00`);
+      const dia = dayIndexMonSun(d);
+      const bloqueos = parseBloqueosCliente();
+      return bloqueos.some(b => b.dia === dia && min < timeToMin(b.fin) && (min+45) > timeToMin(b.inicio));
+    }
 
     function usarTokenManual(){
       const t=document.getElementById('manual-token').value.trim();
@@ -140,7 +164,7 @@
         const clientSnap = await db.collection('besoulPublicClients').doc(token).get();
         if(!clientSnap.exists) return showError('No se ha encontrado tu enlace de reservas. Pide a BESOUL que te envíe un enlace actualizado.');
         clientData = clientSnap.data();
-        if(clientData.activo === false) return showError('Tu enlace de reservas no está activo. Contacta con BESOUL.');
+        if(clientData.activo === false || clientData.reservasOnlineActivas === false) return showError('Tu enlace de reservas no está activo para autogestión. Contacta con BESOUL para revisar tus reservas.');
         const scheduleSnap = await db.collection('besoulPublicSchedule').doc(clientData.trainerKey).get();
         if(!scheduleSnap.exists) return showError('Tu entrenador todavía no tiene disponibilidad publicada.');
         scheduleData = scheduleSnap.data();
@@ -148,6 +172,7 @@
         document.getElementById('trainer-name').textContent = clientData.trainerName || scheduleData.trainerName || 'Entrenador';
         document.getElementById('center-name').textContent = clientData.centroNombre || scheduleData.centroNombre || 'Centro BESOUL';
         renderSlots();
+        renderGroupSlots();
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
       } catch(err){
@@ -173,7 +198,8 @@
           const start=timeToMin(b.inicio), end=timeToMin(b.fin);
           for(let m=start; m+45<=end; m+=15){
             if(i===0 && m <= minNow+120) continue; // margen mínimo 2h
-            if(bloqueLibre(iso,m)) out.push({iso, hora:minToTime(m), label:`${labelFecha(iso)} · ${minToTime(m)}`});
+            if(bloqueadoPorCliente(iso,m)) continue;
+            if(bloqueLibre(iso,m)) out.push({iso, hora:minToTime(m), label:`${labelFecha(iso)} · ${minToTime(m)}`, tipoReserva:'individual'});
           }
         });
       }
@@ -187,14 +213,44 @@
       cont.innerHTML='';
       Object.keys(grupos).slice(0,14).forEach(iso=>{
         const wrap=document.createElement('div');
-        wrap.innerHTML=`<h3 class="text-xs font-black text-amber-400 uppercase mb-2">${escapeHTML(labelFecha(iso))}</h3><div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">${grupos[iso].map(s=>`<button class="slot-btn bg-slate-900 hover:bg-cyan-500/20 border border-slate-800 hover:border-cyan-500/40 rounded-lg py-2 text-xs font-black text-white" onclick="seleccionarSlot('${s.iso}','${s.hora}')">${s.hora}</button>`).join('')}</div>`;
+        wrap.innerHTML=`<h3 class="text-xs font-black text-amber-400 uppercase mb-2">${escapeHTML(labelFecha(iso))}</h3><div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">${grupos[iso].map(s=>`<button class="slot-btn bg-slate-900 hover:bg-cyan-500/20 border border-slate-800 hover:border-cyan-500/40 rounded-lg py-2 text-xs font-black text-white" onclick="seleccionarSlot('${s.iso}','${s.hora}','individual','','')">${s.hora}</button>`).join('')}</div>`;
         cont.appendChild(wrap);
       });
     }
 
-    function seleccionarSlot(iso,hora){
-      selected={iso,hora,clave:`${iso}_${hora}`};
-      document.getElementById('selected-slot').textContent = `${labelFecha(iso)} a las ${hora}`;
+
+    function gruposAbiertosDisponibles(){
+      const grupos = Array.isArray(scheduleData.gruposAbiertos) ? scheduleData.gruposAbiertos : [];
+      const hoy=new Date(); hoy.setHours(0,0,0,0);
+      const now=new Date(); const minNow=now.getHours()*60+now.getMinutes();
+      return grupos.filter(g=>{
+        if(!g || !g.fechaISO || !g.hora || (g.plazasLibres||0) <= 0) return false;
+        if(Array.isArray(g.asistentesIds) && g.asistentesIds.includes(clientData?.clientId)) return false;
+        const d=new Date(`${g.fechaISO}T00:00:00`);
+        const diff=Math.round((d-hoy)/(24*60*60*1000));
+        const m=timeToMin(g.hora);
+        if(diff < 0 || diff > 30) return false;
+        if(diff === 0 && m <= minNow+120) return false;
+        if(bloqueadoPorCliente(g.fechaISO,m)) return false;
+        return true;
+      }).sort((a,b)=>String(a.fechaISO).localeCompare(String(b.fechaISO)) || String(a.hora).localeCompare(String(b.hora)));
+    }
+    function renderGroupSlots(){
+      const cont=document.getElementById('group-slots'); if(!cont) return;
+      const grupos=gruposAbiertosDisponibles();
+      if(!grupos.length){ cont.innerHTML='<div class="text-xs text-slate-500 text-center py-6 border border-dashed border-slate-800 rounded-xl">No hay grupos abiertos con plazas disponibles ahora mismo.</div>'; return; }
+      const byDate={}; grupos.forEach(g=>{ if(!byDate[g.fechaISO]) byDate[g.fechaISO]=[]; byDate[g.fechaISO].push(g); });
+      cont.innerHTML='';
+      Object.keys(byDate).slice(0,14).forEach(iso=>{
+        const wrap=document.createElement('div');
+        wrap.innerHTML=`<h3 class="text-xs font-black text-emerald-400 uppercase mb-2">${escapeHTML(labelFecha(iso))}</h3><div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">${byDate[iso].map(g=>`<button class="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 rounded-lg p-3 text-left" onclick="seleccionarSlot('${g.fechaISO}','${g.hora}','grupo_abierto','${escapeHTML(g.grupoId || '')}','${escapeHTML(g.grupoNombre || 'Grupo abierto')}')"><div class="text-white font-black text-xs">${escapeHTML(g.grupoNombre || 'Grupo abierto')}</div><div class="text-emerald-300 font-mono font-bold text-xs mt-1">${escapeHTML(g.hora)}</div><div class="text-[10px] text-slate-400 mt-1">${Number(g.plazasLibres||0)} plaza(s) libre(s) · cap. ${Number(g.capacidad||0)}</div></button>`).join('')}</div>`;
+        cont.appendChild(wrap);
+      });
+    }
+
+    function seleccionarSlot(iso,hora,tipoReserva='individual',grupoId='',grupoNombre=''){
+      selected={iso,hora,clave:`${iso}_${hora}`,tipoReserva,grupoId,grupoNombre};
+      document.getElementById('selected-slot').textContent = tipoReserva === 'grupo_abierto' ? `${labelFecha(iso)} a las ${hora} · ${grupoNombre}` : `${labelFecha(iso)} a las ${hora}`;
       document.getElementById('selected-panel').classList.remove('hidden');
       document.getElementById('selected-panel').scrollIntoView({behavior:'smooth', block:'start'});
     }
@@ -202,7 +258,11 @@
 
     async function enviarSolicitud(){
       if(!selected) return;
-      if(!bloqueLibre(selected.iso, timeToMin(selected.hora))){ alert('Ese hueco acaba de dejar de estar disponible. Elige otro.'); await init(); return; }
+      if(selected.tipoReserva !== 'grupo_abierto' && !bloqueLibre(selected.iso, timeToMin(selected.hora))){ alert('Ese hueco acaba de dejar de estar disponible. Elige otro.'); await init(); return; }
+      if(selected.tipoReserva === 'grupo_abierto'){
+        const grupoOk = gruposAbiertosDisponibles().some(g => g.clave === selected.clave && (g.grupoId || '') === (selected.grupoId || '') && (g.plazasLibres || 0) > 0);
+        if(!grupoOk){ alert('Ese grupo ya no tiene plazas disponibles. Elige otra opción.'); await init(); return; }
+      }
       const btn=document.getElementById('send-btn'); btn.disabled=true; btn.textContent='Enviando...';
       try{
         const id = `${token}_${selected.iso}_${selected.hora.replace(':','')}_${Date.now()}`;
@@ -220,6 +280,9 @@
           hora: selected.hora,
           clave: selected.clave,
           duracionMin: 45,
+          tipoReserva: selected.tipoReserva || 'individual',
+          grupoId: selected.grupoId || '',
+          grupoNombre: selected.grupoNombre || '',
           comentarios: document.getElementById('comments').value.trim(),
           estado: 'pendiente',
           source: 'portalCliente',
