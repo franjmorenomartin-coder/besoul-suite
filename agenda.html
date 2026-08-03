@@ -339,6 +339,25 @@
                     </div>
                 </div>
 
+                <div id="field-reservas-cliente" class="p-3 bg-cyan-500/5 border border-cyan-500/20 rounded space-y-2">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <label class="flex items-center gap-2 text-cyan-100 font-bold cursor-pointer">
+                                <input type="checkbox" id="cust-reservas-online" class="w-4 h-4 accent-cyan-400" checked>
+                                <span>Permitir reservas online a este cliente</span>
+                            </label>
+                            <p class="text-[9px] text-slate-500 mt-1 leading-tight">Si lo desactivas, su enlace no mostrará huecos aunque tenga token.</p>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-slate-400 block mb-1 text-[10px] font-bold uppercase">Horas bloqueadas solo para este cliente</label>
+                        <textarea id="cust-reservas-bloqueadas" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white h-16 text-[11px]" placeholder="Ej.:
+lunes 18:00-20:00
+miércoles 07:00-09:00"></textarea>
+                        <p class="text-[9px] text-slate-500 leading-tight mt-1">El entrenador puede ocultar horas concretas a un cliente sin cambiar su disponibilidad general. Una línea por franja: día inicio-fin.</p>
+                    </div>
+                </div>
+
                 <div id="crm-origin-block" class="hidden p-3 bg-cyan-500/5 border border-cyan-500/20 rounded space-y-2">
                     <div class="flex items-center justify-between gap-2">
                         <span class="text-cyan-300 text-[10px] font-bold uppercase tracking-wider">Origen comercial CRM</span>
@@ -386,19 +405,35 @@
 
                 <!-- SECCIÓN DINÁMICA DE INTEGRANTES (SOLO GRUPOS) -->
 
-                <div id="group-members-field" class="hidden bg-slate-950/50 p-3 rounded border border-slate-800">
+                <div id="group-members-field" class="hidden bg-slate-950/50 p-3 rounded border border-slate-800 space-y-3">
 
-                    <div class="flex justify-between items-center mb-2">
-
-                        <label class="text-slate-400 font-bold">Integrantes del Grupo</label>
-
-                        <button onclick="addMemberRow()" class="text-[10px] bg-slate-800 text-white px-2 py-1 rounded">+ Fila</button>
-
+                    <div class="p-3 bg-emerald-500/5 border border-emerald-500/20 rounded space-y-2">
+                        <label class="flex items-center gap-2 text-emerald-100 font-bold cursor-pointer">
+                            <input type="checkbox" id="cust-open-group" onchange="toggleGrupoAbiertoFields()" class="w-4 h-4 accent-emerald-400">
+                            <span>Grupo abierto con plazas reservables</span>
+                        </label>
+                        <div id="open-group-fields" class="hidden grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <div>
+                                <label class="text-slate-400 block mb-1 text-[10px] font-bold uppercase">Capacidad máxima</label>
+                                <input type="number" id="cust-open-group-capacity" min="1" max="20" value="6" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+                            </div>
+                            <div class="text-[9px] text-slate-500 leading-tight flex items-end">Crea una hora fija tipo “Grupo 18:00”. Los clientes siguen dados de alta individualmente y cada asistencia consume su plan/bono.</div>
+                        </div>
                     </div>
 
-                    <div id="members-container" class="space-y-2"></div>
+                    <div id="closed-group-members-block">
+                        <div class="flex justify-between items-center mb-2">
 
-                    <p class="text-[9px] text-amber-500/70 mt-2 leading-tight">Al guardar, cada integrante se creará automáticamente como "Atleta" en el sistema general.</p>
+                            <label class="text-slate-400 font-bold">Integrantes del Grupo Cerrado</label>
+
+                            <button onclick="addMemberRow()" class="text-[10px] bg-slate-800 text-white px-2 py-1 rounded">+ Fila</button>
+
+                        </div>
+
+                        <div id="members-container" class="space-y-2"></div>
+
+                        <p class="text-[9px] text-amber-500/70 mt-2 leading-tight">Solo para grupos cerrados: cada integrante debe tener nombre, teléfono y email. Al guardar, se creará automáticamente como cliente individual vinculado al grupo.</p>
+                    </div>
 
                 </div>
 
@@ -660,6 +695,23 @@
                         <span>Marcar como recuperación de meses anteriores / no facturable</span>
                     </label>
                     <p class="text-[9px] text-slate-400 leading-relaxed">Solo administración puede confirmar esta marca. La sesión seguirá ocupando agenda, pero Finanzas no la contará en bonos/sesiones sueltas.</p>
+                </div>
+
+
+                <div id="panel-grupo-abierto-sesion" class="hidden p-3 bg-emerald-500/5 border border-emerald-500/25 rounded space-y-3">
+                    <div class="flex items-start justify-between gap-2">
+                        <div>
+                            <p class="text-[11px] text-emerald-100 font-black uppercase">Grupo abierto</p>
+                            <p id="grupo-abierto-capacidad-info" class="text-[9px] text-slate-400 leading-relaxed">Asistentes reales de esta sesión.</p>
+                        </div>
+                        <span id="grupo-abierto-rentabilidad" class="text-[11px] text-emerald-300 font-black font-mono">0,00 €</span>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <select id="grupo-abierto-cliente-select" class="flex-1 bg-slate-950 border border-slate-800 rounded p-2 text-white text-xs"></select>
+                        <button type="button" onclick="agregarAsistenteGrupoAbierto()" class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-3 py-2 rounded font-bold text-[10px] hover:bg-emerald-500/20 transition">Añadir cliente</button>
+                    </div>
+                    <div id="grupo-abierto-asistentes-lista" class="space-y-1"></div>
+                    <p class="text-[9px] text-slate-500 leading-relaxed">Cada asistente sigue manteniendo su tarifa y plan individual. Finanzas contará la asistencia en bonos/sueltas y la rentabilidad será la suma de los clientes de ese día.</p>
                 </div>
 
                 <div id="panel-recurrencia-sesion" class="p-3 bg-slate-950/50 border border-slate-800 rounded space-y-2">
@@ -1590,7 +1642,8 @@
 
             if (ficha.modalidad && ficha.modalidad.includes('Trío')) multi = 3;
 
-            if (ficha.tipo === 'grupo') multi = ficha.integrantesObj ? ficha.integrantesObj.length : 1;
+            if (ficha.tipo === 'grupo' && !esGrupoAbierto(ficha)) multi = ficha.integrantesObj ? ficha.integrantesObj.length : 1;
+            if (esGrupoAbierto(ficha)) multi = 0;
 
             return Math.max(1, multi);
 
@@ -1630,6 +1683,25 @@
         function normalizarEstadoCliente(valor) { return ['activo', 'inactivo', 'baja'].includes(valor) ? valor : 'activo'; }
         function estadoClienteFicha(ficha) { return normalizarEstadoCliente(ficha?.estadoCliente || 'activo'); }
         function clienteActivoParaAgenda(ficha) { return estadoClienteFicha(ficha) === 'activo'; }
+        function esGrupoAbierto(ficha) { return !!(ficha && (ficha.grupoAbierto === true || ficha.tipoCita === 'grupo_abierto')); }
+        function capacidadGrupoAbierto(ficha) { return Math.max(1, parseInt(ficha?.capacidadGrupoAbierto || ficha?.capacidad || 1, 10) || 1); }
+        function asistentesGrupoAbierto(ficha) { return Array.isArray(ficha?.asistentesGrupoAbierto) ? ficha.asistentesGrupoAbierto : []; }
+        function buscarClientePorIdTrainer(trainerKey, id) {
+            const lista = dbClientes[trainerKey] || [];
+            return lista.find(c => c && c.id === id) || null;
+        }
+        function rentabilidadClientePorIdTrainer(trainerKey, id) {
+            const old = entrenadorVisto;
+            entrenadorVisto = trainerKey || old;
+            const ficha = buscarClientePorIdTrainer(entrenadorVisto, id);
+            const rent = ficha ? calcularRentabilidadFicha(ficha) : 0;
+            entrenadorVisto = old;
+            return rent;
+        }
+        function calcularRentabilidadGrupoAbierto(cita, trainerKey = entrenadorVisto) {
+            if (!esGrupoAbierto(cita)) return calcularRentabilidadFicha(cita);
+            return asistentesGrupoAbierto(cita).reduce((total, a) => total + rentabilidadClientePorIdTrainer(trainerKey, a.id || a.clientId), 0);
+        }
         function etiquetaEstadoCliente(ficha) { const estado = estadoClienteFicha(ficha); if (estado === 'inactivo') return 'Inactivo temporal'; if (estado === 'baja') return 'Baja definitiva'; return 'Activo'; }
         function claseBadgeEstadoCliente(ficha) { const estado = estadoClienteFicha(ficha); if (estado === 'inactivo') return 'bg-orange-500/10 text-orange-400 border-orange-500/30'; if (estado === 'baja') return 'bg-red-500/10 text-red-400 border-red-500/30'; return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'; }
 
@@ -1839,6 +1911,7 @@ function calcularRentabilidadFicha(ficha) {
 
                 if (esCitaPruebaCRM(obj)) return total;
                 if (fechaClave >= desdeISO && fechaClave < hastaISO && obj && idsValidos.has(obj.id)) return total + 1;
+                if (fechaClave >= desdeISO && fechaClave < hastaISO && obj && esGrupoAbierto(obj) && asistentesGrupoAbierto(obj).some(a => (a.id || a.clientId) === ficha.id)) return total + 1;
 
                 return total;
 
@@ -2436,7 +2509,7 @@ function calcularRentabilidadFicha(ficha) {
             actualizarPreviewContadorModal();
         }
 
-        function addMemberRow(name='', phone='', memberId='') {
+        function addMemberRow(name='', phone='', email='', memberId='') {
 
             const container = document.getElementById('members-container');
 
@@ -2446,7 +2519,7 @@ function calcularRentabilidadFicha(ficha) {
 
             const row = document.createElement('div');
 
-            row.className = "flex gap-2 member-row items-center";
+            row.className = "grid grid-cols-1 md:grid-cols-[1.2fr_1fr_1.4fr_auto] gap-2 member-row items-center";
 
             row.id = id;
 
@@ -2454,9 +2527,11 @@ function calcularRentabilidadFicha(ficha) {
 
             row.innerHTML = `
 
-                <input type="text" oninput="autoCalcularTarifa()" class="w-1/2 bg-slate-900 border border-slate-700 rounded p-1.5 text-white text-[10px] mem-name" placeholder="Nombre" value="${escapeHTML(name)}">
+                <input type="text" oninput="autoCalcularTarifa()" class="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-white text-[10px] mem-name" placeholder="Nombre *" value="${escapeHTML(name)}">
 
-                <input type="tel" class="w-1/2 bg-slate-900 border border-slate-700 rounded p-1.5 text-white text-[10px] mem-phone" placeholder="Teléfono" value="${escapeHTML(phone)}">
+                <input type="tel" class="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-white text-[10px] mem-phone" placeholder="Teléfono *" value="${escapeHTML(phone)}">
+
+                <input type="email" class="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-white text-[10px] mem-email" placeholder="Email *" value="${escapeHTML(email)}">
 
                 <button onclick="document.getElementById('${id}').remove(); autoCalcularTarifa();" class="text-red-500 font-bold px-1 text-[12px]">×</button>
 
@@ -2650,6 +2725,8 @@ function calcularRentabilidadFicha(ficha) {
 
             document.getElementById('cust-phone').value = c.telefono || "";
             if (document.getElementById('cust-email')) document.getElementById('cust-email').value = c.email || "";
+            if (document.getElementById('cust-reservas-online')) document.getElementById('cust-reservas-online').checked = c.reservasOnlineActivas !== false;
+            if (document.getElementById('cust-reservas-bloqueadas')) document.getElementById('cust-reservas-bloqueadas').value = c.reservasBloqueadasTexto || c.restriccionesReservas?.bloquesTexto || '';
 
             document.getElementById('cust-mod').value = c.modalidad;
 
@@ -2688,22 +2765,29 @@ function calcularRentabilidadFicha(ficha) {
             if(c.tipo === 'grupo') {
 
                 document.getElementById('field-individual-contact').classList.add('hidden');
+                if (document.getElementById('field-reservas-cliente')) document.getElementById('field-reservas-cliente').classList.add('hidden');
 
                 document.getElementById('group-members-field').classList.remove('hidden');
+                if (document.getElementById('cust-open-group')) document.getElementById('cust-open-group').checked = !!c.grupoAbierto;
+                if (document.getElementById('cust-open-group-capacity')) document.getElementById('cust-open-group-capacity').value = c.capacidadGrupoAbierto || 6;
+                toggleGrupoAbiertoFields();
 
                 document.getElementById('members-container').innerHTML = '';
 
-                if(c.integrantesObj && c.integrantesObj.length > 0) {
+                if(!c.grupoAbierto && c.integrantesObj && c.integrantesObj.length > 0) {
 
-                    c.integrantesObj.forEach(m => addMemberRow(m.nombre, m.telefono, m.id));
+                    c.integrantesObj.forEach(m => addMemberRow(m.nombre, m.telefono, m.email || '', m.id));
 
                 }
 
             } else {
 
                 document.getElementById('field-individual-contact').classList.remove('hidden');
+                if (document.getElementById('field-reservas-cliente')) document.getElementById('field-reservas-cliente').classList.remove('hidden');
 
                 document.getElementById('group-members-field').classList.add('hidden');
+                if (document.getElementById('cust-open-group')) document.getElementById('cust-open-group').checked = false;
+                toggleGrupoAbiertoFields();
 
             }
 
@@ -2721,9 +2805,24 @@ function calcularRentabilidadFicha(ficha) {
 
 
 
+
+        function toggleGrupoAbiertoFields() {
+            const chk = document.getElementById('cust-open-group');
+            const openFields = document.getElementById('open-group-fields');
+            const closedBlock = document.getElementById('closed-group-members-block');
+            const abierto = !!chk?.checked;
+            if (openFields) openFields.classList.toggle('hidden', !abierto);
+            if (closedBlock) closedBlock.classList.toggle('hidden', abierto);
+            autoCalcularTarifa();
+        }
+
+        function normalizarReservasBloqueadasTexto(texto) {
+            return String(texto || '').split('\n').map(l => l.trim()).filter(Boolean).slice(0, 20).join('\n');
+        }
+
         function sincronizarIntegrantesGrupo(fichaGrupo) {
 
-            if (!fichaGrupo || fichaGrupo.tipo !== 'grupo') return;
+            if (!fichaGrupo || fichaGrupo.tipo !== 'grupo' || esGrupoAbierto(fichaGrupo)) return;
 
             if (!dbClientes[entrenadorVisto]) dbClientes[entrenadorVisto] = [];
 
@@ -2778,6 +2877,8 @@ function calcularRentabilidadFicha(ficha) {
                     nombre: miembro.nombre,
 
                     telefono: miembro.telefono || '',
+
+                    email: miembro.email || '',
 
                     modalidad: 'Miembro Subordinado',
 
@@ -2834,6 +2935,10 @@ function calcularRentabilidadFicha(ficha) {
             const fechaAlta = document.getElementById('cust-start-date')?.value || '';
             const fechaEstado = estadoCliente === 'activo' ? '' : (document.getElementById('cust-status-date')?.value || '');
             const observacionesEstado = estadoCliente === 'activo' ? '' : (document.getElementById('cust-status-reason')?.value.trim() || '');
+            const reservasOnlineActivas = !!document.getElementById('cust-reservas-online')?.checked;
+            const reservasBloqueadasTexto = normalizarReservasBloqueadasTexto(document.getElementById('cust-reservas-bloqueadas')?.value || '');
+            const grupoAbierto = tabFichaActiva === 'grupo' ? !!document.getElementById('cust-open-group')?.checked : false;
+            const capacidadGrupoAbiertoVal = grupoAbierto ? Math.max(1, Math.min(20, parseInt(document.getElementById('cust-open-group-capacity')?.value || '6', 10) || 6)) : 0;
 
 
 
@@ -2870,19 +2975,35 @@ function calcularRentabilidadFicha(ficha) {
 
             let integrantesArr = [];
 
-            if(tipoReal === 'grupo') {
+            if(tipoReal === 'grupo' && !grupoAbierto) {
 
-                document.querySelectorAll('.member-row').forEach(row => {
+                const filasMiembros = Array.from(document.querySelectorAll('.member-row'));
 
-                    let n = row.querySelector('.mem-name').value.trim();
+                for (const row of filasMiembros) {
 
-                    let t = row.querySelector('.mem-phone').value.trim();
+                    let n = row.querySelector('.mem-name')?.value.trim() || '';
+
+                    let t = row.querySelector('.mem-phone')?.value.trim() || '';
+
+                    let e = (row.querySelector('.mem-email')?.value || '').trim().toLowerCase();
 
                     let memberId = row.dataset.memberId || ('mem_' + Date.now() + Math.random().toString(36).substr(2, 5));
 
-                    if(n) integrantesArr.push({id: memberId, nombre: n, telefono: t});
+                    if(n || t || e) {
+                        if(!n || !t || !e) {
+                            alert('En grupos cerrados, cada integrante debe tener nombre, teléfono y email para mantener la base de datos completa.');
+                            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            return;
+                        }
+                        if(!/^\S+@\S+\.\S+$/.test(e)) {
+                            alert('El email de un integrante del grupo no es válido.');
+                            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            return;
+                        }
+                        integrantesArr.push({id: memberId, nombre: n, telefono: t, email: e});
+                    }
 
-                });
+                }
 
             }
 
@@ -2901,6 +3022,11 @@ function calcularRentabilidadFicha(ficha) {
                 telefono: tipoReal === 'grupo' ? '' : phone,
                 email: tipoReal === 'grupo' ? '' : emailCliente,
                 reservaToken: tipoReal === 'grupo' ? '' : (fichaAnterior?.reservaToken || generarTokenReservaCliente()),
+                reservasOnlineActivas: tipoReal === 'grupo' ? false : reservasOnlineActivas,
+                reservasBloqueadasTexto: tipoReal === 'grupo' ? '' : reservasBloqueadasTexto,
+                restriccionesReservas: tipoReal === 'grupo' ? { modo:'bloquear', bloquesTexto:'' } : { modo:'bloquear', bloquesTexto: reservasBloqueadasTexto },
+                grupoAbierto: tipoReal === 'grupo' ? grupoAbierto : false,
+                capacidadGrupoAbierto: tipoReal === 'grupo' ? capacidadGrupoAbiertoVal : 0,
 
                 modalidad: mod,
 
@@ -2918,7 +3044,7 @@ function calcularRentabilidadFicha(ficha) {
                 fechaEstado: fechaEstado,
                 observacionesEstado: observacionesEstado,
 
-                integrantesObj: tipoReal === 'grupo' ? integrantesArr : []
+                integrantesObj: (tipoReal === 'grupo' && !grupoAbierto) ? integrantesArr : []
 
             };
 
@@ -3116,7 +3242,8 @@ function calcularRentabilidadFicha(ficha) {
 
                 let txtExtra = c.tipo === 'individual' && c.telefono ? `📞 ${escapeHTML(c.telefono)}` : '';
 
-                if(c.tipo === 'grupo' && c.integrantesObj) txtExtra = `Pax: ${escapeHTML(c.integrantesObj.map(i=>i.nombre).join(', '))}`;
+                if(c.tipo === 'grupo' && c.grupoAbierto) txtExtra = `Grupo abierto · cap. ${capacidadGrupoAbierto(c)} plazas`;
+                else if(c.tipo === 'grupo' && c.integrantesObj) txtExtra = `Pax: ${escapeHTML(c.integrantesObj.map(i=>i.nombre).join(', '))}`;
 
                 if(esVinculado) txtExtra = `👥 Integrante de: ${escapeHTML(grupoPadre?.nombre || c.grupoNombre || 'grupo')}`;
 
@@ -3138,7 +3265,7 @@ function calcularRentabilidadFicha(ficha) {
                     ? `<button onclick="event.stopPropagation(); borrarFichaCliente('${c.id}')" class="text-red-400 text-[10px] mt-1 font-bold hover:underline">Borrar</button>`
                     : '';
                 const botonReservasHTML = (!esVinculado && c.tipo === 'individual' && clienteActivoParaAgenda(c))
-                    ? `<button onclick="event.stopPropagation(); copiarLinkReservaCliente('${c.id}')" class="text-cyan-300 text-[10px] mt-1 font-bold hover:underline">Link reservas</button>`
+                    ? `<button onclick="event.stopPropagation(); copiarLinkReservaCliente('${c.id}')" class="text-cyan-300 text-[10px] mt-1 font-bold hover:underline">Link reservas${c.reservasOnlineActivas === false ? ' (off)' : ''}</button>`
                     : '';
 
                 const contadorHTML = renderContadorHTML(c);
@@ -3465,7 +3592,7 @@ function calcularRentabilidadFicha(ficha) {
 
                         const esPruebaCRM = esCitaPruebaCRM(objOriginal) || esCitaPruebaCRM(obj);
 
-                        let colHex = esPruebaCRM ? '#06b6d4' : (CODIGOS_HEX[obj.color] || '#f59e0b');
+                        let colHex = esPruebaCRM ? '#06b6d4' : (esGrupoAbierto(objOriginal) || esGrupoAbierto(obj) ? '#10b981' : (CODIGOS_HEX[obj.color] || '#f59e0b'));
 
                         tdCell.style.backgroundColor = colHex + (esPruebaCRM ? '18' : '20');
 
@@ -3543,7 +3670,7 @@ function calcularRentabilidadFicha(ficha) {
 
                             tdCell.ondragend = () => { claveAgendaArrastrada = ''; };
 
-                            const rent = calcularRentabilidadFicha(obj);
+                            const rent = esGrupoAbierto(objOriginal) || esGrupoAbierto(obj) ? calcularRentabilidadGrupoAbierto(objOriginal, entrenadorVisto) : calcularRentabilidadFicha(obj);
 
                             const nota = obtenerNotaAgenda(cobertura.claveInicio);
 
@@ -3554,7 +3681,8 @@ function calcularRentabilidadFicha(ficha) {
                             const recurrenteHTML = (obj.recurrente || obj.serieRecurrenteId || obj.recurrenteOrigen) ? '<div class="absolute top-1 left-1 text-[8px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/30">↻</div>' : '';
                             const recuperacionHTML = esRecuperacionNoFacturable(objOriginal) || esRecuperacionNoFacturable(obj) ? '<div class="absolute bottom-1 right-1 text-[8px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-500/30">RECUP.</div>' : '';
                             const paddingTitulo = recurrenteHTML ? 'pt-3' : '';
-                            tdCell.innerHTML = `${iconoNota}${recurrenteHTML}${recuperacionHTML}<div class="text-[11px] text-white uppercase truncate ${paddingTitulo}">${escapeHTML(obj.nombre)}</div><div class="text-[9px] mt-0.5 opacity-90">${rent.toFixed(2)}€</div><div class="text-[8px] mt-0.5 opacity-60">45 min${recurrenteHTML ? ' · semanal' : ''}${recuperacionHTML ? ' · no facturable' : ''}</div>${resumenNota}`;
+                            const grupoAbiertoHTML = esGrupoAbierto(objOriginal) || esGrupoAbierto(obj) ? `<div class="text-[8px] mt-0.5 text-emerald-200">Grupo abierto · ${asistentesGrupoAbierto(objOriginal).length}/${capacidadGrupoAbierto(objOriginal)} plazas</div>` : '';
+                            tdCell.innerHTML = `${iconoNota}${recurrenteHTML}${recuperacionHTML}<div class="text-[11px] text-white uppercase truncate ${paddingTitulo}">${escapeHTML(obj.nombre)}</div><div class="text-[9px] mt-0.5 opacity-90">${rent.toFixed(2)}€</div><div class="text-[8px] mt-0.5 opacity-60">45 min${recurrenteHTML ? ' · semanal' : ''}${recuperacionHTML ? ' · no facturable' : ''}</div>${grupoAbiertoHTML}${resumenNota}`;
 
                             tdCell.onclick = () => {
                                 if (fichaSeleccionadaMovilId) {
@@ -3671,7 +3799,9 @@ function calcularRentabilidadFicha(ficha) {
                     }
                 }
 
-                dbAgenda[entrenadorVisto][clave] = { ...c, duracionMin: 45 };
+                dbAgenda[entrenadorVisto][clave] = esGrupoAbierto(c)
+                    ? { ...c, duracionMin: 45, tipoCita: 'grupo_abierto', grupoAbierto: true, capacidadGrupoAbierto: capacidadGrupoAbierto(c), asistentesGrupoAbierto: Array.isArray(c.asistentesGrupoAbierto) ? c.asistentesGrupoAbierto : [] }
+                    : { ...c, duracionMin: 45 };
                 fijarNotaAgenda(clave, '');
 
                 localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
@@ -3728,6 +3858,9 @@ function calcularRentabilidadFicha(ficha) {
             if (!c.email || !c.telefono) {
                 alert('Este cliente necesita email y teléfono antes de generar/enviar el enlace de reservas.');
                 return;
+            }
+            if (c.reservasOnlineActivas === false) {
+                if (!confirm('Este cliente tiene reservas online desactivadas. ¿Quieres copiar igualmente el enlace? El portal le indicará que debe contactar con BESOUL.')) return;
             }
             if (!c.reservaToken) {
                 c.reservaToken = generarTokenReservaCliente();
@@ -3865,7 +3998,7 @@ function calcularRentabilidadFicha(ficha) {
                 row.innerHTML = `
                     <div class="md:col-span-3"><div class="text-white font-black uppercase">${escapeHTML(r.clientName || 'Cliente')}</div><div class="text-slate-500 text-[10px]">${escapeHTML(r.email || '')} · ${escapeHTML(r.telefono || '')}</div></div>
                     <div class="md:col-span-2"><span class="text-slate-500 text-[9px] uppercase font-bold block">Entrenador</span><span class="text-white font-bold">${escapeHTML(r.trainerName || nombreEntrenador(r.trainerKey))}</span></div>
-                    <div class="md:col-span-2"><span class="text-slate-500 text-[9px] uppercase font-bold block">Fecha y hora</span><span class="text-cyan-300 font-mono font-bold">${escapeHTML(r.fechaISO || '')} · ${escapeHTML(r.hora || '')}</span></div>
+                    <div class="md:col-span-2"><span class="text-slate-500 text-[9px] uppercase font-bold block">Fecha y hora</span><span class="text-cyan-300 font-mono font-bold">${escapeHTML(r.fechaISO || '')} · ${escapeHTML(r.hora || '')}</span><div class="text-[9px] text-emerald-300">${r.tipoReserva === 'grupo_abierto' ? 'Grupo abierto · ' + escapeHTML(r.grupoNombre || '') : 'Reserva individual'}</div></div>
                     <div class="md:col-span-2"><span class="text-slate-500 text-[9px] uppercase font-bold block">Estado</span><span class="text-${color}-300 font-bold uppercase">${escapeHTML(estado)}</span></div>
                     <div class="md:col-span-3 flex flex-wrap md:justify-end gap-2">
                         ${estado === 'pendiente' ? `<button onclick="aceptarSolicitudReserva('${r.id}')" class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-2 py-1.5 rounded font-bold text-[10px]">Aceptar</button><button onclick="rechazarSolicitudReserva('${r.id}')" class="bg-red-500/10 text-red-300 border border-red-500/30 px-2 py-1.5 rounded font-bold text-[10px]">Rechazar</button>` : ''}
@@ -3889,9 +4022,19 @@ function calcularRentabilidadFicha(ficha) {
             entrenadorVisto = trainer;
             const conflicto = hayConflictoBloqueSesion(clave, '');
             entrenadorVisto = oldTrainer;
-            if (conflicto) { alert(`La franja ya no está libre. Se solapa con ${conflicto.obj?.nombre || 'otra cita'}.`); return; }
+            if (r.tipoReserva !== 'grupo_abierto' && conflicto) { alert(`La franja ya no está libre. Se solapa con ${conflicto.obj?.nombre || 'otra cita'}.`); return; }
             if (!dbAgenda[trainer]) dbAgenda[trainer] = {};
-            dbAgenda[trainer][clave] = { ...cliente, duracionMin: 45, origenReservaCliente: true, solicitudReservaId: id };
+            if (r.tipoReserva === 'grupo_abierto') {
+                const grupo = dbAgenda[trainer][clave];
+                if (!esGrupoAbierto(grupo)) { alert('El grupo abierto ya no existe en esa franja.'); return; }
+                const asistentes = asistentesGrupoAbierto(grupo);
+                if (asistentes.some(a => (a.id || a.clientId) === cliente.id)) { alert('Este cliente ya está incluido en ese grupo.'); return; }
+                if (asistentes.length >= capacidadGrupoAbierto(grupo)) { alert('El grupo ya está completo.'); return; }
+                grupo.asistentesGrupoAbierto = [...asistentes, { id: cliente.id, nombre: cliente.nombre, email: cliente.email || '', telefono: cliente.telefono || '', añadidoPorReservaId: id, añadidoEn: new Date().toISOString() }];
+                grupo.ultimaActualizacionGrupoAbierto = new Date().toISOString();
+            } else {
+                dbAgenda[trainer][clave] = { ...cliente, duracionMin: 45, origenReservaCliente: true, solicitudReservaId: id };
+            }
             localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
             try {
                 const fs = firebase.firestore();
@@ -3947,13 +4090,39 @@ function calcularRentabilidadFicha(ficha) {
                     if (!dbClientes[trainerKey]) return;
                     const disp = dbDisponibilidadReservas[trainerKey] || disponibilidadReservasPorDefecto();
                     const ocupados = {};
+                    const gruposAbiertos = [];
                     Object.keys(dbAgenda[trainerKey] || {}).forEach(clave => {
+                        const objAgenda = dbAgenda[trainerKey][clave];
                         clavesBloqueSesion(clave, 45).forEach(k => ocupados[k] = true);
+                        if (esGrupoAbierto(objAgenda)) {
+                            const [fechaISO, hora] = clave.split('_');
+                            const capacidad = capacidadGrupoAbierto(objAgenda);
+                            const asistentes = asistentesGrupoAbierto(objAgenda);
+                            gruposAbiertos.push({
+                                clave,
+                                fechaISO,
+                                hora,
+                                grupoId: objAgenda.id || '',
+                                grupoNombre: objAgenda.nombre || 'Grupo abierto',
+                                duracionMin: 45,
+                                capacidad,
+                                asistentes: asistentes.length,
+                                asistentesIds: asistentes.map(a => a.id || a.clientId).filter(Boolean),
+                                plazasLibres: Math.max(0, capacidad - asistentes.length),
+                                trainerKey,
+                                trainerName: nombreEntrenador(trainerKey)
+                            });
+                        }
                     });
                     Object.values(dbSolicitudesReservas || {}).forEach(r => {
                         if (r.trainerKey === trainerKey && estadoReservaActivo(r)) {
                             clavesBloqueSesion(r.clave || `${r.fechaISO}_${r.hora}`, 45).forEach(k => ocupados[k] = true);
                         }
+                    });
+                    gruposAbiertos.forEach(g => {
+                        const pendientes = Object.values(dbSolicitudesReservas || {}).filter(r => String(r.estado || 'pendiente').toLowerCase() === 'pendiente' && r.trainerKey === trainerKey && (r.clave || `${r.fechaISO}_${r.hora}`) === g.clave && r.tipoReserva === 'grupo_abierto').length;
+                        g.solicitudesPendientes = pendientes;
+                        g.plazasLibres = Math.max(0, (g.capacidad || 0) - (g.asistentes || 0) - pendientes);
                     });
                     const scheduleRef = fs.collection(BS_PUBLIC_SCHEDULE_COLLECTION).doc(trainerKey);
                     batch.set(scheduleRef, {
@@ -3963,6 +4132,7 @@ function calcularRentabilidadFicha(ficha) {
                         centroNombre: dbCredenciales[trainerKey]?.centroNombre || '',
                         disponibilidad: disp,
                         ocupados,
+                        gruposAbiertos: gruposAbiertos.filter(g => g.plazasLibres > 0),
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     }, { merge: true });
                     (dbClientes[trainerKey] || []).forEach(c => {
@@ -3980,7 +4150,10 @@ function calcularRentabilidadFicha(ficha) {
                             centroNombre: dbCredenciales[trainerKey]?.centroNombre || '',
                             email: c.email || '',
                             telefono: c.telefono || '',
-                            activo: true,
+                            activo: c.reservasOnlineActivas !== false,
+                            reservasOnlineActivas: c.reservasOnlineActivas !== false,
+                            restriccionesReservas: c.restriccionesReservas || { modo:'bloquear', bloquesTexto: c.reservasBloqueadasTexto || '' },
+                            reservasBloqueadasTexto: c.reservasBloqueadasTexto || c.restriccionesReservas?.bloquesTexto || '',
                             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                         }, { merge: true });
                     });
@@ -4028,6 +4201,12 @@ function calcularRentabilidadFicha(ficha) {
                         const objGuardado = dbAgenda[entrenadorVisto][k];
                         const obj = buscarFichaPorId(objGuardado?.id) || objGuardado;
                         if (!obj || esCitaPruebaCRM(obj)) return;
+                        if (esGrupoAbierto(objGuardado) || esGrupoAbierto(obj)) {
+                            const asistentes = asistentesGrupoAbierto(objGuardado);
+                            ses += asistentes.length;
+                            factMes += calcularRentabilidadGrupoAbierto(objGuardado, entrenadorVisto);
+                            return;
+                        }
                         ses++;
                         factMes += calcularRentabilidadFicha(obj);
                     }
@@ -4143,6 +4322,9 @@ function calcularRentabilidadFicha(ficha) {
             };
 
             const baseFicha = buscarFichaPorId(citaOrigen.id) || citaOrigen;
+            const prepararCopiaRecurrente = (base) => esGrupoAbierto(base)
+                ? { ...base, grupoAbierto: true, tipoCita: 'grupo_abierto', capacidadGrupoAbierto: capacidadGrupoAbierto(base), asistentesGrupoAbierto: [] }
+                : { ...base };
             let creadas = 0;
             const omitidas = [];
             const cursor = new Date(fechaOrigen.getTime());
@@ -4161,7 +4343,7 @@ function calcularRentabilidadFicha(ficha) {
                     continue;
                 }
                 dbAgenda[entrenadorVisto][claveNueva] = {
-                    ...baseFicha,
+                    ...prepararCopiaRecurrente(baseFicha),
                     duracionMin: 45,
                     recurrente: true,
                     serieRecurrenteId: serieId,
@@ -4260,6 +4442,79 @@ function calcularRentabilidadFicha(ficha) {
             localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
         }
 
+
+        function clientesElegiblesGrupoAbierto(trainerKey = entrenadorVisto) {
+            return (dbClientes[trainerKey] || []).filter(c => c && c.tipo === 'individual' && !c.vinculacion && clienteActivoParaAgenda(c));
+        }
+
+        function actualizarCitaGrupoAbiertoActual(cita) {
+            const cobertura = obtenerCoberturaCitaAgenda(celdaNotaSeleccionada);
+            const clave = cobertura ? cobertura.claveInicio : celdaNotaSeleccionada;
+            if (!dbAgenda[entrenadorVisto]) dbAgenda[entrenadorVisto] = {};
+            dbAgenda[entrenadorVisto][clave] = cita;
+            localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
+            programarGuardadoNubeAgenda();
+            publicarReservasPublicasDebounced();
+            recalcularKPIs(); renderAgenda();
+            prepararPanelGrupoAbiertoSesion(clave, cita);
+        }
+
+        function prepararPanelGrupoAbiertoSesion(clave, obj) {
+            const panel = document.getElementById('panel-grupo-abierto-sesion');
+            if (!panel) return;
+            if (!esGrupoAbierto(obj)) { panel.classList.add('hidden'); return; }
+            panel.classList.remove('hidden');
+            const capacidad = capacidadGrupoAbierto(obj);
+            const asistentes = asistentesGrupoAbierto(obj);
+            const rent = calcularRentabilidadGrupoAbierto(obj, entrenadorVisto);
+            const info = document.getElementById('grupo-abierto-capacidad-info');
+            if (info) info.innerText = `Asistentes: ${asistentes.length}/${capacidad} plazas`;
+            const rentEl = document.getElementById('grupo-abierto-rentabilidad');
+            if (rentEl) rentEl.innerText = `${rent.toFixed(2)} €`;
+            const ids = new Set(asistentes.map(a => a.id || a.clientId));
+            const select = document.getElementById('grupo-abierto-cliente-select');
+            if (select) {
+                const disponibles = clientesElegiblesGrupoAbierto().filter(c => !ids.has(c.id));
+                select.innerHTML = disponibles.length
+                    ? disponibles.map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.nombre)} · ${calcularRentabilidadFicha(c).toFixed(2)} €/ses.</option>`).join('')
+                    : '<option value="">Sin clientes disponibles</option>';
+            }
+            const lista = document.getElementById('grupo-abierto-asistentes-lista');
+            if (lista) {
+                lista.innerHTML = asistentes.length ? asistentes.map(a => {
+                    const ficha = buscarClientePorIdTrainer(entrenadorVisto, a.id || a.clientId);
+                    const rentA = ficha ? calcularRentabilidadFicha(ficha) : 0;
+                    return `<div class="flex items-center justify-between gap-2 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[10px]"><span class="text-white font-bold">${escapeHTML(a.nombre || ficha?.nombre || 'Cliente')}</span><span class="text-emerald-300 font-mono">${rentA.toFixed(2)} €</span><button type="button" onclick="quitarAsistenteGrupoAbierto('${escapeHTML(a.id || a.clientId)}')" class="text-red-300 font-bold">Quitar</button></div>`;
+                }).join('') : '<div class="text-[10px] text-slate-500 border border-dashed border-slate-800 rounded p-2">Sin asistentes todavía.</div>';
+            }
+        }
+
+        function agregarAsistenteGrupoAbierto() {
+            const select = document.getElementById('grupo-abierto-cliente-select');
+            const id = select?.value || '';
+            if (!id) return;
+            const cobertura = obtenerCoberturaCitaAgenda(celdaNotaSeleccionada);
+            const clave = cobertura ? cobertura.claveInicio : celdaNotaSeleccionada;
+            const cita = dbAgenda[entrenadorVisto]?.[clave];
+            if (!esGrupoAbierto(cita)) return;
+            const asistentes = asistentesGrupoAbierto(cita);
+            if (asistentes.length >= capacidadGrupoAbierto(cita)) { alert('El grupo ya está completo.'); return; }
+            if (asistentes.some(a => (a.id || a.clientId) === id)) { alert('Este cliente ya está incluido.'); return; }
+            const ficha = buscarClientePorIdTrainer(entrenadorVisto, id);
+            if (!ficha) return;
+            cita.asistentesGrupoAbierto = [...asistentes, { id:ficha.id, nombre:ficha.nombre, email:ficha.email || '', telefono:ficha.telefono || '', añadidoManual:true, añadidoEn:new Date().toISOString() }];
+            actualizarCitaGrupoAbiertoActual(cita);
+        }
+
+        function quitarAsistenteGrupoAbierto(idCliente) {
+            const cobertura = obtenerCoberturaCitaAgenda(celdaNotaSeleccionada);
+            const clave = cobertura ? cobertura.claveInicio : celdaNotaSeleccionada;
+            const cita = dbAgenda[entrenadorVisto]?.[clave];
+            if (!esGrupoAbierto(cita)) return;
+            cita.asistentesGrupoAbierto = asistentesGrupoAbierto(cita).filter(a => (a.id || a.clientId) !== idCliente);
+            actualizarCitaGrupoAbiertoActual(cita);
+        }
+
         function abrirModalNota(clave, obj, rent) {
 
             celdaNotaSeleccionada = clave;
@@ -4270,11 +4525,13 @@ function calcularRentabilidadFicha(ficha) {
 
             document.getElementById('nota-info-asignado').innerText = obj.nombre;
 
-            document.getElementById('nota-info-profit').innerText = `${rent.toFixed(2)} €`;
+            const rentMostrada = esGrupoAbierto(obj) ? calcularRentabilidadGrupoAbierto(obj, entrenadorVisto) : rent;
+            document.getElementById('nota-info-profit').innerText = `${rentMostrada.toFixed(2)} €`;
 
             document.getElementById('txt-nota-contenido').value = obtenerNotaAgenda(clave);
             prepararPanelRecurrenciaSesion(clave, obj);
             prepararPanelRecuperacionSesion(clave, obj);
+            prepararPanelGrupoAbiertoSesion(clave, obj);
 
         }
 
