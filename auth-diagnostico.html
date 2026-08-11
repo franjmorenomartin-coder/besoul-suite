@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BESOUL · Diagnóstico Login Firebase</title>
+  <style>
+    body{margin:0;min-height:100vh;background:#070b18;color:#f8fafc;font-family:Inter,Arial,sans-serif;display:grid;place-items:center;padding:24px}
+    .card{width:min(680px,100%);background:#111827;border:1px solid #243047;border-radius:18px;padding:24px;box-shadow:0 18px 60px rgba(0,0,0,.35)}
+    h1{margin:0 0 8px;font-size:24px}
+    p{color:#b9c8e8;line-height:1.5}
+    label{display:block;margin-top:14px;color:#93a4c7;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+    input{width:100%;box-sizing:border-box;margin-top:6px;padding:13px;border-radius:12px;border:1px solid #334155;background:#050816;color:#fff;font-size:16px}
+    button{margin-top:16px;width:100%;padding:14px;border:0;border-radius:12px;background:#f59e0b;color:#0b0f17;font-weight:900;cursor:pointer}
+    button.secondary{background:#263449;color:#e5efff}
+    pre{white-space:pre-wrap;background:#050816;border:1px solid #263449;border-radius:12px;padding:14px;color:#d1e3ff;min-height:110px}
+    .muted{font-size:12px;color:#8ea0bf}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Diagnóstico de acceso BESOUL</h1>
+    <p>Esta página solo prueba Firebase Authentication y la lectura del perfil en Firestore. No modifica datos.</p>
+
+    <label>Email</label>
+    <input id="email" type="email" autocomplete="username" value="ruben.diaz@besoulfitness.com">
+
+    <label>Contraseña</label>
+    <input id="password" type="password" autocomplete="current-password" placeholder="Escribir manualmente">
+
+    <button id="btnLogin">Probar login</button>
+    <button class="secondary" id="btnLogout">Cerrar sesión</button>
+
+    <h3>Resultado</h3>
+    <pre id="out">Pendiente de prueba...</pre>
+    <p class="muted">Si aquí falla con auth/invalid-credential, el problema está en Authentication/contraseña. Si aquí funciona pero la app normal falla, el problema está en caché, service worker o código de la app.</p>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAHp7l39BYkgHTVNNwPaaa21tTksBQ94Zo",
+      authDomain: "besoul-suite.firebaseapp.com",
+      projectId: "besoul-suite",
+      storageBucket: "besoul-suite.firebasestorage.app",
+      messagingSenderId: "215142605598",
+      appId: "1:215142605598:web:943629a7a9c50c034a1f0f"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    const out = document.getElementById('out');
+
+    function log(obj){
+      if(typeof obj === 'string') out.textContent = obj;
+      else out.textContent = JSON.stringify(obj, null, 2);
+    }
+
+    function cleanEmail(v){
+      return String(v || '').trim().toLowerCase();
+    }
+
+    document.getElementById('btnLogin').onclick = async () => {
+      const email = cleanEmail(document.getElementById('email').value);
+      const password = document.getElementById('password').value;
+      log("Probando login...");
+      try {
+        const cred = await auth.signInWithEmailAndPassword(email, password);
+        const user = cred.user;
+        let profile = null;
+        let profileError = null;
+        try {
+          const snap = await db.collection('besoulUsers').doc(email).get();
+          profile = snap.exists ? snap.data() : null;
+        } catch(e) {
+          profileError = { code:e.code, message:e.message };
+        }
+        log({
+          login: "OK",
+          uid: user.uid,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          firestoreDoc: "besoulUsers/" + email,
+          profileExists: !!profile,
+          profile,
+          profileError
+        });
+      } catch (e) {
+        log({
+          login: "ERROR",
+          code: e.code,
+          message: e.message,
+          emailUsado: email,
+          explicacion: e.code === "auth/invalid-credential"
+            ? "Firebase no acepta ese email/contraseña para Authentication."
+            : "Revisar código de error."
+        });
+      }
+    };
+
+    document.getElementById('btnLogout').onclick = async () => {
+      await auth.signOut();
+      log("Sesión cerrada.");
+    };
+  </script>
+</body>
+</html>
