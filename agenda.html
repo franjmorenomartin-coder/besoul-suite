@@ -775,8 +775,22 @@ miércoles 07:00-09:00"></textarea>
                 <div class="flex-1">
                     <span class="text-slate-500 text-[10px] uppercase font-bold block">Entrenador configurado</span>
                     <span id="disp-trainer-label" class="text-white font-black">---</span>
+                    <div class="mt-2 flex flex-col sm:flex-row sm:items-center gap-2 text-[11px]">
+                        <label class="inline-flex items-center gap-2 text-cyan-200 font-bold">
+                            <input type="checkbox" id="disp-recurrente-semanal" class="accent-cyan-400" checked>
+                            Repetir esta disponibilidad todas las semanas
+                        </label>
+                        <span class="text-slate-500">Si lo desmarcas, solo se aplicará a la semana visible.</span>
+                    </div>
                 </div>
-                <button type="button" onclick="copiarLinkPortalReservasGenerico()" class="bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-3 py-2 rounded font-bold text-[10px] hover:bg-cyan-500/20 transition">Copiar link portal clientes</button>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" onclick="marcarDisponibilidadLaboral()" class="bg-amber-500/10 text-amber-300 border border-amber-500/30 px-3 py-2 rounded font-bold text-[10px] hover:bg-amber-500/20 transition">L-V 08-14 / 16-21</button>
+                    <button type="button" onclick="limpiarBloqueosDisponibilidadSemana()" class="bg-slate-800 text-slate-300 border border-slate-700 px-3 py-2 rounded font-bold text-[10px] hover:text-white transition">Restaurar slots ocultos semana</button>
+                    <button type="button" onclick="copiarLinkPortalReservasGenerico()" class="bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-3 py-2 rounded font-bold text-[10px] hover:bg-cyan-500/20 transition">Copiar link portal clientes</button>
+                </div>
+            </div>
+            <div class="bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-[11px] text-slate-400 leading-relaxed">
+                Marca un día como <b class="text-white">activo</b> y define sus bloques. Al guardar, la agenda generará automáticamente slots de 45 min dentro de esas franjas. Después podrás ocultar slots concretos desde la propia agenda.
             </div>
             <div id="disponibilidad-grid" class="space-y-2"></div>
             <div class="flex justify-end gap-2 pt-2">
@@ -3485,11 +3499,32 @@ function calcularRentabilidadFicha(ficha) {
             const fecha = new Date(`${fechaISO}T00:00:00`);
             const dia = diaSemanaBesoul(fecha);
             const semanal = disp.semanal?.[dia];
+            const excepcion = disp.excepciones?.[fechaISO];
+
+            // Si hay excepción semanal/día con override, manda sobre la recurrente.
+            if (excepcion) {
+                if (excepcion.activo === false) return [];
+                if (excepcion.override === true) {
+                    return excepcion.activo ? normalizarBloquesDisponibilidad(excepcion.bloques) : [];
+                }
+            }
+
             let bloques = [];
             if (semanal?.activo) bloques = bloques.concat(normalizarBloquesDisponibilidad(semanal.bloques));
-            const excepcion = disp.excepciones?.[fechaISO];
             if (excepcion?.activo !== false) bloques = bloques.concat(normalizarBloquesDisponibilidad(excepcion?.bloques));
-            return bloques;
+            return fusionarBloquesDisponibilidad(bloques);
+        }
+
+        function slotsBloqueadosFecha(trainerKey, fechaISO) {
+            const disp = disponibilidadTrainerLectura(trainerKey);
+            const lista = disp?.bloqueos?.[fechaISO] || [];
+            return new Set((Array.isArray(lista) ? lista : []).map(h => String(h || '').slice(0,5)));
+        }
+
+        function slotBloqueadoDisponibilidad(clave, trainerKey = entrenadorVisto) {
+            const partes = String(clave || '').split('_');
+            if (partes.length < 2) return false;
+            return slotsBloqueadosFecha(trainerKey, partes[0]).has(String(partes[1] || '').slice(0,5));
         }
 
         function slotDisponibleParaClave(clave, trainerKey = entrenadorVisto) {
@@ -3498,6 +3533,7 @@ function calcularRentabilidadFicha(ficha) {
             const fechaISO = partes[0];
             const inicio = minutosDesdeHorario(partes[1]);
             if (Number.isNaN(inicio)) return false;
+            if (slotBloqueadoDisponibilidad(clave, trainerKey)) return false;
             const fin = inicio + 45;
             return bloquesDisponibilidadFecha(trainerKey, fechaISO).some(b => {
                 const bi = minutosDesdeHorario(b.inicio);
@@ -3534,6 +3570,7 @@ function calcularRentabilidadFicha(ficha) {
             if (!dbDisponibilidadReservas[trainerKey]) dbDisponibilidadReservas[trainerKey] = disponibilidadReservasPorDefecto();
             if (!dbDisponibilidadReservas[trainerKey].semanal) dbDisponibilidadReservas[trainerKey].semanal = disponibilidadReservasPorDefecto().semanal;
             if (!dbDisponibilidadReservas[trainerKey].excepciones) dbDisponibilidadReservas[trainerKey].excepciones = {};
+            if (!dbDisponibilidadReservas[trainerKey].bloqueos) dbDisponibilidadReservas[trainerKey].bloqueos = {};
             return dbDisponibilidadReservas[trainerKey];
         }
 
@@ -3573,6 +3610,72 @@ function calcularRentabilidadFicha(ficha) {
             publicarReservasPublicasDebounced();
             return true;
         }
+
+
+        function ocultarSlotDisponibilidad(clave) {
+            const partes = String(clave || '').split('_');
+            if (partes.length < 2) return false;
+            const fechaISO = partes[0];
+            const hora = String(partes[1] || '').slice(0,5);
+            const disp = asegurarDisponibilidadTrainerEditable(entrenadorVisto);
+            if (!disp.bloqueos) disp.bloqueos = {};
+            const set = new Set(disp.bloqueos[fechaISO] || []);
+            set.add(hora);
+            disp.bloqueos[fechaISO] = Array.from(set).sort();
+            disp.actualizadoEn = new Date().toISOString();
+            disp.actualizadoPor = usuarioLogeado;
+            localStorage.setItem('bs_db_disponibilidad_reservas_v6', JSON.stringify(dbDisponibilidadReservas));
+            guardarEstadoNubeAgenda();
+            publicarReservasPublicasDebounced();
+            return true;
+        }
+
+        function gestionarSlotLibreDisponibilidad(clave) {
+            if (fichaSeleccionadaMovilId) {
+                agendarFichaSeleccionadaEnCelda(clave);
+                return;
+            }
+            const partes = String(clave || '').split('_');
+            if (partes.length < 2) return;
+            const hora = partes[1];
+            const fin = formatoMinutosHorario(minutosDesdeHorario(hora) + 45);
+            const opcion = prompt(
+                `Slot libre ${partes[0]} ${hora}-${fin}.\\n\\nEscribe:\\n1 = ocultar/desactivar este slot solo esta semana\\n2 = editar disponibilidad\\n\\nCancelar = no hacer nada`,
+                '1'
+            );
+            if (opcion === null) return;
+            if (String(opcion).trim() === '2') {
+                abrirModalDisponibilidadReservas();
+                return;
+            }
+            if (String(opcion).trim() === '1') {
+                ocultarSlotDisponibilidad(clave);
+                renderAgenda();
+            }
+        }
+
+        function limpiarBloqueosDisponibilidadSemana() {
+            const disp = asegurarDisponibilidadTrainerEditable(entrenadorVisto);
+            if (!disp.bloqueos) disp.bloqueos = {};
+            let borrados = 0;
+            for (let i=0; i<7; i++) {
+                const f = new Date(lunesActual);
+                f.setDate(f.getDate() + i);
+                const iso = formatoFechaLocal(f);
+                if (disp.bloqueos[iso]) {
+                    borrados += disp.bloqueos[iso].length || 0;
+                    delete disp.bloqueos[iso];
+                }
+            }
+            disp.actualizadoEn = new Date().toISOString();
+            disp.actualizadoPor = usuarioLogeado;
+            localStorage.setItem('bs_db_disponibilidad_reservas_v6', JSON.stringify(dbDisponibilidadReservas));
+            guardarEstadoNubeAgenda();
+            publicarReservasPublicasDebounced();
+            renderAgenda();
+            alert(borrados ? `Se han restaurado ${borrados} slots ocultos de esta semana.` : 'No había slots ocultos esta semana.');
+        }
+
 
         function toggleVistaAgendaSlots() {
             modoAgendaSlots = !modoAgendaSlots;
@@ -3703,7 +3806,10 @@ function calcularRentabilidadFicha(ficha) {
                 const inicio = minutosDesdeHorario(b.inicio);
                 const fin = minutosDesdeHorario(b.fin);
                 if (Number.isNaN(inicio) || Number.isNaN(fin)) return;
-                for (let m = inicio; m + 45 <= fin; m += 45) minutosSet.add(m);
+                for (let m = inicio; m + 45 <= fin; m += 45) {
+                    const claveSlot = claveDesdeFechaYMinutos(fechaISO, m);
+                    if (!slotBloqueadoDisponibilidad(claveSlot, entrenadorVisto)) minutosSet.add(m);
+                }
             });
 
             // Mantener visibles citas ya existentes aunque se hubieran creado antes de exigir disponibilidad.
@@ -3835,9 +3941,7 @@ function calcularRentabilidadFicha(ficha) {
                 card.className = clasesSlotBesoul('libre');
                 card.title = fichaSeleccionadaMovilId ? 'Toca para agendar la ficha seleccionada.' : 'Slot libre habilitado por disponibilidad del PT.';
                 activarDropLibreSlot(card, clave);
-                card.onclick = () => {
-                    if (fichaSeleccionadaMovilId) agendarFichaSeleccionadaEnCelda(clave);
-                };
+                card.onclick = () => gestionarSlotLibreDisponibilidad(clave);
                 card.innerHTML = `${horaHTML}<span class="text-xl leading-none text-emerald-100/90">+</span></div>
                     <div class="mt-1 text-[12px] font-black text-emerald-100">Libre</div>
                     <div class="text-[10px] text-emerald-200/75">${fichaSeleccionadaMovilId ? 'Tocar para agendar' : 'Individual · 45 min'}</div>`;
@@ -4353,7 +4457,7 @@ function calcularRentabilidadFicha(ficha) {
             // El PT/admin debe definir franjas antes de agendar clientes.
             const semanal = {};
             for (let d=1; d<=7; d++) semanal[d] = { activo: false, bloques: [] };
-            return { semanal, excepciones: {}, actualizadoEn: new Date().toISOString() };
+            return { semanal, excepciones: {}, bloqueos: {}, recurrenteSemanal: true, actualizadoEn: new Date().toISOString() };
         }
 
         function disponibilidadTrainerActual() {
@@ -4374,34 +4478,81 @@ function calcularRentabilidadFicha(ficha) {
             if (modal) modal.classList.add('hidden');
         }
 
+
+        function setDiaDisponibilidadActivoVisual(d) {
+            const activo = !!document.getElementById(`disp-active-${d}`)?.checked;
+            const row = document.getElementById(`disp-row-${d}`);
+            if (row) row.classList.toggle('opacity-55', !activo);
+            ['b1-start','b1-end','b2-start','b2-end'].forEach(suf => {
+                const el = document.getElementById(`disp-${d}-${suf}`);
+                if (el) el.disabled = !activo;
+            });
+        }
+
+        function marcarDisponibilidadLaboral() {
+            for (let d=1; d<=7; d++) {
+                const activo = d <= 5;
+                const chk = document.getElementById(`disp-active-${d}`);
+                if (chk) chk.checked = activo;
+                const vals = {
+                    [`disp-${d}-b1-start`]: '08:00',
+                    [`disp-${d}-b1-end`]: '14:00',
+                    [`disp-${d}-b2-start`]: '16:00',
+                    [`disp-${d}-b2-end`]: '21:00'
+                };
+                Object.entries(vals).forEach(([id, val]) => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = val;
+                });
+                setDiaDisponibilidadActivoVisual(d);
+            }
+        }
+
         function renderDisponibilidadReservasForm() {
             const cont = document.getElementById('disponibilidad-grid');
             if (!cont) return;
             const disp = disponibilidadTrainerActual();
             const dias = ['','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+            const recurrente = document.getElementById('disp-recurrente-semanal');
+            if (recurrente) recurrente.checked = disp.recurrenteSemanal !== false;
             cont.innerHTML = '';
             for (let d=1; d<=7; d++) {
-                const cfg = disp.semanal?.[d] || {activo:false, bloques:[{inicio:'08:00',fin:'14:00'},{inicio:'16:00',fin:'21:00'}]};
+                const fecha = new Date(lunesActual);
+                fecha.setDate(fecha.getDate() + (d - 1));
+                const fechaISO = formatoFechaLocal(fecha);
+                const excepcionSemana = disp.excepciones?.[fechaISO];
+                const cfgBase = excepcionSemana?.override === true ? excepcionSemana : (disp.semanal?.[d] || {activo:false, bloques:[]});
+                const cfg = cfgBase || {activo:false, bloques:[]};
                 const b1 = cfg.bloques?.[0] || {inicio:'08:00', fin:'14:00'};
                 const b2 = cfg.bloques?.[1] || {inicio:'16:00', fin:'21:00'};
+                const bloqueadosDia = (disp.bloqueos?.[fechaISO] || []).length;
                 const row = document.createElement('div');
-                row.className = 'bg-slate-950/70 border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-xs';
+                row.id = `disp-row-${d}`;
+                row.className = 'bg-slate-950/70 border border-slate-800 rounded-2xl p-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-xs';
                 row.innerHTML = `
-                    <label class="md:col-span-2 flex items-center gap-2 font-bold text-white"><input type="checkbox" id="disp-active-${d}" ${cfg.activo ? 'checked' : ''} class="accent-cyan-400"> ${dias[d]}</label>
+                    <label class="md:col-span-2 flex items-center gap-2 font-bold text-white">
+                        <input type="checkbox" id="disp-active-${d}" ${cfg.activo ? 'checked' : ''} onchange="setDiaDisponibilidadActivoVisual(${d})" class="accent-cyan-400">
+                        <span>
+                            <span class="block">${dias[d]}</span>
+                            <span class="block text-[9px] text-amber-300">${fechaISO.slice(5)}</span>
+                            ${bloqueadosDia ? `<span class="block text-[9px] text-red-300">${bloqueadosDia} slot(s) oculto(s)</span>` : ''}
+                        </span>
+                    </label>
                     <div class="md:col-span-5 grid grid-cols-2 gap-2">
-                        <div><span class="text-[9px] text-slate-500 uppercase font-bold">Bloque 1 inicio</span><input type="time" step="900" id="disp-${d}-b1-start" value="${escapeHTML(b1.inicio)}" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white"></div>
-                        <div><span class="text-[9px] text-slate-500 uppercase font-bold">Bloque 1 fin</span><input type="time" step="900" id="disp-${d}-b1-end" value="${escapeHTML(b1.fin)}" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white"></div>
+                        <div><span class="text-[9px] text-slate-500 uppercase font-bold">Bloque 1 inicio</span><input type="time" step="900" id="disp-${d}-b1-start" value="${escapeHTML(b1.inicio || '08:00')}" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-2 text-white disabled:opacity-40"></div>
+                        <div><span class="text-[9px] text-slate-500 uppercase font-bold">Bloque 1 fin</span><input type="time" step="900" id="disp-${d}-b1-end" value="${escapeHTML(b1.fin || '14:00')}" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-2 text-white disabled:opacity-40"></div>
                     </div>
                     <div class="md:col-span-5 grid grid-cols-2 gap-2">
-                        <div><span class="text-[9px] text-slate-500 uppercase font-bold">Bloque 2 inicio</span><input type="time" step="900" id="disp-${d}-b2-start" value="${escapeHTML(b2.inicio)}" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white"></div>
-                        <div><span class="text-[9px] text-slate-500 uppercase font-bold">Bloque 2 fin</span><input type="time" step="900" id="disp-${d}-b2-end" value="${escapeHTML(b2.fin)}" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white"></div>
+                        <div><span class="text-[9px] text-slate-500 uppercase font-bold">Bloque 2 inicio</span><input type="time" step="900" id="disp-${d}-b2-start" value="${escapeHTML(b2.inicio || '16:00')}" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-2 text-white disabled:opacity-40"></div>
+                        <div><span class="text-[9px] text-slate-500 uppercase font-bold">Bloque 2 fin</span><input type="time" step="900" id="disp-${d}-b2-end" value="${escapeHTML(b2.fin || '21:00')}" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-2 text-white disabled:opacity-40"></div>
                     </div>
                 `;
                 cont.appendChild(row);
+                setDiaDisponibilidadActivoVisual(d);
             }
         }
 
-        function guardarDisponibilidadReservas() {
+        function leerDisponibilidadFormulario() {
             const semanal = {};
             for (let d=1; d<=7; d++) {
                 const activo = !!document.getElementById(`disp-active-${d}`)?.checked;
@@ -4410,16 +4561,55 @@ function calcularRentabilidadFicha(ficha) {
                 const b2s = document.getElementById(`disp-${d}-b2-start`)?.value || '';
                 const b2e = document.getElementById(`disp-${d}-b2-end`)?.value || '';
                 const bloques = [];
-                if (b1s && b1e && b1s < b1e) bloques.push({inicio:b1s, fin:b1e});
-                if (b2s && b2e && b2s < b2e) bloques.push({inicio:b2s, fin:b2e});
+                if (activo && b1s && b1e && b1s < b1e) bloques.push({inicio:b1s, fin:b1e});
+                if (activo && b2s && b2e && b2s < b2e) bloques.push({inicio:b2s, fin:b2e});
                 semanal[d] = { activo, bloques };
             }
-            dbDisponibilidadReservas[entrenadorVisto] = { semanal, actualizadoEn: new Date().toISOString(), actualizadoPor: usuarioLogeado };
+            return semanal;
+        }
+
+        function guardarDisponibilidadReservas() {
+            const semanalFormulario = leerDisponibilidadFormulario();
+            const anterior = dbDisponibilidadReservas[entrenadorVisto] || disponibilidadReservasPorDefecto();
+            const recurrente = !!document.getElementById('disp-recurrente-semanal')?.checked;
+            const bloqueos = anterior.bloqueos || {};
+            const excepciones = anterior.excepciones || {};
+
+            if (recurrente) {
+                dbDisponibilidadReservas[entrenadorVisto] = {
+                    ...anterior,
+                    semanal: semanalFormulario,
+                    excepciones,
+                    bloqueos,
+                    recurrenteSemanal: true,
+                    actualizadoEn: new Date().toISOString(),
+                    actualizadoPor: usuarioLogeado
+                };
+            } else {
+                const nuevasExcepciones = { ...excepciones };
+                for (let d=1; d<=7; d++) {
+                    const fecha = new Date(lunesActual);
+                    fecha.setDate(fecha.getDate() + (d - 1));
+                    const fechaISO = formatoFechaLocal(fecha);
+                    nuevasExcepciones[fechaISO] = { ...semanalFormulario[d], override: true };
+                }
+                dbDisponibilidadReservas[entrenadorVisto] = {
+                    ...anterior,
+                    semanal: anterior.semanal || disponibilidadReservasPorDefecto().semanal,
+                    excepciones: nuevasExcepciones,
+                    bloqueos,
+                    recurrenteSemanal: false,
+                    actualizadoEn: new Date().toISOString(),
+                    actualizadoPor: usuarioLogeado
+                };
+            }
+
             localStorage.setItem('bs_db_disponibilidad_reservas_v6', JSON.stringify(dbDisponibilidadReservas));
             guardarEstadoNubeAgenda();
             publicarReservasPublicas();
             cerrarModalDisponibilidadReservas();
-            alert('Disponibilidad de reservas guardada.');
+            renderAgenda();
+            alert(recurrente ? 'Disponibilidad recurrente guardada. Se generarán slots de 45 min todas las semanas.' : 'Disponibilidad guardada solo para la semana visible.');
         }
 
         function estadoReservaActivo(reserva) {
