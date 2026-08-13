@@ -119,7 +119,7 @@
           <button onclick="exportarResumenCSV()" class="w-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 rounded-lg p-2 font-bold hover:bg-emerald-500/20">Export CSV</button>
         </div>
       </div>
-      <p class="text-[11px] text-slate-500 leading-relaxed">Dashboard de solo lectura. Finanzas sigue siendo el módulo para configurar centros, gastos, rangos y cierres.</p>
+      <p class="text-[11px] text-slate-500 leading-relaxed">Dashboard de solo lectura. Cálculo financiero sincronizado con Finanzas: mismos rangos, centros, cánones, desviaciones y cierres.</p>
     </section>
 
     <main class="flex-1 p-4 md:p-6 space-y-6">
@@ -255,6 +255,12 @@ function dateISO(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStar
 function mesKeyFromDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
 function mesActualKey(){ return mesKeyFromDate(new Date()); }
 function etiquetaMes(key){ const [y,m]=String(key).split('-').map(Number); if(!y||!m) return key; return new Date(y,m-1,1).toLocaleDateString('es-ES',{month:'short', year:'2-digit'}); }
+function fechaReferenciaMes(key){
+      const [y,m]=String(key || mesActualKey()).split('-').map(Number);
+      const d = new Date(y || new Date().getFullYear(), m || 1, 0);
+      d.setHours(23,59,59,999);
+      return d;
+    }
 function fechaInicioMes(key){ const [y,m]=String(key).split('-').map(Number); return new Date(y, m-1, 1); }
 function addDays(d, days){ const x = new Date(d); x.setDate(x.getDate()+days); return x; }
 function startOfWeek(d){ const x = new Date(d); const day = (x.getDay()+6)%7; x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x; }
@@ -271,30 +277,46 @@ function nombrePerfil(p){ return String(p?.nombre || p?.email || p?.trainerKey |
 function trainerByKey(key){ return perfilesUsuarios.find(p => trainerKeyPerfil(p) === key); }
 function esAdmin(){ return perfil?.rol === 'admin'; }
 function esPerfilOperativo(p){
-  const key = trainerKeyPerfil(p);
-  if (!key || TRAINERS_EXCLUIDOS_FINANZAS.includes(key)) return false;
-  const rol = String(p.rol || '').toLowerCase();
-  if (rol === 'pt') return true;
-  if (TRAINERS_ADMIN_CON_CARTERA.includes(key)) return true;
-  const clientes = (agendaData.clientes && agendaData.clientes[key]) || [];
-  return Array.isArray(clientes) && clientes.length > 0;
-}
-function centroTrainer(key, perfilObj){
-  const settings = dbFinanzas.trainerSettings?.[key] || {};
-  const nombre = nombrePerfil(perfilObj).toLowerCase();
-  if (settings.centroId && centroValido(settings.centroId) && settings.centroId !== 'sin_centro' && settings.centroId !== 'sin-centro') return settings.centroId;
-  if (DEFAULT_CENTER_BY_TRAINER[key]) return DEFAULT_CENTER_BY_TRAINER[key];
-  if ((key === 'miguel' || nombre.includes('fenech') || nombre.includes('lillo')) && !nombre.includes('luna')) return 'lagunillas';
-  if (nombre.includes('miguel') && nombre.includes('luna')) return 'fantasy';
-  if (perfilObj?.centroId && centroValido(perfilObj.centroId) && perfilObj.centroId !== 'sin_centro') return perfilObj.centroId;
-  if (String(perfilObj?.rol || '').toLowerCase() === 'pt') return 'inacua';
-  return 'sin_centro';
-}
+      const key = trainerKeyPerfil(p);
+      if (!key || TRAINERS_EXCLUIDOS_FINANZAS.includes(key)) return false;
+      const rol = String(p.rol || '').toLowerCase();
+      if (rol === 'pt') return true;
+      if (TRAINERS_ADMIN_CON_CARTERA.includes(key)) return true;
+      const clientes = (agendaData.clientes && agendaData.clientes[key]) || [];
+      return Array.isArray(clientes) && clientes.length > 0;
+    }
+function centroTrainer(key, perfil){
+      const settings = dbFinanzas.trainerSettings?.[key] || {};
+      const nombre = nombrePerfil(perfil).toLowerCase();
+      // Primero respetamos una asignación manual, siempre que apunte al maestro de centros.
+      if (settings.centroId && centroValido(settings.centroId) && settings.centroId !== 'sin_centro') return settings.centroId;
+      // Después, asignación oficial por trainerKey.
+      if (DEFAULT_CENTER_BY_TRAINER[key]) return DEFAULT_CENTER_BY_TRAINER[key];
+      // Compatibilidad por si Miguel Fenech/Lillo fue creado con otra clave.
+      if ((key === 'miguel' || nombre.includes('fenech') || nombre.includes('lillo')) && !nombre.includes('luna')) return 'lagunillas';
+      if (nombre.includes('miguel') && nombre.includes('luna')) return 'fantasy';
+      // Si el perfil de Firestore tiene centro válido del maestro, lo usamos.
+      if (perfil?.centroId && centroValido(perfil.centroId) && perfil.centroId !== 'sin_centro') return perfil.centroId;
+      // Resto de entrenadores actuales: Inacua.
+      if (String(perfil?.rol || '').toLowerCase() === 'pt') return 'inacua';
+      return 'sin_centro';
+    }
 function nombreCentro(id){ const c = getCentros({incluirInactivos:true})[id] || getCentros()[id]; if (c) return c.nombre; if (id === 'sin_centro' || id === 'sin-centro') return 'Dirección / sin centro'; return id || 'Sin centro'; }
 function tarifaBaseFicha(ficha){ if (!ficha || !TARIFAS_2026[ficha.modalidad]) return 0; const factor=parseInt(ficha.factor)||1; return TARIFAS_2026[ficha.modalidad][factor] || TARIFAS_2026[ficha.modalidad][1] || 0; }
-function multiplicadorFacturacionFicha(ficha){ if (!ficha) return 1; if (ficha.grupoAbierto === true || ficha.tipoCita === 'grupo_abierto') return 0; if (String(ficha.modalidad||'').includes('Pareja')) return 2; if (String(ficha.modalidad||'').includes('Trío')) return 3; if (ficha.tipo === 'grupo') return Math.max(1, ficha.integrantesObj ? ficha.integrantesObj.length : 1); return 1; }
+function multiplicadorFacturacionFicha(ficha){
+      if (!ficha) return 1;
+      if (ficha.modalidad && ficha.modalidad.includes('Pareja')) return 2;
+      if (ficha.modalidad && ficha.modalidad.includes('Trío')) return 3;
+      if (ficha.tipo === 'grupo') return Math.max(1, ficha.integrantesObj ? ficha.integrantesObj.length : 1);
+      return 1;
+    }
 function obtenerDescuentoFicha(ficha){ const n=parseFloat(String(ficha?.descuentoPct??0).replace(',','.')); return Number.isNaN(n)?0:Math.max(0, Math.min(100,n)); }
-function calcularFacturacionFichaSimple(ficha){ if (!ficha || ficha.modalidad === 'Miembro Subordinado' || ficha.vinculacion) return 0; const base = tarifaBaseFicha(ficha) * multiplicadorFacturacionFicha(ficha); return Math.max(0, base * (1 - obtenerDescuentoFicha(ficha)/100)); }
+function calcularFacturacionFichaSimple(ficha){
+      if (!ficha) return 0;
+      if (ficha.modalidad === 'Miembro Subordinado' || ficha.vinculacion) return 0;
+      const base = tarifaBaseFicha(ficha) * multiplicadorFacturacionFicha(ficha);
+      return Math.max(0, base * (1 - obtenerDescuentoFicha(ficha)/100));
+    }
 function esBonoFicha(ficha){ return !!(ficha && (ficha.tipoCompra === 'Bono' || String(ficha.modalidad||'').includes('Bono'))); }
 function esSueltaFicha(ficha){ return !!(ficha && String(ficha.modalidad||'').includes('Suelta')); }
 function esMensualFicha(ficha){ return !!(ficha && !esBonoFicha(ficha) && !esSueltaFicha(ficha)); }
@@ -304,30 +326,65 @@ function esGrupoAbiertoAgenda(obj){ return !!(obj && (obj.grupoAbierto === true 
 function asistentesGrupoAbiertoAgenda(obj){ return Array.isArray(obj?.asistentesGrupoAbierto) ? obj.asistentesGrupoAbierto : []; }
 function rangoMes(mesKey){ const [y,m]=String(mesKey||mesActualKey()).split('-').map(Number); const ini=new Date(y,(m||1)-1,1); const fin=new Date(y,(m||1),1); return { desde:dateISO(ini), hasta:dateISO(fin) }; }
 function sesionesAgendadasFacturablesFichaMes(ficha, trainerKey, mesKey){
-  if (!ficha || !trainerKey) return 0;
-  const agendaEntrenador = agendaData.agenda?.[trainerKey] || {};
-  const {desde,hasta} = rangoMes(mesKey);
-  return Object.keys(agendaEntrenador).reduce((total, clave) => {
-    const fecha = clave.split('_')[0];
-    if (fecha < desde || fecha >= hasta) return total;
-    const cita = agendaEntrenador[clave];
-    if (!cita) return total;
-    if (esCitaPruebaCRM(cita) || esRecuperacionNoFacturable(cita)) return total;
-    if (cita.id === ficha.id) return total + 1;
-    if (esGrupoAbiertoAgenda(cita) && asistentesGrupoAbiertoAgenda(cita).some(a => (a.id || a.clientId) === ficha.id)) return total + 1;
-    return total;
-  }, 0);
-}
+      if (!ficha || !trainerKey) return 0;
+      const agendaEntrenador = agendaData.agenda?.[trainerKey] || {};
+      const { desde, hasta } = rangoMes(mesKey);
+      return Object.keys(agendaEntrenador).reduce((total, clave) => {
+        const fecha = clave.split('_')[0];
+        if (fecha < desde || fecha >= hasta) return total;
+        const cita = agendaEntrenador[clave];
+        if (!cita || cita.id !== ficha.id) return total;
+        if (esCitaPruebaCRM(cita) || esRecuperacionNoFacturable(cita)) return total;
+        return total + 1;
+      }, 0);
+    }
+function descripcionCanonCentro(c){
+      const partes = [`Fijo ${dinero(c.canonFijoTotal||0)}`];
+      if ((c.canonFijoProrrateado||0) && c.trainers?.length) partes.push(`${dinero(c.canonFijoProrrateado)}/PT fijo`);
+      if ((c.ptsIncluidos||0) > 0) partes.push(`incluye ${numero(c.ptsIncluidos)} PT`);
+      if ((c.canonPorPt||0) > 0) {
+        const desde = Math.max(1, (c.ptsIncluidos||0) + 1);
+        const hasta = (c.canonPorPtReducidoDesde||0) > 0 ? `-${(c.canonPorPtReducidoDesde||0)-1}` : '+';
+        partes.push(`${desde}${hasta}: ${dinero(c.canonPorPt)}/PT`);
+      }
+      if ((c.canonPorPtReducidoDesde||0) > 0 && (c.canonPorPtReducido||0) > 0) partes.push(`desde ${numero(c.canonPorPtReducidoDesde)}º: ${dinero(c.canonPorPtReducido)}/PT`);
+      if ((c.canonClientesTotal||0) > 0) partes.push(`clientes: ${dinero(c.canonClientesTotal)}`);
+      return partes.join(' · ');
+    }
+function sesionesPrevistasMensualesFicha(ficha){
+      if (!esMensualFicha(ficha)) return 0;
+      // En BESOUL las mensualidades se interpretan como frecuencia semanal contratada.
+      // Para control financiero usamos 4 semanas/mes: factor 2 = 8 sesiones previstas.
+      const factor = Math.max(1, parseInt(ficha?.factor) || 1);
+      return factor * 4;
+    }
 function calcularFacturacionFichaFinanzas(ficha, trainerKey, mesKey){
-  const importeBase = calcularFacturacionFichaSimple(ficha);
-  if (!ficha || importeBase <= 0) return { total:0, mensual:0, variable:0, sesiones:0, tipo:'sin_importe' };
-  if (esMensualFicha(ficha)) return { total:importeBase, mensual:importeBase, variable:0, sesiones:0, tipo:'mensual' };
-  const sesiones = sesionesAgendadasFacturablesFichaMes(ficha, trainerKey, mesKey);
-  const divisor = esBonoFicha(ficha) ? 10 : 1;
-  const variable = sesiones * (importeBase / divisor);
-  return { total:variable, mensual:0, variable, sesiones, tipo: esBonoFicha(ficha) ? 'bono' : 'suelta' };
-}
-function contarPersonasFicha(ficha){ if (!ficha || ficha.vinculacion) return 0; if (normalizarEstado(ficha.estadoCliente||'activo') !== 'activo') return 0; if (ficha.tipo === 'grupo') return Math.max(1, ficha.integrantesObj ? ficha.integrantesObj.length : 1); return 1; }
+      const importeBase = calcularFacturacionFichaSimple(ficha);
+      if (!ficha || importeBase <= 0) return { total:0, mensual:0, variable:0, sesiones:0, sesionesAgendadas:0, sesionesPrevistas:0, valorAgenda:0, desviacion:0, tipo:'sin_importe', motivoDesviacion:'' };
+      const sesiones = sesionesAgendadasFacturablesFichaMes(ficha, trainerKey, mesKey);
+      if (esMensualFicha(ficha)) {
+        const sesionesPrevistas = sesionesPrevistasMensualesFicha(ficha);
+        const valorSesionTeorico = sesionesPrevistas ? importeBase / sesionesPrevistas : 0;
+        const valorAgenda = sesiones * valorSesionTeorico;
+        const desviacion = importeBase - valorAgenda;
+        const diffSesiones = sesionesPrevistas - sesiones;
+        let motivoDesviacion = '';
+        if (diffSesiones > 0) motivoDesviacion = `Faltan ${numero(diffSesiones)} sesión/es respecto a la frecuencia contratada`;
+        else if (diffSesiones < 0) motivoDesviacion = `Hay ${numero(Math.abs(diffSesiones))} sesión/es extra sobre la frecuencia contratada`;
+        else motivoDesviacion = 'Agenda alineada con la frecuencia contratada';
+        return { total:importeBase, mensual:importeBase, variable:0, sesiones, sesionesAgendadas:sesiones, sesionesPrevistas, valorAgenda, desviacion, tipo:'mensual', motivoDesviacion };
+      }
+      const divisor = esBonoFicha(ficha) ? 10 : 1;
+      const valorSesion = importeBase / divisor;
+      const variable = sesiones * valorSesion;
+      return { total:variable, mensual:0, variable, sesiones, sesionesAgendadas:sesiones, sesionesPrevistas:sesiones, valorAgenda:variable, desviacion:0, tipo: esBonoFicha(ficha) ? 'bono' : 'suelta', motivoDesviacion: esBonoFicha(ficha) ? 'Bono: se factura por sesiones agendadas' : 'Sesión suelta: se factura por sesiones agendadas' };
+    }
+function contarPersonasFicha(ficha){
+      if (!ficha || ficha.vinculacion) return 0;
+      if (normalizarEstado(ficha.estadoCliente || 'activo') !== 'activo') return 0;
+      if (ficha.tipo === 'grupo') return Math.max(1, ficha.integrantesObj ? ficha.integrantesObj.length : 1);
+      return 1;
+    }
 
 function sesionesContratadasFichaDashboard(ficha){
   if (!ficha) return 0;
@@ -385,120 +442,267 @@ function claveSlotDashboard(fechaISO, minutos){ return `${fechaISO}_${formatoMin
 function slotOcupadoAgendaDashboard(trainerKey, clave){ const cita=agendaData.agenda?.[trainerKey]?.[clave]; return !!(cita && !cita.bloqueoParteDe); }
 function eachDateISO(startDate,endDate,cb){ let d=new Date(startDate); d.setHours(0,0,0,0); const last=new Date(endDate); last.setHours(0,0,0,0); while(d<=last){ cb(dateISO(d), new Date(d)); d.setDate(d.getDate()+1); } }
 
-function calcularRepartoPorTramosBesoul(F, rango='rango1'){
-  F = Math.max(0, Number(F)||0);
-  const esRango2 = rango === 'rango2';
-  const bsPct3 = esRango2 ? 0.15 : 0.30;
-  const t1 = Math.min(F, 1400);
-  const t2 = F > 1400 ? Math.min(F,1900)-1400 : 0;
-  const t3 = F > 1900 ? F-1900 : 0;
-  const bsTotal = Math.min(F, Math.max(0, (t1*0.50)+(t2*0.40)+(t3*bsPct3)));
-  return { pt: Math.max(0, F-bsTotal), bs: bsTotal, sistemaAplicado: esRango2 ? 'Rango II' : 'Rango I' };
-}
-function fechaAltaSettings(settings){ const raw=String(settings?.fechaAlta||'').trim(); if(!raw) return null; const d=new Date(raw+'T00:00:00'); return Number.isNaN(d.getTime()) ? null : d; }
-function yearsBetween(fecha, now=new Date()){ if(!fecha) return 0; let y=now.getFullYear()-fecha.getFullYear(); const m=now.getMonth()-fecha.getMonth(); if(m<0 || (m===0 && now.getDate()<fecha.getDate())) y--; return Math.max(0,y); }
-function contarPosterioresCentro(key, centroId, fechaAlta){ if(!fechaAlta) return 0; return perfilesUsuarios.filter(esPerfilOperativo).filter(p=>{ const k=trainerKeyPerfil(p); if(!k || k===key) return false; if(centroTrainer(k,p)!==centroId) return false; const f=fechaAltaSettings(dbFinanzas.trainerSettings?.[k]||{}); return f && f > fechaAlta; }).length; }
-function contarActivosCentroParaCoordinacion(key, centroId){ return perfilesUsuarios.filter(esPerfilOperativo).filter(p=>{ const k=trainerKeyPerfil(p); return k && k!==key && centroTrainer(k,p)===centroId; }).length; }
-function rangoAutomaticoBesoul(antiguedad){ if (antiguedad >= 3) return 'rango3'; if (antiguedad >= 1) return 'rango2'; return 'rango1'; }
+function calcularRepartoPorTramosBesoul(F, rango='rango1', aporteClientes=0){
+      F = Math.max(0, Number(F)||0);
+      aporteClientes = Number(aporteClientes)||0;
+      const esRango2 = rango === 'rango2';
+      const tercerTramoBsPct = esRango2 ? 0.15 : 0.30;
+      const tercerTramoPtPct = esRango2 ? 0.85 : 0.70;
+      const t1 = Math.min(F, 1400);
+      const t2 = F > 1400 ? Math.min(F, 1900) - 1400 : 0;
+      const t3 = F > 1900 ? F - 1900 : 0;
+      let bs = (t1 * 0.50) + (t2 * 0.40) + (t3 * tercerTramoBsPct);
+      const bsTotal = Math.min(F, Math.max(0, bs + aporteClientes));
+      return {
+        pt: Math.max(0, F - bsTotal),
+        bs: bsTotal,
+        bonus: 0,
+        coordinacionBonus: 0,
+        sistemaAplicado: esRango2 ? 'Rango II · 50/50 · 60/40 · 85/15' : 'Rango I · 50/50 · 60/40 · 70/30',
+        repartoDetalle: esRango2 ? `0-1.400: 50/50 · 1.400-1.900: 60/40 · +1.900: 85/15 PT/Besoul` : `0-1.400: 50/50 · 1.400-1.900: 60/40 · +1.900: 70/30 PT/Besoul`,
+        tercerTramoPtPct,
+        tercerTramoBsPct
+      };
+    }
+function fechaAltaSettings(settings){
+      const raw = String(settings?.fechaAlta || '').trim();
+      if (!raw) return null;
+      const d = new Date(raw + 'T00:00:00');
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+function yearsBetween(fecha, now=new Date()){
+      if (!fecha) return 0;
+      let years = now.getFullYear() - fecha.getFullYear();
+      const m = now.getMonth() - fecha.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < fecha.getDate())) years--;
+      return Math.max(0, years);
+    }
+function contarPosterioresCentro(key, centroId, fechaAlta){
+      if (!fechaAlta) return 0;
+      return perfilesUsuarios.filter(esPerfilOperativo).filter(p => {
+        const k = trainerKeyPerfil(p);
+        if (!k || k === key) return false;
+        if (centroTrainer(k, p) !== centroId) return false;
+        const f = fechaAltaSettings(dbFinanzas.trainerSettings?.[k] || {});
+        return f && f > fechaAlta;
+      }).length;
+    }
+function contarActivosCentroParaCoordinacion(key, centroId){
+      return perfilesUsuarios.filter(esPerfilOperativo).filter(p => {
+        const k = trainerKeyPerfil(p);
+        if (!k || k === key) return false;
+        return centroTrainer(k, p) === centroId;
+      }).length;
+    }
+function rangoAutomaticoBesoul(antiguedad){
+      if (antiguedad >= 3) return 'rango3';
+      if (antiguedad >= 1) return 'rango2';
+      return 'rango1';
+    }
 function calcularComisionAvanzada(F, settings={}, contexto={}){
-  F = Math.max(0, Number(F)||0);
-  const pactoEspecial = !!settings.pactoEspecial;
-  const fechaAlta = fechaAltaSettings(settings);
-  const antiguedad = yearsBetween(fechaAlta);
-  const posteriores = contarPosterioresCentro(contexto.key, contexto.centroId, fechaAlta);
-  const canonFijo = parseNum(settings.canonFijoIndependiente ?? 1000) || 1000;
-  const bonusCoordPorPt = parseNum(settings.coordBonusPorPt ?? 50) || 50;
-  const coordMaxPts = parseNum(settings.coordMaxPts ?? 5) || 5;
-  const coordMaxBonus = parseNum(settings.coordMaxBonus ?? 250) || 250;
-  let sistema = settings.sistemaPago || 'auto';
-  if (sistema === 'base') sistema = 'rango1';
-  if (sistema === 'bonus_15') sistema = 'rango2';
-  if (sistema === 'canon_1000') sistema = 'rango3';
-  const coordinadorAutorizado = !!settings.coordinadorAutorizado || sistema === 'coordinador';
-  const elegibleCoordinador = !!fechaAlta && antiguedad >= 4 && posteriores >= 3;
-  let sistemaEfectivo = sistema === 'auto' ? rangoAutomaticoBesoul(antiguedad) : sistema;
-  if ((sistema === 'auto' && coordinadorAutorizado && elegibleCoordinador) || sistema === 'coordinador') sistemaEfectivo = 'coordinador';
-  let res;
-  if (pactoEspecial && sistemaEfectivo !== 'coordinador') {
-    const bs = Math.max(0, Math.min(F, canonFijo));
-    res = { pt: Math.max(0, F-bs), bs, sistemaAplicado:`Pacto especial · canon ${dinero(canonFijo)}` };
-  } else if (sistemaEfectivo === 'rango2') res = calcularRepartoPorTramosBesoul(F, 'rango2');
-  else if (sistemaEfectivo === 'rango3') res = { pt: Math.max(0, F-canonFijo), bs: Math.max(0, Math.min(F, canonFijo)), sistemaAplicado:`Rango III · canon ${dinero(canonFijo)}` };
-  else if (sistemaEfectivo === 'coordinador') {
-    const ptsActivosCentro = contarActivosCentroParaCoordinacion(contexto.key, contexto.centroId);
-    const ptsComputables = Math.min(Math.max(0, ptsActivosCentro), coordMaxPts);
-    const coordinacionBonus = Math.min(coordMaxBonus, ptsComputables * bonusCoordPorPt);
-    const canonReducido = Math.max(0, canonFijo - coordinacionBonus);
-    res = { pt: Math.max(0, F-canonReducido), bs: Math.max(0, Math.min(F, canonReducido)), sistemaAplicado:`Rango IV · coordinador` };
-  } else res = calcularRepartoPorTramosBesoul(F, 'rango1');
-  return { ...res, fechaAlta:settings.fechaAlta||'', antiguedad, posteriores, sistemaEfectivo };
-}
+      F = Math.max(0, Number(F)||0);
+      const pactoEspecial = !!settings.pactoEspecial;
+      // El antiguo aporteClientes dejó de sumarse a BESOUL: ahora se imputa como canon del centro.
+      const aporteClientes = 0;
+      const fechaAlta = fechaAltaSettings(settings);
+      const antiguedad = yearsBetween(fechaAlta, contexto.fechaReferencia || new Date());
+      const posteriores = contarPosterioresCentro(contexto.key, contexto.centroId, fechaAlta);
+      const canonFijo = parseNum(settings.canonFijoIndependiente ?? 1000) || 1000;
+      const bonusCoordPorPt = parseNum(settings.coordBonusPorPt ?? 50) || 50;
+      const coordMaxPts = parseNum(settings.coordMaxPts ?? 5) || 5;
+      const coordMaxBonus = parseNum(settings.coordMaxBonus ?? 250) || 250;
+      let sistema = settings.sistemaPago || 'auto';
+      // Compatibilidad con configuraciones antiguas guardadas en Firestore.
+      if (sistema === 'base') sistema = 'rango1';
+      if (sistema === 'bonus_15') sistema = 'rango2';
+      if (sistema === 'canon_1000') sistema = 'rango3';
+      const coordinadorAutorizado = !!settings.coordinadorAutorizado || sistema === 'coordinador';
+      const elegibleRango2 = !!fechaAlta && antiguedad >= 1;
+      const elegibleRango3 = !!fechaAlta && antiguedad >= 3;
+      const elegibleCoordinador = !!fechaAlta && antiguedad >= 4 && posteriores >= 3;
+
+      let sistemaEfectivo = sistema;
+      if (sistema === 'auto') sistemaEfectivo = rangoAutomaticoBesoul(antiguedad);
+      if ((sistema === 'auto' && coordinadorAutorizado && elegibleCoordinador) || sistema === 'coordinador') sistemaEfectivo = 'coordinador';
+
+      let res;
+      if (pactoEspecial && sistemaEfectivo !== 'coordinador') {
+        // Pacto especial manual: BESOUL cobra exclusivamente el canon fijo configurado para ese PT.
+        // Ejemplo Carmen Fernández: Canon Rango III = 500 => BESOUL 500 y el resto para la PT.
+        const bs = Math.max(0, canonFijo + aporteClientes);
+        res = { pt: Math.max(0, F - bs), bs, bonus:0, coordinacionBonus:0, sistemaAplicado:`Pacto especial · canon ${dinero(canonFijo)}`, repartoDetalle:`Pacto especial: canon fijo Besoul ${dinero(canonFijo)}; el resto queda para el PT` };
+      } else if (sistemaEfectivo === 'rango2') {
+        res = calcularRepartoPorTramosBesoul(F, 'rango2', aporteClientes);
+      } else if (sistemaEfectivo === 'rango3') {
+        const bs = Math.max(0, canonFijo);
+        res = { pt: Math.max(0, F - bs), bs, bonus:0, coordinacionBonus:0, sistemaAplicado:`Rango III · canon ${dinero(canonFijo)}`, repartoDetalle:'Canon fijo Besoul proyectado aunque la agenda todavía no esté completa; el resto queda para el PT' };
+      } else if (sistemaEfectivo === 'coordinador') {
+        const ptsActivosCentro = contarActivosCentroParaCoordinacion(contexto.key, contexto.centroId);
+        const ptsComputables = Math.min(Math.max(0, ptsActivosCentro), coordMaxPts);
+        const coordinacionBonus = Math.min(coordMaxBonus, ptsComputables * bonusCoordPorPt);
+        const canonReducido = Math.max(0, canonFijo - coordinacionBonus);
+        const bs = Math.max(0, canonReducido);
+        res = { pt: Math.max(0, F - bs), bs, bonus:0, coordinacionBonus, ptsActivosCentro, sistemaAplicado:`Rango IV · coordinador · canon ${dinero(canonReducido)}`, repartoDetalle:`Canon proyectado ${dinero(canonFijo)} - coordinación ${dinero(coordinacionBonus)} (${ptsComputables} PT activos computables)` };
+      } else {
+        res = calcularRepartoPorTramosBesoul(F, 'rango1', aporteClientes);
+      }
+
+      const rangoTeorico = elegibleCoordinador && coordinadorAutorizado ? 'coordinador' : rangoAutomaticoBesoul(antiguedad);
+      return {
+        ...res,
+        fechaAlta: settings.fechaAlta || '',
+        antiguedad,
+        posteriores,
+        elegibleRango2,
+        elegibleRango3,
+        elegibleCoordinador,
+        coordinadorAutorizado,
+        rangoTeorico,
+        sistemaEfectivo,
+        canonFijo,
+        coordMaxBonus,
+        bonusCoordPorPt,
+        coordMaxPts
+      };
+    }
 function calcularCanonCentroYAsignar(c){
-  const trainers = Array.isArray(c.trainers) ? c.trainers : [];
-  const n = trainers.length;
-  const fijo = parseNum(c.canonFijo) || 0;
-  const incluidos = Math.max(0, Math.floor(parseNum(c.ptsIncluidos)||0));
-  const extra = parseNum(c.canonPt) || 0;
-  const reducidoDesde = Math.max(0, Math.floor(parseNum(c.canonPtReducidoDesde)||0));
-  const reducido = parseNum(c.canonPtReducido) || 0;
-  let variable = 0;
-  if (n > incluidos) {
-    const primerExtra = incluidos + 1;
-    const ultimoRegular = reducidoDesde > 0 ? Math.min(n, reducidoDesde - 1) : n;
-    const extrasRegulares = Math.max(0, ultimoRegular - primerExtra + 1);
-    const extrasReducidos = reducidoDesde > 0 ? Math.max(0, n - reducidoDesde + 1) : 0;
-    variable = extrasRegulares * extra + extrasReducidos * reducido;
-  }
-  const canonClientes = trainers.reduce((s,t)=>s + (parseNum(t.aporteCentroClientes)||0), 0);
-  const shareBase = n ? (fijo + variable) / n : 0;
-  trainers.forEach(t => {
-    const canonClienteTrainer = parseNum(t.aporteCentroClientes)||0;
-    t.canonCentroBaseShare = shareBase;
-    t.canonClienteCentro = canonClienteTrainer;
-    t.canonCentroShare = shareBase + canonClienteTrainer;
-    t.bsNetoCentro = (t.bsBruto||0) - t.canonCentroShare;
-  });
-  c.canonFijoTotal = fijo;
-  c.canonVariableTotal = variable;
-  c.canonClienteTotal = canonClientes;
-  c.canon = fijo + variable + canonClientes;
-  c.canonProrrateado = shareBase;
-  return c;
-}
-function construirCalculoMes(mesKey){
-  const centrosBase = { ...getCentros(), sin_centro:{id:'sin_centro', nombre:'Dirección / sin centro', canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true} };
-  const centros = {}; Object.keys(centrosBase).forEach(id => centros[id] = { ...centrosBase[id], trainers:[], facturacion:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClienteTotal:0 });
-  const trainers = [];
-  perfilesUsuarios.filter(esPerfilOperativo).forEach(p => {
-    const key = trainerKeyPerfil(p);
-    const lista = Array.isArray(agendaData.clientes?.[key]) ? agendaData.clientes[key] : [];
-    let facturacion=0, clientes=0, facturacionMensual=0, facturacionVariable=0, sesionesBonosSueltas=0;
-    lista.forEach(f => {
-      if (f?.vinculacion) return;
-      if (normalizarEstado(f.estadoCliente||'activo') !== 'activo') return;
-      clientes += contarPersonasFicha(f);
-      const calc = calcularFacturacionFichaFinanzas(f, key, mesKey);
-      facturacion += calc.total; facturacionMensual += calc.mensual; facturacionVariable += calc.variable; sesionesBonosSueltas += calc.sesiones;
-    });
-    const settings = dbFinanzas.trainerSettings?.[key] || {};
-    const centroId = centroTrainer(key,p);
-    const soloGastos = TRAINERS_SOLO_IMPUTACION_GASTOS.includes(key);
-    const clientesAgendaNoComputados = soloGastos ? clientes : 0;
-    if (soloGastos) { facturacion=0; facturacionMensual=0; facturacionVariable=0; sesionesBonosSueltas=0; clientes=0; }
-    // Este concepto NO es ingreso de BESOUL. Es canon/coste del centro asociado al PT.
-    const aporteCentroClientes = soloGastos ? 0 : parseNum(settings.aporteIndividualCliente ?? 0) * clientes;
-    const reparto = soloGastos ? {pt:0, bs:0, sistemaAplicado:'CEO · solo imputación gastos', fechaAlta:settings.fechaAlta || '', antiguedad:yearsBetween(fechaAltaSettings(settings)), sistemaEfectivo:'solo_gastos'} : calcularComisionAvanzada(facturacion, settings, {key, centroId});
-    const row = {key, nombre:nombrePerfil(p), email:p.email||'', centroId, facturacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, soloImputacionGastos:soloGastos, aporteCentroClientes, ptNeto:reparto.pt||0, bsBruto:reparto.bs||0, sistemaAplicado:reparto.sistemaAplicado||'', antiguedad:reparto.antiguedad||0, sistemaEfectivo:reparto.sistemaEfectivo||''};
-    trainers.push(row);
-    if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), trainers:[], facturacion:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClienteTotal:0 };
-    centros[centroId].trainers.push(row); centros[centroId].facturacion += facturacion; centros[centroId].ptNeto += row.ptNeto; centros[centroId].bsBruto += row.bsBruto; centros[centroId].clientes += clientes; centros[centroId].canonClienteTotal += aporteCentroClientes;
-  });
-  Object.values(centros).forEach(c => calcularCanonCentroYAsignar(c));
-  const gastos = gastosMes(mesKey);
-  const total = Object.values(centros).reduce((a,c)=>{ a.facturacion += c.facturacion; a.ptNeto += c.ptNeto; a.bsBruto += c.bsBruto; a.canones += c.canon; a.canonClientes += c.canonClienteTotal || 0; a.clientes += c.clientes; return a; }, {facturacion:0, ptNeto:0, bsBruto:0, canones:0, canonClientes:0, clientes:0});
-  total.gastos = gastos; total.beneficio = total.bsBruto - total.canones - gastos;
-  return {mes:mesKey, centros, trainers, total, generadoEn:new Date().toISOString()};
-}
+      const trainers = Array.isArray(c.trainers) ? c.trainers : [];
+      const numTrainers = trainers.length;
+      const canonFijoCentro = parseNum(c.canonFijo) || 0;
+      const ptsIncluidos = Math.max(0, Math.floor(parseNum(c.ptsIncluidos) || 0));
+      const canonPtRegular = parseNum(c.canonPt) || 0;
+      const canonPtReducidoDesde = Math.max(0, Math.floor(parseNum(c.canonPtReducidoDesde) || 0));
+      const canonPtReducido = parseNum(c.canonPtReducido) || 0;
+
+      // Regla corregida: el coste total de la sede se calcula por capas, pero se imputa
+      // a partes iguales entre todos los entrenadores activos del centro.
+      // Ejemplo Inacua con 12 PT: 1.200 fijo + 5*200 + 1*60 = 2.260; imputación = 2.260/12.
+      const fijoShare = numTrainers ? canonFijoCentro / numTrainers : 0;
+      let canonVariableTotal = 0;
+      if (numTrainers > ptsIncluidos) {
+        const primerExtra = ptsIncluidos + 1;
+        const ultimoRegular = canonPtReducidoDesde > 0 ? Math.min(numTrainers, canonPtReducidoDesde - 1) : numTrainers;
+        const extrasRegulares = Math.max(0, ultimoRegular - primerExtra + 1);
+        const extrasReducidos = canonPtReducidoDesde > 0 ? Math.max(0, numTrainers - canonPtReducidoDesde + 1) : 0;
+        canonVariableTotal = (extrasRegulares * canonPtRegular) + (extrasReducidos * canonPtReducido);
+      }
+      const variableShare = numTrainers ? canonVariableTotal / numTrainers : 0;
+      const totalShare = fijoShare + variableShare;
+      const canonClientesTotal = trainers.reduce((s,t)=>s+(parseNum(t.aporteCentroCliente)||0),0);
+      trainers.forEach((t) => {
+        const clienteShare = parseNum(t.aporteCentroCliente) || 0;
+        t.canonPosicionCentro = '';
+        t.canonFijoShare = fijoShare;
+        t.canonPtShare = variableShare;
+        t.canonClienteShare = clienteShare;
+        // El €/cliente extra NO es ingreso BESOUL: es canon/coste de centro asociado a la cartera del PT.
+        t.canonCentroShare = totalShare + clienteShare;
+        t.canonRepartoIgualitario = true;
+        t.bsNetoCentro = (t.bsBruto || 0) - t.canonCentroShare;
+      });
+      c.canonFijoTotal = canonFijoCentro;
+      c.ptsIncluidos = ptsIncluidos;
+      c.canonPorPt = canonPtRegular;
+      c.canonPorPtReducidoDesde = canonPtReducidoDesde;
+      c.canonPorPtReducido = canonPtReducido;
+      c.canonVariableTotal = canonVariableTotal;
+      c.canonPorPtTotal = canonVariableTotal;
+      c.canonClientesTotal = canonClientesTotal;
+      c.canonFijoProrrateado = fijoShare;
+      c.canonVariableProrrateado = variableShare;
+      c.canonClientesProrrateado = canonClientesTotal;
+      c.canonProrrateado = totalShare;
+      c.canon = canonFijoCentro + canonVariableTotal + canonClientesTotal;
+      return c;
+    }
+function construirCalculoMes(mesKey = mesActualKey()){
+      const centrosBase = { ...getCentros(), sin_centro: { id:'sin_centro', nombre:'Dirección / sin centro', canonFijo:0, canonPt:0, activo:true } };
+      const centros = {};
+      Object.keys(centrosBase).forEach(id => centros[id] = { ...centrosBase[id], trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0 });
+      const trainers = [];
+      perfilesUsuarios.filter(esPerfilOperativo).forEach(perfil => {
+        const key = trainerKeyPerfil(perfil);
+        const lista = Array.isArray(agendaData.clientes?.[key]) ? agendaData.clientes[key] : [];
+        let facturacion = 0, clientes = 0, fichasActivas = 0, facturacionMensual = 0, facturacionVariable = 0, sesionesBonosSueltas = 0;
+        let facturacionAgenda = 0, desviacionAgenda = 0, sesionesMensualesPrevistas = 0, sesionesMensualesAgendadas = 0;
+        const motivosDesviacion = [];
+        lista.forEach(f => {
+          if (f?.vinculacion) return;
+          if (normalizarEstado(f.estadoCliente || 'activo') !== 'activo') return;
+          fichasActivas += 1;
+          clientes += contarPersonasFicha(f);
+          const calcFicha = calcularFacturacionFichaFinanzas(f, key, mesKey);
+          facturacion += calcFicha.total;
+          facturacionMensual += calcFicha.mensual;
+          facturacionVariable += calcFicha.variable;
+          sesionesBonosSueltas += calcFicha.sesiones;
+          facturacionAgenda += calcFicha.valorAgenda || 0;
+          desviacionAgenda += calcFicha.desviacion || 0;
+          if (calcFicha.tipo === 'mensual') {
+            sesionesMensualesPrevistas += calcFicha.sesionesPrevistas || 0;
+            sesionesMensualesAgendadas += calcFicha.sesionesAgendadas || 0;
+            if ((calcFicha.desviacion || 0) !== 0 && motivosDesviacion.length < 3) {
+              motivosDesviacion.push(`${f.nombre || f.nombreCliente || 'Cliente'}: ${calcFicha.motivoDesviacion}`);
+            }
+          }
+        });
+        const settings = dbFinanzas.trainerSettings?.[key] || {};
+        const centroId = centroTrainer(key, perfil);
+        const pactoEspecial = !!settings.pactoEspecial;
+        const soloImputacionGastos = TRAINERS_SOLO_IMPUTACION_GASTOS.includes(key);
+        const clientesAgendaNoComputados = soloImputacionGastos ? clientes : 0;
+        if (soloImputacionGastos) {
+          facturacion = 0;
+          facturacionMensual = 0;
+          facturacionVariable = 0;
+          sesionesBonosSueltas = 0;
+          facturacionAgenda = 0;
+          desviacionAgenda = 0;
+          sesionesMensualesPrevistas = 0;
+          sesionesMensualesAgendadas = 0;
+          motivosDesviacion.length = 0;
+          clientes = 0;
+        }
+        const aporteCliente = soloImputacionGastos ? 0 : parseNum(settings.aporteIndividualCliente ?? 0) * clientes;
+        const reparto = soloImputacionGastos
+          ? { pt:0, bs:0, bonus:0, coordinacionBonus:0, sistemaAplicado:'CEO · solo imputación gastos', repartoDetalle:'Bea/Soraya computan como coste de sede, pero sus carteras no generan ingresos BESOUL ni liquidación PT en Finanzas.', fechaAlta:settings.fechaAlta || '', antiguedad:yearsBetween(fechaAltaSettings(settings), fechaReferenciaMes(mesKey)), posteriores:0, elegibleRango2:false, elegibleRango3:false, elegibleCoordinador:false, coordinadorAutorizado:false, sistemaEfectivo:'solo_gastos', ptsActivosCentro:0 }
+          : calcularComisionAvanzada(facturacion, settings, { key, centroId, aporteClientes: aporteCliente, fechaReferencia: fechaReferenciaMes(mesKey) });
+        const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, facturacion, facturacionAgenda, desviacionAgenda, sesionesMensualesPrevistas, sesionesMensualesAgendadas, desviacionSesiones: sesionesMensualesPrevistas - sesionesMensualesAgendadas, motivosDesviacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, fichasActivas, soloImputacionGastos, ptNeto:reparto.pt, bsBruto:reparto.bs, pactoEspecial, aporteCliente, aporteCentroCliente: aporteCliente, bonus:reparto.bonus || 0, coordinacionBonus:reparto.coordinacionBonus || 0, sistemaAplicado:reparto.sistemaAplicado, repartoDetalle:reparto.repartoDetalle || '', fechaAlta:reparto.fechaAlta, antiguedad:reparto.antiguedad, posteriores:reparto.posteriores, elegibleRango2:reparto.elegibleRango2, elegibleRango3:reparto.elegibleRango3, elegibleCoordinador:reparto.elegibleCoordinador, coordinadorAutorizado:reparto.coordinadorAutorizado, sistemaEfectivo:reparto.sistemaEfectivo, ptsActivosCentro:reparto.ptsActivosCentro || 0 };
+        trainers.push(row);
+        if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0 };
+        centros[centroId].trainers.push(row);
+        centros[centroId].facturacion += facturacion;
+        centros[centroId].facturacionAgenda += facturacionAgenda;
+        centros[centroId].desviacionAgenda += desviacionAgenda;
+        centros[centroId].sesionesMensualesPrevistas += sesionesMensualesPrevistas;
+        centros[centroId].sesionesMensualesAgendadas += sesionesMensualesAgendadas;
+        centros[centroId].canonClientesTotal += aporteCliente;
+        centros[centroId].ptNeto += reparto.pt;
+        centros[centroId].bsBruto += reparto.bs;
+        centros[centroId].clientes += clientes;
+      });
+      Object.values(centros).forEach(c => {
+        // Coste de sede separado en dos capas:
+        // 1) Canon fijo de sede: se paga una vez y se prorratea entre los PT activos.
+        // 2) Coste ligado al PT: puede tener tramos por posición dentro de la sede.
+        //    Ejemplo Inacua: 1.200 € fijos incluyen 6 PT; del 7º al 11º son 200 €/PT; desde el 12º son 60 €/PT.
+        calcularCanonCentroYAsignar(c);
+      });
+      const gastos = (dbFinanzas.gastos?.[mesKey] || []).reduce((s,g)=>s+parseNum(g.importe),0);
+      const total = Object.values(centros).reduce((acc,c)=>{ acc.facturacion+=c.facturacion; acc.facturacionAgenda+=c.facturacionAgenda||0; acc.desviacionAgenda+=c.desviacionAgenda||0; acc.sesionesMensualesPrevistas+=c.sesionesMensualesPrevistas||0; acc.sesionesMensualesAgendadas+=c.sesionesMensualesAgendadas||0; acc.ptNeto+=c.ptNeto; acc.bsBruto+=c.bsBruto; acc.canones+=c.canon; acc.canonClientesTotal+=c.canonClientesTotal||0; acc.clientes+=c.clientes; return acc; }, {facturacion:0,facturacionAgenda:0,desviacionAgenda:0,sesionesMensualesPrevistas:0,sesionesMensualesAgendadas:0,ptNeto:0,bsBruto:0,canones:0,canonClientesTotal:0,clientes:0});
+      total.gastos = gastos;
+      total.beneficio = total.bsBruto - total.canones - gastos;
+      // Alias de compatibilidad para Dashboard. La fuente de cálculo es Finanzas.
+      total.canonClientes = total.canonClientesTotal || 0;
+      Object.values(centros).forEach(c => {
+        c.canonClienteTotal = c.canonClientesTotal || 0;
+        (c.trainers || []).forEach(t => {
+          t.canonClienteCentro = t.canonClienteShare || 0;
+          t.aporteCentroClientes = t.aporteCentroCliente || 0;
+        });
+      });
+      return { mes: mesKey, centros, trainers, total, generadoEn:new Date().toISOString(), fuente:'finanzas_live_engine_v3' };
+    }
 function gastosMes(mesKey){ return (dbFinanzas.gastos?.[mesKey] || []).reduce((s,g)=>s+parseNum(g.importe),0); }
 function gastosCategoriasPeriodo(meses){ const res={}; meses.forEach(m=>{ (dbFinanzas.gastos?.[m]||[]).forEach(g=>{ const cat=g.categoria||'Otros'; res[cat]=(res[cat]||0)+parseNum(g.importe); }); }); return res; }
 function normalizarFinanzas(data){
@@ -528,27 +732,46 @@ function cambiarPeriodo(){
   else { ini=new Date(hoy.getFullYear(), hoy.getMonth(), 1); fin=new Date(hoy.getFullYear(), hoy.getMonth()+1, 0); }
   document.getElementById('filter-start').value = dateISO(ini); document.getElementById('filter-end').value = dateISO(fin); aplicarDashboard();
 }
+function normalizarAliasCalculoFinanzas(data){
+  if (!data) return data;
+  if (data.total) data.total.canonClientes = data.total.canonClientes ?? data.total.canonClientesTotal ?? 0;
+  Object.values(data.centros || {}).forEach(c => {
+    c.canonClienteTotal = c.canonClienteTotal ?? c.canonClientesTotal ?? 0;
+    (c.trainers || []).forEach(t => {
+      t.canonClienteCentro = t.canonClienteCentro ?? t.canonClienteShare ?? 0;
+      t.aporteCentroClientes = t.aporteCentroClientes ?? t.aporteCentroCliente ?? 0;
+    });
+  });
+  return data;
+}
+function historicoCompatibleFinanzasV3(h){
+  return !!(h && h.total && typeof h.total.canonClientesTotal !== 'undefined' && typeof h.total.facturacionAgenda !== 'undefined' && Array.isArray(h.trainers));
+}
 function obtenerMesData(mesKey){
-  if (mesKey === mesActualKey()) return construirCalculoMes(mesKey);
+  if (mesKey === mesActualKey()) return normalizarAliasCalculoFinanzas(construirCalculoMes(mesKey));
   const h = dbFinanzas.historico?.[mesKey];
-  // Si el histórico fue cerrado antes de la corrección del canon por cliente,
-  // no lo usamos para evitar arrastrar el euro/cliente dentro de BESOUL bruto.
-  if (h && h.total && typeof h.total.canonClientes !== 'undefined') return h;
-  return construirCalculoMes(mesKey);
+  // Solo usamos históricos cerrados que ya incorporan la lógica nueva de Finanzas.
+  // Si son antiguos, el Dashboard recalcula con la lógica actual de Finanzas para evitar desfases.
+  if (historicoCompatibleFinanzasV3(h)) return normalizarAliasCalculoFinanzas(h);
+  return normalizarAliasCalculoFinanzas(construirCalculoMes(mesKey));
 }
 function aplicarFiltroFinanzasMes(data, centroId, trainerKey){
+  data = normalizarAliasCalculoFinanzas(data);
+  const empty = { facturacion:0, facturacionAgenda:0, desviacionAgenda:0, ptNeto:0, bsBruto:0, canones:0, canonClientes:0, gastos:0, beneficio:0, clientes:0, trainers:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0 };
   if (trainerKey) {
     const t = (data.trainers || []).find(x => x.key === trainerKey);
-    if (!t) return { facturacion:0, ptNeto:0, bsBruto:0, canones:0, canonClientes:0, gastos:0, beneficio:0, clientes:0, trainers:0 };
+    if (!t) return { ...empty };
     const canones = t.canonCentroShare || 0;
-    const canonClientes = t.canonClienteCentro || t.aporteCentroClientes || 0;
-    return { facturacion:t.facturacion||0, ptNeto:t.ptNeto||0, bsBruto:t.bsBruto||0, canones, canonClientes, gastos:0, beneficio:(t.bsBruto||0)-canones, clientes:t.clientes||0, trainers:1 };
+    const canonClientes = t.canonClienteShare ?? t.canonClienteCentro ?? t.aporteCentroCliente ?? t.aporteCentroClientes ?? 0;
+    return { facturacion:t.facturacion||0, facturacionAgenda:t.facturacionAgenda||0, desviacionAgenda:t.desviacionAgenda||0, ptNeto:t.ptNeto||0, bsBruto:t.bsBruto||0, canones, canonClientes, gastos:0, beneficio:(t.bsBruto||0)-canones, clientes:t.clientes||0, trainers:1, sesionesMensualesPrevistas:t.sesionesMensualesPrevistas||0, sesionesMensualesAgendadas:t.sesionesMensualesAgendadas||0 };
   }
   if (centroId) {
-    const c = data.centros?.[centroId]; if (!c) return { facturacion:0, ptNeto:0, bsBruto:0, canones:0, canonClientes:0, gastos:0, beneficio:0, clientes:0, trainers:0 };
-    return { facturacion:c.facturacion||0, ptNeto:c.ptNeto||0, bsBruto:c.bsBruto||0, canones:c.canon||0, canonClientes:c.canonClienteTotal||0, gastos:0, beneficio:(c.bsBruto||0)-(c.canon||0), clientes:c.clientes||0, trainers:(c.trainers||[]).length };
+    const c = data.centros?.[centroId];
+    if (!c) return { ...empty };
+    return { facturacion:c.facturacion||0, facturacionAgenda:c.facturacionAgenda||0, desviacionAgenda:c.desviacionAgenda||0, ptNeto:c.ptNeto||0, bsBruto:c.bsBruto||0, canones:c.canon||0, canonClientes:c.canonClientesTotal??c.canonClienteTotal??0, gastos:0, beneficio:(c.bsBruto||0)-(c.canon||0), clientes:c.clientes||0, trainers:(c.trainers||[]).length, sesionesMensualesPrevistas:c.sesionesMensualesPrevistas||0, sesionesMensualesAgendadas:c.sesionesMensualesAgendadas||0 };
   }
-  const t=data.total||{}; return { facturacion:t.facturacion||0, ptNeto:t.ptNeto||0, bsBruto:t.bsBruto||0, canones:t.canones||0, canonClientes:t.canonClientes||0, gastos:t.gastos||0, beneficio:t.beneficio||0, clientes:t.clientes||0, trainers:(data.trainers||[]).length };
+  const t=data.total||{};
+  return { facturacion:t.facturacion||0, facturacionAgenda:t.facturacionAgenda||0, desviacionAgenda:t.desviacionAgenda||0, ptNeto:t.ptNeto||0, bsBruto:t.bsBruto||0, canones:t.canones||0, canonClientes:t.canonClientesTotal??t.canonClientes??0, gastos:t.gastos||0, beneficio:t.beneficio||0, clientes:t.clientes||0, trainers:(data.trainers||[]).length, sesionesMensualesPrevistas:t.sesionesMensualesPrevistas||0, sesionesMensualesAgendadas:t.sesionesMensualesAgendadas||0 };
 }
 function fechaDeClaveAgenda(clave){ return String(clave||'').split('_')[0] || ''; }
 function horaDeClaveAgenda(clave){ return String(clave||'').split('_')[1] || ''; }
@@ -634,8 +857,8 @@ function pintarKPIs(res){
   const conv = res.crm.total ? res.crm.convertidos / res.crm.total : 0;
   document.getElementById('kpi-conversion').innerText = pct(conv);
   document.getElementById('kpi-canon-clientes').innerText = dinero(res.total.canonClientes || 0);
-  document.getElementById('kpi-valor-agenda').innerText = dinero(res.agenda.valorAgenda || 0);
-  document.getElementById('kpi-desviacion-agenda').innerText = dinero((res.total.facturacion || 0) - (res.agenda.valorAgenda || 0));
+  document.getElementById('kpi-valor-agenda').innerText = dinero(res.total.facturacionAgenda || 0);
+  document.getElementById('kpi-desviacion-agenda').innerText = dinero(res.total.desviacionAgenda || ((res.total.facturacion || 0) - (res.total.facturacionAgenda || 0)));
   document.getElementById('kpi-ocupacion-disponibilidad').innerText = pct(res.disponibilidad.ocupacion || 0);
 }
 function chartOptions(){ return { responsive:true, maintainAspectRatio:false, plugins:{ legend:{labels:{color:'#cbd5e1', boxWidth:10}}, tooltip:{callbacks:{label:(ctx)=>`${ctx.dataset?.label || ctx.label}: ${typeof ctx.raw==='number' ? ctx.raw.toLocaleString('es-ES') : ctx.raw}`}}}, scales:{ x:{ticks:{color:'#94a3b8'}, grid:{color:'#1e293b'}}, y:{ticks:{color:'#94a3b8'}, grid:{color:'#1e293b'}} } }; }
@@ -657,7 +880,7 @@ function pintarGraficas(res){
 function pintarTablas(res){
   const totalFact = res.current.total.facturacion || 0;
   const centros = Object.values(res.current.centros || {}).filter(c=>c.id !== 'sin_centro' && ((c.trainers||[]).length || c.facturacion || c.canon));
-  document.getElementById('tabla-centros').innerHTML = centros.map(c=>`<tr class="hover:bg-slate-950/50"><td class="py-2 font-bold text-white">${escapeHTML(c.nombre)}</td><td>${numero((c.trainers||[]).length)}</td><td>${numero(c.clientes||0)}</td><td class="font-mono">${dinero(c.facturacion||0)}</td><td>${pct(totalFact ? (c.facturacion||0)/totalFact : 0)}</td><td class="font-mono text-red-200">${dinero(c.canonClienteTotal||0)}</td><td class="font-mono text-red-300">${dinero(c.canon||0)}</td><td class="font-mono ${(c.bsBruto-c.canon)>=0?'text-cyan-300':'text-red-300'}">${dinero((c.bsBruto||0)-(c.canon||0))}</td></tr>`).join('') || '<tr><td colspan="8" class="py-8 text-center text-slate-500">Sin datos.</td></tr>';
+  document.getElementById('tabla-centros').innerHTML = centros.map(c=>`<tr class="hover:bg-slate-950/50"><td class="py-2 font-bold text-white">${escapeHTML(c.nombre)}</td><td>${numero((c.trainers||[]).length)}</td><td>${numero(c.clientes||0)}</td><td class="font-mono">${dinero(c.facturacion||0)}</td><td>${pct(totalFact ? (c.facturacion||0)/totalFact : 0)}</td><td class="font-mono text-red-200">${dinero(c.canonClientesTotal??c.canonClienteTotal??0)}</td><td class="font-mono text-red-300">${dinero(c.canon||0)}</td><td class="font-mono ${(c.bsBruto-c.canon)>=0?'text-cyan-300':'text-red-300'}">${dinero((c.bsBruto||0)-(c.canon||0))}</td></tr>`).join('') || '<tr><td colspan="8" class="py-8 text-center text-slate-500">Sin datos.</td></tr>';
   const trainers = (res.current.trainers || []).filter(t => !document.getElementById('filter-trainer').value || t.key === document.getElementById('filter-trainer').value).filter(t => !document.getElementById('filter-center').value || t.centroId === document.getElementById('filter-center').value).sort((a,b)=>(b.facturacion||0)-(a.facturacion||0)).slice(0,20);
   document.getElementById('tabla-trainers').innerHTML = trainers.map(t=>`<tr class="hover:bg-slate-950/50"><td class="py-2 font-bold text-white">${escapeHTML(t.nombre)}<div class="text-[10px] text-slate-500">${escapeHTML(t.key)}</div></td><td>${escapeHTML(nombreCentro(t.centroId))}</td><td>${numero(t.clientes||0)}</td><td class="font-mono">${dinero(t.facturacion||0)}</td><td class="font-mono text-emerald-300">${dinero(t.bsBruto||0)}</td><td class="font-mono text-red-200">${dinero(t.canonCentroShare||0)}</td><td class="font-mono ${(t.bsNetoCentro||0)>=0?'text-cyan-300':'text-red-300'}">${dinero(t.bsNetoCentro||0)}</td><td class="text-cyan-300 text-[10px]">${escapeHTML(t.sistemaAplicado||'---')}</td></tr>`).join('') || '<tr><td colspan="8" class="py-8 text-center text-slate-500">Sin datos.</td></tr>';
 }
@@ -687,7 +910,7 @@ function pintarInsights(res){
   const topCentro=centros.slice().sort((a,b)=>(b.facturacion||0)-(a.facturacion||0))[0];
   if(topCentro) ideas.push(`Centro con mayor facturación: <b>${escapeHTML(topCentro.nombre)}</b> (${dinero(topCentro.facturacion)}).`);
   if((res.total.canonClientes||0)>0) ideas.push(`Canon por cliente destinado a centros: <b class="text-red-200">${dinero(res.total.canonClientes)}</b>. No se suma a BESOUL bruto.`);
-  const desviacion=(res.total.facturacion||0)-(res.agenda.valorAgenda||0);
+  const desviacion=res.total.desviacionAgenda || ((res.total.facturacion||0)-(res.total.facturacionAgenda||0));
   if(Math.abs(desviacion)>1) ideas.push(`Desviación cartera vs agenda: <b class="${desviacion>=0?'text-amber-300':'text-cyan-300'}">${dinero(desviacion)}</b>. Positivo indica facturación contratada todavía no reflejada en sesiones agendadas.`);
   ideas.push(`Ocupación de disponibilidad publicada: <b class="text-emerald-300">${pct(res.disponibilidad.ocupacion||0)}</b> (${res.disponibilidad.ocupados}/${res.disponibilidad.slots} slots).`);
   const topFuente=Object.entries(res.crm.fuente).sort((a,b)=>b[1]-a[1])[0];
@@ -706,8 +929,15 @@ function aplicarDashboard(){
   const trainerKey=document.getElementById('filter-trainer').value;
   const meses=mesesEntreFechas(startDate,endDate);
   const monthly=meses.map(m=>aplicarFiltroFinanzasMes(obtenerMesData(m), centroId, trainerKey));
-  const total=monthly.reduce((a,m)=>{ a.facturacion+=m.facturacion; a.ptNeto+=m.ptNeto; a.bsBruto+=m.bsBruto; a.canones+=m.canones; a.canonClientes+=m.canonClientes||0; a.gastos+=m.gastos; a.beneficio+=m.beneficio; a.clientes=Math.max(a.clientes,m.clientes); a.trainers=Math.max(a.trainers,m.trainers); return a; }, {facturacion:0,ptNeto:0,bsBruto:0,canones:0,canonClientes:0,gastos:0,beneficio:0,clientes:0,trainers:0});
-  const current=obtenerMesData(mesActualKey());
+  const total=monthly.reduce((a,m)=>{
+    a.facturacion+=m.facturacion; a.facturacionAgenda+=m.facturacionAgenda||0; a.desviacionAgenda+=m.desviacionAgenda||0;
+    a.ptNeto+=m.ptNeto; a.bsBruto+=m.bsBruto; a.canones+=m.canones; a.canonClientes+=m.canonClientes||0; a.gastos+=m.gastos; a.beneficio+=m.beneficio;
+    a.sesionesMensualesPrevistas+=m.sesionesMensualesPrevistas||0; a.sesionesMensualesAgendadas+=m.sesionesMensualesAgendadas||0;
+    a.clientes=Math.max(a.clientes,m.clientes); a.trainers=Math.max(a.trainers,m.trainers);
+    return a;
+  }, {facturacion:0,facturacionAgenda:0,desviacionAgenda:0,ptNeto:0,bsBruto:0,canones:0,canonClientes:0,gastos:0,beneficio:0,clientes:0,trainers:0,sesionesMensualesPrevistas:0,sesionesMensualesAgendadas:0});
+  // Para tablas y ranking usamos el mes seleccionado si es mensual; si el periodo toca varios meses, usamos el último mes del rango.
+  const current=obtenerMesData(meses.length ? meses[meses.length-1] : mesActualKey());
   const agenda=analizarAgenda(startDate,endDate,centroId,trainerKey);
   const disponibilidad=analizarDisponibilidad(startDate,endDate,centroId,trainerKey);
   const crm=analizarLeads(startDate,endDate,centroId,trainerKey);
@@ -724,7 +954,7 @@ function poblarFiltros(){
 }
 function exportarResumenCSV(){
   if(!ultimoResumen) return;
-  const rows=[['Métrica','Valor'],['Facturación',ultimoResumen.total.facturacion],['Besoul bruto',ultimoResumen.total.bsBruto],['Canon clientes centro',ultimoResumen.total.canonClientes],['Costes centro total',ultimoResumen.total.canones],['Gastos',ultimoResumen.total.gastos],['Beneficio',ultimoResumen.total.beneficio],['Clientes',ultimoResumen.total.clientes],['Entrenadores',ultimoResumen.total.trainers],['Sesiones reales',ultimoResumen.agenda.reales],['Valor agenda',ultimoResumen.agenda.valorAgenda],['Desviación cartera-agenda',ultimoResumen.total.facturacion-ultimoResumen.agenda.valorAgenda],['Ocupación disponibilidad',ultimoResumen.disponibilidad.ocupacion],['Slots disponibles',ultimoResumen.disponibilidad.slots],['Slots ocupados',ultimoResumen.disponibilidad.ocupados],['Slots libres',ultimoResumen.disponibilidad.libres],['Leads',ultimoResumen.crm.total],['Convertidos',ultimoResumen.crm.convertidos]];
+  const rows=[['Métrica','Valor'],['Facturación',ultimoResumen.total.facturacion],['Besoul bruto',ultimoResumen.total.bsBruto],['Canon clientes centro',ultimoResumen.total.canonClientes],['Costes centro total',ultimoResumen.total.canones],['Gastos',ultimoResumen.total.gastos],['Beneficio',ultimoResumen.total.beneficio],['Clientes',ultimoResumen.total.clientes],['Entrenadores',ultimoResumen.total.trainers],['Sesiones reales',ultimoResumen.agenda.reales],['Valor agenda Finanzas',ultimoResumen.total.facturacionAgenda],['Desviación cartera-agenda Finanzas',ultimoResumen.total.desviacionAgenda || (ultimoResumen.total.facturacion-ultimoResumen.total.facturacionAgenda)],['Ocupación disponibilidad',ultimoResumen.disponibilidad.ocupacion],['Slots disponibles',ultimoResumen.disponibilidad.slots],['Slots ocupados',ultimoResumen.disponibilidad.ocupados],['Slots libres',ultimoResumen.disponibilidad.libres],['Leads',ultimoResumen.crm.total],['Convertidos',ultimoResumen.crm.convertidos]];
   const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`besoul_dashboard_${dateISO(new Date())}.csv`; a.click(); URL.revokeObjectURL(url);
 }
