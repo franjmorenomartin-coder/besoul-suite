@@ -18,7 +18,19 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./besoul-icon-192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="./besoul-icon-512.png">
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
-<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.tailwindcss.com">
+        window.addEventListener('resize', () => {
+            clearTimeout(window.bsAgendaResizeTimer);
+            window.bsAgendaResizeTimer = setTimeout(() => {
+                if (document.getElementById('app-content') && !document.getElementById('app-content').classList.contains('hidden')) {
+                    actualizarMobileTabsAgenda();
+                    renderAgenda();
+                }
+            }, 180);
+        });
+
+
+    </script>
 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
@@ -46,6 +58,154 @@
             #modal-cliente > div { max-height: calc(100dvh - 1rem); overflow-y: auto; margin-top: 0.5rem; margin-bottom: 0.5rem; padding: 1rem; border-radius: 1rem; }
             #modal-title { position: sticky; top: -1rem; z-index: 10; background-color: #0f172a; padding: 0.75rem 0; }
         }
+
+
+        @media (max-width: 767px) {
+            body { background:#050814; padding-bottom: calc(78px + env(safe-area-inset-bottom)); }
+            #app-content > header {
+                padding: .75rem .9rem !important;
+                gap: .75rem !important;
+                align-items: stretch !important;
+            }
+            #app-content > header .w-32 { display:none !important; }
+            #app-content > header h1 { font-size: .98rem !important; }
+            #app-content > header p { font-size: .68rem !important; }
+            #app-content > header > div:last-child {
+                width: 100%;
+                display: grid !important;
+                grid-template-columns: 1fr 1fr;
+                gap: .45rem !important;
+            }
+            #app-content > header > div:last-child button { width:100%; padding:.55rem .35rem !important; }
+
+            #app-content > .bg-slate-950 {
+                padding: .7rem .75rem !important;
+                position: sticky;
+                top: 0;
+                z-index: 30;
+                backdrop-filter: blur(12px);
+                background: rgba(2,6,23,.96) !important;
+            }
+            #app-content > .bg-slate-950 .grid.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap:.45rem !important; }
+            #app-content > .bg-slate-950 .bg-slate-900 { padding:.45rem .55rem !important; border-radius:.85rem !important; }
+            #app-content > .bg-slate-950 span[id^="kpi-"] { font-size:.8rem !important; }
+            #admin-trainer-filter-block { width:100%; }
+            #admin-trainer-filter-block select { flex:1; min-width:0; }
+            #agenda-main {
+                display:block !important;
+                padding:.75rem !important;
+                padding-bottom: 5.5rem !important;
+            }
+            #panel-clientes, #panel-agenda {
+                height:auto !important;
+                min-height: calc(100dvh - 190px);
+                max-height:none !important;
+                border-radius:1.4rem !important;
+                padding:.9rem !important;
+            }
+            body:not([data-mobile-tab]) #panel-clientes,
+            body[data-mobile-tab="agenda"] #panel-clientes { display:none !important; }
+            body[data-mobile-tab="clientes"] #panel-agenda,
+            body[data-mobile-tab="grupos"] #panel-agenda { display:none !important; }
+            body[data-mobile-tab="clientes"] #panel-clientes,
+            body[data-mobile-tab="grupos"] #panel-clientes { display:flex !important; }
+
+            #panel-agenda > div:first-child {
+                align-items: stretch !important;
+                gap:.75rem !important;
+            }
+            #panel-agenda h2 { font-size:.9rem !important; line-height:1.2 !important; }
+            #lbl-agenda-slots-info { font-size:.72rem !important; line-height:1.35 !important; }
+            #panel-agenda .flex.flex-wrap.gap-2.justify-end {
+                justify-content: stretch !important;
+                display:grid !important;
+                grid-template-columns: 1fr 1fr;
+            }
+            #panel-agenda .flex.flex-wrap.gap-2.justify-end button {
+                font-size:.72rem !important;
+                padding:.65rem .5rem !important;
+                border-radius:.9rem !important;
+            }
+            #panel-agenda .flex.flex-wrap.gap-2.justify-end button:nth-child(3) {
+                grid-column: span 2;
+            }
+
+            #agenda-slots-grid { min-width:0 !important; overflow:visible !important; }
+            #tabla-agenda-avanzada { min-width: 980px !important; }
+            .agenda-mobile-daytabs {
+                display:flex;
+                gap:.5rem;
+                overflow-x:auto;
+                padding:.15rem .05rem .7rem;
+                scroll-snap-type:x proximity;
+                -webkit-overflow-scrolling:touch;
+            }
+            .agenda-mobile-daytabs button {
+                flex:0 0 auto;
+                min-width:74px;
+                scroll-snap-align:start;
+            }
+            .agenda-mobile-slot-list {
+                display:flex;
+                flex-direction:column;
+                gap:.55rem;
+            }
+            .agenda-mobile-kpis {
+                display:grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap:.5rem;
+                margin-bottom:.75rem;
+            }
+            .agenda-mobile-kpis .kpi-card {
+                background: rgba(15,23,42,.74);
+                border: 1px solid rgba(51,65,85,.9);
+                border-radius: 1rem;
+                padding:.65rem .7rem;
+            }
+            .agenda-mobile-kpis .kpi-label {
+                display:block;
+                color:#94a3b8;
+                font-size:.58rem;
+                text-transform:uppercase;
+                font-weight:800;
+                letter-spacing:.04em;
+                margin-bottom:.2rem;
+            }
+            .agenda-mobile-kpis .kpi-value {
+                font-size:.95rem;
+                font-weight:900;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+            }
+            #lista-clientes-pt { max-height: calc(100dvh - 250px); }
+            #modal-nota { align-items:flex-end !important; padding:0 !important; }
+            #modal-nota > div {
+                width:100% !important;
+                max-width:none !important;
+                max-height:88dvh !important;
+                overflow-y:auto !important;
+                border-radius:1.5rem 1.5rem 0 0 !important;
+                padding:1rem !important;
+                margin:0 !important;
+            }
+            #modal-disponibilidad-reservas, #modal-solicitudes-reservas, #modal-historico-cliente {
+                align-items:flex-end !important;
+                padding:0 !important;
+            }
+            #modal-disponibilidad-reservas > div, #modal-solicitudes-reservas > div, #modal-historico-cliente > div {
+                width:100% !important;
+                max-width:none !important;
+                max-height:90dvh !important;
+                border-radius:1.5rem 1.5rem 0 0 !important;
+                margin:0 !important;
+                padding:1rem !important;
+            }
+            #mobile-agenda-tabs { display:grid !important; }
+        }
+
+        @media (min-width: 768px) {
+            #mobile-agenda-tabs { display:none !important; }
+        }
+
 
     </style>
 
@@ -219,11 +379,11 @@
 
 
 
-        <main class="flex-1 p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <main id="agenda-main" class="flex-1 p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
 
             <!-- COLUMNA CLIENTES -->
 
-            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[720px]">
+            <div id="panel-clientes" class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[720px]">
 
                 <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
 
@@ -254,7 +414,7 @@
 
             <!-- COLUMNA CALENDARIO -->
 
-            <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[720px]">
+            <div id="panel-agenda" class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[720px]">
 
                 <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-2 border-b border-slate-800 pb-2 mb-3">
 
@@ -269,6 +429,25 @@
                         <button onclick="guardarMesEnHistorico()" class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-1 rounded">Respaldar Semana</button>
                     </div>
 
+                </div>
+
+                <div id="agenda-kpi-extended" class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-3">
+                    <div class="bg-slate-950/55 border border-slate-800 rounded-xl p-2">
+                        <span class="block text-[9px] text-slate-500 uppercase font-black">Facturación prevista</span>
+                        <b id="kpi-ext-previsto" class="text-emerald-400 font-mono text-sm">0.00 €</b>
+                    </div>
+                    <div class="bg-slate-950/55 border border-slate-800 rounded-xl p-2">
+                        <span class="block text-[9px] text-slate-500 uppercase font-black">Valor agenda</span>
+                        <b id="kpi-ext-agenda" class="text-cyan-300 font-mono text-sm">0.00 €</b>
+                    </div>
+                    <div class="bg-slate-950/55 border border-slate-800 rounded-xl p-2">
+                        <span class="block text-[9px] text-slate-500 uppercase font-black">Desviación</span>
+                        <b id="kpi-ext-desviacion" class="text-amber-300 font-mono text-sm">0.00 €</b>
+                    </div>
+                    <div class="bg-slate-950/55 border border-slate-800 rounded-xl p-2">
+                        <span class="block text-[9px] text-slate-500 uppercase font-black">Ocupación</span>
+                        <b id="kpi-ext-ocupacion" class="text-white font-mono text-sm">0%</b>
+                    </div>
                 </div>
 
                 <div class="flex-1 overflow-auto">
@@ -312,6 +491,13 @@
             </div>
 
         </main>
+
+        <nav id="mobile-agenda-tabs" class="hidden fixed bottom-0 inset-x-0 z-40 grid-cols-4 gap-1 bg-slate-950/95 border-t border-slate-800 px-2 pt-2 pb-[calc(.5rem+env(safe-area-inset-bottom))] backdrop-blur-xl">
+            <button id="mob-tab-agenda" onclick="setMobileTabAgenda('agenda')" class="rounded-2xl px-2 py-2 text-[10px] font-black text-amber-300 bg-amber-500/10 border border-amber-500/30">Agenda</button>
+            <button id="mob-tab-clientes" onclick="setMobileTabAgenda('clientes')" class="rounded-2xl px-2 py-2 text-[10px] font-black text-slate-400 bg-slate-900/70 border border-slate-800">Clientes</button>
+            <button id="mob-tab-grupos" onclick="setMobileTabAgenda('grupos')" class="rounded-2xl px-2 py-2 text-[10px] font-black text-slate-400 bg-slate-900/70 border border-slate-800">Grupos</button>
+            <button id="mob-tab-reservas" onclick="setMobileTabAgenda('reservas')" class="rounded-2xl px-2 py-2 text-[10px] font-black text-slate-400 bg-slate-900/70 border border-slate-800">Reservas</button>
+        </nav>
 
     </div>
 
@@ -813,6 +999,28 @@ miércoles 07:00-09:00"></textarea>
         </div>
     </div>
 
+    <!-- MODAL ACCIONES SLOT LIBRE / MÓVIL -->
+    <div id="modal-slot-acciones" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+        <div class="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl p-4 w-full sm:max-w-lg space-y-3 max-h-[88dvh] overflow-y-auto">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-sm font-black text-emerald-300 uppercase tracking-wider">Gestionar slot</h3>
+                    <p id="slot-accion-info" class="text-[11px] text-slate-400 mt-1">---</p>
+                </div>
+                <button onclick="cerrarModalSlotAcciones()" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="ocultarSlotDesdeModal()" class="bg-slate-950 border border-slate-700 text-slate-300 rounded-xl px-3 py-2 text-[11px] font-bold hover:text-white">Ocultar slot</button>
+                <button onclick="editarDisponibilidadDesdeModalSlot()" class="bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 rounded-xl px-3 py-2 text-[11px] font-bold">Disponibilidad</button>
+            </div>
+            <div class="space-y-2">
+                <label class="text-[10px] text-slate-500 uppercase font-black">Añadir cliente o grupo</label>
+                <input id="slot-accion-buscar" oninput="renderOpcionesSlotAcciones()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white text-sm" placeholder="Buscar cliente o grupo...">
+                <div id="slot-accion-lista" class="space-y-2"></div>
+            </div>
+        </div>
+    </div>
+
         <!-- MODAL HISTÓRICO / ESTIMACIÓN CLIENTE -->
     <div id="modal-historico-cliente" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-2xl space-y-4 my-8">
@@ -841,6 +1049,8 @@ miércoles 07:00-09:00"></textarea>
         const CREDENCIALES_BASE = {};
 
         const BS_AGENDA_DOC_ID = 'agenda'; // PRODUCCIÓN
+        let slotAccionSeleccionado = '';
+        window.bsAgendaDiaMovil = window.bsAgendaDiaMovil ?? null;
 
         let dbCredenciales = sanitizarCredenciales(JSON.parse(localStorage.getItem('bs_db_credenciales_v6')) || CREDENCIALES_BASE);
 
@@ -1594,7 +1804,7 @@ miércoles 07:00-09:00"></textarea>
 
                 ['kpi-label-atletas', `Atletas activos red · ${mes}`],
 
-                ['kpi-label-sesiones', `Sesiones agendadas · ${mes}`]
+                ['kpi-label-sesiones', `Ocupación disponibilidad · ${mes}`]
 
             ];
 
@@ -2146,6 +2356,7 @@ function calcularRentabilidadFicha(ficha) {
                 iniciarSincronizacionLeadsCRMAgenda();
                 iniciarModuloReservasAgenda();
                 buildColorPicker(); 
+                asegurarEstadoMobileAgenda();
                 irSemanaActual();
 
             } catch (err) {
@@ -3635,20 +3846,36 @@ function calcularRentabilidadFicha(ficha) {
                 agendarFichaSeleccionadaEnCelda(clave);
                 return;
             }
+            if (isMobileAgenda()) {
+                abrirModalSlotAcciones(clave);
+                return;
+            }
             const partes = String(clave || '').split('_');
             if (partes.length < 2) return;
             const hora = partes[1];
             const fin = formatoMinutosHorario(minutosDesdeHorario(hora) + 45);
             const opcion = prompt(
-                `Slot libre ${partes[0]} ${hora}-${fin}.\\n\\nEscribe:\\n1 = ocultar/desactivar este slot solo esta semana\\n2 = editar disponibilidad\\n\\nCancelar = no hacer nada`,
-                '1'
+                `Slot libre ${partes[0]} ${hora}-${fin}.
+
+Escribe:
+1 = ocultar/desactivar este slot solo esta semana
+2 = elegir cliente/grupo
+3 = editar disponibilidad
+
+Cancelar = no hacer nada`,
+                '2'
             );
             if (opcion === null) return;
-            if (String(opcion).trim() === '2') {
+            const op = String(opcion).trim();
+            if (op === '3') {
                 abrirModalDisponibilidadReservas();
                 return;
             }
-            if (String(opcion).trim() === '1') {
+            if (op === '2') {
+                abrirModalSlotAcciones(clave);
+                return;
+            }
+            if (op === '1') {
                 ocultarSlotDisponibilidad(clave);
                 renderAgenda();
             }
@@ -3769,14 +3996,231 @@ function calcularRentabilidadFicha(ficha) {
         }
 
 
+
+        function isMobileAgenda() {
+            return !!(window.matchMedia && window.matchMedia('(max-width: 767px)').matches);
+        }
+
+        function indiceDiaActualEnSemana() {
+            const hoyISO = formatoFechaLocal(new Date());
+            for (let i=0; i<7; i++) {
+                const f = new Date(lunesActual);
+                f.setDate(f.getDate() + i);
+                if (formatoFechaLocal(f) === hoyISO) return i;
+            }
+            return 0;
+        }
+
+        function diaMovilActivo() {
+            if (window.bsAgendaDiaMovil === null || window.bsAgendaDiaMovil === undefined) window.bsAgendaDiaMovil = indiceDiaActualEnSemana();
+            const n = parseInt(window.bsAgendaDiaMovil, 10);
+            return Math.min(6, Math.max(0, Number.isNaN(n) ? 0 : n));
+        }
+
+        function setDiaMovilAgenda(idx) {
+            window.bsAgendaDiaMovil = Math.min(6, Math.max(0, parseInt(idx, 10) || 0));
+            renderAgenda();
+        }
+
+        function setMobileTabAgenda(tab) {
+            if (tab === 'reservas') {
+                abrirModalSolicitudesReservas();
+                tab = 'agenda';
+            }
+            document.body.dataset.mobileTab = tab || 'agenda';
+            if (tab === 'grupos') cambiarFichaTab('grupo');
+            if (tab === 'clientes') cambiarFichaTab('individual');
+            actualizarMobileTabsAgenda();
+        }
+
+        function actualizarMobileTabsAgenda() {
+            const tab = document.body.dataset.mobileTab || 'agenda';
+            ['agenda','clientes','grupos','reservas'].forEach(t => {
+                const btn = document.getElementById(`mob-tab-${t}`);
+                if (!btn) return;
+                const activo = t === tab || (t === 'agenda' && tab === 'reservas');
+                btn.className = activo
+                    ? 'rounded-2xl px-2 py-2 text-[10px] font-black text-amber-300 bg-amber-500/10 border border-amber-500/30'
+                    : 'rounded-2xl px-2 py-2 text-[10px] font-black text-slate-400 bg-slate-900/70 border border-slate-800';
+            });
+        }
+
+        function asegurarEstadoMobileAgenda() {
+            if (!document.body.dataset.mobileTab) document.body.dataset.mobileTab = 'agenda';
+            actualizarMobileTabsAgenda();
+        }
+
+        function calcularResumenAgendaEntrenador() {
+            const inicioMes = inicioMesVisible();
+            const finMes = finMesVisible();
+            const desdeISO = formatoFechaLocal(inicioMes);
+            const hastaISO = formatoFechaLocal(finMes);
+            const clientes = dbClientes[entrenadorVisto] || [];
+            let atletasActivos = 0;
+            let facturacionPrevista = 0;
+
+            clientes.forEach(c => {
+                if (!clienteActivoParaAgenda(c)) return;
+                if (c.modalidad === "Miembro Subordinado") { atletasActivos++; return; }
+                if (c.tipo === 'individual') atletasActivos++;
+                if (c.vinculacion) return;
+                if (c.tipo === 'individual' || c.tipo === 'grupo') facturacionPrevista += calcularFacturacionFicha(c);
+            });
+
+            let sesionesAgendadas = 0;
+            let valorAgenda = 0;
+            if (dbAgenda[entrenadorVisto]) {
+                Object.keys(dbAgenda[entrenadorVisto]).forEach(k => {
+                    const fechaClave = k.split('_')[0];
+                    if (fechaClave < desdeISO || fechaClave >= hastaISO) return;
+                    const objGuardado = dbAgenda[entrenadorVisto][k];
+                    const obj = buscarFichaPorId(objGuardado?.id) || objGuardado;
+                    if (!obj || esCitaPruebaCRM(obj)) return;
+                    if (esGrupoAbierto(objGuardado) || esGrupoAbierto(obj)) {
+                        const asistentes = asistentesGrupoAbierto(objGuardado);
+                        sesionesAgendadas += asistentes.length || 1;
+                        valorAgenda += calcularRentabilidadGrupoAbierto(objGuardado, entrenadorVisto);
+                        return;
+                    }
+                    sesionesAgendadas++;
+                    valorAgenda += calcularRentabilidadFicha(obj);
+                });
+            }
+
+            let slotsHabilitados = 0;
+            let slotsOcupados = 0;
+            for (let idxDia=0; idxDia<7; idxDia++) {
+                const f = new Date(lunesActual);
+                f.setDate(f.getDate() + idxDia);
+                const fechaISO = formatoFechaLocal(f);
+                const slots = generarSlotsDiaDisponibilidad(fechaISO);
+                slotsHabilitados += slots.length;
+                slots.forEach(m => {
+                    const clave = claveDesdeFechaYMinutos(fechaISO, m);
+                    const cobertura = obtenerCoberturaCitaAgenda(clave);
+                    if (cobertura && cobertura.esInicio) slotsOcupados++;
+                });
+            }
+            const slotsLibres = Math.max(0, slotsHabilitados - slotsOcupados);
+            const ocupacionPct = slotsHabilitados ? (slotsOcupados / slotsHabilitados) * 100 : 0;
+
+            return {
+                facturacionPrevista, valorAgenda,
+                desviacion: facturacionPrevista - valorAgenda,
+                sesionesAgendadas, atletasActivos,
+                rentabilidadPromedio: sesionesAgendadas > 0 ? valorAgenda / sesionesAgendadas : 0,
+                slotsHabilitados, slotsOcupados, slotsLibres, ocupacionPct
+            };
+        }
+
+        function pintarKPIsExtendidosAgenda(resumen) {
+            const set = (id, txt) => { const el = document.getElementById(id); if (el) el.innerText = txt; };
+            set('kpi-ext-previsto', `${(resumen.facturacionPrevista || 0).toFixed(2)} €`);
+            set('kpi-ext-agenda', `${(resumen.valorAgenda || 0).toFixed(2)} €`);
+            set('kpi-ext-desviacion', `${(resumen.desviacion || 0).toFixed(2)} €`);
+            set('kpi-ext-ocupacion', `${(resumen.ocupacionPct || 0).toFixed(0)}%`);
+        }
+
+        function resumenKPIsMobileHTML(resumen) {
+            return `<div class="agenda-mobile-kpis">
+                <div class="kpi-card"><span class="kpi-label">Facturación prevista</span><span class="kpi-value text-emerald-400">${(resumen.facturacionPrevista || 0).toFixed(0)} €</span></div>
+                <div class="kpi-card"><span class="kpi-label">Valor agenda</span><span class="kpi-value text-cyan-300">${(resumen.valorAgenda || 0).toFixed(0)} €</span></div>
+                <div class="kpi-card"><span class="kpi-label">Ocupación</span><span class="kpi-value text-white">${(resumen.ocupacionPct || 0).toFixed(0)}%</span><span class="block text-[10px] text-slate-500">${resumen.slotsOcupados}/${resumen.slotsHabilitados} slots</span></div>
+                <div class="kpi-card"><span class="kpi-label">Desviación</span><span class="kpi-value text-amber-300">${(resumen.desviacion || 0).toFixed(0)} €</span></div>
+            </div>`;
+        }
+
+        function abrirModalSlotAcciones(clave) {
+            slotAccionSeleccionado = clave;
+            const partes = String(clave || '').split('_');
+            const fechaISO = partes[0] || '';
+            const hora = partes[1] || '';
+            const fin = formatoMinutosHorario(minutosDesdeHorario(hora) + 45);
+            const info = document.getElementById('slot-accion-info');
+            if (info) info.innerText = `${fechaISO} · ${hora} - ${fin}`;
+            const buscar = document.getElementById('slot-accion-buscar');
+            if (buscar) buscar.value = '';
+            renderOpcionesSlotAcciones();
+            document.getElementById('modal-slot-acciones')?.classList.remove('hidden');
+            setTimeout(() => buscar?.focus(), 120);
+        }
+
+        function cerrarModalSlotAcciones() {
+            document.getElementById('modal-slot-acciones')?.classList.add('hidden');
+            slotAccionSeleccionado = '';
+        }
+
+        function opcionesFichasParaSlot() {
+            return (dbClientes[entrenadorVisto] || []).filter(c => {
+                if (!c || c.vinculacion) return false;
+                if (!clienteActivoParaAgenda(c)) return false;
+                return c.tipo === 'individual' || c.tipo === 'grupo';
+            });
+        }
+
+        function renderOpcionesSlotAcciones() {
+            const lista = document.getElementById('slot-accion-lista');
+            if (!lista) return;
+            const q = String(document.getElementById('slot-accion-buscar')?.value || '').trim().toLowerCase();
+            const fichas = opcionesFichasParaSlot().filter(c => !q || String(c.nombre || '').toLowerCase().includes(q)).slice(0, 40);
+            if (!fichas.length) {
+                lista.innerHTML = '<div class="rounded-xl border border-dashed border-slate-700 p-4 text-center text-xs text-slate-500">No hay clientes/grupos activos que coincidan.</div>';
+                return;
+            }
+            lista.innerHTML = fichas.map(c => {
+                const tipo = c.tipo === 'grupo' ? 'Grupo' : 'Individual';
+                const color = c.tipo === 'grupo' ? 'text-amber-300 border-amber-500/30 bg-amber-500/10' : 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10';
+                const rent = calcularRentabilidadFicha(c);
+                return `<button type="button" onclick="agendarFichaDesdeModalSlot('${escapeHTML(c.id)}')" class="w-full text-left rounded-2xl bg-slate-950/70 border border-slate-800 px-3 py-3 hover:border-cyan-400/50 transition">
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <div class="font-black text-white text-sm truncate">${escapeHTML(c.nombre || 'Sin nombre')}</div>
+                            <div class="text-[10px] text-slate-500 truncate">${escapeHTML(c.modalidad || tipo)}</div>
+                        </div>
+                        <div class="text-right shrink-0">
+                            <span class="inline-block border rounded-full px-2 py-0.5 text-[9px] font-black ${color}">${tipo}</span>
+                            <div class="text-[10px] text-cyan-300 font-mono mt-1">${rent.toFixed(2)}€</div>
+                        </div>
+                    </div>
+                </button>`;
+            }).join('');
+        }
+
+        function agendarFichaDesdeModalSlot(idCliente) {
+            if (!slotAccionSeleccionado) return;
+            const clave = slotAccionSeleccionado;
+            cerrarModalSlotAcciones();
+            soltarFichaEnCelda(clave, idCliente, '');
+            recalcularKPIs();
+            renderClientes();
+            renderAgenda();
+        }
+
+        function ocultarSlotDesdeModal() {
+            if (!slotAccionSeleccionado) return;
+            const clave = slotAccionSeleccionado;
+            cerrarModalSlotAcciones();
+            ocultarSlotDisponibilidad(clave);
+            renderAgenda();
+        }
+
+        function editarDisponibilidadDesdeModalSlot() {
+            cerrarModalSlotAcciones();
+            abrirModalDisponibilidadReservas();
+        }
+
+
         function clasesSlotBesoul(tipo) {
-            const base = 'group relative rounded-2xl border px-3 py-2.5 min-h-[64px] shadow-lg transition overflow-hidden';
+            const mobile = isMobileAgenda();
+            const base = mobile
+                ? 'group relative rounded-3xl border px-3.5 py-2.5 min-h-[58px] shadow-lg transition overflow-hidden'
+                : 'group relative rounded-3xl border px-3 py-2.5 min-h-[64px] shadow-lg transition overflow-hidden';
             const hover = ' hover:-translate-y-[1px] hover:shadow-xl';
-            if (tipo === 'libre') return base + hover + ' cursor-pointer bg-emerald-500/10 border-emerald-400/40 text-emerald-100 hover:bg-emerald-500/16';
-            if (tipo === 'grupo-abierto') return base + hover + ' cursor-pointer bg-amber-500/12 border-amber-400/70 text-amber-100 hover:bg-amber-500/18';
-            if (tipo === 'grupo-completo') return base + ' cursor-pointer bg-red-500/14 border-red-400/65 text-red-100 opacity-95';
+            if (tipo === 'libre') return base + hover + ' cursor-pointer bg-emerald-500/10 border-emerald-400/45 text-emerald-100 hover:bg-emerald-500/16';
+            if (tipo === 'grupo-abierto') return base + hover + ' cursor-pointer bg-amber-500/12 border-amber-400/75 text-amber-100 hover:bg-amber-500/18';
+            if (tipo === 'grupo-completo') return base + ' cursor-pointer bg-red-500/14 border-red-400/70 text-red-100 opacity-95';
             if (tipo === 'valoracion') return base + hover + ' cursor-pointer bg-cyan-500/10 border-cyan-300/70 text-cyan-100 border-dashed';
-            if (tipo === 'ocupado') return base + hover + ' cursor-pointer bg-slate-700/30 border-slate-500/35 text-slate-100';
+            if (tipo === 'ocupado') return base + hover + ' cursor-pointer bg-slate-700/30 border-slate-500/40 text-slate-100';
             return base + ' bg-slate-950/50 border-slate-800 text-slate-500';
         }
 
@@ -3957,7 +4401,77 @@ function calcularRentabilidadFicha(ficha) {
             return card;
         }
 
+
+        function renderAgendaSlotsMovil() {
+            const grid = document.getElementById('agenda-slots-grid');
+            const tabla = document.getElementById('tabla-agenda-avanzada');
+            const cuerpo = document.getElementById('cuerpo-agenda');
+            if (cuerpo) cuerpo.innerHTML = '';
+            if (tabla) tabla.classList.add('hidden');
+            if (!grid) return;
+            asegurarEstadoMobileAgenda();
+            grid.classList.remove('hidden');
+            grid.innerHTML = '';
+
+            const resumen = calcularResumenAgendaEntrenador();
+            const dias = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+            const diaActivo = diaMovilActivo();
+
+            let htmlTabs = '<div class="agenda-mobile-daytabs">';
+            for (let idxDia = 0; idxDia < 7; idxDia++) {
+                const fecha = new Date(lunesActual);
+                fecha.setDate(fecha.getDate() + idxDia);
+                const fechaISO = formatoFechaLocal(fecha);
+                const slots = generarSlotsDiaDisponibilidad(fechaISO);
+                const activo = idxDia === diaActivo;
+                htmlTabs += `<button type="button" onclick="setDiaMovilAgenda(${idxDia})" class="${activo ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-slate-950/70 text-slate-300 border-slate-800'} border rounded-2xl px-3 py-2 text-center">
+                    <span class="block text-[11px] font-black uppercase">${dias[idxDia]}</span>
+                    <span class="block text-[10px] font-bold ${activo ? 'text-slate-900' : 'text-amber-300'}">${fecha.toLocaleDateString('es-ES', { day:'numeric', month:'short' })}</span>
+                    <span class="block text-[9px] ${activo ? 'text-slate-800' : 'text-slate-500'}">${slots.length} slots</span>
+                </button>`;
+            }
+            htmlTabs += '</div>';
+
+            const fecha = new Date(lunesActual);
+            fecha.setDate(fecha.getDate() + diaActivo);
+            const fechaISO = formatoFechaLocal(fecha);
+            const slots = generarSlotsDiaDisponibilidad(fechaISO);
+            const tituloDia = fecha.toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'long' });
+
+            const wrap = document.createElement('div');
+            wrap.innerHTML = `
+                ${resumenKPIsMobileHTML(resumen)}
+                ${htmlTabs}
+                <div class="flex items-center justify-between gap-2 mb-2 px-1">
+                    <div>
+                        <div class="text-sm font-black text-white capitalize">${tituloDia}</div>
+                        <div class="text-[11px] text-slate-500">${slots.length ? 'Toca un slot para gestionar.' : 'Sin disponibilidad publicada para este día.'}</div>
+                    </div>
+                    <button onclick="abrirModalDisponibilidadReservas()" class="shrink-0 bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-3 py-2 rounded-2xl text-[10px] font-black">+ Horario</button>
+                </div>
+                <div id="agenda-mobile-slot-list" class="agenda-mobile-slot-list"></div>
+            `;
+            grid.appendChild(wrap);
+
+            const list = document.getElementById('agenda-mobile-slot-list');
+            if (!list) return;
+            if (!slots.length) {
+                list.innerHTML = `<button onclick="abrirModalDisponibilidadReservas()" class="w-full rounded-3xl border border-dashed border-slate-700 bg-slate-950/50 p-6 text-center">
+                    <div class="text-sm font-black text-white">Sin slots habilitados</div>
+                    <div class="text-xs text-slate-500 mt-1">Añade disponibilidad para generar huecos de 45 min.</div>
+                    <div class="mt-3 inline-flex bg-cyan-400 text-slate-950 rounded-xl px-4 py-2 text-xs font-black">Añadir disponibilidad</div>
+                </button>`;
+                return;
+            }
+            slots.forEach(min => list.appendChild(crearSlotAgendaCompacto(fechaISO, min)));
+        }
+
+
         function renderAgendaSlotsCompacta() {
+            if (isMobileAgenda()) {
+                renderAgendaSlotsMovil();
+                return;
+            }
             const grid = document.getElementById('agenda-slots-grid');
             const tabla = document.getElementById('tabla-agenda-avanzada');
             const cuerpo = document.getElementById('cuerpo-agenda');
@@ -4838,54 +5352,23 @@ function calcularRentabilidadFicha(ficha) {
 
         function recalcularKPIs() {
             actualizarLabelsKPIMes();
-            const inicioMes = inicioMesVisible();
-            const finMes = finMesVisible();
-            const desdeISO = formatoFechaLocal(inicioMes);
-            const hastaISO = formatoFechaLocal(finMes);
+
+            const resumen = calcularResumenAgendaEntrenador();
 
             if(!dbClientes[entrenadorVisto]) {
                 document.getElementById('kpi-facturacion-cartera').innerText = `0.00 €`;
                 document.getElementById('kpi-atletas-activos').innerText = 0;
-                document.getElementById('kpi-sesiones-semana').innerText = 0;
+                document.getElementById('kpi-sesiones-semana').innerText = `0%`;
                 document.getElementById('kpi-rentabilidad-total').innerText = `0.00 €`;
+                pintarKPIsExtendidosAgenda({facturacionPrevista:0, valorAgenda:0, desviacion:0, ocupacionPct:0, slotsOcupados:0, slotsHabilitados:0});
                 return;
             }
 
-            let act = 0;
-            dbClientes[entrenadorVisto].forEach(c => {
-                // Los integrantes creados desde grupo cuentan como atletas activos, pero no duplican facturación.
-                if(!clienteActivoParaAgenda(c)) return;
-                if(c.modalidad === "Miembro Subordinado") { act++; return; }
-                if(c.tipo === 'individual') act++;
-            });
-            document.getElementById('kpi-atletas-activos').innerText = act;
-
-            // Facturación del mes visible = suma real de las sesiones agendadas en ese mes
-            // por la rentabilidad/precio medio de cada sesión. Así no arrastra importes de otros meses.
-            let ses = 0;
-            let factMes = 0;
-            if(dbAgenda[entrenadorVisto]) {
-                Object.keys(dbAgenda[entrenadorVisto]).forEach(k => {
-                    const fechaClave = k.split('_')[0];
-                    if(fechaClave >= desdeISO && fechaClave < hastaISO) {
-                        const objGuardado = dbAgenda[entrenadorVisto][k];
-                        const obj = buscarFichaPorId(objGuardado?.id) || objGuardado;
-                        if (!obj || esCitaPruebaCRM(obj)) return;
-                        if (esGrupoAbierto(objGuardado) || esGrupoAbierto(obj)) {
-                            const asistentes = asistentesGrupoAbierto(objGuardado);
-                            ses += asistentes.length;
-                            factMes += calcularRentabilidadGrupoAbierto(objGuardado, entrenadorVisto);
-                            return;
-                        }
-                        ses++;
-                        factMes += calcularRentabilidadFicha(obj);
-                    }
-                });
-            }
-
-            document.getElementById('kpi-facturacion-cartera').innerText = `${factMes.toFixed(2)} €`;
-            document.getElementById('kpi-sesiones-semana').innerText = ses;
-            document.getElementById('kpi-rentabilidad-total').innerText = ses > 0 ? `${(factMes/ses).toFixed(2)} €` : `0.00 €`;
+            document.getElementById('kpi-atletas-activos').innerText = resumen.atletasActivos;
+            document.getElementById('kpi-facturacion-cartera').innerText = `${resumen.facturacionPrevista.toFixed(2)} €`;
+            document.getElementById('kpi-sesiones-semana').innerText = `${resumen.ocupacionPct.toFixed(0)}%`;
+            document.getElementById('kpi-rentabilidad-total').innerText = resumen.sesionesAgendadas > 0 ? `${resumen.rentabilidadPromedio.toFixed(2)} €` : `0.00 €`;
+            pintarKPIsExtendidosAgenda(resumen);
         }
 
 
