@@ -1,3 +1,9 @@
+/
+agenda.html
+
+
+
+
 <!DOCTYPE html>
 
 <html lang="es">
@@ -256,11 +262,18 @@
 
             <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[720px]">
 
-                <div class="flex justify-between items-center border-b border-slate-800 pb-2 mb-3">
+                <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-2 border-b border-slate-800 pb-2 mb-3">
 
-                    <h2 class="text-xs font-bold uppercase text-slate-300 tracking-wider">Cuadrante Semanal · Lunes a Domingo · tramos de 15 min · sesiones de 45 min</h2>
+                    <div>
+                        <h2 class="text-xs font-bold uppercase text-slate-300 tracking-wider">Agenda por slots disponibles · sesiones de 45 min</h2>
+                        <p id="lbl-agenda-slots-info" class="text-[10px] text-slate-500 mt-1">Solo se muestran huecos publicados por disponibilidad del PT y sesiones ya agendadas.</p>
+                    </div>
 
-                    <button onclick="guardarMesEnHistorico()" class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded">Respaldar Semana</button>
+                    <div class="flex flex-wrap gap-2 justify-end">
+                        <button id="btn-toggle-vista-agenda" onclick="toggleVistaAgendaSlots()" class="bg-slate-950 text-slate-300 border border-slate-700 text-[10px] font-bold px-2 py-1 rounded hover:text-white transition">Vista avanzada</button>
+                        <button onclick="abrirModalDisponibilidadReservas()" class="bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold px-2 py-1 rounded hover:bg-cyan-500/20 transition">+ Disponibilidad</button>
+                        <button onclick="guardarMesEnHistorico()" class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-1 rounded">Respaldar Semana</button>
+                    </div>
 
                 </div>
 
@@ -884,6 +897,9 @@ miércoles 07:00-09:00"></textarea>
         let dbPruebasCRM = JSON.parse(localStorage.getItem('bs_db_pruebas_crm_v6')) || {};
         let dbLeadsPruebasCRM = JSON.parse(localStorage.getItem('bs_db_leads_pruebas_crm_v6')) || {};
         let dbDisponibilidadReservas = JSON.parse(localStorage.getItem('bs_db_disponibilidad_reservas_v6')) || {};
+        // Vista por defecto: solo slots/huecos publicados por disponibilidad del PT.
+        // Se puede alternar temporalmente a vista completa para auditoría/admin.
+        let modoAgendaSlots = localStorage.getItem('bs_modo_agenda_slots_v1') !== 'full';
         let dbSolicitudesReservas = {};
 
         let dbNotas = JSON.parse(localStorage.getItem('bs_db_notas_v6')) || {};
@@ -3449,6 +3465,168 @@ function calcularRentabilidadFicha(ficha) {
 
 
 
+        function diaSemanaBesoul(fecha) {
+            const d = fecha.getDay();
+            return d === 0 ? 7 : d;
+        }
+
+        function normalizarBloquesDisponibilidad(bloques) {
+            return (Array.isArray(bloques) ? bloques : [])
+                .map(b => ({ inicio: String(b.inicio || '').slice(0,5), fin: String(b.fin || '').slice(0,5) }))
+                .filter(b => b.inicio && b.fin && b.inicio < b.fin)
+                .sort((a,b) => a.inicio.localeCompare(b.inicio));
+        }
+
+        function disponibilidadTrainerLectura(trainerKey = entrenadorVisto) {
+            return dbDisponibilidadReservas[trainerKey] || null;
+        }
+
+        function bloquesDisponibilidadFecha(trainerKey, fechaISO) {
+            const disp = disponibilidadTrainerLectura(trainerKey);
+            if (!disp) return [];
+            const fecha = new Date(`${fechaISO}T00:00:00`);
+            const dia = diaSemanaBesoul(fecha);
+            const semanal = disp.semanal?.[dia];
+            let bloques = [];
+            if (semanal?.activo) bloques = bloques.concat(normalizarBloquesDisponibilidad(semanal.bloques));
+            const excepcion = disp.excepciones?.[fechaISO];
+            if (excepcion?.activo !== false) bloques = bloques.concat(normalizarBloquesDisponibilidad(excepcion?.bloques));
+            return bloques;
+        }
+
+        function slotDisponibleParaClave(clave, trainerKey = entrenadorVisto) {
+            const partes = String(clave || '').split('_');
+            if (partes.length < 2) return false;
+            const fechaISO = partes[0];
+            const inicio = minutosDesdeHorario(partes[1]);
+            if (Number.isNaN(inicio)) return false;
+            const fin = inicio + 45;
+            return bloquesDisponibilidadFecha(trainerKey, fechaISO).some(b => {
+                const bi = minutosDesdeHorario(b.inicio);
+                const bf = minutosDesdeHorario(b.fin);
+                return !Number.isNaN(bi) && !Number.isNaN(bf) && inicio >= bi && fin <= bf;
+            });
+        }
+
+        function disponibilidadPublicadaSemana(trainerKey = entrenadorVisto) {
+            const disp = disponibilidadTrainerLectura(trainerKey);
+            if (!disp) return false;
+            for (let i = 0; i < 7; i++) {
+                const f = new Date(lunesActual); f.setDate(f.getDate() + i);
+                if (bloquesDisponibilidadFecha(trainerKey, formatoFechaLocal(f)).length) return true;
+            }
+            return false;
+        }
+
+        function fusionarBloquesDisponibilidad(bloques) {
+            const lista = normalizarBloquesDisponibilidad(bloques);
+            if (!lista.length) return [];
+            const salida = [lista[0]];
+            for (let i=1; i<lista.length; i++) {
+                const ultimo = salida[salida.length - 1];
+                const actual = lista[i];
+                if (actual.inicio <= ultimo.fin) {
+                    if (actual.fin > ultimo.fin) ultimo.fin = actual.fin;
+                } else salida.push(actual);
+            }
+            return salida;
+        }
+
+        function asegurarDisponibilidadTrainerEditable(trainerKey = entrenadorVisto) {
+            if (!dbDisponibilidadReservas[trainerKey]) dbDisponibilidadReservas[trainerKey] = disponibilidadReservasPorDefecto();
+            if (!dbDisponibilidadReservas[trainerKey].semanal) dbDisponibilidadReservas[trainerKey].semanal = disponibilidadReservasPorDefecto().semanal;
+            if (!dbDisponibilidadReservas[trainerKey].excepciones) dbDisponibilidadReservas[trainerKey].excepciones = {};
+            return dbDisponibilidadReservas[trainerKey];
+        }
+
+        function habilitarSlotSobreLaMarcha(clave) {
+            const partes = String(clave || '').split('_');
+            if (partes.length < 2) return false;
+            const fechaISO = partes[0];
+            const hora = partes[1];
+            const inicio = minutosDesdeHorario(hora);
+            if (Number.isNaN(inicio)) return false;
+            const fin = formatoMinutosHorario(inicio + 45);
+            const fecha = new Date(`${fechaISO}T00:00:00`);
+            const dia = diaSemanaBesoul(fecha);
+            const nombreDia = ['','lunes','martes','miércoles','jueves','viernes','sábado','domingo'][dia];
+            const opcion = prompt(
+                `Esta hora (${fechaISO} ${hora}-${fin}) no está dentro de la disponibilidad publicada de ${nombreEntrenador(entrenadorVisto)}.\n\nEscribe:\n1 = habilitar solo este día\n2 = habilitar semanalmente todos los ${nombreDia}\n\nCancelar = no agendar`,
+                '1'
+            );
+            if (opcion === null) return false;
+            const disp = asegurarDisponibilidadTrainerEditable(entrenadorVisto);
+            const nuevoBloque = { inicio: hora, fin };
+            if (String(opcion).trim() === '2') {
+                const actual = disp.semanal[dia] || { activo: true, bloques: [] };
+                actual.activo = true;
+                actual.bloques = fusionarBloquesDisponibilidad([...(actual.bloques || []), nuevoBloque]);
+                disp.semanal[dia] = actual;
+            } else {
+                const actual = disp.excepciones[fechaISO] || { activo: true, bloques: [] };
+                actual.activo = true;
+                actual.bloques = fusionarBloquesDisponibilidad([...(actual.bloques || []), nuevoBloque]);
+                disp.excepciones[fechaISO] = actual;
+            }
+            disp.actualizadoEn = new Date().toISOString();
+            disp.actualizadoPor = usuarioLogeado;
+            localStorage.setItem('bs_db_disponibilidad_reservas_v6', JSON.stringify(dbDisponibilidadReservas));
+            guardarEstadoNubeAgenda();
+            publicarReservasPublicasDebounced();
+            return true;
+        }
+
+        function toggleVistaAgendaSlots() {
+            modoAgendaSlots = !modoAgendaSlots;
+            localStorage.setItem('bs_modo_agenda_slots_v1', modoAgendaSlots ? 'slots' : 'full');
+            renderAgenda();
+        }
+
+        function actualizarBotonVistaAgenda() {
+            const btn = document.getElementById('btn-toggle-vista-agenda');
+            const info = document.getElementById('lbl-agenda-slots-info');
+            if (btn) btn.innerText = modoAgendaSlots ? 'Vista avanzada' : 'Vista slots';
+            if (info) info.innerText = modoAgendaSlots
+                ? 'Solo se muestran huecos publicados por disponibilidad del PT y sesiones ya agendadas.'
+                : 'Vista avanzada: se muestra todo el día de 06:00 a 22:00 para auditoría.';
+        }
+
+        function generarFranjasAgendaSegunDisponibilidad() {
+            if (!modoAgendaSlots) return generarFranjasHorario45Min();
+            const minutosSet = new Set();
+            for (let idxDia = 0; idxDia < 7; idxDia++) {
+                const f = new Date(lunesActual); f.setDate(f.getDate() + idxDia);
+                const fechaISO = formatoFechaLocal(f);
+                bloquesDisponibilidadFecha(entrenadorVisto, fechaISO).forEach(b => {
+                    const inicio = minutosDesdeHorario(b.inicio);
+                    const fin = minutosDesdeHorario(b.fin);
+                    if (Number.isNaN(inicio) || Number.isNaN(fin)) return;
+                    for (let m = inicio; m + 45 <= fin; m += 15) minutosSet.add(m);
+                });
+                Object.keys(dbAgenda[entrenadorVisto] || {}).forEach(clave => {
+                    if (!clave.startsWith(`${fechaISO}_`)) return;
+                    const partes = clave.split('_');
+                    const inicio = minutosDesdeHorario(partes[1]);
+                    if (Number.isNaN(inicio)) return;
+                    for (let m = inicio; m < inicio + 45; m += 15) minutosSet.add(m);
+                });
+                Object.keys(dbLeadsPruebasCRM[entrenadorVisto] || {}).forEach(clave => {
+                    if (!clave.startsWith(`${fechaISO}_`)) return;
+                    const partes = clave.split('_');
+                    const inicio = minutosDesdeHorario(partes[1]);
+                    if (Number.isNaN(inicio)) return;
+                    for (let m = inicio; m < inicio + 45; m += 15) minutosSet.add(m);
+                });
+            }
+            return Array.from(minutosSet).sort((a,b) => a-b).map(minutos => ({
+                inicio: formatoMinutosHorario(minutos),
+                fin: formatoMinutosHorario(minutos + 15)
+            }));
+        }
+
+
+
+
         function esCitaPruebaCRM(obj) {
             return !!(obj && (obj.esPruebaCRM === true || obj.tipoCita === 'pruebaCRM' || obj.noSumaFacturacion === true || obj.modalidad === 'Prueba CRM'));
         }
@@ -3492,10 +3670,19 @@ function calcularRentabilidadFicha(ficha) {
         function renderAgenda() {
 
             const cuerpo = document.getElementById('cuerpo-agenda'); cuerpo.innerHTML = '';
+            actualizarBotonVistaAgenda();
 
-            const franjas = generarFranjasHorario45Min();
-
-
+            const franjas = generarFranjasAgendaSegunDisponibilidad();
+            if (modoAgendaSlots && !franjas.length) {
+                const tr = document.createElement('tr');
+                const td = document.createElement('td');
+                td.colSpan = 8;
+                td.className = 'p-8 text-center text-slate-400 bg-slate-950/40 border border-dashed border-slate-800';
+                td.innerHTML = `<div class="text-sm font-black text-white mb-2">Sin disponibilidad publicada esta semana</div><div class="text-xs text-slate-500 mb-4">Antes de agendar clientes, ${escapeHTML(nombreEntrenador(entrenadorVisto))} debe publicar sus slots disponibles.</div><button onclick="abrirModalDisponibilidadReservas()" class="bg-cyan-400 text-slate-950 px-4 py-2 rounded-lg font-black text-xs hover:bg-cyan-500 transition">Configurar disponibilidad</button>`;
+                tr.appendChild(td);
+                cuerpo.appendChild(tr);
+                return;
+            }
 
             franjas.forEach(bloque => {
 
@@ -3522,6 +3709,7 @@ function calcularRentabilidadFicha(ficha) {
                     tdCell.className = "p-1 border border-slate-800/60 align-top relative text-center transition";
 
                     const cobertura = obtenerCoberturaCitaAgenda(clave);
+                    const slotDisponible = slotDisponibleParaClave(clave);
 
 
 
@@ -3706,14 +3894,23 @@ function calcularRentabilidadFicha(ficha) {
 
                     } else {
 
-                        activarDropLibre();
-                        tdCell.onclick = () => {
-                            if (fichaSeleccionadaMovilId) agendarFichaSeleccionadaEnCelda(clave);
-                        };
-
-                        tdCell.className += " text-slate-800 text-[9px] italic";
-
-                        tdCell.innerText = fichaSeleccionadaMovilId ? "Tocar para agendar" : "Libre";
+                        if (slotDisponible) {
+                            activarDropLibre();
+                            tdCell.onclick = () => {
+                                if (fichaSeleccionadaMovilId) agendarFichaSeleccionadaEnCelda(clave);
+                            };
+                            tdCell.className += " text-emerald-400 text-[9px] italic bg-emerald-500/5 hover:bg-emerald-500/10";
+                            tdCell.innerHTML = fichaSeleccionadaMovilId
+                                ? '<span class="font-bold">Tocar para agendar</span>'
+                                : '<span class="font-bold">Disponible</span><br><span class="text-[8px] text-emerald-300/70">45 min</span>';
+                        } else {
+                            tdCell.className += " text-slate-700 text-[9px] italic bg-slate-950/40 cursor-pointer";
+                            tdCell.title = 'Hora no publicada. Haz clic para habilitar este slot antes de agendar.';
+                            tdCell.innerHTML = modoAgendaSlots ? '—' : '<span>No disponible</span><br><span class="text-[8px]">+ habilitar</span>';
+                            tdCell.onclick = () => {
+                                if (habilitarSlotSobreLaMarcha(clave)) renderAgenda();
+                            };
+                        }
 
                     }
 
@@ -3742,6 +3939,15 @@ function calcularRentabilidadFicha(ficha) {
                 alert('No hay espacio suficiente para una sesión de 45 minutos desde esta hora.');
                 claveAgendaArrastrada = '';
                 return;
+            }
+
+            if (!slotDisponibleParaClave(clave)) {
+                const habilitado = habilitarSlotSobreLaMarcha(clave);
+                if (!habilitado || !slotDisponibleParaClave(clave)) {
+                    alert('No se puede agendar fuera de la disponibilidad publicada del entrenador.');
+                    claveAgendaArrastrada = '';
+                    return;
+                }
             }
 
             if (claveOrigen) {
@@ -3883,11 +4089,11 @@ function calcularRentabilidadFicha(ficha) {
         }
 
         function disponibilidadReservasPorDefecto() {
+            // Nueva filosofía: sin disponibilidad publicada no hay slots agendables.
+            // El PT/admin debe definir franjas antes de agendar clientes.
             const semanal = {};
-            for (let d=1; d<=7; d++) {
-                semanal[d] = { activo: d <= 5, bloques: [{inicio:'08:00', fin:'14:00'}, {inicio:'16:00', fin:'21:00'}] };
-            }
-            return { semanal, actualizadoEn: new Date().toISOString() };
+            for (let d=1; d<=7; d++) semanal[d] = { activo: false, bloques: [] };
+            return { semanal, excepciones: {}, actualizadoEn: new Date().toISOString() };
         }
 
         function disponibilidadTrainerActual() {
