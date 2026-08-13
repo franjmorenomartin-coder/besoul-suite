@@ -1,9 +1,3 @@
-/
-agenda.html
-
-
-
-
 <!DOCTYPE html>
 
 <html lang="es">
@@ -265,8 +259,8 @@ agenda.html
                 <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-2 border-b border-slate-800 pb-2 mb-3">
 
                     <div>
-                        <h2 class="text-xs font-bold uppercase text-slate-300 tracking-wider">Agenda por slots disponibles · sesiones de 45 min</h2>
-                        <p id="lbl-agenda-slots-info" class="text-[10px] text-slate-500 mt-1">Solo se muestran huecos publicados por disponibilidad del PT y sesiones ya agendadas.</p>
+                        <h2 class="text-xs font-bold uppercase text-slate-300 tracking-wider">Agenda por slots · sesiones de 45 min</h2>
+                        <p id="lbl-agenda-slots-info" class="text-[10px] text-slate-500 mt-1">Vista por días: solo aparecen los slots de 45 min habilitados por el PT y sus sesiones.</p>
                     </div>
 
                     <div class="flex flex-wrap gap-2 justify-end">
@@ -279,7 +273,11 @@ agenda.html
 
                 <div class="flex-1 overflow-auto">
 
-                    <table class="w-full min-w-[1120px] text-left text-xs border-collapse border border-slate-800 table-fixed">
+                    <!-- VISTA PRINCIPAL: slots por día, sin columna franja -->
+                    <div id="agenda-slots-grid" class="hidden min-w-[1120px]"></div>
+
+                    <!-- VISTA AVANZADA: parrilla completa para auditoría/admin -->
+                    <table id="tabla-agenda-avanzada" class="w-full min-w-[1120px] text-left text-xs border-collapse border border-slate-800 table-fixed">
 
                         <thead>
 
@@ -3587,7 +3585,7 @@ function calcularRentabilidadFicha(ficha) {
             const info = document.getElementById('lbl-agenda-slots-info');
             if (btn) btn.innerText = modoAgendaSlots ? 'Vista avanzada' : 'Vista slots';
             if (info) info.innerText = modoAgendaSlots
-                ? 'Solo se muestran huecos publicados por disponibilidad del PT y sesiones ya agendadas.'
+                ? 'Vista por días: solo aparecen los slots de 45 min habilitados por el PT y sus sesiones.'
                 : 'Vista avanzada: se muestra todo el día de 06:00 a 22:00 para auditoría.';
         }
 
@@ -3667,10 +3665,272 @@ function calcularRentabilidadFicha(ficha) {
             if (dbNotas[claveDestino]) delete dbNotas[claveDestino];
         }
 
+
+        function clasesSlotBesoul(tipo) {
+            const base = 'group relative rounded-2xl border px-3 py-2.5 min-h-[64px] shadow-lg transition overflow-hidden';
+            const hover = ' hover:-translate-y-[1px] hover:shadow-xl';
+            if (tipo === 'libre') return base + hover + ' cursor-pointer bg-emerald-500/10 border-emerald-400/40 text-emerald-100 hover:bg-emerald-500/16';
+            if (tipo === 'grupo-abierto') return base + hover + ' cursor-pointer bg-amber-500/12 border-amber-400/70 text-amber-100 hover:bg-amber-500/18';
+            if (tipo === 'grupo-completo') return base + ' cursor-pointer bg-red-500/14 border-red-400/65 text-red-100 opacity-95';
+            if (tipo === 'valoracion') return base + hover + ' cursor-pointer bg-cyan-500/10 border-cyan-300/70 text-cyan-100 border-dashed';
+            if (tipo === 'ocupado') return base + hover + ' cursor-pointer bg-slate-700/30 border-slate-500/35 text-slate-100';
+            return base + ' bg-slate-950/50 border-slate-800 text-slate-500';
+        }
+
+        function activarDropLibreSlot(el, clave) {
+            el.ondragover = (e) => { e.preventDefault(); el.classList.add('ring-2', 'ring-emerald-300/70'); };
+            el.ondragleave = () => el.classList.remove('ring-2', 'ring-emerald-300/70');
+            el.ondrop = (e) => {
+                e.preventDefault();
+                el.classList.remove('ring-2', 'ring-emerald-300/70');
+                const payloadTexto = e.dataTransfer.getData("text/plain");
+                let claveOrigen = e.dataTransfer.getData("application/x-bs-agenda-key") || claveAgendaArrastrada || '';
+                let idCliente = payloadTexto;
+                if (payloadTexto && payloadTexto.startsWith('bs-agenda-move|')) {
+                    const partes = payloadTexto.split('|');
+                    claveOrigen = claveOrigen || partes[1] || '';
+                    idCliente = partes[2] || '';
+                }
+                soltarFichaEnCelda(clave, idCliente, claveOrigen);
+            };
+        }
+
+        function generarSlotsDiaDisponibilidad(fechaISO) {
+            const minutosSet = new Set();
+
+            // Disponibilidad publicada: slots reales de 45 min, no tramos de 15 min.
+            bloquesDisponibilidadFecha(entrenadorVisto, fechaISO).forEach(b => {
+                const inicio = minutosDesdeHorario(b.inicio);
+                const fin = minutosDesdeHorario(b.fin);
+                if (Number.isNaN(inicio) || Number.isNaN(fin)) return;
+                for (let m = inicio; m + 45 <= fin; m += 45) minutosSet.add(m);
+            });
+
+            // Mantener visibles citas ya existentes aunque se hubieran creado antes de exigir disponibilidad.
+            Object.keys(dbAgenda[entrenadorVisto] || {}).forEach(clave => {
+                if (!clave.startsWith(`${fechaISO}_`)) return;
+                const partes = clave.split('_');
+                const inicio = minutosDesdeHorario(partes[1]);
+                if (!Number.isNaN(inicio)) minutosSet.add(inicio);
+            });
+
+            Object.keys(dbLeadsPruebasCRM[entrenadorVisto] || {}).forEach(clave => {
+                if (!clave.startsWith(`${fechaISO}_`)) return;
+                const partes = clave.split('_');
+                const inicio = minutosDesdeHorario(partes[1]);
+                if (!Number.isNaN(inicio)) minutosSet.add(inicio);
+            });
+
+            return Array.from(minutosSet).sort((a,b) => a-b);
+        }
+
+        function crearSlotAgendaCompacto(fechaISO, minutosInicio) {
+            const clave = claveDesdeFechaYMinutos(fechaISO, minutosInicio);
+            const hora = formatoMinutosHorario(minutosInicio);
+            const horaFin = formatoMinutosHorario(minutosInicio + 45);
+            const cobertura = obtenerCoberturaCitaAgenda(clave);
+            const slotDisponible = slotDisponibleParaClave(clave);
+            const card = document.createElement('div');
+            card.dataset.clave = clave;
+
+            const horaHTML = `<div class="flex items-start justify-between gap-2">
+                <div>
+                    <div class="text-[12px] font-black tracking-tight">${hora} - ${horaFin}</div>
+                </div>`;
+
+            if (cobertura && !cobertura.esInicio) {
+                const objBloque = buscarFichaPorId(cobertura.obj?.id) || cobertura.obj || {};
+                card.className = clasesSlotBesoul('ocupado') + ' opacity-60';
+                card.title = `Bloque reservado por ${objBloque.nombre || 'sesión'} (${etiquetaFranja45(cobertura.claveInicio.split('_')[1])})`;
+                card.innerHTML = `${horaHTML}<span class="text-[10px] text-slate-400">ocupado</span></div>
+                    <div class="mt-1 text-[11px] font-bold truncate">${escapeHTML(objBloque.nombre || 'Ocupado')}</div>
+                    <div class="text-[10px] text-slate-400">Bloque de sesión</div>`;
+                return card;
+            }
+
+            let obj = cobertura && cobertura.esInicio ? cobertura.obj : null;
+            if (obj) {
+                const objOriginal = obj;
+                obj = buscarFichaPorId(obj.id) || obj;
+                const esPruebaCRM = esCitaPruebaCRM(objOriginal) || esCitaPruebaCRM(obj);
+                const esGrupo = esGrupoAbierto(objOriginal) || esGrupoAbierto(obj);
+                const rent = esGrupo ? calcularRentabilidadGrupoAbierto(objOriginal, entrenadorVisto) : calcularRentabilidadFicha(obj);
+                const nota = obtenerNotaAgenda(cobertura.claveInicio);
+                const notaHTML = nota ? `<div class="mt-1 text-[10px] text-amber-200 truncate">📝 ${escapeHTML(nota)}</div>` : '';
+
+                card.setAttribute('draggable', 'true');
+                card.ondragstart = (e) => {
+                    e.stopPropagation();
+                    claveAgendaArrastrada = cobertura.claveInicio;
+                    e.dataTransfer.setData("application/x-bs-agenda-key", cobertura.claveInicio);
+                    e.dataTransfer.setData("text/plain", `bs-agenda-move|${cobertura.claveInicio}|${obj.id}`);
+                    e.dataTransfer.effectAllowed = 'move';
+                };
+                card.ondragend = () => { claveAgendaArrastrada = ''; };
+
+                if (esPruebaCRM) {
+                    const detalle = textoDetallePruebaCRM(objOriginal);
+                    card.className = clasesSlotBesoul('valoracion');
+                    card.title = 'Valoración comercial procedente del CRM. No suma facturación ni sesiones.';
+                    card.innerHTML = `${horaHTML}<span class="text-[9px] px-2 py-0.5 rounded-full bg-cyan-400/15 text-cyan-200 border border-cyan-300/30">VALORACIÓN</span></div>
+                        <div class="mt-1 text-[12px] font-black text-white uppercase truncate">${escapeHTML(objOriginal.nombre || obj.nombre || 'Valoración')}</div>
+                        <div class="text-[10px] text-cyan-200/80 truncate">${escapeHTML(detalle)}</div>${notaHTML}`;
+                    card.onclick = () => {
+                        if (fichaSeleccionadaMovilId) {
+                            agendarFichaSeleccionadaEnCelda(cobertura.claveInicio);
+                            return;
+                        }
+                        const notaEntrenador = objOriginal.notaEntrenadorPrueba || objOriginal.notaEntrenador || objOriginal.notasEntrenadorPrueba || '';
+                        alert([
+                            'Valoración asignada desde CRM.',
+                            `Lead: ${objOriginal.nombre || '---'}`,
+                            `Teléfono: ${objOriginal.telefono || '---'}`,
+                            `Fuente: ${objOriginal.fuenteCaptacion || '---'}`,
+                            `Medio: ${objOriginal.medioCaptacion || '---'}`,
+                            `Objetivo: ${objOriginal.objetivoCliente || '---'}`,
+                            notaEntrenador ? `Notas para el entrenador: ${notaEntrenador}` : 'Notas para el entrenador: ---',
+                            '',
+                            'No suma facturación ni sesiones. Para cambiar fecha, entrenador o estado, abre el lead en CRM.'
+                        ].join('\\n'));
+                    };
+                    return card;
+                }
+
+                if (esGrupo) {
+                    const asistentes = asistentesGrupoAbierto(objOriginal).length;
+                    const capacidad = capacidadGrupoAbierto(objOriginal);
+                    const completo = asistentes >= capacidad;
+                    card.className = clasesSlotBesoul(completo ? 'grupo-completo' : 'grupo-abierto');
+                    card.title = completo ? 'Grupo completo. Haz clic para ver detalles.' : 'Grupo abierto con plazas disponibles. Haz clic para gestionar.';
+                    card.innerHTML = `${horaHTML}<span class="text-[16px]">${completo ? '🔴' : '👥'}</span></div>
+                        <div class="mt-1 text-[12px] font-black ${completo ? 'text-red-100' : 'text-amber-100'} truncate">${escapeHTML(obj.nombre || 'Grupo abierto')}</div>
+                        <div class="text-[10px] font-bold ${completo ? 'text-red-200' : 'text-amber-200'}">${completo ? 'Completo' : 'Grupo abierto'} · ${asistentes}/${capacidad} plazas</div>
+                        <div class="text-[10px] opacity-80">${rent.toFixed(2)}€ · 45 min</div>${notaHTML}`;
+                    card.onclick = () => {
+                        if (fichaSeleccionadaMovilId) {
+                            agendarFichaSeleccionadaEnCelda(cobertura.claveInicio);
+                            return;
+                        }
+                        abrirModalNota(cobertura.claveInicio, obj, rent);
+                    };
+                    return card;
+                }
+
+                card.className = clasesSlotBesoul('ocupado');
+                card.title = 'Slot ocupado. Haz clic para ver notas/detalles o arrastra para mover la cita.';
+                card.innerHTML = `${horaHTML}<span class="text-[9px] px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-300 border border-slate-400/20">OCUPADO</span></div>
+                    <div class="mt-1 text-[12px] font-black text-white uppercase truncate">${escapeHTML(obj.nombre || 'Cliente')}</div>
+                    <div class="text-[10px] text-slate-400">Individual · ${rent.toFixed(2)}€</div>${notaHTML}`;
+                card.onclick = () => {
+                    if (fichaSeleccionadaMovilId) {
+                        agendarFichaSeleccionadaEnCelda(cobertura.claveInicio);
+                        return;
+                    }
+                    abrirModalNota(cobertura.claveInicio, obj, rent);
+                };
+                return card;
+            }
+
+            if (slotDisponible) {
+                card.className = clasesSlotBesoul('libre');
+                card.title = fichaSeleccionadaMovilId ? 'Toca para agendar la ficha seleccionada.' : 'Slot libre habilitado por disponibilidad del PT.';
+                activarDropLibreSlot(card, clave);
+                card.onclick = () => {
+                    if (fichaSeleccionadaMovilId) agendarFichaSeleccionadaEnCelda(clave);
+                };
+                card.innerHTML = `${horaHTML}<span class="text-xl leading-none text-emerald-100/90">+</span></div>
+                    <div class="mt-1 text-[12px] font-black text-emerald-100">Libre</div>
+                    <div class="text-[10px] text-emerald-200/75">${fichaSeleccionadaMovilId ? 'Tocar para agendar' : 'Individual · 45 min'}</div>`;
+                return card;
+            }
+
+            card.className = clasesSlotBesoul('no-disponible');
+            card.title = 'Hora no publicada. Haz clic para habilitar este slot antes de agendar.';
+            card.onclick = () => { if (habilitarSlotSobreLaMarcha(clave)) renderAgenda(); };
+            card.innerHTML = `${horaHTML}<span class="text-[10px] text-slate-500">+</span></div>
+                <div class="mt-1 text-[11px] font-bold">No habilitado</div>
+                <div class="text-[10px] text-slate-500">Clic para habilitar</div>`;
+            return card;
+        }
+
+        function renderAgendaSlotsCompacta() {
+            const grid = document.getElementById('agenda-slots-grid');
+            const tabla = document.getElementById('tabla-agenda-avanzada');
+            const cuerpo = document.getElementById('cuerpo-agenda');
+            if (cuerpo) cuerpo.innerHTML = '';
+            if (tabla) tabla.classList.add('hidden');
+            if (!grid) return;
+            grid.classList.remove('hidden');
+            grid.innerHTML = '';
+
+            const dias = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+            const cols = document.createElement('div');
+            cols.className = 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3 pb-2';
+
+            let totalSlots = 0;
+
+            for (let idxDia = 0; idxDia < 7; idxDia++) {
+                const fecha = new Date(lunesActual);
+                fecha.setDate(fecha.getDate() + idxDia);
+                const fechaISO = formatoFechaLocal(fecha);
+                const slots = generarSlotsDiaDisponibilidad(fechaISO);
+                totalSlots += slots.length;
+
+                const col = document.createElement('section');
+                col.className = 'bg-slate-950/35 border border-slate-800/80 rounded-3xl p-2.5 min-h-[240px]';
+
+                const fechaTxt = fecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+                col.innerHTML = `<div class="sticky top-0 z-10 -mx-1 mb-2 px-2 py-2 rounded-2xl bg-slate-950/90 border border-slate-800 text-center backdrop-blur">
+                    <div class="text-[11px] font-black text-slate-200 uppercase tracking-wide">${dias[idxDia]}</div>
+                    <div class="text-[10px] text-amber-300 font-bold">${fechaTxt}</div>
+                </div>`;
+
+                const list = document.createElement('div');
+                list.className = 'space-y-2';
+
+                if (!slots.length) {
+                    const empty = document.createElement('button');
+                    empty.type = 'button';
+                    empty.className = 'w-full rounded-2xl border border-dashed border-slate-700/80 bg-slate-900/40 px-3 py-4 text-center text-[11px] text-slate-500 hover:border-cyan-400/40 hover:text-cyan-300 transition';
+                    empty.innerHTML = '<div class="font-bold text-slate-400">Sin slots</div><div class="text-[10px] mt-1">+ Añadir disponibilidad</div>';
+                    empty.onclick = () => abrirModalDisponibilidadReservas();
+                    list.appendChild(empty);
+                } else {
+                    slots.forEach(min => list.appendChild(crearSlotAgendaCompacto(fechaISO, min)));
+                }
+
+                col.appendChild(list);
+                cols.appendChild(col);
+            }
+
+            if (!totalSlots) {
+                grid.innerHTML = `<div class="p-8 text-center text-slate-400 bg-slate-950/40 border border-dashed border-slate-800 rounded-3xl">
+                    <div class="text-sm font-black text-white mb-2">Sin disponibilidad publicada esta semana</div>
+                    <div class="text-xs text-slate-500 mb-4">Antes de agendar clientes, ${escapeHTML(nombreEntrenador(entrenadorVisto))} debe publicar sus slots disponibles.</div>
+                    <button onclick="abrirModalDisponibilidadReservas()" class="bg-cyan-400 text-slate-950 px-4 py-2 rounded-xl font-black text-xs hover:bg-cyan-500 transition">Configurar disponibilidad</button>
+                </div>`;
+                return;
+            }
+
+            grid.appendChild(cols);
+        }
+
+
         function renderAgenda() {
 
-            const cuerpo = document.getElementById('cuerpo-agenda'); cuerpo.innerHTML = '';
             actualizarBotonVistaAgenda();
+
+            if (modoAgendaSlots) {
+                renderAgendaSlotsCompacta();
+                return;
+            }
+
+            const gridSlots = document.getElementById('agenda-slots-grid');
+            const tablaAvanzada = document.getElementById('tabla-agenda-avanzada');
+            if (gridSlots) gridSlots.classList.add('hidden');
+            if (tablaAvanzada) tablaAvanzada.classList.remove('hidden');
+
+            const cuerpo = document.getElementById('cuerpo-agenda'); cuerpo.innerHTML = '';
 
             const franjas = generarFranjasAgendaSegunDisponibilidad();
             if (modoAgendaSlots && !franjas.length) {
