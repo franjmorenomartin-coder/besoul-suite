@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BESOUL Dashboard · Dirección</title>
-    <link rel="manifest" href="./manifest.json?v=pwa-logo2">
+    <link rel="manifest" href="./manifest.json?v=dashboard-v2">
   <meta name="theme-color" content="#0B0F17">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -64,7 +64,7 @@
           <div class="text-slate-950 font-black text-[8px] tracking-[0.25em] border-t border-slate-950 w-full text-center mt-0.5">FIT</div>
         </a>
         <div>
-          <h1 class="text-lg font-extrabold text-white tracking-tight">Dashboard <span class="text-cyan-400 font-medium text-sm">Dirección 360</span></h1>
+          <h1 class="text-lg font-extrabold text-white tracking-tight">Dashboard <span class="text-cyan-400 font-medium text-sm">Dirección 360 · v2</span></h1>
           <p class="text-xs text-slate-400">Usuario: <span id="lbl-usuario" class="text-amber-400 font-bold uppercase">---</span> · <span id="lbl-rango" class="text-slate-300">---</span></p>
         </div>
       </div>
@@ -123,7 +123,7 @@
     </section>
 
     <main class="flex-1 p-4 md:p-6 space-y-6">
-      <section class="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-8 gap-3">
+      <section class="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-12 gap-3">
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Facturación</p><p id="kpi-facturacion" class="text-lg font-black text-white font-mono mt-1">0,00 €</p></div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">BESOUL bruto</p><p id="kpi-besoul" class="text-lg font-black text-emerald-400 font-mono mt-1">0,00 €</p></div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Coste sede</p><p id="kpi-coste" class="text-lg font-black text-red-300 font-mono mt-1">0,00 €</p></div>
@@ -132,6 +132,10 @@
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Entrenadores</p><p id="kpi-trainers" class="text-lg font-black text-white font-mono mt-1">0</p></div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Sesiones</p><p id="kpi-sesiones" class="text-lg font-black text-blue-300 font-mono mt-1">0</p></div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Conversión CRM</p><p id="kpi-conversion" class="text-lg font-black text-purple-300 font-mono mt-1">0%</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Canon clientes centro</p><p id="kpi-canon-clientes" class="text-lg font-black text-red-200 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Valor agenda</p><p id="kpi-valor-agenda" class="text-lg font-black text-cyan-300 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Desviación cartera</p><p id="kpi-desviacion-agenda" class="text-lg font-black text-amber-300 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Ocupación disp.</p><p id="kpi-ocupacion-disponibilidad" class="text-lg font-black text-emerald-300 font-mono mt-1">0%</p></div>
       </section>
 
       <section id="insights" class="bg-slate-900 border border-slate-800 rounded-xl p-4 hidden"></section>
@@ -154,7 +158,7 @@
           <canvas id="chartSources"></canvas>
         </div>
         <div class="chart-card bg-slate-900 border border-slate-800 rounded-xl p-4">
-          <div class="flex items-center justify-between mb-3"><h2 class="text-sm font-black text-white">Ocupación por hora</h2><span class="text-[10px] text-slate-500">Sesiones y pruebas</span></div>
+          <div class="flex items-center justify-between mb-3"><h2 class="text-sm font-black text-white">Ocupación por hora</h2><span class="text-[10px] text-slate-500">Ocupado vs disponible</span></div>
           <canvas id="chartHours"></canvas>
         </div>
         <div class="chart-card bg-slate-900 border border-slate-800 rounded-xl p-4">
@@ -166,14 +170,14 @@
       <section class="grid grid-cols-1 2xl:grid-cols-2 gap-4">
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 overflow-x-auto">
           <h2 class="text-sm font-black text-white mb-1">Mapa de ocupación</h2>
-          <p class="text-[11px] text-slate-500 mb-4">Detecta días y horas con más demanda. Se agrupa por hora de inicio de sesión/prueba.</p>
+          <p class="text-[11px] text-slate-500 mb-4">Detecta el aprovechamiento real de la disponibilidad publicada por los PT.</p>
           <div id="heatmap" class="min-w-[700px]"></div>
         </div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 overflow-x-auto">
           <h2 class="text-sm font-black text-white mb-1">Top entrenadores</h2>
-          <p class="text-[11px] text-slate-500 mb-4">Ranking del periodo/mes por facturación, clientes y margen Besoul.</p>
+          <p class="text-[11px] text-slate-500 mb-4">Ranking del periodo/mes por facturación, clientes, canon centro y margen Besoul real.</p>
           <table class="w-full min-w-[760px] text-left text-xs">
-            <thead class="text-[10px] uppercase text-slate-500 border-b border-slate-800"><tr><th class="py-2">Entrenador</th><th>Centro</th><th>Clientes</th><th>Facturación</th><th>BESOUL bruto</th><th>Sistema</th></tr></thead>
+            <thead class="text-[10px] uppercase text-slate-500 border-b border-slate-800"><tr><th class="py-2">Entrenador</th><th>Centro</th><th>Clientes</th><th>Facturación</th><th>BESOUL bruto</th><th>Canon centro</th><th>Neto Besoul</th><th>Sistema</th></tr></thead>
             <tbody id="tabla-trainers" class="divide-y divide-slate-800/70"></tbody>
           </table>
         </div>
@@ -183,12 +187,12 @@
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 overflow-x-auto">
           <h2 class="text-sm font-black text-white mb-4">Centros</h2>
           <table class="w-full min-w-[760px] text-left text-xs">
-            <thead class="text-[10px] uppercase text-slate-500 border-b border-slate-800"><tr><th class="py-2">Centro</th><th>PT</th><th>Clientes</th><th>Facturación</th><th>% Fact.</th><th>Coste sede</th><th>Neto centro</th></tr></thead>
+            <thead class="text-[10px] uppercase text-slate-500 border-b border-slate-800"><tr><th class="py-2">Centro</th><th>PT</th><th>Clientes</th><th>Facturación</th><th>% Fact.</th><th>Canon clientes</th><th>Coste centro</th><th>Neto centro</th></tr></thead>
             <tbody id="tabla-centros" class="divide-y divide-slate-800/70"></tbody>
           </table>
         </div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 overflow-x-auto">
-          <h2 class="text-sm font-black text-white mb-4">Huecos y oportunidades</h2>
+          <h2 class="text-sm font-black text-white mb-4">Slots libres y oportunidades</h2>
           <div id="slots-oportunidad" class="space-y-2 text-xs"></div>
         </div>
       </section>
@@ -324,14 +328,71 @@ function calcularFacturacionFichaFinanzas(ficha, trainerKey, mesKey){
   return { total:variable, mensual:0, variable, sesiones, tipo: esBonoFicha(ficha) ? 'bono' : 'suelta' };
 }
 function contarPersonasFicha(ficha){ if (!ficha || ficha.vinculacion) return 0; if (normalizarEstado(ficha.estadoCliente||'activo') !== 'activo') return 0; if (ficha.tipo === 'grupo') return Math.max(1, ficha.integrantesObj ? ficha.integrantesObj.length : 1); return 1; }
-function calcularRepartoPorTramosBesoul(F, rango='rango1', aporteClientes=0){
-  F = Math.max(0, Number(F)||0); aporteClientes = Number(aporteClientes)||0;
+
+function sesionesContratadasFichaDashboard(ficha){
+  if (!ficha) return 0;
+  if (esBonoFicha(ficha)) return 10;
+  if (esSueltaFicha(ficha)) return 1;
+  return (parseInt(ficha.factor)||1) * 4;
+}
+function fichaByIdTrainer(trainerKey, id){ const lista=agendaData.clientes?.[trainerKey] || []; return (Array.isArray(lista)?lista:[]).find(c=>c && c.id===id) || null; }
+function fichaPadreGrupoDashboard(ficha, trainerKey){ return ficha?.vinculacion ? fichaByIdTrainer(trainerKey, ficha.vinculacion) : null; }
+function facturacionFichaValorAgenda(ficha, trainerKey){
+  if (!ficha) return 0;
+  if (ficha.vinculacion || ficha.modalidad === 'Miembro Subordinado') {
+    const padre = fichaPadreGrupoDashboard(ficha, trainerKey);
+    if (padre) {
+      const miembros = padre.integrantesObj && padre.integrantesObj.length ? padre.integrantesObj.length : 1;
+      return calcularFacturacionFichaSimple(padre) / miembros;
+    }
+    return parseNum(ficha.facturacionEstadistica || 0);
+  }
+  return calcularFacturacionFichaSimple(ficha);
+}
+function sesionesFichaValorAgenda(ficha, trainerKey){
+  const padre = fichaPadreGrupoDashboard(ficha, trainerKey);
+  return sesionesContratadasFichaDashboard(padre || ficha);
+}
+function valorSesionFichaDashboard(ficha, trainerKey=''){ const sesiones=sesionesFichaValorAgenda(ficha, trainerKey); const total=facturacionFichaValorAgenda(ficha, trainerKey); return sesiones>0 ? total/sesiones : 0; }
+function valorAgendaCitaDashboard(cita, trainerKey){
+  if (!cita || esCitaPruebaCRM(cita) || esRecuperacionNoFacturable(cita)) return 0;
+  if (esGrupoAbiertoAgenda(cita)) {
+    const asistentes=asistentesGrupoAbiertoAgenda(cita);
+    if (asistentes.length) return asistentes.reduce((s,a)=>s+valorSesionFichaDashboard(fichaByIdTrainer(trainerKey, a.id || a.clientId) || a, trainerKey),0);
+    const fichaGrupo=fichaByIdTrainer(trainerKey, cita.id);
+    return fichaGrupo ? valorSesionFichaDashboard(fichaGrupo, trainerKey) : 0;
+  }
+  const ficha=fichaByIdTrainer(trainerKey, cita.id) || cita;
+  return valorSesionFichaDashboard(ficha, trainerKey);
+}
+function minutosDesdeHorario(hora){ const p=String(hora||'').split(':'); if(p.length!==2) return NaN; const h=parseInt(p[0],10), m=parseInt(p[1],10); return (Number.isNaN(h)||Number.isNaN(m)) ? NaN : h*60+m; }
+function formatoMinutosHorario(totalMinutos){ const h=Math.floor(totalMinutos/60); const m=totalMinutos%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
+function diaSemanaBesoul(fecha){ const d=fecha.getDay(); return d===0 ? 7 : d; }
+function normalizarBloquesDisponibilidad(bloques){ return (Array.isArray(bloques)?bloques:[]).map(b=>({inicio:String(b.inicio||'').slice(0,5), fin:String(b.fin||'').slice(0,5)})).filter(b=>b.inicio && b.fin && b.inicio < b.fin).sort((a,b)=>a.inicio.localeCompare(b.inicio)); }
+function fusionarBloquesDisponibilidad(bloques){ const lista=normalizarBloquesDisponibilidad(bloques); if(!lista.length) return []; const salida=[{...lista[0]}]; for(let i=1;i<lista.length;i++){ const u=salida[salida.length-1]; const a=lista[i]; if(a.inicio<=u.fin){ if(a.fin>u.fin) u.fin=a.fin; } else salida.push({...a}); } return salida; }
+function disponibilidadTrainerLecturaDashboard(trainerKey){ return agendaData.disponibilidadReservas?.[trainerKey] || null; }
+function bloquesDisponibilidadFechaDashboard(trainerKey, fechaISO){
+  const disp=disponibilidadTrainerLecturaDashboard(trainerKey); if(!disp) return [];
+  const fecha=new Date(`${fechaISO}T00:00:00`); const dia=diaSemanaBesoul(fecha);
+  const semanal=disp.semanal?.[dia]; const excepcion=disp.excepciones?.[fechaISO];
+  if (excepcion) { if (excepcion.activo===false) return []; if (excepcion.override===true) return excepcion.activo ? normalizarBloquesDisponibilidad(excepcion.bloques) : []; }
+  let bloques=[]; if(semanal?.activo) bloques=bloques.concat(normalizarBloquesDisponibilidad(semanal.bloques));
+  if(excepcion?.activo!==false) bloques=bloques.concat(normalizarBloquesDisponibilidad(excepcion?.bloques));
+  return fusionarBloquesDisponibilidad(bloques);
+}
+function slotBloqueadoDisponibilidadDashboard(trainerKey, fechaISO, hora){ const lista=agendaData.disponibilidadReservas?.[trainerKey]?.bloqueos?.[fechaISO] || []; return new Set((Array.isArray(lista)?lista:[]).map(h=>String(h||'').slice(0,5))).has(String(hora||'').slice(0,5)); }
+function claveSlotDashboard(fechaISO, minutos){ return `${fechaISO}_${formatoMinutosHorario(minutos)}`; }
+function slotOcupadoAgendaDashboard(trainerKey, clave){ const cita=agendaData.agenda?.[trainerKey]?.[clave]; return !!(cita && !cita.bloqueoParteDe); }
+function eachDateISO(startDate,endDate,cb){ let d=new Date(startDate); d.setHours(0,0,0,0); const last=new Date(endDate); last.setHours(0,0,0,0); while(d<=last){ cb(dateISO(d), new Date(d)); d.setDate(d.getDate()+1); } }
+
+function calcularRepartoPorTramosBesoul(F, rango='rango1'){
+  F = Math.max(0, Number(F)||0);
   const esRango2 = rango === 'rango2';
   const bsPct3 = esRango2 ? 0.15 : 0.30;
   const t1 = Math.min(F, 1400);
   const t2 = F > 1400 ? Math.min(F,1900)-1400 : 0;
   const t3 = F > 1900 ? F-1900 : 0;
-  const bsTotal = Math.min(F, Math.max(0, (t1*0.50)+(t2*0.40)+(t3*bsPct3)+aporteClientes));
+  const bsTotal = Math.min(F, Math.max(0, (t1*0.50)+(t2*0.40)+(t3*bsPct3)));
   return { pt: Math.max(0, F-bsTotal), bs: bsTotal, sistemaAplicado: esRango2 ? 'Rango II' : 'Rango I' };
 }
 function fechaAltaSettings(settings){ const raw=String(settings?.fechaAlta||'').trim(); if(!raw) return null; const d=new Date(raw+'T00:00:00'); return Number.isNaN(d.getTime()) ? null : d; }
@@ -342,7 +403,6 @@ function rangoAutomaticoBesoul(antiguedad){ if (antiguedad >= 3) return 'rango3'
 function calcularComisionAvanzada(F, settings={}, contexto={}){
   F = Math.max(0, Number(F)||0);
   const pactoEspecial = !!settings.pactoEspecial;
-  const aporteClientes = Number(contexto.aporteClientes)||0;
   const fechaAlta = fechaAltaSettings(settings);
   const antiguedad = yearsBetween(fechaAlta);
   const posteriores = contarPosterioresCentro(contexto.key, contexto.centroId, fechaAlta);
@@ -360,17 +420,17 @@ function calcularComisionAvanzada(F, settings={}, contexto={}){
   if ((sistema === 'auto' && coordinadorAutorizado && elegibleCoordinador) || sistema === 'coordinador') sistemaEfectivo = 'coordinador';
   let res;
   if (pactoEspecial && sistemaEfectivo !== 'coordinador') {
-    const bs = Math.max(0, canonFijo + aporteClientes);
+    const bs = Math.max(0, Math.min(F, canonFijo));
     res = { pt: Math.max(0, F-bs), bs, sistemaAplicado:`Pacto especial · canon ${dinero(canonFijo)}` };
-  } else if (sistemaEfectivo === 'rango2') res = calcularRepartoPorTramosBesoul(F, 'rango2', aporteClientes);
-  else if (sistemaEfectivo === 'rango3') res = { pt: Math.max(0, F-canonFijo), bs: Math.max(0, canonFijo), sistemaAplicado:`Rango III · canon ${dinero(canonFijo)}` };
+  } else if (sistemaEfectivo === 'rango2') res = calcularRepartoPorTramosBesoul(F, 'rango2');
+  else if (sistemaEfectivo === 'rango3') res = { pt: Math.max(0, F-canonFijo), bs: Math.max(0, Math.min(F, canonFijo)), sistemaAplicado:`Rango III · canon ${dinero(canonFijo)}` };
   else if (sistemaEfectivo === 'coordinador') {
     const ptsActivosCentro = contarActivosCentroParaCoordinacion(contexto.key, contexto.centroId);
     const ptsComputables = Math.min(Math.max(0, ptsActivosCentro), coordMaxPts);
     const coordinacionBonus = Math.min(coordMaxBonus, ptsComputables * bonusCoordPorPt);
     const canonReducido = Math.max(0, canonFijo - coordinacionBonus);
-    res = { pt: Math.max(0, F-canonReducido), bs: canonReducido, sistemaAplicado:`Rango IV · coordinador` };
-  } else res = calcularRepartoPorTramosBesoul(F, 'rango1', aporteClientes);
+    res = { pt: Math.max(0, F-canonReducido), bs: Math.max(0, Math.min(F, canonReducido)), sistemaAplicado:`Rango IV · coordinador` };
+  } else res = calcularRepartoPorTramosBesoul(F, 'rango1');
   return { ...res, fechaAlta:settings.fechaAlta||'', antiguedad, posteriores, sistemaEfectivo };
 }
 function calcularCanonCentroYAsignar(c){
@@ -389,14 +449,25 @@ function calcularCanonCentroYAsignar(c){
     const extrasReducidos = reducidoDesde > 0 ? Math.max(0, n - reducidoDesde + 1) : 0;
     variable = extrasRegulares * extra + extrasReducidos * reducido;
   }
-  const share = n ? (fijo + variable) / n : 0;
-  trainers.forEach(t => { t.canonCentroShare = share; t.bsNetoCentro = (t.bsBruto||0) - share; });
-  c.canonFijoTotal = fijo; c.canonVariableTotal = variable; c.canon = fijo + variable; c.canonProrrateado = share;
+  const canonClientes = trainers.reduce((s,t)=>s + (parseNum(t.aporteCentroClientes)||0), 0);
+  const shareBase = n ? (fijo + variable) / n : 0;
+  trainers.forEach(t => {
+    const canonClienteTrainer = parseNum(t.aporteCentroClientes)||0;
+    t.canonCentroBaseShare = shareBase;
+    t.canonClienteCentro = canonClienteTrainer;
+    t.canonCentroShare = shareBase + canonClienteTrainer;
+    t.bsNetoCentro = (t.bsBruto||0) - t.canonCentroShare;
+  });
+  c.canonFijoTotal = fijo;
+  c.canonVariableTotal = variable;
+  c.canonClienteTotal = canonClientes;
+  c.canon = fijo + variable + canonClientes;
+  c.canonProrrateado = shareBase;
   return c;
 }
 function construirCalculoMes(mesKey){
   const centrosBase = { ...getCentros(), sin_centro:{id:'sin_centro', nombre:'Dirección / sin centro', canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true} };
-  const centros = {}; Object.keys(centrosBase).forEach(id => centros[id] = { ...centrosBase[id], trainers:[], facturacion:0, ptNeto:0, bsBruto:0, clientes:0, canon:0 });
+  const centros = {}; Object.keys(centrosBase).forEach(id => centros[id] = { ...centrosBase[id], trainers:[], facturacion:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClienteTotal:0 });
   const trainers = [];
   perfilesUsuarios.filter(esPerfilOperativo).forEach(p => {
     const key = trainerKeyPerfil(p);
@@ -414,16 +485,17 @@ function construirCalculoMes(mesKey){
     const soloGastos = TRAINERS_SOLO_IMPUTACION_GASTOS.includes(key);
     const clientesAgendaNoComputados = soloGastos ? clientes : 0;
     if (soloGastos) { facturacion=0; facturacionMensual=0; facturacionVariable=0; sesionesBonosSueltas=0; clientes=0; }
-    const aporteCliente = soloGastos ? 0 : parseNum(settings.aporteIndividualCliente ?? 0) * clientes;
-    const reparto = soloGastos ? {pt:0, bs:0, sistemaAplicado:'CEO · solo imputación gastos', fechaAlta:settings.fechaAlta || '', antiguedad:yearsBetween(fechaAltaSettings(settings)), sistemaEfectivo:'solo_gastos'} : calcularComisionAvanzada(facturacion, settings, {key, centroId, aporteClientes:aporteCliente});
-    const row = {key, nombre:nombrePerfil(p), email:p.email||'', centroId, facturacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, soloImputacionGastos:soloGastos, ptNeto:reparto.pt||0, bsBruto:reparto.bs||0, sistemaAplicado:reparto.sistemaAplicado||'', antiguedad:reparto.antiguedad||0, sistemaEfectivo:reparto.sistemaEfectivo||''};
+    // Este concepto NO es ingreso de BESOUL. Es canon/coste del centro asociado al PT.
+    const aporteCentroClientes = soloGastos ? 0 : parseNum(settings.aporteIndividualCliente ?? 0) * clientes;
+    const reparto = soloGastos ? {pt:0, bs:0, sistemaAplicado:'CEO · solo imputación gastos', fechaAlta:settings.fechaAlta || '', antiguedad:yearsBetween(fechaAltaSettings(settings)), sistemaEfectivo:'solo_gastos'} : calcularComisionAvanzada(facturacion, settings, {key, centroId});
+    const row = {key, nombre:nombrePerfil(p), email:p.email||'', centroId, facturacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, soloImputacionGastos:soloGastos, aporteCentroClientes, ptNeto:reparto.pt||0, bsBruto:reparto.bs||0, sistemaAplicado:reparto.sistemaAplicado||'', antiguedad:reparto.antiguedad||0, sistemaEfectivo:reparto.sistemaEfectivo||''};
     trainers.push(row);
-    if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), trainers:[], facturacion:0, ptNeto:0, bsBruto:0, clientes:0, canon:0 };
-    centros[centroId].trainers.push(row); centros[centroId].facturacion += facturacion; centros[centroId].ptNeto += row.ptNeto; centros[centroId].bsBruto += row.bsBruto; centros[centroId].clientes += clientes;
+    if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), trainers:[], facturacion:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClienteTotal:0 };
+    centros[centroId].trainers.push(row); centros[centroId].facturacion += facturacion; centros[centroId].ptNeto += row.ptNeto; centros[centroId].bsBruto += row.bsBruto; centros[centroId].clientes += clientes; centros[centroId].canonClienteTotal += aporteCentroClientes;
   });
   Object.values(centros).forEach(c => calcularCanonCentroYAsignar(c));
   const gastos = gastosMes(mesKey);
-  const total = Object.values(centros).reduce((a,c)=>{ a.facturacion += c.facturacion; a.ptNeto += c.ptNeto; a.bsBruto += c.bsBruto; a.canones += c.canon; a.clientes += c.clientes; return a; }, {facturacion:0, ptNeto:0, bsBruto:0, canones:0, clientes:0});
+  const total = Object.values(centros).reduce((a,c)=>{ a.facturacion += c.facturacion; a.ptNeto += c.ptNeto; a.bsBruto += c.bsBruto; a.canones += c.canon; a.canonClientes += c.canonClienteTotal || 0; a.clientes += c.clientes; return a; }, {facturacion:0, ptNeto:0, bsBruto:0, canones:0, canonClientes:0, clientes:0});
   total.gastos = gastos; total.beneficio = total.bsBruto - total.canones - gastos;
   return {mes:mesKey, centros, trainers, total, generadoEn:new Date().toISOString()};
 }
@@ -459,21 +531,24 @@ function cambiarPeriodo(){
 function obtenerMesData(mesKey){
   if (mesKey === mesActualKey()) return construirCalculoMes(mesKey);
   const h = dbFinanzas.historico?.[mesKey];
-  if (h && h.total) return h;
+  // Si el histórico fue cerrado antes de la corrección del canon por cliente,
+  // no lo usamos para evitar arrastrar el euro/cliente dentro de BESOUL bruto.
+  if (h && h.total && typeof h.total.canonClientes !== 'undefined') return h;
   return construirCalculoMes(mesKey);
 }
 function aplicarFiltroFinanzasMes(data, centroId, trainerKey){
   if (trainerKey) {
     const t = (data.trainers || []).find(x => x.key === trainerKey);
-    if (!t) return { facturacion:0, ptNeto:0, bsBruto:0, canones:0, gastos:0, beneficio:0, clientes:0, trainers:0 };
+    if (!t) return { facturacion:0, ptNeto:0, bsBruto:0, canones:0, canonClientes:0, gastos:0, beneficio:0, clientes:0, trainers:0 };
     const canones = t.canonCentroShare || 0;
-    return { facturacion:t.facturacion||0, ptNeto:t.ptNeto||0, bsBruto:t.bsBruto||0, canones, gastos:0, beneficio:(t.bsBruto||0)-canones, clientes:t.clientes||0, trainers:1 };
+    const canonClientes = t.canonClienteCentro || t.aporteCentroClientes || 0;
+    return { facturacion:t.facturacion||0, ptNeto:t.ptNeto||0, bsBruto:t.bsBruto||0, canones, canonClientes, gastos:0, beneficio:(t.bsBruto||0)-canones, clientes:t.clientes||0, trainers:1 };
   }
   if (centroId) {
-    const c = data.centros?.[centroId]; if (!c) return { facturacion:0, ptNeto:0, bsBruto:0, canones:0, gastos:0, beneficio:0, clientes:0, trainers:0 };
-    return { facturacion:c.facturacion||0, ptNeto:c.ptNeto||0, bsBruto:c.bsBruto||0, canones:c.canon||0, gastos:0, beneficio:(c.bsBruto||0)-(c.canon||0), clientes:c.clientes||0, trainers:(c.trainers||[]).length };
+    const c = data.centros?.[centroId]; if (!c) return { facturacion:0, ptNeto:0, bsBruto:0, canones:0, canonClientes:0, gastos:0, beneficio:0, clientes:0, trainers:0 };
+    return { facturacion:c.facturacion||0, ptNeto:c.ptNeto||0, bsBruto:c.bsBruto||0, canones:c.canon||0, canonClientes:c.canonClienteTotal||0, gastos:0, beneficio:(c.bsBruto||0)-(c.canon||0), clientes:c.clientes||0, trainers:(c.trainers||[]).length };
   }
-  const t=data.total||{}; return { facturacion:t.facturacion||0, ptNeto:t.ptNeto||0, bsBruto:t.bsBruto||0, canones:t.canones||0, gastos:t.gastos||0, beneficio:t.beneficio||0, clientes:t.clientes||0, trainers:(data.trainers||[]).length };
+  const t=data.total||{}; return { facturacion:t.facturacion||0, ptNeto:t.ptNeto||0, bsBruto:t.bsBruto||0, canones:t.canones||0, canonClientes:t.canonClientes||0, gastos:t.gastos||0, beneficio:t.beneficio||0, clientes:t.clientes||0, trainers:(data.trainers||[]).length };
 }
 function fechaDeClaveAgenda(clave){ return String(clave||'').split('_')[0] || ''; }
 function horaDeClaveAgenda(clave){ return String(clave||'').split('_')[1] || ''; }
@@ -481,6 +556,7 @@ function citaEnRango(clave, start, end){ const f=fechaDeClaveAgenda(clave); if(!
 function trainerIncluidoPorFiltro(trainerKey, centroIdFiltro, trainerFiltro){ if (trainerFiltro && trainerKey !== trainerFiltro) return false; if (centroIdFiltro) { const p=trainerByKey(trainerKey); if (centroTrainer(trainerKey,p) !== centroIdFiltro) return false; } return true; }
 function analizarAgenda(startDate, endDate, centroId, trainerKey){
   const sesiones=[]; const slots={}; const heat={}; const byHour={}; const byDay={};
+  let valorAgenda=0, grupos=0;
   Object.keys(agendaData.agenda || {}).forEach(tKey=>{
     if (!trainerIncluidoPorFiltro(tKey, centroId, trainerKey)) return;
     const ag = agendaData.agenda[tKey] || {};
@@ -492,15 +568,50 @@ function analizarAgenda(startDate, endDate, centroId, trainerKey){
       const d=new Date(fecha+'T00:00:00'); if(Number.isNaN(d.getTime())) return;
       const dow=(d.getDay()+6)%7;
       const tipo=esCitaPruebaCRM(obj)?'prueba':(esRecuperacionNoFacturable(obj)?'recuperacion':'sesion');
-      sesiones.push({trainerKey:tKey, clave, fecha, hora, dow, tipo, nombre:obj.nombre||''});
+      const valor=valorAgendaCitaDashboard(obj,tKey);
+      if(tipo==='sesion') valorAgenda += valor;
+      if(esGrupoAbiertoAgenda(obj)) grupos++;
+      sesiones.push({trainerKey:tKey, clave, fecha, hora, dow, tipo, nombre:obj.nombre||'', valor});
       const hour=hora.slice(0,2)+':00';
       slots[`${DIAS[dow]} ${hora}`]=(slots[`${DIAS[dow]} ${hora}`]||0)+1;
       if(!heat[dow]) heat[dow]={}; heat[dow][hour]=(heat[dow][hour]||0)+1;
       byHour[hour]=(byHour[hour]||0)+1; byDay[DIAS[dow]]=(byDay[DIAS[dow]]||0)+1;
     });
   });
-  return { sesiones, slots, heat, byHour, byDay, total:sesiones.length, pruebas:sesiones.filter(s=>s.tipo==='prueba').length, recuperaciones:sesiones.filter(s=>s.tipo==='recuperacion').length, reales:sesiones.filter(s=>s.tipo==='sesion').length };
+  return { sesiones, slots, heat, byHour, byDay, total:sesiones.length, pruebas:sesiones.filter(s=>s.tipo==='prueba').length, recuperaciones:sesiones.filter(s=>s.tipo==='recuperacion').length, reales:sesiones.filter(s=>s.tipo==='sesion').length, grupos, valorAgenda };
 }
+
+function analizarDisponibilidad(startDate,endDate,centroId,trainerKey){
+  const trainers = perfilesUsuarios.filter(esPerfilOperativo).map(p=>trainerKeyPerfil(p)).filter(k=>trainerIncluidoPorFiltro(k, centroId, trainerKey));
+  const byHour={}; const byDay={}; const heat={}; const libres=[]; const ocupados=[];
+  let slots=0, ocupadosN=0, libresN=0;
+  trainers.forEach(tKey=>{
+    eachDateISO(startDate,endDate,(fechaISO, fechaObj)=>{
+      const dow=(fechaObj.getDay()+6)%7;
+      const bloques=bloquesDisponibilidadFechaDashboard(tKey, fechaISO);
+      bloques.forEach(b=>{
+        const bi=minutosDesdeHorario(b.inicio), bf=minutosDesdeHorario(b.fin);
+        if(Number.isNaN(bi)||Number.isNaN(bf)) return;
+        for(let m=bi; m+45<=bf; m+=45){
+          const hora=formatoMinutosHorario(m);
+          if(slotBloqueadoDisponibilidadDashboard(tKey, fechaISO, hora)) continue;
+          const clave=claveSlotDashboard(fechaISO,m);
+          const ocupado=slotOcupadoAgendaDashboard(tKey, clave);
+          slots++;
+          if(!byHour[hora]) byHour[hora]={disponibles:0,ocupados:0,libres:0};
+          if(!byDay[DIAS[dow]]) byDay[DIAS[dow]]={disponibles:0,ocupados:0,libres:0};
+          if(!heat[dow]) heat[dow]={}; if(!heat[dow][hora]) heat[dow][hora]={disponibles:0,ocupados:0,libres:0};
+          byHour[hora].disponibles++; byDay[DIAS[dow]].disponibles++; heat[dow][hora].disponibles++;
+          const item={trainerKey:tKey, trainer:nombrePerfil(trainerByKey(tKey))||tKey, centroId:centroTrainer(tKey, trainerByKey(tKey)), fecha:fechaISO, hora, dia:DIAS[dow]};
+          if(ocupado){ ocupadosN++; byHour[hora].ocupados++; byDay[DIAS[dow]].ocupados++; heat[dow][hora].ocupados++; ocupados.push(item); }
+          else { libresN++; byHour[hora].libres++; byDay[DIAS[dow]].libres++; heat[dow][hora].libres++; libres.push(item); }
+        }
+      });
+    });
+  });
+  return { slots, ocupados:ocupadosN, libres:libresN, ocupacion:slots ? ocupadosN/slots : 0, byHour, byDay, heat, libresLista:libres, ocupadosLista:ocupados };
+}
+
 function analizarLeads(startDate,endDate,centroId,trainerKey){
   const ini=startDate.getTime(); const fin=endDate.getTime();
   const filtrados = leads.filter(l=>{
@@ -519,9 +630,13 @@ function pintarKPIs(res){
   document.getElementById('kpi-beneficio').innerText = dinero(res.total.beneficio);
   document.getElementById('kpi-clientes').innerText = numero(res.total.clientes);
   document.getElementById('kpi-trainers').innerText = numero(res.total.trainers);
-  document.getElementById('kpi-sesiones').innerText = numero(res.agenda.total);
+  document.getElementById('kpi-sesiones').innerText = numero(res.agenda.reales);
   const conv = res.crm.total ? res.crm.convertidos / res.crm.total : 0;
   document.getElementById('kpi-conversion').innerText = pct(conv);
+  document.getElementById('kpi-canon-clientes').innerText = dinero(res.total.canonClientes || 0);
+  document.getElementById('kpi-valor-agenda').innerText = dinero(res.agenda.valorAgenda || 0);
+  document.getElementById('kpi-desviacion-agenda').innerText = dinero((res.total.facturacion || 0) - (res.agenda.valorAgenda || 0));
+  document.getElementById('kpi-ocupacion-disponibilidad').innerText = pct(res.disponibilidad.ocupacion || 0);
 }
 function chartOptions(){ return { responsive:true, maintainAspectRatio:false, plugins:{ legend:{labels:{color:'#cbd5e1', boxWidth:10}}, tooltip:{callbacks:{label:(ctx)=>`${ctx.dataset?.label || ctx.label}: ${typeof ctx.raw==='number' ? ctx.raw.toLocaleString('es-ES') : ctx.raw}`}}}, scales:{ x:{ticks:{color:'#94a3b8'}, grid:{color:'#1e293b'}}, y:{ticks:{color:'#94a3b8'}, grid:{color:'#1e293b'}} } }; }
 function setChart(id, config){ if(charts[id]) charts[id].destroy(); const ctx=document.getElementById(id); if(!ctx || !window.Chart) return; charts[id]=new Chart(ctx, config); }
@@ -534,41 +649,36 @@ function pintarGraficas(res){
   setChart('chartCrm', { type:'bar', data:{ labels:['Leads','Contactados','Valorac. solic.','Valorac. real.','Convertidos','Perdidos'], datasets:[{label:'CRM', data:[res.crm.total,res.crm.contactados,res.crm.valoracionesSolicitadas,res.crm.valoracionesRealizadas,res.crm.convertidos,res.crm.perdidos], backgroundColor:'#8b5cf6'}]}, options:chartOptions() });
   const fuentes = Object.keys(res.crm.fuente).sort((a,b)=>res.crm.fuente[b]-res.crm.fuente[a]);
   setChart('chartSources', { type:'doughnut', data:{ labels:fuentes.length?fuentes:['Sin datos'], datasets:[{data:fuentes.length?fuentes.map(f=>res.crm.fuente[f]):[1], backgroundColor:colorList(Math.max(1,fuentes.length)), borderColor:'#0f172a'}]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{color:'#cbd5e1', boxWidth:10}}} } });
-  const horas = Object.keys(res.agenda.byHour).sort();
-  setChart('chartHours', { type:'bar', data:{ labels:horas, datasets:[{label:'Sesiones/pruebas', data:horas.map(h=>res.agenda.byHour[h]), backgroundColor:'#06b6d4'}]}, options:chartOptions() });
+  const horas = Object.keys(res.disponibilidad.byHour || {}).sort();
+  setChart('chartHours', { type:'bar', data:{ labels:horas, datasets:[{label:'Ocupados', data:horas.map(h=>res.disponibilidad.byHour[h].ocupados||0), backgroundColor:'#06b6d4'}, {label:'Libres publicados', data:horas.map(h=>res.disponibilidad.byHour[h].libres||0), backgroundColor:'#10b981'}]}, options:{...chartOptions(), scales:{ x:{stacked:true,ticks:{color:'#94a3b8'},grid:{color:'#1e293b'}}, y:{stacked:true,ticks:{color:'#94a3b8'},grid:{color:'#1e293b'}} }} });
   const cats = Object.keys(res.gastosCategorias).sort((a,b)=>res.gastosCategorias[b]-res.gastosCategorias[a]);
   setChart('chartExpenses', { type:'bar', data:{ labels:cats.length?cats:['Sin gastos'], datasets:[{label:'Gastos', data:cats.length?cats.map(c=>res.gastosCategorias[c]):[0], backgroundColor:'#f43f5e'}]}, options:chartOptions() });
 }
 function pintarTablas(res){
   const totalFact = res.current.total.facturacion || 0;
   const centros = Object.values(res.current.centros || {}).filter(c=>c.id !== 'sin_centro' && ((c.trainers||[]).length || c.facturacion || c.canon));
-  document.getElementById('tabla-centros').innerHTML = centros.map(c=>`<tr class="hover:bg-slate-950/50"><td class="py-2 font-bold text-white">${escapeHTML(c.nombre)}</td><td>${numero((c.trainers||[]).length)}</td><td>${numero(c.clientes||0)}</td><td class="font-mono">${dinero(c.facturacion||0)}</td><td>${pct(totalFact ? (c.facturacion||0)/totalFact : 0)}</td><td class="font-mono text-red-300">${dinero(c.canon||0)}</td><td class="font-mono ${(c.bsBruto-c.canon)>=0?'text-cyan-300':'text-red-300'}">${dinero((c.bsBruto||0)-(c.canon||0))}</td></tr>`).join('') || '<tr><td colspan="7" class="py-8 text-center text-slate-500">Sin datos.</td></tr>';
+  document.getElementById('tabla-centros').innerHTML = centros.map(c=>`<tr class="hover:bg-slate-950/50"><td class="py-2 font-bold text-white">${escapeHTML(c.nombre)}</td><td>${numero((c.trainers||[]).length)}</td><td>${numero(c.clientes||0)}</td><td class="font-mono">${dinero(c.facturacion||0)}</td><td>${pct(totalFact ? (c.facturacion||0)/totalFact : 0)}</td><td class="font-mono text-red-200">${dinero(c.canonClienteTotal||0)}</td><td class="font-mono text-red-300">${dinero(c.canon||0)}</td><td class="font-mono ${(c.bsBruto-c.canon)>=0?'text-cyan-300':'text-red-300'}">${dinero((c.bsBruto||0)-(c.canon||0))}</td></tr>`).join('') || '<tr><td colspan="8" class="py-8 text-center text-slate-500">Sin datos.</td></tr>';
   const trainers = (res.current.trainers || []).filter(t => !document.getElementById('filter-trainer').value || t.key === document.getElementById('filter-trainer').value).filter(t => !document.getElementById('filter-center').value || t.centroId === document.getElementById('filter-center').value).sort((a,b)=>(b.facturacion||0)-(a.facturacion||0)).slice(0,20);
-  document.getElementById('tabla-trainers').innerHTML = trainers.map(t=>`<tr class="hover:bg-slate-950/50"><td class="py-2 font-bold text-white">${escapeHTML(t.nombre)}<div class="text-[10px] text-slate-500">${escapeHTML(t.key)}</div></td><td>${escapeHTML(nombreCentro(t.centroId))}</td><td>${numero(t.clientes||0)}</td><td class="font-mono">${dinero(t.facturacion||0)}</td><td class="font-mono text-emerald-300">${dinero(t.bsBruto||0)}</td><td class="text-cyan-300 text-[10px]">${escapeHTML(t.sistemaAplicado||'---')}</td></tr>`).join('') || '<tr><td colspan="6" class="py-8 text-center text-slate-500">Sin datos.</td></tr>';
+  document.getElementById('tabla-trainers').innerHTML = trainers.map(t=>`<tr class="hover:bg-slate-950/50"><td class="py-2 font-bold text-white">${escapeHTML(t.nombre)}<div class="text-[10px] text-slate-500">${escapeHTML(t.key)}</div></td><td>${escapeHTML(nombreCentro(t.centroId))}</td><td>${numero(t.clientes||0)}</td><td class="font-mono">${dinero(t.facturacion||0)}</td><td class="font-mono text-emerald-300">${dinero(t.bsBruto||0)}</td><td class="font-mono text-red-200">${dinero(t.canonCentroShare||0)}</td><td class="font-mono ${(t.bsNetoCentro||0)>=0?'text-cyan-300':'text-red-300'}">${dinero(t.bsNetoCentro||0)}</td><td class="text-cyan-300 text-[10px]">${escapeHTML(t.sistemaAplicado||'---')}</td></tr>`).join('') || '<tr><td colspan="8" class="py-8 text-center text-slate-500">Sin datos.</td></tr>';
 }
 function pintarHeatmap(res){
   const hours=[]; for(let h=6; h<22; h++) hours.push(`${String(h).padStart(2,'0')}:00`);
-  const max = Math.max(1, ...Object.values(res.agenda.heat).flatMap(x=>Object.values(x||{})));
   let html = '<table class="w-full text-[10px] text-center"><thead><tr><th class="text-left text-slate-500 py-2">Día/Hora</th>' + hours.map(h=>`<th class="text-slate-500 py-2">${h}</th>`).join('') + '</tr></thead><tbody>';
   for(let d=0; d<7; d++) {
     html += `<tr><td class="text-left text-slate-300 font-bold py-1 pr-2">${DIAS[d]}</td>`;
-    hours.forEach(h=>{ const val=(res.agenda.heat[d]||{})[h]||0; const op=val?Math.max(.16, val/max):.04; html += `<td class="heat-cell border border-slate-800" style="background:rgba(6,182,212,${op})"><span class="${val?'text-white':'text-slate-700'} font-mono">${val||''}</span></td>`; });
+    hours.forEach(h=>{ const cell=(res.disponibilidad.heat[d]||{})[h]||{disponibles:0,ocupados:0}; const ratio=cell.disponibles?cell.ocupados/cell.disponibles:0; const op=cell.disponibles?Math.max(.10, ratio):.04; const txt=cell.disponibles?`${Math.round(ratio*100)}%`:''; html += `<td class="heat-cell border border-slate-800" title="${cell.ocupados||0}/${cell.disponibles||0} slots" style="background:rgba(6,182,212,${op})"><span class="${cell.disponibles?'text-white':'text-slate-700'} font-mono">${txt}</span></td>`; });
     html += '</tr>';
   }
   html += '</tbody></table>';
   document.getElementById('heatmap').innerHTML = html;
 }
 function pintarOportunidades(res){
-  const slots = Object.entries(res.agenda.slots).sort((a,b)=>b[1]-a[1]);
-  const top = slots.slice(0,8);
-  const low = [];
-  const heat = res.agenda.heat;
-  for(let d=0; d<5; d++) { for(let h=8; h<=20; h++) { const key=`${String(h).padStart(2,'0')}:00`; low.push([`${DIAS[d]} ${key}`, (heat[d]||{})[key]||0]); } }
-  low.sort((a,b)=>a[1]-b[1] || a[0].localeCompare(b[0]));
+  const topHoras = Object.entries(res.disponibilidad.byHour || {}).sort((a,b)=>(b[1].ocupados||0)-(a[1].ocupados||0)).slice(0,8);
+  const libres = (res.disponibilidad.libresLista || []).slice().sort((a,b)=>`${a.fecha} ${a.hora}`.localeCompare(`${b.fecha} ${b.hora}`)).slice(0,12);
   document.getElementById('slots-oportunidad').innerHTML = `
     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-      <div class="bg-slate-950 border border-slate-800 rounded-xl p-3"><h3 class="font-black text-amber-400 mb-2">Franjas más ocupadas</h3>${top.length?top.map(([k,v])=>`<div class="flex justify-between border-b border-slate-800/50 py-1"><span>${escapeHTML(k)}</span><b>${v}</b></div>`).join(''):'<p class="text-slate-500">Sin sesiones en el periodo.</p>'}</div>
-      <div class="bg-slate-950 border border-slate-800 rounded-xl p-3"><h3 class="font-black text-cyan-400 mb-2">Huecos potenciales</h3>${low.slice(0,8).map(([k,v])=>`<div class="flex justify-between border-b border-slate-800/50 py-1"><span>${escapeHTML(k)}</span><b>${v}</b></div>`).join('')}</div>
+      <div class="bg-slate-950 border border-slate-800 rounded-xl p-3"><h3 class="font-black text-amber-400 mb-2">Horas con más ocupación</h3>${topHoras.length?topHoras.map(([h,v])=>`<div class="flex justify-between border-b border-slate-800/50 py-1"><span>${escapeHTML(h)}</span><b>${v.ocupados||0}/${v.disponibles||0}</b></div>`).join(''):'<p class="text-slate-500">Sin disponibilidad publicada.</p>'}</div>
+      <div class="bg-slate-950 border border-slate-800 rounded-xl p-3"><h3 class="font-black text-cyan-400 mb-2">Próximos slots libres publicados</h3>${libres.length?libres.map(s=>`<div class="flex justify-between gap-2 border-b border-slate-800/50 py-1"><span>${escapeHTML(s.dia)} ${escapeHTML(s.fecha)} · ${escapeHTML(s.hora)}</span><b class="text-slate-300">${escapeHTML(s.trainer)}</b></div>`).join(''):'<p class="text-slate-500">No hay slots libres en el periodo.</p>'}</div>
     </div>`;
 }
 function pintarInsights(res){
@@ -576,11 +686,13 @@ function pintarInsights(res){
   const centros=Object.values(res.current.centros||{}).filter(c=>c.id!=='sin_centro' && c.trainers?.length);
   const topCentro=centros.slice().sort((a,b)=>(b.facturacion||0)-(a.facturacion||0))[0];
   if(topCentro) ideas.push(`Centro con mayor facturación: <b>${escapeHTML(topCentro.nombre)}</b> (${dinero(topCentro.facturacion)}).`);
+  if((res.total.canonClientes||0)>0) ideas.push(`Canon por cliente destinado a centros: <b class="text-red-200">${dinero(res.total.canonClientes)}</b>. No se suma a BESOUL bruto.`);
+  const desviacion=(res.total.facturacion||0)-(res.agenda.valorAgenda||0);
+  if(Math.abs(desviacion)>1) ideas.push(`Desviación cartera vs agenda: <b class="${desviacion>=0?'text-amber-300':'text-cyan-300'}">${dinero(desviacion)}</b>. Positivo indica facturación contratada todavía no reflejada en sesiones agendadas.`);
+  ideas.push(`Ocupación de disponibilidad publicada: <b class="text-emerald-300">${pct(res.disponibilidad.ocupacion||0)}</b> (${res.disponibilidad.ocupados}/${res.disponibilidad.slots} slots).`);
   const topFuente=Object.entries(res.crm.fuente).sort((a,b)=>b[1]-a[1])[0];
   if(topFuente) ideas.push(`Fuente principal de leads: <b>${escapeHTML(topFuente[0])}</b> (${topFuente[1]} lead/s).`);
-  const slots=Object.entries(res.agenda.slots).sort((a,b)=>b[1]-a[1])[0];
-  if(slots) ideas.push(`Franja más ocupada: <b>${escapeHTML(slots[0])}</b> con ${slots[1]} sesión/es o prueba/s.`);
-  if(res.total.beneficio < 0) ideas.push(`El beneficio neto del periodo está en negativo: <b class="text-red-300">${dinero(res.total.beneficio)}</b>. Revisa costes de sede y gastos.`);
+  if(res.total.beneficio < 0) ideas.push(`El beneficio neto del periodo está en negativo: <b class="text-red-300">${dinero(res.total.beneficio)}</b>. Revisa costes de centro y gastos.`);
   const box=document.getElementById('insights');
   if(!ideas.length){ box.classList.add('hidden'); return; }
   box.classList.remove('hidden');
@@ -594,12 +706,13 @@ function aplicarDashboard(){
   const trainerKey=document.getElementById('filter-trainer').value;
   const meses=mesesEntreFechas(startDate,endDate);
   const monthly=meses.map(m=>aplicarFiltroFinanzasMes(obtenerMesData(m), centroId, trainerKey));
-  const total=monthly.reduce((a,m)=>{ a.facturacion+=m.facturacion; a.ptNeto+=m.ptNeto; a.bsBruto+=m.bsBruto; a.canones+=m.canones; a.gastos+=m.gastos; a.beneficio+=m.beneficio; a.clientes=Math.max(a.clientes,m.clientes); a.trainers=Math.max(a.trainers,m.trainers); return a; }, {facturacion:0,ptNeto:0,bsBruto:0,canones:0,gastos:0,beneficio:0,clientes:0,trainers:0});
+  const total=monthly.reduce((a,m)=>{ a.facturacion+=m.facturacion; a.ptNeto+=m.ptNeto; a.bsBruto+=m.bsBruto; a.canones+=m.canones; a.canonClientes+=m.canonClientes||0; a.gastos+=m.gastos; a.beneficio+=m.beneficio; a.clientes=Math.max(a.clientes,m.clientes); a.trainers=Math.max(a.trainers,m.trainers); return a; }, {facturacion:0,ptNeto:0,bsBruto:0,canones:0,canonClientes:0,gastos:0,beneficio:0,clientes:0,trainers:0});
   const current=obtenerMesData(mesActualKey());
   const agenda=analizarAgenda(startDate,endDate,centroId,trainerKey);
+  const disponibilidad=analizarDisponibilidad(startDate,endDate,centroId,trainerKey);
   const crm=analizarLeads(startDate,endDate,centroId,trainerKey);
   const gastosCategorias=gastosCategoriasPeriodo(meses);
-  const res={meses, monthly, total, current, agenda, crm, gastosCategorias};
+  const res={meses, monthly, total, current, agenda, disponibilidad, crm, gastosCategorias};
   ultimoResumen=res;
   pintarKPIs(res); pintarGraficas(res); pintarTablas(res); pintarHeatmap(res); pintarOportunidades(res); pintarInsights(res);
 }
@@ -611,7 +724,7 @@ function poblarFiltros(){
 }
 function exportarResumenCSV(){
   if(!ultimoResumen) return;
-  const rows=[['Métrica','Valor'],['Facturación',ultimoResumen.total.facturacion],['Besoul bruto',ultimoResumen.total.bsBruto],['Coste sede',ultimoResumen.total.canones],['Gastos',ultimoResumen.total.gastos],['Beneficio',ultimoResumen.total.beneficio],['Clientes',ultimoResumen.total.clientes],['Entrenadores',ultimoResumen.total.trainers],['Sesiones/pruebas',ultimoResumen.agenda.total],['Leads',ultimoResumen.crm.total],['Convertidos',ultimoResumen.crm.convertidos]];
+  const rows=[['Métrica','Valor'],['Facturación',ultimoResumen.total.facturacion],['Besoul bruto',ultimoResumen.total.bsBruto],['Canon clientes centro',ultimoResumen.total.canonClientes],['Costes centro total',ultimoResumen.total.canones],['Gastos',ultimoResumen.total.gastos],['Beneficio',ultimoResumen.total.beneficio],['Clientes',ultimoResumen.total.clientes],['Entrenadores',ultimoResumen.total.trainers],['Sesiones reales',ultimoResumen.agenda.reales],['Valor agenda',ultimoResumen.agenda.valorAgenda],['Desviación cartera-agenda',ultimoResumen.total.facturacion-ultimoResumen.agenda.valorAgenda],['Ocupación disponibilidad',ultimoResumen.disponibilidad.ocupacion],['Slots disponibles',ultimoResumen.disponibilidad.slots],['Slots ocupados',ultimoResumen.disponibilidad.ocupados],['Slots libres',ultimoResumen.disponibilidad.libres],['Leads',ultimoResumen.crm.total],['Convertidos',ultimoResumen.crm.convertidos]];
   const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`besoul_dashboard_${dateISO(new Date())}.csv`; a.click(); URL.revokeObjectURL(url);
 }
