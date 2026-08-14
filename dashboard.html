@@ -237,7 +237,7 @@ const TRAINERS_SOLO_IMPUTACION_GASTOS = ['bea', 'soraya'];
 const SISTEMAS_PAGO = { auto:'Automático por rango Besoul', rango1:'Rango I · 0-1 año', rango2:'Rango II · desde 1 año', rango3:'Rango III · canon fijo', coordinador:'Rango IV · coordinador de sede' };
 const DIAS = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 let auth, db, perfil = null, usuario = null;
-let dbFinanzas = { centros:{}, trainerSettings:{}, gastos:{}, historico:{} };
+let dbFinanzas = { centros:{}, trainerSettings:{}, gastos:{}, otrosIngresos:{}, historico:{}, auditoriaCierres:{} };
 let agendaData = { clientes:{}, agenda:{}, pruebasCRM:{} };
 let perfilesUsuarios = [];
 let leads = [];
@@ -688,10 +688,13 @@ function construirCalculoMes(mesKey = mesActualKey()){
         //    Ejemplo Inacua: 1.200 € fijos incluyen 6 PT; del 7º al 11º son 200 €/PT; desde el 12º son 60 €/PT.
         calcularCanonCentroYAsignar(c);
       });
-      const gastos = (dbFinanzas.gastos?.[mesKey] || []).reduce((s,g)=>s+parseNum(g.importe),0);
+      const gastos = gastosMes(mesKey);
+      const otrosIngresos = otrosIngresosMes(mesKey);
       const total = Object.values(centros).reduce((acc,c)=>{ acc.facturacion+=c.facturacion; acc.facturacionAgenda+=c.facturacionAgenda||0; acc.desviacionAgenda+=c.desviacionAgenda||0; acc.sesionesMensualesPrevistas+=c.sesionesMensualesPrevistas||0; acc.sesionesMensualesAgendadas+=c.sesionesMensualesAgendadas||0; acc.ptNeto+=c.ptNeto; acc.bsBruto+=c.bsBruto; acc.canones+=c.canon; acc.canonClientesTotal+=c.canonClientesTotal||0; acc.clientes+=c.clientes; return acc; }, {facturacion:0,facturacionAgenda:0,desviacionAgenda:0,sesionesMensualesPrevistas:0,sesionesMensualesAgendadas:0,ptNeto:0,bsBruto:0,canones:0,canonClientesTotal:0,clientes:0});
       total.gastos = gastos;
-      total.beneficio = total.bsBruto - total.canones - gastos;
+      total.otrosIngresos = otrosIngresos;
+      total.ingresosBesoul = total.bsBruto + otrosIngresos;
+      total.beneficio = total.bsBruto + otrosIngresos - total.canones - gastos;
       // Alias de compatibilidad para Dashboard. La fuente de cálculo es Finanzas.
       total.canonClientes = total.canonClientesTotal || 0;
       Object.values(centros).forEach(c => {
@@ -704,13 +707,14 @@ function construirCalculoMes(mesKey = mesActualKey()){
       return { mes: mesKey, centros, trainers, total, generadoEn:new Date().toISOString(), fuente:'finanzas_live_engine_v3' };
     }
 function gastosMes(mesKey){ return (dbFinanzas.gastos?.[mesKey] || []).reduce((s,g)=>s+parseNum(g.importe),0); }
+function otrosIngresosMes(mesKey){ return (dbFinanzas.otrosIngresos?.[mesKey] || []).reduce((s,g)=>s+parseNum(g.importe),0); }
 function gastosCategoriasPeriodo(meses){ const res={}; meses.forEach(m=>{ (dbFinanzas.gastos?.[m]||[]).forEach(g=>{ const cat=g.categoria||'Otros'; res[cat]=(res[cat]||0)+parseNum(g.importe); }); }); return res; }
 function normalizarFinanzas(data){
-  const res = { centros:{}, trainerSettings:{}, gastos:{}, historico:{}, ...(data || {}) };
+  const res = { centros:{}, trainerSettings:{}, gastos:{}, otrosIngresos:{}, historico:{}, auditoriaCierres:{}, ...(data || {}) };
   const centros = {}; const source={...DEFAULT_CENTROS, ...(data?.centros||{})};
   Object.keys(source).forEach(id=>{ const c={...(DEFAULT_CENTROS[id]||defaultsCentro(id, source[id]?.nombre||id)), ...(source[id]||{})}; c.id=String(c.id||id); c.nombre=String(c.nombre||c.id).trim(); c.orden=parseNum(c.orden??99); if(typeof c.activo==='undefined') c.activo=true; ['visibleCRM','visibleAgenda','visibleReservas','visibleQR'].forEach(k=>{ if(typeof c[k]==='undefined') c[k]=true; }); if(esCentroTecnicoDescartable(c.id,c.nombre)) return; centros[c.id]=c; });
   if (!centros.inacua.reglaCanon || centros.inacua.reglaCanon !== 'inacua_2026_v1') centros.inacua = { ...centros.inacua, canonFijo:1200, ptsIncluidos:6, canonPt:200, canonPtReducidoDesde:12, canonPtReducido:60, reglaCanon:'inacua_2026_v1' };
-  res.centros = centros; res.trainerSettings = res.trainerSettings || {}; res.gastos = res.gastos || {}; res.historico = res.historico || {}; return res;
+  res.centros = centros; res.trainerSettings = res.trainerSettings || {}; res.gastos = res.gastos || {}; res.otrosIngresos = res.otrosIngresos || {}; res.historico = res.historico || {}; res.auditoriaCierres = res.auditoriaCierres || {}; return res;
 }
 function rangoSeleccionadoFechas(){
   const start = document.getElementById('filter-start').value;
@@ -734,7 +738,12 @@ function cambiarPeriodo(){
 }
 function normalizarAliasCalculoFinanzas(data){
   if (!data) return data;
-  if (data.total) data.total.canonClientes = data.total.canonClientes ?? data.total.canonClientesTotal ?? 0;
+  if (data.total) {
+    data.total.canonClientes = data.total.canonClientes ?? data.total.canonClientesTotal ?? 0;
+    data.total.otrosIngresos = parseNum(data.total.otrosIngresos || 0);
+    data.total.ingresosBesoul = parseNum(data.total.ingresosBesoul || ((data.total.bsBruto || 0) + data.total.otrosIngresos));
+    data.total.beneficio = parseNum(data.total.beneficio ?? ((data.total.bsBruto || 0) + data.total.otrosIngresos - (data.total.canones || 0) - (data.total.gastos || 0)));
+  }
   Object.values(data.centros || {}).forEach(c => {
     c.canonClienteTotal = c.canonClienteTotal ?? c.canonClientesTotal ?? 0;
     (c.trainers || []).forEach(t => {
@@ -748,16 +757,15 @@ function historicoCompatibleFinanzasV3(h){
   return !!(h && h.total && typeof h.total.canonClientesTotal !== 'undefined' && typeof h.total.facturacionAgenda !== 'undefined' && Array.isArray(h.trainers));
 }
 function obtenerMesData(mesKey){
-  if (mesKey === mesActualKey()) return normalizarAliasCalculoFinanzas(construirCalculoMes(mesKey));
   const h = dbFinanzas.historico?.[mesKey];
-  // Solo usamos históricos cerrados que ya incorporan la lógica nueva de Finanzas.
-  // Si son antiguos, el Dashboard recalcula con la lógica actual de Finanzas para evitar desfases.
-  if (historicoCompatibleFinanzasV3(h)) return normalizarAliasCalculoFinanzas(h);
+  // Regla nueva: si el mes está cerrado en Finanzas, el Dashboard NO recalcula.
+  // Lee el snapshot congelado aunque sea el mes actual, para que Finanzas y Dashboard coincidan.
+  if (h && h.total) return normalizarAliasCalculoFinanzas(h);
   return normalizarAliasCalculoFinanzas(construirCalculoMes(mesKey));
 }
 function aplicarFiltroFinanzasMes(data, centroId, trainerKey){
   data = normalizarAliasCalculoFinanzas(data);
-  const empty = { facturacion:0, facturacionAgenda:0, desviacionAgenda:0, ptNeto:0, bsBruto:0, canones:0, canonClientes:0, gastos:0, beneficio:0, clientes:0, trainers:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0 };
+  const empty = { facturacion:0, facturacionAgenda:0, desviacionAgenda:0, ptNeto:0, bsBruto:0, canones:0, canonClientes:0, gastos:0, otrosIngresos:0, beneficio:0, clientes:0, trainers:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0 };
   if (trainerKey) {
     const t = (data.trainers || []).find(x => x.key === trainerKey);
     if (!t) return { ...empty };
@@ -771,7 +779,7 @@ function aplicarFiltroFinanzasMes(data, centroId, trainerKey){
     return { facturacion:c.facturacion||0, facturacionAgenda:c.facturacionAgenda||0, desviacionAgenda:c.desviacionAgenda||0, ptNeto:c.ptNeto||0, bsBruto:c.bsBruto||0, canones:c.canon||0, canonClientes:c.canonClientesTotal??c.canonClienteTotal??0, gastos:0, beneficio:(c.bsBruto||0)-(c.canon||0), clientes:c.clientes||0, trainers:(c.trainers||[]).length, sesionesMensualesPrevistas:c.sesionesMensualesPrevistas||0, sesionesMensualesAgendadas:c.sesionesMensualesAgendadas||0 };
   }
   const t=data.total||{};
-  return { facturacion:t.facturacion||0, facturacionAgenda:t.facturacionAgenda||0, desviacionAgenda:t.desviacionAgenda||0, ptNeto:t.ptNeto||0, bsBruto:t.bsBruto||0, canones:t.canones||0, canonClientes:t.canonClientesTotal??t.canonClientes??0, gastos:t.gastos||0, beneficio:t.beneficio||0, clientes:t.clientes||0, trainers:(data.trainers||[]).length, sesionesMensualesPrevistas:t.sesionesMensualesPrevistas||0, sesionesMensualesAgendadas:t.sesionesMensualesAgendadas||0 };
+  return { facturacion:t.facturacion||0, facturacionAgenda:t.facturacionAgenda||0, desviacionAgenda:t.desviacionAgenda||0, ptNeto:t.ptNeto||0, bsBruto:t.bsBruto||0, canones:t.canones||0, canonClientes:t.canonClientesTotal??t.canonClientes??0, gastos:t.gastos||0, otrosIngresos:t.otrosIngresos||0, beneficio:t.beneficio||0, clientes:t.clientes||0, trainers:(data.trainers||[]).length, sesionesMensualesPrevistas:t.sesionesMensualesPrevistas||0, sesionesMensualesAgendadas:t.sesionesMensualesAgendadas||0 };
 }
 function fechaDeClaveAgenda(clave){ return String(clave||'').split('_')[0] || ''; }
 function horaDeClaveAgenda(clave){ return String(clave||'').split('_')[1] || ''; }
