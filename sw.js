@@ -1,4 +1,4 @@
-const CACHE_NAME = 'besoul-finanzas-cierre-ingresos-v4';
+const CACHE_NAME = 'besoul-pwa-icons-v5';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -8,8 +8,8 @@ const CORE_ASSETS = [
   './dashboard.html',
   './reservas.html',
   './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  './besoul-icon-192.png',
+  './besoul-icon-512.png'
 ];
 
 self.addEventListener('install', event => {
