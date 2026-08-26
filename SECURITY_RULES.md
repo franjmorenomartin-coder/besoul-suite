@@ -1,20 +1,30 @@
-# Security Rules - BESOUL Suite
+# SECURITY_RULES.md · BESOUL Suite
 
-## Principles
+Estado: documentación de las reglas Firestore consideradas reales en producción.
 
-- Internal modules require Firebase Authentication.
-- Admin has full access.
-- PT access must be limited to their own `trainerKey`.
-- Customer reservation portal is token-based and public only for minimal data.
-- External customers must not list collections.
-- External customers must not read agenda, CRM, finances, users or internal notes.
-- External customers can only create `pendiente` booking requests.
-- Dashboard must be read-only.
-- Finanzas must be admin-only in the UI and should remain protected by rules and application logic.
+Última actualización: 2026-08-26  
+Ticket: BS-009  
+Tipo de cambio: documentación  
+Producción/Firebase: NO modificado  
+Código app: NO modificado  
 
-## Current Firestore rules
+## Aviso importante
 
-Use this as the expected full ruleset unless a controlled migration is approved.
+Este documento refleja las reglas Firestore actuales aportadas manualmente por el responsable del proyecto.
+
+No despliega reglas.
+No modifica Firebase.
+No modifica Firestore.
+No modifica datos.
+No modifica lógica de negocio.
+
+Para cambiar reglas reales, debe hacerse un ticket independiente con:
+- backup previo,
+- pruebas por rol,
+- rollback,
+- aprobación explícita.
+
+## Reglas Firestore actuales
 
 ```js
 rules_version = '2';
@@ -49,23 +59,65 @@ service cloud.firestore {
       return getProfile().data.trainerKey;
     }
 
+    function isPublicTrialLead() {
+      return request.auth == null
+        && request.resource.data.keys().hasOnly([
+          'nombre', 'telefono', 'email',
+          'centroId', 'centroNombre',
+          'estado', 'fuente', 'medioCaptacion', 'captadorNombre',
+          'trainerKey', 'trainerName',
+          'objetivo', 'horarioPreferido',
+          'tipoPrueba', 'duracionPrueba',
+          'notas', 'notaEntrenadorPrueba',
+          'createdAt', 'updatedAt',
+          'createdByEmail', 'createdByName',
+          'updatedByEmail', 'updatedByName',
+          'convertido', 'origenPublico', 'origenQR',
+          'sourceParam', 'campana',
+          'valoracionUnica', 'leadId'
+        ])
+        && request.resource.data.nombre is string
+        && request.resource.data.telefono is string
+        && request.resource.data.email is string
+        && request.resource.data.centroId is string
+        && request.resource.data.centroNombre is string
+        && request.resource.data.estado == 'Prueba solicitada'
+        && request.resource.data.fuente == 'QR valoración'
+        && request.resource.data.trainerKey == ''
+        && request.resource.data.trainerName == ''
+        && request.resource.data.tipoPrueba == 'Valoración inicial'
+        && request.resource.data.duracionPrueba == '45 min'
+        && request.resource.data.convertido == false
+        && request.resource.data.origenPublico in ['valoracion.html', 'prueba.html']
+        && request.resource.data.origenQR == true;
+    }
+
     match /besoulUsers/{email} {
-      allow read: if isActiveUser()
-        && (email == request.auth.token.email || isAdmin());
+      // Cada usuario autenticado puede leer directamente SU propio perfil.
+      // Esto evita depender de isActiveUser() para poder leer el documento
+      // que precisamente necesitamos para calcular isActiveUser().
+      allow get: if signedIn() && email == request.auth.token.email;
+
+      // Administración puede leer/listar todos los perfiles.
+      allow get, list: if isAdmin();
 
       allow create, update, delete: if isAdmin();
     }
 
-    match /besoulSuite/{docId} {
-      allow read, write: if isActiveUser()
-        && docId in ['agenda', 'finanzas'];
-    }
+ match /besoulSuite/{docId} {
+  // Agenda compartida: cualquier usuario autenticado de BESOUL puede leer/escribir agenda.
+  allow read, write: if signedIn() && docId == 'agenda';
+
+  // Finanzas sigue reservado solo para administración.
+  allow read, write: if isAdmin() && docId == 'finanzas';
+}
 
     match /besoulLeads/{leadId} {
       allow read: if isAdmin()
         || (isActiveUser() && resource.data.trainerKey == myTrainerKey());
 
-      allow create: if isAdmin()
+      allow create: if isPublicTrialLead()
+        || isAdmin()
         || (isActiveUser() && request.resource.data.trainerKey == myTrainerKey());
 
       allow update: if isAdmin()
@@ -76,6 +128,26 @@ service cloud.firestore {
         );
 
       allow delete: if isAdmin();
+    }
+
+    match /besoulPublicConfig/{docId} {
+      allow get: if docId == 'centros';
+      allow list: if false;
+      allow create, update, delete: if isActiveUser();
+    }
+
+
+    match /besoulValoracionRegistry/{keyId} {
+      allow get: if true;
+      allow list: if false;
+
+      allow create: if request.auth == null
+        && request.resource.data.kind in ['email', 'phone']
+        && request.resource.data.leadId is string
+        && request.resource.data.nombre is string
+        && request.resource.data.source == 'valoracion_publica';
+
+      allow read, update, delete: if isActiveUser();
     }
 
     match /besoulPublicClients/{token} {
@@ -100,7 +172,12 @@ service cloud.firestore {
         && request.resource.data.clave is string
         && request.resource.data.duracionMin == 45;
 
-      allow read, update, delete: if isActiveUser();
+      // Admin ve todas. Un PT solo ve/gestiona reservas asignadas a su trainerKey.
+      allow read: if isAdmin()
+        || (isActiveUser() && resource.data.trainerKey == myTrainerKey());
+
+      allow update, delete: if isAdmin()
+        || (isActiveUser() && resource.data.trainerKey == myTrainerKey());
     }
 
     match /{document=**} {
@@ -108,4 +185,3 @@ service cloud.firestore {
     }
   }
 }
-```
