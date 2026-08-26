@@ -531,16 +531,50 @@ async function cargarCentros() {
 }
 async function cargarUsuariosBesoul() {
   usuariosBesoul = [];
+
   if (esAdmin()) {
-    const snap = await db.collection('besoulUsers').get();
+    let snap;
+
+    try {
+      // Lectura limpia desde servidor para evitar listas antiguas/cacheadas de entrenadores.
+      snap = await db.collection('besoulUsers').get({ source: 'server' });
+    } catch (err) {
+      console.warn('No se pudo cargar besoulUsers desde servidor. Uso lectura estándar.', err);
+      snap = await db.collection('besoulUsers').get();
+    }
+
+    const vistos = new Set();
+
     snap.forEach(doc => {
-      const d = doc.data();
-      if (d.activo === true && d.trainerKey) usuariosBesoul.push({ id:doc.id, ...d });
+      const d = doc.data() || {};
+      const trainerKey = String(d.trainerKey || '').trim();
+
+      if (d.activo === true && trainerKey && !vistos.has(trainerKey)) {
+        vistos.add(trainerKey);
+        usuariosBesoul.push({
+          id: doc.id,
+          ...d,
+          trainerKey,
+          nombre: d.nombre || trainerKey,
+          email: d.email || doc.id,
+          rol: d.rol || 'pt'
+        });
+      }
     });
   } else {
-    usuariosBesoul = [{ id: perfil.email, ...perfil }];
+    const trainerKey = String(perfil.trainerKey || '').trim();
+
+    usuariosBesoul = [{
+      id: perfil.email,
+      ...perfil,
+      trainerKey,
+      nombre: perfil.nombre || trainerKey || perfil.email,
+      email: perfil.email,
+      rol: perfil.rol || 'pt'
+    }];
   }
-  usuariosBesoul.sort((a,b) => String(a.nombre||'').localeCompare(String(b.nombre||''), 'es'));
+
+  usuariosBesoul.sort((a,b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
 }
 
 function poblarSelect(selectId, valores, opts={}) {
