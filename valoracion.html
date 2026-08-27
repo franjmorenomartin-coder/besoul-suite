@@ -17,9 +17,18 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
   <style>
-    body { font-family:'Inter',sans-serif; background:#0B0F17; }
+    :root {
+      --bs-bg: #0B0F17;
+      --bs-accent: #f59e0b;
+      --bs-surface: #0f172a;
+      --bs-border: #1e293b;
+    }
+    body { font-family:'Inter',sans-serif; background:var(--bs-bg); }
     input, select, textarea { font-size:16px; }
-    .bg-hero { background: radial-gradient(circle at top left, rgba(245,158,11,.18), transparent 35%), radial-gradient(circle at bottom right, rgba(34,211,238,.12), transparent 35%), #0B0F17; }
+    .bg-hero { background: radial-gradient(circle at top left, rgba(245,158,11,.18), transparent 35%), radial-gradient(circle at bottom right, rgba(34,211,238,.12), transparent 35%), var(--bs-bg); }
+    @media (prefers-reduced-motion: reduce) {
+      .transition { transition: none; }
+    }
   </style>
 </head>
 <body class="min-h-screen text-white bg-hero">
@@ -50,22 +59,22 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label for="nombre" class="text-xs font-bold text-slate-300 block mb-1">Nombre y apellidos *</label>
-            <input id="nombre" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-3 text-white focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="Tu nombre">
+            <input id="nombre" required aria-required="true" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-3 text-white focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="Tu nombre">
           </div>
           <div>
             <label for="telefono" class="text-xs font-bold text-slate-300 block mb-1">Teléfono *</label>
-            <input id="telefono" required inputmode="tel" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-3 text-white focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="WhatsApp / teléfono">
+            <input id="telefono" required aria-required="true" inputmode="tel" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-3 text-white focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="WhatsApp / teléfono">
           </div>
           <div>
             <label for="email" class="text-xs font-bold text-slate-300 block mb-1">Email *</label>
-            <input id="email" required type="email" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-3 text-white focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="tu@email.com">
+            <input id="email" required aria-required="true" type="email" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-3 text-white focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="tu@email.com">
           </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label for="centro" class="text-xs font-bold text-slate-300 block mb-1">Centro preferido *</label>
-            <select id="centro" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-3 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"></select>
+            <select id="centro" required aria-required="true" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-3 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"></select>
           </div>
           <div>
             <label for="objetivo" class="text-xs font-bold text-slate-300 block mb-1">Objetivo principal</label>
@@ -99,12 +108,12 @@
           <textarea id="observaciones" rows="4" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-3 text-white focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="Cuéntanos brevemente si tienes alguna lesión, limitación, preferencia de intensidad o disponibilidad concreta."></textarea>
         </div>
 
-        <label class="flex gap-3 items-start bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-slate-300">
-          <input id="privacidad" type="checkbox" class="mt-1 accent-amber-500" required>
+        <label for="privacidad" class="flex gap-3 items-start bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-slate-300">
+          <input id="privacidad" type="checkbox" class="mt-1 accent-amber-500" required aria-required="true">
           <span>Acepto que BESOUL utilice estos datos para contactar conmigo y gestionar mi solicitud de valoración inicial.</span>
         </label>
 
-        <div id="form-msg" class="hidden rounded-xl border p-4 text-sm"></div>
+        <div id="form-msg" class="hidden rounded-xl border p-4 text-sm" role="status" aria-live="polite"></div>
 
         <button id="btn-submit" type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-4 rounded-2xl transition uppercase tracking-wider">Solicitar valoración</button>
 
