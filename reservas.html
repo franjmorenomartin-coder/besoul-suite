@@ -148,6 +148,122 @@
       return bloqueos.some(b => b.dia === dia && min < timeToMin(b.fin) && (min+45) > timeToMin(b.inicio));
     }
 
+    function normalizarBloques(bloques){
+      return (Array.isArray(bloques) ? bloques : [])
+        .map(b => ({ inicio:String(b?.inicio||'').slice(0,5), fin:String(b?.fin||'').slice(0,5) }))
+        .filter(b => b.inicio && b.fin && b.inicio < b.fin)
+        .sort((a,b) => a.inicio.localeCompare(b.inicio));
+    }
+
+    function fusionarBloques(bloques){
+      const lista=normalizarBloques(bloques);
+      if(!lista.length) return [];
+      const out=[{...lista[0]}];
+      for(let i=1;i<lista.length;i++){
+        const ultimo=out[out.length-1], actual=lista[i];
+        if(actual.inicio <= ultimo.fin){
+          if(actual.fin > ultimo.fin) ultimo.fin=actual.fin;
+        }else out.push({...actual});
+      }
+      return out;
+    }
+
+    function bloquesDisponibilidadFechaCliente(fechaISO){
+      const disp=scheduleData?.disponibilidad || {};
+      const d=new Date(`${fechaISO}T00:00:00`);
+      const dia=dayIndexMonSun(d);
+      const semanal=disp.semanal?.[dia];
+      const excepcion=disp.excepciones?.[fechaISO];
+
+      if(excepcion){
+        if(excepcion.activo === false) return [];
+        if(excepcion.override === true){
+          return excepcion.activo ? normalizarBloques(excepcion.bloques) : [];
+        }
+      }
+
+      let bloques=[];
+      if(semanal?.activo) bloques=bloques.concat(normalizarBloques(semanal.bloques));
+      if(excepcion?.activo !== false) bloques=bloques.concat(normalizarBloques(excepcion?.bloques));
+      return fusionarBloques(bloques);
+    }
+
+    function slotBloqueadoPorPT(iso, min){
+      const lista=scheduleData?.disponibilidad?.bloqueos?.[iso] || [];
+      return new Set((Array.isArray(lista)?lista:[]).map(x=>String(x||'').slice(0,5))).has(minToTime(min));
+    }
+
+    function intervalosOcupadosDentroBloque(iso, start, end){
+      const ocupados=[];
+      let abierto=null;
+
+      for(let m=start; m<end; m+=15){
+        const ocupado = slotOcupado(`${iso}_${minToTime(m)}`) || slotBloqueadoPorPT(iso,m) || bloqueadoPorCliente(iso,m);
+        if(ocupado && abierto===null) abierto=m;
+        if(!ocupado && abierto!==null){
+          ocupados.push({inicio:abierto, fin:m});
+          abierto=null;
+        }
+      }
+      if(abierto!==null) ocupados.push({inicio:abierto, fin:end});
+      return ocupados;
+    }
+
+    function huecosLibresFecha(iso){
+      const huecos=[];
+      bloquesDisponibilidadFechaCliente(iso).forEach(b=>{
+        const start=timeToMin(b.inicio), end=timeToMin(b.fin);
+        if(Number.isNaN(start)||Number.isNaN(end)||end<=start) return;
+
+        const ocupados=intervalosOcupadosDentroBloque(iso,start,end);
+        let cursor=start;
+
+        ocupados.forEach(o=>{
+          if(o.inicio>cursor){
+            huecos.push({
+              inicio:cursor,
+              fin:o.inicio,
+              tieneAnterior: cursor>start,
+              tieneSiguiente:true
+            });
+          }
+          cursor=Math.max(cursor,o.fin);
+        });
+
+        if(cursor<end){
+          huecos.push({
+            inicio:cursor,
+            fin:end,
+            tieneAnterior: cursor>start,
+            tieneSiguiente:false
+          });
+        }
+      });
+      return huecos.map(h=>({...h,duracion:h.fin-h.inicio})).filter(h=>h.duracion>=45);
+    }
+
+    function iniciosEficientesHueco(h){
+      const out=[];
+
+      // Si el hueco nace justo después de una sesión, priorizamos continuar desde ahí.
+      if(h.tieneAnterior){
+        for(let m=h.inicio; m+45<=h.fin; m+=45) out.push(m);
+        return out;
+      }
+
+      // Si es el primer hueco del bloque pero termina justo al comenzar una cita,
+      // alineamos hacia atrás para que la última reserva termine exactamente al empezar esa cita.
+      if(h.tieneSiguiente){
+        const tmp=[];
+        for(let fin=h.fin; fin-45>=h.inicio; fin-=45) tmp.push(fin-45);
+        return tmp.reverse();
+      }
+
+      // Bloque completamente libre: cadena natural desde el inicio de la disponibilidad.
+      for(let m=h.inicio; m+45<=h.fin; m+=45) out.push(m);
+      return out;
+    }
+
     function usarTokenManual(){
       const t=document.getElementById('manual-token').value.trim();
       if(!t) return;
@@ -187,23 +303,34 @@
     }
 
     function generarSlots(){
-      const out=[]; const hoy=new Date(); hoy.setHours(0,0,0,0);
+      const out=[];
+      const hoy=new Date(); hoy.setHours(0,0,0,0);
       const now=new Date(); const minNow=now.getHours()*60+now.getMinutes();
-      const disp = scheduleData.disponibilidad || {}; const semanal=disp.semanal || {};
+      const vistos=new Set();
+
       for(let i=0;i<30;i++){
         const d=new Date(hoy); d.setDate(hoy.getDate()+i);
-        const iso=dateISO(d); const cfg=semanal[dayIndexMonSun(d)];
-        if(!cfg || !cfg.activo) continue;
-        (cfg.bloques||[]).forEach(b=>{
-          const start=timeToMin(b.inicio), end=timeToMin(b.fin);
-          for(let m=start; m+45<=end; m+=15){
-            if(i===0 && m <= minNow+120) continue; // margen mínimo 2h
-            if(bloqueadoPorCliente(iso,m)) continue;
-            if(bloqueLibre(iso,m)) out.push({iso, hora:minToTime(m), label:`${labelFecha(iso)} · ${minToTime(m)}`, tipoReserva:'individual'});
-          }
+        const iso=dateISO(d);
+
+        huecosLibresFecha(iso).forEach(h=>{
+          iniciosEficientesHueco(h).forEach(m=>{
+            if(i===0 && m <= minNow+120) return; // margen mínimo 2h
+            if(!bloqueLibre(iso,m)) return;
+            const clave=`${iso}_${minToTime(m)}`;
+            if(vistos.has(clave)) return;
+            vistos.add(clave);
+            out.push({
+              iso,
+              hora:minToTime(m),
+              fin:minToTime(m+45),
+              label:`${labelFecha(iso)} · ${minToTime(m)}–${minToTime(m+45)}`,
+              tipoReserva:'individual'
+            });
+          });
         });
       }
-      return out;
+
+      return out.sort((a,b)=>a.iso.localeCompare(b.iso)||a.hora.localeCompare(b.hora));
     }
 
     function renderSlots(){
@@ -213,7 +340,7 @@
       cont.innerHTML='';
       Object.keys(grupos).slice(0,14).forEach(iso=>{
         const wrap=document.createElement('div');
-        wrap.innerHTML=`<h3 class="text-xs font-black text-amber-400 uppercase mb-2">${escapeHTML(labelFecha(iso))}</h3><div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">${grupos[iso].map(s=>`<button class="slot-btn bg-slate-900 hover:bg-cyan-500/20 border border-slate-800 hover:border-cyan-500/40 rounded-lg py-2 text-xs font-black text-white" onclick="seleccionarSlot('${s.iso}','${s.hora}','individual','','')">${s.hora}</button>`).join('')}</div>`;
+        wrap.innerHTML=`<h3 class="text-xs font-black text-amber-400 uppercase mb-2">${escapeHTML(labelFecha(iso))}</h3><div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">${grupos[iso].map(s=>`<button class="slot-btn bg-slate-900 hover:bg-cyan-500/20 border border-slate-800 hover:border-cyan-500/40 rounded-lg py-2 text-xs font-black text-white" onclick="seleccionarSlot('${s.iso}','${s.hora}','individual','','')"><span class="block">${s.hora}</span><span class="block text-[9px] text-slate-500 font-bold mt-0.5">45 min</span></button>`).join('')}</div>`;
         cont.appendChild(wrap);
       });
     }
@@ -250,7 +377,7 @@
 
     function seleccionarSlot(iso,hora,tipoReserva='individual',grupoId='',grupoNombre=''){
       selected={iso,hora,clave:`${iso}_${hora}`,tipoReserva,grupoId,grupoNombre};
-      document.getElementById('selected-slot').textContent = tipoReserva === 'grupo_abierto' ? `${labelFecha(iso)} a las ${hora} · ${grupoNombre}` : `${labelFecha(iso)} a las ${hora}`;
+      document.getElementById('selected-slot').textContent = tipoReserva === 'grupo_abierto' ? `${labelFecha(iso)} a las ${hora} · ${grupoNombre}` : `${labelFecha(iso)} · ${hora}–${minToTime(timeToMin(hora)+45)}`;
       document.getElementById('selected-panel').classList.remove('hidden');
       document.getElementById('selected-panel').scrollIntoView({behavior:'smooth', block:'start'});
     }

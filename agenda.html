@@ -4087,21 +4087,19 @@ Cancelar = no hacer nada`,
                 });
             }
 
-            let slotsHabilitados = 0;
+            let slotsLibres = 0;
             let slotsOcupados = 0;
             for (let idxDia=0; idxDia<7; idxDia++) {
                 const f = new Date(lunesActual);
                 f.setDate(f.getDate() + idxDia);
                 const fechaISO = formatoFechaLocal(f);
-                const slots = generarSlotsDiaDisponibilidad(fechaISO);
-                slotsHabilitados += slots.length;
-                slots.forEach(m => {
-                    const clave = claveDesdeFechaYMinutos(fechaISO, m);
-                    const cobertura = obtenerCoberturaCitaAgenda(clave);
-                    if (cobertura && cobertura.esInicio) slotsOcupados++;
-                });
+
+                // Fuente única de verdad: huecos reales por fragmentación (resumenHuecosDia),
+                // nunca duración bruta / 45.
+                slotsLibres += resumenHuecosDia(fechaISO).capacidadSesiones;
+                slotsOcupados += intervalosOcupadosDia(fechaISO).length;
             }
-            const slotsLibres = Math.max(0, slotsHabilitados - slotsOcupados);
+            const slotsHabilitados = slotsOcupados + slotsLibres;
             const ocupacionPct = slotsHabilitados ? (slotsOcupados / slotsHabilitados) * 100 : 0;
 
             return {
@@ -4242,38 +4240,6 @@ Cancelar = no hacer nada`,
             };
         }
 
-        function generarSlotsDiaDisponibilidad(fechaISO) {
-            const minutosSet = new Set();
-
-            // Disponibilidad publicada: slots reales de 45 min, no tramos de 15 min.
-            bloquesDisponibilidadFecha(entrenadorVisto, fechaISO).forEach(b => {
-                const inicio = minutosDesdeHorario(b.inicio);
-                const fin = minutosDesdeHorario(b.fin);
-                if (Number.isNaN(inicio) || Number.isNaN(fin)) return;
-                for (let m = inicio; m + 45 <= fin; m += 45) {
-                    const claveSlot = claveDesdeFechaYMinutos(fechaISO, m);
-                    if (!slotBloqueadoDisponibilidad(claveSlot, entrenadorVisto)) minutosSet.add(m);
-                }
-            });
-
-            // Mantener visibles citas ya existentes aunque se hubieran creado antes de exigir disponibilidad.
-            Object.keys(dbAgenda[entrenadorVisto] || {}).forEach(clave => {
-                if (!clave.startsWith(`${fechaISO}_`)) return;
-                const partes = clave.split('_');
-                const inicio = minutosDesdeHorario(partes[1]);
-                if (!Number.isNaN(inicio)) minutosSet.add(inicio);
-            });
-
-            Object.keys(dbLeadsPruebasCRM[entrenadorVisto] || {}).forEach(clave => {
-                if (!clave.startsWith(`${fechaISO}_`)) return;
-                const partes = clave.split('_');
-                const inicio = minutosDesdeHorario(partes[1]);
-                if (!Number.isNaN(inicio)) minutosSet.add(inicio);
-            });
-
-            return Array.from(minutosSet).sort((a,b) => a-b);
-        }
-
         function crearSlotAgendaCompacto(fechaISO, minutosInicio) {
             const clave = claveDesdeFechaYMinutos(fechaISO, minutosInicio);
             const hora = formatoMinutosHorario(minutosInicio);
@@ -4401,6 +4367,272 @@ Cancelar = no hacer nada`,
             return card;
         }
 
+        function intervalosBloqueadosDia(fechaISO, trainerKey = entrenadorVisto) {
+            const marcas = Array.from(slotsBloqueadosFecha(trainerKey, fechaISO))
+                .map(h => minutosDesdeHorario(h))
+                .filter(m => !Number.isNaN(m))
+                .sort((a,b) => a - b);
+            const intervalos = [];
+            marcas.forEach(m => {
+                const ultimo = intervalos[intervalos.length - 1];
+                if (ultimo && ultimo.fin === m) {
+                    ultimo.fin = m + 15;
+                } else {
+                    intervalos.push({ inicio: m, fin: m + 15 });
+                }
+            });
+            return intervalos;
+        }
+
+        function intervalosOperativosDia(fechaISO) {
+            const bloqueados = intervalosBloqueadosDia(fechaISO, entrenadorVisto);
+            const brutos = bloquesDisponibilidadFecha(entrenadorVisto, fechaISO)
+                .map(b => ({
+                    inicio: minutosDesdeHorario(b.inicio),
+                    fin: minutosDesdeHorario(b.fin)
+                }))
+                .filter(b => !Number.isNaN(b.inicio) && !Number.isNaN(b.fin) && b.fin > b.inicio)
+                .sort((a,b) => a.inicio - b.inicio);
+
+            const resultado = [];
+            brutos.forEach(op => {
+                const cortes = bloqueados
+                    .filter(bl => bl.fin > op.inicio && bl.inicio < op.fin)
+                    .map(bl => ({ inicio: Math.max(op.inicio, bl.inicio), fin: Math.min(op.fin, bl.fin) }))
+                    .sort((a,b) => a.inicio - b.inicio);
+
+                let cursor = op.inicio;
+                cortes.forEach(bl => {
+                    if (bl.inicio > cursor) resultado.push({ inicio: cursor, fin: bl.inicio });
+                    cursor = Math.max(cursor, bl.fin);
+                });
+                if (cursor < op.fin) resultado.push({ inicio: cursor, fin: op.fin });
+            });
+
+            return resultado.sort((a,b) => a.inicio - b.inicio);
+        }
+
+        function intervalosOcupadosDia(fechaISO) {
+            const intervalos = [];
+            const vistos = new Set();
+
+            const agregarClave = (clave, obj) => {
+                if (!clave || !clave.startsWith(`${fechaISO}_`) || vistos.has(clave)) return;
+                const inicio = minutosDesdeHorario(String(clave).split('_')[1]);
+                if (Number.isNaN(inicio)) return;
+                const duracion = parseInt(obj?.duracionMin || obj?.duracionPruebaMin || 45, 10) || 45;
+                intervalos.push({ inicio, fin: inicio + duracion, clave, obj });
+                vistos.add(clave);
+            };
+
+            Object.entries(dbAgenda[entrenadorVisto] || {}).forEach(([clave, obj]) => agregarClave(clave, obj));
+            Object.entries(dbLeadsPruebasCRM[entrenadorVisto] || {}).forEach(([clave, obj]) => agregarClave(clave, obj));
+
+            return intervalos.sort((a,b) => a.inicio - b.inicio);
+        }
+
+        function huecosOperativosDia(fechaISO) {
+            const operativos = intervalosOperativosDia(fechaISO);
+            const ocupados = intervalosOcupadosDia(fechaISO);
+            const huecos = [];
+
+            operativos.forEach(op => {
+                const ocupadosBloque = ocupados
+                    .filter(c => c.fin > op.inicio && c.inicio < op.fin)
+                    .map(c => ({
+                        inicio: Math.max(op.inicio, c.inicio),
+                        fin: Math.min(op.fin, c.fin)
+                    }))
+                    .sort((a,b) => a.inicio - b.inicio);
+
+                let cursor = op.inicio;
+                ocupadosBloque.forEach(c => {
+                    if (c.inicio > cursor) huecos.push({ inicio: cursor, fin: c.inicio });
+                    cursor = Math.max(cursor, c.fin);
+                });
+                if (cursor < op.fin) huecos.push({ inicio: cursor, fin: op.fin });
+            });
+
+            return huecos
+                .map(h => ({ ...h, duracion: h.fin - h.inicio }))
+                .filter(h => h.duracion > 0);
+        }
+
+        function iniciosClienteOptimizadosDia(fechaISO) {
+            // Portal cliente: no mostramos todos los cuartos de hora posibles.
+            // Se ofrecen comienzos encadenados de 45 min desde el principio de cada hueco real,
+            // para educar a que la siguiente sesión empiece al terminar la anterior.
+            const inicios = [];
+            huecosOperativosDia(fechaISO).forEach(h => {
+                for (let m = h.inicio; m + 45 <= h.fin; m += 45) {
+                    const clave = claveDesdeFechaYMinutos(fechaISO, m);
+                    if (!slotBloqueadoDisponibilidad(clave, entrenadorVisto) && !hayConflictoBloqueSesion(clave)) {
+                        inicios.push(m);
+                    }
+                }
+            });
+            return inicios;
+        }
+
+        function resumenHuecosDia(fechaISO) {
+            const huecos = huecosOperativosDia(fechaISO);
+            const microGaps = huecos.filter(h => h.duracion < 45);
+            const huecosUtiles = huecos.filter(h => h.duracion >= 45);
+            const minutosMicroGap = microGaps.reduce((acc,h) => acc + h.duracion, 0);
+            const capacidadSesiones = huecosUtiles.reduce((acc,h) => acc + Math.floor(h.duracion / 45), 0);
+            const minutosOperativos = intervalosOperativosDia(fechaISO).reduce((acc,b) => acc + (b.fin - b.inicio), 0);
+            const minutosOcupados = intervalosOcupadosDia(fechaISO).reduce((acc,b) => acc + Math.max(0, b.fin - b.inicio), 0);
+
+            return {
+                huecos,
+                microGaps,
+                huecosUtiles,
+                minutosMicroGap,
+                capacidadSesiones,
+                minutosOperativos,
+                minutosOcupados,
+                iniciosCliente: iniciosClienteOptimizadosDia(fechaISO)
+            };
+        }
+
+        function textoDuracionMinutos(minutos) {
+            const m = Math.max(0, parseInt(minutos,10) || 0);
+            const h = Math.floor(m / 60);
+            const r = m % 60;
+            if (h && r) return `${h} h ${r} min`;
+            if (h) return `${h} h`;
+            return `${r} min`;
+        }
+
+        function construirTimelineDia(fechaISO) {
+            const segmentos = [];
+
+            intervalosOcupadosDia(fechaISO).forEach(o => {
+                segmentos.push({ tipo: 'cita', inicio: o.inicio, fin: o.fin, clave: o.clave });
+            });
+
+            huecosOperativosDia(fechaISO).forEach(h => {
+                if (h.duracion < 45) {
+                    segmentos.push({ tipo: 'gap', inicio: h.inicio, fin: h.fin, duracion: h.duracion });
+                    return;
+                }
+                let m = h.inicio;
+                while (m + 45 <= h.fin) {
+                    segmentos.push({ tipo: 'slot', inicio: m, fin: m + 45, huecoInicio: h.inicio, huecoFin: h.fin });
+                    m += 45;
+                }
+                if (m < h.fin) {
+                    segmentos.push({ tipo: 'gap', inicio: m, fin: h.fin, duracion: h.fin - m });
+                }
+            });
+
+            return segmentos.sort((a,b) => a.inicio - b.inicio);
+        }
+
+        function crearDivisorGap(duracion) {
+            const div = document.createElement('div');
+            div.className = 'flex items-center gap-2 px-1 py-0.5 text-[10px] text-slate-600';
+            div.innerHTML = `<span class="flex-1 border-t border-dashed border-slate-800"></span><span class="shrink-0">${escapeHTML(textoDuracionMinutos(duracion))} libre</span><span class="flex-1 border-t border-dashed border-slate-800"></span>`;
+            return div;
+        }
+
+        function crearBloqueSlotLibre(fechaISO, segmento) {
+            const wrap = document.createElement('div');
+            wrap.className = 'rounded-2xl border border-emerald-500/25 bg-emerald-500/5 px-3 py-2.5';
+
+            const iniciosCliente = new Set(iniciosClienteOptimizadosDia(fechaISO));
+            const inicios = [];
+            for (let m = segmento.huecoInicio; m + 45 <= segmento.huecoFin; m += 15) inicios.push(m);
+
+            const agendar = (minutosInicio) => {
+                gestionarSlotLibreDisponibilidad(claveDesdeFechaYMinutos(fechaISO, minutosInicio));
+            };
+
+            const cabecera = document.createElement('div');
+            cabecera.className = 'flex items-center justify-between gap-2';
+            cabecera.innerHTML = `
+                <div>
+                    <div class="text-[12px] font-black text-emerald-100 tracking-tight">${formatoMinutosHorario(segmento.inicio)} – ${formatoMinutosHorario(segmento.fin)}</div>
+                    <div class="text-[10px] text-emerald-300/70">Libre · 45 min${iniciosCliente.has(segmento.inicio) ? ' · óptimo' : ''}</div>
+                </div>
+                <button type="button" class="shrink-0 bg-emerald-500/15 text-emerald-200 border border-emerald-500/30 rounded-lg px-2.5 py-1.5 text-[10px] font-black hover:bg-emerald-500/25 transition">+ Añadir</button>
+            `;
+            cabecera.querySelector('button').onclick = () => agendar(segmento.inicio);
+            wrap.appendChild(cabecera);
+
+            activarDropLibreSlot(wrap, claveDesdeFechaYMinutos(fechaISO, segmento.inicio));
+
+            if (inicios.length > 1) {
+                const detalles = document.createElement('details');
+                detalles.className = 'mt-1.5';
+                const resumen = document.createElement('summary');
+                resumen.className = 'text-[10px] text-emerald-300/60 cursor-pointer select-none hover:text-emerald-200';
+                resumen.textContent = 'Cambiar inicio';
+                detalles.appendChild(resumen);
+
+                const fila = document.createElement('div');
+                fila.className = 'flex items-center gap-1.5 mt-1.5';
+
+                const select = document.createElement('select');
+                select.className = 'flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-[10px] font-bold text-slate-200';
+                select.setAttribute('aria-label', `Inicios válidos dentro del hueco de ${fechaISO}`);
+                inicios.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = String(m);
+                    opt.textContent = `${formatoMinutosHorario(m)}–${formatoMinutosHorario(m + 45)}${iniciosCliente.has(m) ? ' ·óptimo' : ''}`;
+                    if (m === segmento.inicio) opt.selected = true;
+                    select.appendChild(opt);
+                });
+
+                const btnUsar = document.createElement('button');
+                btnUsar.type = 'button';
+                btnUsar.className = 'shrink-0 bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[10px] font-black hover:bg-slate-700 transition';
+                btnUsar.textContent = 'Usar';
+                btnUsar.onclick = () => agendar(parseInt(select.value, 10));
+
+                fila.appendChild(select);
+                fila.appendChild(btnUsar);
+                detalles.appendChild(fila);
+                wrap.appendChild(detalles);
+            }
+
+            return wrap;
+        }
+
+        function crearPanelInsightsDia(fechaISO) {
+            const r = resumenHuecosDia(fechaISO);
+            const detalles = document.createElement('details');
+            detalles.className = 'rounded-xl border border-slate-800/60 bg-slate-950/20 px-3 py-2 text-[10px] text-slate-500';
+
+            const resumenTxt = r.microGaps.length
+                ? `Insights · ${r.microGaps.length} microgap${r.microGaps.length === 1 ? '' : 's'} (${textoDuracionMinutos(r.minutosMicroGap)}) · capacidad libre: ${r.capacidadSesiones} sesión${r.capacidadSesiones === 1 ? '' : 'es'}`
+                : `Insights · sin microgaps · capacidad libre: ${r.capacidadSesiones} sesión${r.capacidadSesiones === 1 ? '' : 'es'}`;
+            const sugerencia = r.minutosMicroGap >= 15
+                ? `<div class="mt-1.5 text-amber-300/70">Reorganizando ${escapeHTML(textoDuracionMinutos(r.minutosMicroGap))} podrías liberar espacio para otra sesión de 45 min.</div>`
+                : '';
+
+            detalles.innerHTML = `
+                <summary class="cursor-pointer select-none hover:text-slate-400">${escapeHTML(resumenTxt)}</summary>
+                <div class="mt-1.5 space-y-1 pl-1">
+                    <div>Operativo: <b class="text-slate-400">${textoDuracionMinutos(r.minutosOperativos)}</b></div>
+                    <div>Ocupado: <b class="text-slate-400">${textoDuracionMinutos(r.minutosOcupados)}</b></div>
+                </div>
+                ${sugerencia}
+            `;
+            return detalles;
+        }
+
+        function renderTimelineDia(list, fechaISO) {
+            const timeline = construirTimelineDia(fechaISO);
+            timeline.forEach(seg => {
+                if (seg.tipo === 'cita') list.appendChild(crearSlotAgendaCompacto(fechaISO, seg.inicio));
+                else if (seg.tipo === 'slot') list.appendChild(crearBloqueSlotLibre(fechaISO, seg));
+                else if (seg.tipo === 'gap') list.appendChild(crearDivisorGap(seg.duracion));
+            });
+            if (timeline.length) list.appendChild(crearPanelInsightsDia(fechaISO));
+            return timeline;
+        }
+
 
         function renderAgendaSlotsMovil() {
             const grid = document.getElementById('agenda-slots-grid');
@@ -4422,12 +4654,12 @@ Cancelar = no hacer nada`,
                 const fecha = new Date(lunesActual);
                 fecha.setDate(fecha.getDate() + idxDia);
                 const fechaISO = formatoFechaLocal(fecha);
-                const slots = generarSlotsDiaDisponibilidad(fechaISO);
+                const citasDia = intervalosOcupadosDia(fechaISO).length;
                 const activo = idxDia === diaActivo;
                 htmlTabs += `<button type="button" onclick="setDiaMovilAgenda(${idxDia})" class="${activo ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-slate-950/70 text-slate-300 border-slate-800'} border rounded-2xl px-3 py-2 text-center">
                     <span class="block text-[11px] font-black uppercase">${dias[idxDia]}</span>
                     <span class="block text-[10px] font-bold ${activo ? 'text-slate-900' : 'text-amber-300'}">${fecha.toLocaleDateString('es-ES', { day:'numeric', month:'short' })}</span>
-                    <span class="block text-[9px] ${activo ? 'text-slate-800' : 'text-slate-500'}">${slots.length} slots</span>
+                    <span class="block text-[9px] ${activo ? 'text-slate-800' : 'text-slate-500'}">${citasDia} citas</span>
                 </button>`;
             }
             htmlTabs += '</div>';
@@ -4435,7 +4667,7 @@ Cancelar = no hacer nada`,
             const fecha = new Date(lunesActual);
             fecha.setDate(fecha.getDate() + diaActivo);
             const fechaISO = formatoFechaLocal(fecha);
-            const slots = generarSlotsDiaDisponibilidad(fechaISO);
+            const hayTimeline = construirTimelineDia(fechaISO).length > 0;
             const tituloDia = fecha.toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'long' });
 
             const wrap = document.createElement('div');
@@ -4445,7 +4677,7 @@ Cancelar = no hacer nada`,
                 <div class="flex items-center justify-between gap-2 mb-2 px-1">
                     <div>
                         <div class="text-sm font-black text-white capitalize">${tituloDia}</div>
-                        <div class="text-[11px] text-slate-500">${slots.length ? 'Toca un slot para gestionar.' : 'Sin disponibilidad publicada para este día.'}</div>
+                        <div class="text-[11px] text-slate-500">${hayTimeline ? 'Toca una cita o añade una sesión nueva.' : 'Sin disponibilidad publicada para este día.'}</div>
                     </div>
                     <button onclick="abrirModalDisponibilidadReservas()" class="shrink-0 bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-3 py-2 rounded-2xl text-[10px] font-black">+ Horario</button>
                 </div>
@@ -4455,7 +4687,7 @@ Cancelar = no hacer nada`,
 
             const list = document.getElementById('agenda-mobile-slot-list');
             if (!list) return;
-            if (!slots.length) {
+            if (!hayTimeline) {
                 list.innerHTML = `<button onclick="abrirModalDisponibilidadReservas()" class="w-full rounded-3xl border border-dashed border-slate-700 bg-slate-950/50 p-6 text-center">
                     <div class="text-sm font-black text-white">Sin slots habilitados</div>
                     <div class="text-xs text-slate-500 mt-1">Añade disponibilidad para generar huecos de 45 min.</div>
@@ -4463,7 +4695,7 @@ Cancelar = no hacer nada`,
                 </button>`;
                 return;
             }
-            slots.forEach(min => list.appendChild(crearSlotAgendaCompacto(fechaISO, min)));
+            renderTimelineDia(list, fechaISO);
         }
 
 
@@ -4491,8 +4723,8 @@ Cancelar = no hacer nada`,
                 const fecha = new Date(lunesActual);
                 fecha.setDate(fecha.getDate() + idxDia);
                 const fechaISO = formatoFechaLocal(fecha);
-                const slots = generarSlotsDiaDisponibilidad(fechaISO);
-                totalSlots += slots.length;
+                const timelinePreview = construirTimelineDia(fechaISO);
+                totalSlots += timelinePreview.length;
 
                 const col = document.createElement('section');
                 col.className = 'bg-slate-950/35 border border-slate-800/80 rounded-3xl p-2.5 min-h-[240px]';
@@ -4506,7 +4738,7 @@ Cancelar = no hacer nada`,
                 const list = document.createElement('div');
                 list.className = 'space-y-2';
 
-                if (!slots.length) {
+                if (!timelinePreview.length) {
                     const empty = document.createElement('button');
                     empty.type = 'button';
                     empty.className = 'w-full rounded-2xl border border-dashed border-slate-700/80 bg-slate-900/40 px-3 py-4 text-center text-[11px] text-slate-500 hover:border-cyan-400/40 hover:text-cyan-300 transition';
@@ -4514,7 +4746,7 @@ Cancelar = no hacer nada`,
                     empty.onclick = () => abrirModalDisponibilidadReservas();
                     list.appendChild(empty);
                 } else {
-                    slots.forEach(min => list.appendChild(crearSlotAgendaCompacto(fechaISO, min)));
+                    renderTimelineDia(list, fechaISO);
                 }
 
                 col.appendChild(list);
