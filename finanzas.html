@@ -1200,8 +1200,11 @@
       const tbody = document.getElementById('tabla-historico-cuerpo');
       const hist = dbFinanzas.historico || {};
       const keys = Object.keys(hist).sort().reverse();
-      if (!keys.length) { tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-slate-500">No hay cierres guardados.</td></tr>'; return; }
-      tbody.innerHTML = keys.map(k=>{ const h=hist[k]; const t=h.total||{}; const aud=(dbFinanzas.auditoriaCierres?.[k]||[]).length; return `<tr class="hover:bg-slate-900/40"><td class="py-3 px-4 font-bold text-white">${escapeHTML(etiquetaMes(k))}<div class="text-[10px] text-emerald-300">Cerrado</div>${aud?`<div class="text-[9px] text-slate-500">${aud} mov. auditoría</div>`:''}</td><td class="py-3 px-4">${dinero(t.facturacion)}</td><td class="py-3 px-4 text-amber-400">${dinero(t.ptNeto)}</td><td class="py-3 px-4 text-emerald-400">${dinero(t.bsBruto)}</td><td class="py-3 px-4 text-lime-300">${dinero(t.otrosIngresos||0)}</td><td class="py-3 px-4 text-red-300">${dinero(t.gastos)}</td><td class="py-3 px-4 text-cyan-400 font-bold">${dinero(t.beneficio)}</td><td class="py-3 px-4"><div class="flex gap-2 flex-wrap"><button onclick="cargarMesHistorico('${k}')" class="text-amber-300 hover:underline">Ver</button><button onclick="reabrirMesCerradoParaEdicion('${k}')" class="text-cyan-300 hover:underline">Reabrir</button><button onclick="recalcularCierreMes('${k}')" class="text-emerald-300 hover:underline">Recalcular</button><button onclick="borrarHistorico('${k}')" class="text-red-400 hover:underline">Borrar</button></div></td></tr>`; }).join('');
+      const papeleraKeys = Object.keys(dbFinanzas.historicoBorrado || {}).filter(k => (dbFinanzas.historicoBorrado[k]||[]).length && !hist[k]).sort().reverse();
+      if (!keys.length && !papeleraKeys.length) { tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-slate-500">No hay cierres guardados.</td></tr>'; return; }
+      const filasActivas = keys.map(k=>{ const h=hist[k]; const t=h.total||{}; const aud=(dbFinanzas.auditoriaCierres?.[k]||[]).length; return `<tr class="hover:bg-slate-900/40"><td class="py-3 px-4 font-bold text-white">${escapeHTML(etiquetaMes(k))}<div class="text-[10px] text-emerald-300">Cerrado</div>${aud?`<div class="text-[9px] text-slate-500">${aud} mov. auditoría</div>`:''}</td><td class="py-3 px-4">${dinero(t.facturacion)}</td><td class="py-3 px-4 text-amber-400">${dinero(t.ptNeto)}</td><td class="py-3 px-4 text-emerald-400">${dinero(t.bsBruto)}</td><td class="py-3 px-4 text-lime-300">${dinero(t.otrosIngresos||0)}</td><td class="py-3 px-4 text-red-300">${dinero(t.gastos)}</td><td class="py-3 px-4 text-cyan-400 font-bold">${dinero(t.beneficio)}</td><td class="py-3 px-4"><div class="flex gap-2 flex-wrap"><button onclick="cargarMesHistorico('${k}')" class="text-amber-300 hover:underline">Ver</button><button onclick="reabrirMesCerradoParaEdicion('${k}')" class="text-cyan-300 hover:underline">Reabrir</button><button onclick="recalcularCierreMes('${k}')" class="text-emerald-300 hover:underline">Recalcular</button><button onclick="borrarHistorico('${k}')" class="text-red-400 hover:underline">Borrar</button></div></td></tr>`; }).join('');
+      const filasPapelera = papeleraKeys.map(k=>{ const ultimo=(dbFinanzas.historicoBorrado[k]||[]).slice(-1)[0]; return `<tr class="bg-slate-950/60 opacity-70"><td class="py-3 px-4 font-bold text-slate-400">${escapeHTML(etiquetaMes(k))}<div class="text-[10px] text-red-400">En papelera · ${escapeHTML(ultimo?.borradoPor||'')}</div></td><td class="py-3 px-4 text-slate-600" colspan="6">Cierre borrado el ${ultimo ? new Date(ultimo.borradoEn).toLocaleString('es-ES') : ''}</td><td class="py-3 px-4"><button onclick="restaurarHistoricoBorrado('${k}')" class="text-emerald-300 hover:underline font-bold">Restaurar</button></td></tr>`; }).join('');
+      tbody.innerHTML = filasActivas + filasPapelera;
     }
     function cargarMesHistorico(key){ mesSeleccionadoFinanzas = key; mesCerradoEditando = null; switchTab('directo'); }
     function crearSnapshotCierre(key){
@@ -1250,7 +1253,32 @@
     }
     function cancelarEdicionMesCerrado(){ mesCerradoEditando = null; pintarTodo(); }
     function recalcularCierreMes(key){ mesSeleccionadoFinanzas = key; mesCerradoEditando = key; cerrarMesActual(); }
-    function borrarHistorico(key){ if(!confirm(`¿Borrar cierre de ${etiquetaMes(key)}? Esta acción desbloquea el mes y volverá a calcularse en vivo.`)) return; delete dbFinanzas.historico[key]; registrarAuditoriaCierre(key, 'borrado_cierre', 'Cierre borrado por administración'); if(mesCerradoEditando===key) mesCerradoEditando=null; guardarConfigFinanzas(); }
+    // Baja lógica, no hard-delete: el cierre se mueve a historicoBorrado (papelera) en vez de
+    // destruirse, para que un clic accidental no pierda una facturación/reparto ya auditados sin
+    // posibilidad de recuperación. restaurarHistoricoBorrado() deshace exactamente esta acción.
+    function borrarHistorico(key){
+      if(!confirm(`¿Quitar el cierre de ${etiquetaMes(key)} del histórico? Se moverá a la papelera (recuperable desde "Restaurar último borrado") y el mes volverá a calcularse en vivo.`)) return;
+      if(!dbFinanzas.historicoBorrado) dbFinanzas.historicoBorrado = {};
+      if(!Array.isArray(dbFinanzas.historicoBorrado[key])) dbFinanzas.historicoBorrado[key] = [];
+      dbFinanzas.historicoBorrado[key].push({ snapshot: dbFinanzas.historico[key], borradoEn: new Date().toISOString(), borradoPor: usuarioFinanzasEmail || '' });
+      dbFinanzas.historicoBorrado[key] = dbFinanzas.historicoBorrado[key].slice(-5);
+      delete dbFinanzas.historico[key];
+      registrarAuditoriaCierre(key, 'borrado_cierre', 'Cierre movido a papelera por administración (recuperable)');
+      if(mesCerradoEditando===key) mesCerradoEditando=null;
+      guardarConfigFinanzas();
+    }
+    function restaurarHistoricoBorrado(key){
+      const papelera = dbFinanzas.historicoBorrado?.[key];
+      if(!papelera || !papelera.length){ alert('No hay ningún cierre en la papelera para ese mes.'); return; }
+      const ultimo = papelera[papelera.length - 1];
+      if(!confirm(`¿Restaurar el cierre de ${etiquetaMes(key)} borrado el ${new Date(ultimo.borradoEn).toLocaleString('es-ES')} por ${ultimo.borradoPor || 'admin'}?`)) return;
+      if(!dbFinanzas.historico) dbFinanzas.historico = {};
+      dbFinanzas.historico[key] = ultimo.snapshot;
+      dbFinanzas.historicoBorrado[key] = papelera.slice(0, -1);
+      registrarAuditoriaCierre(key, 'restauracion_cierre', 'Cierre restaurado desde la papelera por administración');
+      guardarConfigFinanzas();
+      alert(`Cierre de ${etiquetaMes(key)} restaurado.`);
+    }
 
     function renderConfigCentros(){
       const cont=document.getElementById('centros-config');

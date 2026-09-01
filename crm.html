@@ -704,6 +704,10 @@ function aplicarFiltros() {
   const { iniISO, finISO } = inicioFinMes(month);
 
   leadsFiltrados = leads.filter(l => {
+    // Leads dados de baja lógica (eliminarLead) nunca vuelven a aparecer en el tablero activo,
+    // igual que un cliente en 'baja' desaparece de Agenda — el documento se conserva en Firestore
+    // (con eliminadoEn/eliminadoPor) por si hace falta auditar o recuperar manualmente.
+    if (l.estado === 'Eliminado') return false;
     const created = l.createdAt || l.updatedAt || '';
     if (created && (created < iniISO || created >= finISO)) return false;
     if (centro && normalizarCentroId(l.centroId) !== centro) return false;
@@ -1227,10 +1231,20 @@ async function guardarLead() {
   }
 }
 async function eliminarLead() {
+  // Baja lógica, no hard-delete: igual que borrarFichaCliente en agenda.html y el flujo de
+  // solicitudes de eliminación, se conserva el documento (histórico/auditoría) en vez de
+  // destruirlo. 'Perdido' ya existe como estado de retiro normal; 'Eliminado' se reserva para
+  // cuando el propio admin decide quitar el lead de la vista activa (p.ej. duplicado, spam).
   if (!leadEditandoId || !esAdmin()) return;
-  if (!confirm('¿Eliminar este lead? Esta acción no borra ningún cliente de Agenda.')) return;
+  if (!confirm('¿Eliminar este lead? Se marcará como eliminado y dejará de aparecer en el tablero activo, pero no se borra el registro (puedes recuperarlo cambiando su estado). Esta acción no borra ningún cliente de Agenda.')) return;
   await sincronizarPruebaAgendaDesdeLead(leadEditandoId, { estado:'Eliminado', trainerKey:'' }, false);
-  await db.collection('besoulLeads').doc(leadEditandoId).delete();
+  await db.collection('besoulLeads').doc(leadEditandoId).set({
+    estado: 'Eliminado',
+    eliminadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+    eliminadoPor: perfil.email,
+    updatedAt: new Date().toISOString(),
+    updatedByEmail: perfil.email
+  }, { merge:true });
   cerrarModalLead();
 }
 
