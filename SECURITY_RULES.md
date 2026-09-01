@@ -2,11 +2,11 @@
 
 Estado: documentación de las reglas Firestore consideradas reales en producción.
 
-Última actualización: 2026-08-26  
-Ticket: BS-009  
+Última actualización: 2026-09-01  
+Ticket: BS-009 (histórico) · SEC-010/SEC-011 (propuesta pendiente, ver abajo)  
 Tipo de cambio: documentación  
 Producción/Firebase: NO modificado  
-Código app: NO modificado  
+Código app: modificado (ver `BESOUL_WORK_STATE.md` — escritura dirigida por trainerKey ya desplegada en código, las Rules de esta sección siguen siendo las REALES en producción hasta que se despliegue la propuesta)  
 
 ## Aviso importante
 
@@ -23,6 +23,16 @@ Para cambiar reglas reales, debe hacerse un ticket independiente con:
 - pruebas por rol,
 - rollback,
 - aprobación explícita.
+
+## Propuesta pendiente de despliegue (SEC-010 / SEC-011)
+
+El archivo `firestore.rules` en la raíz del repo contiene una propuesta completa, lista para revisar y desplegar, que añade:
+
+1. `match /besoulSolicitudesEliminacion/{solicitudId}` — hoy esa colección cae en el `catch-all` de abajo (deny-all total), lo que bloquea por completo el flujo de baja segura de clientes ya implementado en `agenda.html`.
+2. `besoulPublicClients` con comprobación de propiedad por `trainerKey` en `create`/`update` (hoy cualquier usuario activo puede tocar el enlace público de cualquier otro entrenador).
+3. Un bloque opcional, comentado por defecto, de aislamiento por `trainerKey` dentro de `besoulSuite/agenda` — solo activar tras validar en producción que la escritura dirigida por `trainerKey` (`merge:true`, ya en el código) funciona sin errores durante unos días.
+
+**No se ha desplegado.** Este entorno de trabajo no tiene Firebase CLI ni credenciales configuradas para desplegar reglas reales — el despliegue requiere que el responsable del proyecto lo haga manualmente (Firebase Console o `firebase deploy --only firestore:rules` desde un entorno con acceso), idealmente tras probar contra el emulador de Firestore con los 4 casos de rol (no-auth, PT propio, PT ajeno, admin), siguiendo el proceso que este mismo documento exige arriba. Detalle completo del análisis y de cada regla en `BESOUL_WORK_STATE.md`.
 
 ## Reglas Firestore actuales
 

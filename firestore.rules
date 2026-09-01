@@ -1,0 +1,245 @@
+rules_version = '2';
+
+// BESOUL Suite — Firestore Security Rules
+// ESTADO: propuesta lista para desplegar. NO se ha aplicado a producción
+// desde este entorno (sin Firebase CLI/credenciales disponibles aquí).
+// Antes de desplegar: revisar contra el emulador de Firestore con casos
+// no-auth / PT propio / PT ajeno / admin, backup previo, y aprobación
+// explícita, tal como exige SECURITY_RULES.md.
+//
+// Cambios respecto a las reglas documentadas en SECURITY_RULES.md
+// (última actualización 2026-08-26):
+//   1. NUEVO: match /besoulSolicitudesEliminacion/{solicitudId} — hoy cae
+//      en el catch-all deny-all, bloqueando por completo el flujo de baja
+//      segura de clientes ya implementado en agenda.html.
+//   2. besoulPublicClients: create/update ahora exigen ownership por
+//      trainerKey (antes cualquier usuario activo podía tocar el enlace
+//      público de cualquier otro entrenador).
+//   3. OPCIONAL / FASE 2, comentado por defecto: aislamiento por trainerKey
+//      dentro de besoulSuite/agenda. Solo activar después de validar en
+//      producción, durante unos días, que la escritura dirigida por
+//      trainerKey (merge:true) desplegada en el código (commit
+//      "fix: prevent concurrent agenda overwrites") funciona sin errores —
+//      ver BESOUL_WORK_STATE.md, sección FASE 3.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+
+    function getProfile() {
+      return get(/databases/$(database)/documents/besoulUsers/$(request.auth.token.email));
+    }
+
+    function userProfileExists() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/besoulUsers/$(request.auth.token.email));
+    }
+
+    function isActiveUser() {
+      return userProfileExists()
+        && getProfile().data.activo == true;
+    }
+
+    function isAdmin() {
+      return isActiveUser()
+        && getProfile().data.rol == 'admin';
+    }
+
+    function myTrainerKey() {
+      return getProfile().data.trainerKey;
+    }
+
+    function isPublicTrialLead() {
+      return request.auth == null
+        && request.resource.data.keys().hasOnly([
+          'nombre', 'telefono', 'email',
+          'centroId', 'centroNombre',
+          'estado', 'fuente', 'medioCaptacion', 'captadorNombre',
+          'trainerKey', 'trainerName',
+          'objetivo', 'horarioPreferido',
+          'tipoPrueba', 'duracionPrueba',
+          'notas', 'notaEntrenadorPrueba',
+          'createdAt', 'updatedAt',
+          'createdByEmail', 'createdByName',
+          'updatedByEmail', 'updatedByName',
+          'convertido', 'origenPublico', 'origenQR',
+          'sourceParam', 'campana',
+          'valoracionUnica', 'leadId'
+        ])
+        && request.resource.data.nombre is string
+        && request.resource.data.telefono is string
+        && request.resource.data.email is string
+        && request.resource.data.centroId is string
+        && request.resource.data.centroNombre is string
+        && request.resource.data.estado == 'Prueba solicitada'
+        && request.resource.data.fuente == 'QR valoración'
+        && request.resource.data.trainerKey == ''
+        && request.resource.data.trainerName == ''
+        && request.resource.data.tipoPrueba == 'Valoración inicial'
+        && request.resource.data.duracionPrueba == '45 min'
+        && request.resource.data.convertido == false
+        && request.resource.data.origenPublico in ['valoracion.html', 'prueba.html']
+        && request.resource.data.origenQR == true;
+    }
+
+    match /besoulUsers/{email} {
+      // Cada usuario autenticado puede leer directamente SU propio perfil.
+      // Esto evita depender de isActiveUser() para poder leer el documento
+      // que precisamente necesitamos para calcular isActiveUser().
+      allow get: if signedIn() && email == request.auth.token.email;
+
+      // Administración puede leer/listar todos los perfiles.
+      allow get, list: if isAdmin();
+
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /besoulSuite/{docId} {
+      // Agenda compartida: cualquier usuario autenticado de BESOUL puede leer/escribir agenda.
+      allow read, write: if signedIn() && docId == 'agenda';
+
+      // Finanzas sigue reservado solo para administración.
+      allow read, write: if isAdmin() && docId == 'finanzas';
+
+      // --- OPCIONAL / FASE 2 (no activo por defecto) ---
+      // Sustituir la línea "allow read, write: if signedIn() && docId == 'agenda';"
+      // de arriba por lo siguiente SOLO cuando se valide que el código ya
+      // escribe siempre de forma dirigida por trainerKey (merge:true):
+      //
+      // allow read: if signedIn() && docId == 'agenda';
+      // allow write: if docId == 'agenda' && (
+      //   isAdmin()
+      //   || (isActiveUser()
+      //       && request.resource.data.diff(resource.data).affectedKeys()
+      //            .hasOnly(['clientes','agenda','disponibilidadReservas','historicoClientes','pruebasCRM','notas','actualizadoEn','ultimaActualizacionLocal'])
+      //       && request.resource.data.clientes.diff(resource.data.clientes).affectedKeys().hasOnly([myTrainerKey()])
+      //       && request.resource.data.agenda.diff(resource.data.agenda).affectedKeys().hasOnly([myTrainerKey()])
+      //       && request.resource.data.disponibilidadReservas.diff(resource.data.disponibilidadReservas).affectedKeys().hasOnly([myTrainerKey()])
+      //       && request.resource.data.historicoClientes.diff(resource.data.historicoClientes).affectedKeys().hasOnly([myTrainerKey()])
+      //       && request.resource.data.pruebasCRM.diff(resource.data.pruebasCRM).affectedKeys().hasOnly([myTrainerKey()])
+      //      )
+      // );
+      // (notas queda fuera de la comprobación estricta: es un mapa plano
+      // "trainerKey__clave", no anidado por trainerKey — ver BESOUL_WORK_STATE.md)
+    }
+
+    match /besoulLeads/{leadId} {
+      allow read: if isAdmin()
+        || (isActiveUser() && resource.data.trainerKey == myTrainerKey());
+
+      allow create: if isPublicTrialLead()
+        || isAdmin()
+        || (isActiveUser() && request.resource.data.trainerKey == myTrainerKey());
+
+      allow update: if isAdmin()
+        || (
+          isActiveUser()
+          && resource.data.trainerKey == myTrainerKey()
+          && request.resource.data.trainerKey == myTrainerKey()
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    match /besoulPublicConfig/{docId} {
+      allow get: if docId == 'centros';
+      allow list: if false;
+      allow create, update, delete: if isActiveUser();
+    }
+
+    match /besoulValoracionRegistry/{keyId} {
+      allow get: if true;
+      allow list: if false;
+
+      allow create: if request.auth == null
+        && request.resource.data.kind in ['email', 'phone']
+        && request.resource.data.leadId is string
+        && request.resource.data.nombre is string
+        && request.resource.data.source == 'valoracion_publica';
+
+      allow read, update, delete: if isActiveUser();
+    }
+
+    match /besoulPublicClients/{token} {
+      allow get: if true;
+      allow list: if false;
+
+      // Solo se puede crear el propio (trainerKey del creador).
+      allow create: if isActiveUser() && request.resource.data.trainerKey == myTrainerKey();
+
+      // Solo el dueño puede actualizar, y no puede reasignarlo a otro trainerKey.
+      allow update: if isAdmin()
+        || (isActiveUser()
+            && resource.data.trainerKey == myTrainerKey()
+            && request.resource.data.trainerKey == resource.data.trainerKey);
+
+      allow delete: if isAdmin();
+    }
+
+    match /besoulPublicSchedule/{trainerKey} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update, delete: if isActiveUser();
+    }
+
+    match /besoulReservas/{reservaId} {
+      allow create: if request.resource.data.estado == 'pendiente'
+        && request.resource.data.token is string
+        && request.resource.data.clientId is string
+        && request.resource.data.trainerKey is string
+        && request.resource.data.fechaISO is string
+        && request.resource.data.hora is string
+        && request.resource.data.clave is string
+        && request.resource.data.duracionMin == 45;
+
+      // Admin ve todas. Un PT solo ve/gestiona reservas asignadas a su trainerKey.
+      allow read: if isAdmin()
+        || (isActiveUser() && resource.data.trainerKey == myTrainerKey());
+
+      allow update, delete: if isAdmin()
+        || (isActiveUser() && resource.data.trainerKey == myTrainerKey());
+    }
+
+    // NUEVO — SEC-010: solicitudes de eliminación/baja de cliente.
+    match /besoulSolicitudesEliminacion/{solicitudId} {
+      // Un PT solo puede crear una solicitud para su propio trainerKey y
+      // atribuida a sí mismo. Un admin también puede crearla (p.ej. mientras
+      // audita a otro PT con entrenadorVisto), pero solicitadoPor siempre
+      // debe ser su propia identidad, nunca la de otro.
+      allow create: if request.resource.data.estado == 'pendiente'
+        && (!('revisadoPor' in request.resource.data) || request.resource.data.revisadoPor == '')
+        && (!('revisadoEn' in request.resource.data) || request.resource.data.revisadoEn == null)
+        && (
+             (isActiveUser()
+               && request.resource.data.trainerKey == myTrainerKey()
+               && request.resource.data.solicitadoPor == myTrainerKey())
+             || (isAdmin() && request.resource.data.solicitadoPor == myTrainerKey())
+           );
+
+      // Admin ve todas. Un PT solo lee las de su propio trainerKey (incluidas
+      // las que un admin haya creado en su nombre mientras lo auditaba).
+      allow read: if isAdmin()
+        || (isActiveUser() && resource.data.trainerKey == myTrainerKey());
+
+      // Solo admin puede resolver, solo desde 'pendiente', y solo puede tocar
+      // estado/revisadoPor/revisadoEn/notasAdmin — whitelist estricta para
+      // que no pueda alterar clienteId/trainerKey/solicitadoPor/solicitadoEn
+      // ni ningún otro campo de identidad.
+      allow update: if isAdmin()
+        && resource.data.estado == 'pendiente'
+        && request.resource.data.estado in ['aprobada', 'rechazada']
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['estado', 'revisadoPor', 'revisadoEn', 'notasAdmin']);
+
+      // Nunca se borran: se conservan como auditoría.
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
