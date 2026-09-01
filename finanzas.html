@@ -284,7 +284,7 @@
     let agendaRef = null;
     let usersUnsub = null, agendaUnsub = null, finanzasUnsub = null;
 
-    let dbFinanzas = { centros: {}, trainerSettings: {}, gastos: {}, otrosIngresos: {}, historico: {}, auditoriaCierres: {} };
+    let dbFinanzas = { centros: {}, trainerSettings: {}, trainerSettingsVersiones: {}, centrosVersiones: {}, gastos: {}, otrosIngresos: {}, historico: {}, auditoriaCierres: {} };
     let agendaData = { clientes:{}, agenda:{}, historicoClientes:{} };
     let perfilesUsuarios = [];
     let calculoActual = null;
@@ -309,6 +309,53 @@
       if (mesEnEdicion(key)) return true;
       alert(`El mes ${etiquetaMes(key)} está cerrado y bloqueado. Para modificar ${concepto}, pulsa primero “Reabrir edición”. Después recalcula/cierra de nuevo el mes.`);
       return false;
+    }
+    // --- FASE 6-7: temporalidad de configuración financiera (canon/rango/centro) ---
+    // trainerSettings/centros son configuración VIVA (lo que ve/edita el admin hoy).
+    // Cada cambio en un campo que afecta al cálculo de facturación registra además
+    // una entrada versionada con vigencia por mes, para que un cambio hecho hoy
+    // nunca recalcule silenciosamente meses ya pasados (abiertos o cerrados).
+    // Resolución: la entrada con 'desde' <= mesKey más reciente gana; si hay una
+    // entrada puntual de un solo mes (desde==hasta==mesKey) para ese mes, esa gana
+    // sobre cualquier entrada "desde ... en adelante" con el mismo 'desde'.
+    const CAMPOS_TEMPORALES_TRAINER = ['canonFijoIndependiente','aporteIndividualCliente','coordBonusPorPt','coordMaxPts','coordMaxBonus','pactoEspecial','sistemaPago','centroId'];
+    const CAMPOS_TEMPORALES_CENTRO = ['canonFijo','ptsIncluidos','canonPt','canonPtReducidoDesde','canonPtReducido'];
+    function valorEfectivoTemporal(versiones, campo, mesKey, valorFallback){
+      const candidatas = (versiones||[]).filter(v => campo in v && v.desde <= mesKey && (!v.hasta || mesKey <= v.hasta));
+      if (!candidatas.length) return valorFallback;
+      candidatas.sort((a,b) => (a.desde < b.desde ? -1 : a.desde > b.desde ? 1 : (a.hasta?1:0)-(b.hasta?1:0)));
+      return candidatas[candidatas.length-1][campo];
+    }
+    function registrarVersionTemporal(bucket, id, campo, valorNuevo, valorAnteriorLive, mesDesde, soloEsteMes){
+      if (!bucket[id]) bucket[id] = [];
+      const versiones = bucket[id];
+      const yaVersionado = versiones.some(v => campo in v);
+      // Primera vez que este campo se versiona: se congela el valor previo como base
+      // legacy para todos los meses no cubiertos explícitamente (incluidos los pasados).
+      if (!yaVersionado && valorAnteriorLive !== undefined) {
+        versiones.push({ desde: '0000-01', [campo]: valorAnteriorLive, _legacy: true });
+      }
+      const entrada = soloEsteMes
+        ? { desde: mesDesde, hasta: mesDesde, [campo]: valorNuevo }
+        : { desde: mesDesde, [campo]: valorNuevo };
+      entrada._registradoEn = new Date().toISOString();
+      entrada._registradoPor = usuarioFinanzasEmail || '';
+      versiones.push(entrada);
+    }
+    function settingsTrainerParaMes(key, mesKey){
+      const live = dbFinanzas.trainerSettings?.[key] || {};
+      const versiones = dbFinanzas.trainerSettingsVersiones?.[key];
+      if (!versiones || !versiones.length) return live;
+      const resuelto = { ...live };
+      CAMPOS_TEMPORALES_TRAINER.forEach(c => { resuelto[c] = valorEfectivoTemporal(versiones, c, mesKey, live[c]); });
+      return resuelto;
+    }
+    function centroParaMes(centroLive, mesKey){
+      const versiones = dbFinanzas.centrosVersiones?.[centroLive.id];
+      if (!versiones || !versiones.length) return centroLive;
+      const resuelto = { ...centroLive };
+      CAMPOS_TEMPORALES_CENTRO.forEach(c => { resuelto[c] = valorEfectivoTemporal(versiones, c, mesKey, centroLive[c]); });
+      return resuelto;
     }
     function registrarAuditoriaCierre(mes, accion, detalle=''){
       if(!dbFinanzas.auditoriaCierres) dbFinanzas.auditoriaCierres = {};
@@ -384,8 +431,8 @@
       const clientes = (agendaData.clientes && agendaData.clientes[key]) || [];
       return Array.isArray(clientes) && clientes.length > 0;
     }
-    function centroTrainer(key, perfil){
-      const settings = dbFinanzas.trainerSettings?.[key] || {};
+    function centroTrainer(key, perfil, mesKey){
+      const settings = mesKey ? settingsTrainerParaMes(key, mesKey) : (dbFinanzas.trainerSettings?.[key] || {});
       const nombre = nombrePerfil(perfil).toLowerCase();
       // Primero respetamos una asignación manual, siempre que apunte al maestro de centros.
       if (settings.centroId && centroValido(settings.centroId) && settings.centroId !== 'sin_centro') return settings.centroId;
@@ -713,7 +760,7 @@
     function construirCalculoVivo(mesKey = mesTrabajoKey()){
       const centrosBase = { ...getCentros(), sin_centro: { id:'sin_centro', nombre:'Dirección / sin centro', canonFijo:0, canonPt:0, activo:true } };
       const centros = {};
-      Object.keys(centrosBase).forEach(id => centros[id] = { ...centrosBase[id], trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0 });
+      Object.keys(centrosBase).forEach(id => centros[id] = { ...centroParaMes(centrosBase[id], mesKey), trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0 });
       const trainers = [];
       perfilesUsuarios.filter(esPerfilOperativo).forEach(perfil => {
         const key = trainerKeyPerfil(perfil);
@@ -741,8 +788,8 @@
             }
           }
         });
-        const settings = dbFinanzas.trainerSettings?.[key] || {};
-        const centroId = centroTrainer(key, perfil);
+        const settings = settingsTrainerParaMes(key, mesKey);
+        const centroId = centroTrainer(key, perfil, mesKey);
         const pactoEspecial = !!settings.pactoEspecial;
         const soloImputacionGastos = TRAINERS_SOLO_IMPUTACION_GASTOS.includes(key);
         const clientesAgendaNoComputados = soloImputacionGastos ? clientes : 0;
@@ -1124,9 +1171,17 @@
       const c = asegurarCentroEditable(id);
       const numericFields = ['canonFijo','ptsIncluidos','canonPt','canonPtReducidoDesde','canonPtReducido','orden'];
       const boolFields = ['activo','visibleCRM','visibleAgenda','visibleReservas','visibleQR'];
-      if (numericFields.includes(campo)) c[campo] = parseNum(valor);
-      else if (boolFields.includes(campo)) c[campo] = !!valor;
-      else c[campo] = valor;
+      const valorFinal = numericFields.includes(campo) ? parseNum(valor) : (boolFields.includes(campo) ? !!valor : valor);
+      const valorAnterior = c[campo];
+      if (CAMPOS_TEMPORALES_CENTRO.includes(campo) && valorAnterior !== undefined && valorFinal !== valorAnterior) {
+        const mes = mesTrabajoKey();
+        const soloEsteMes = confirm(`Cambio de "${campo}" en el centro ${c.nombre||id}.\n\nAceptar = aplicar SOLO a ${etiquetaMes(mes)} (no toca otros meses).\nCancelar = aplicar DESDE ${etiquetaMes(mes)} en adelante (nunca recalcula meses anteriores).`);
+        if(!dbFinanzas.centrosVersiones) dbFinanzas.centrosVersiones = {};
+        registrarVersionTemporal(dbFinanzas.centrosVersiones, id, campo, valorFinal, valorAnterior, mes, soloEsteMes);
+        if (!soloEsteMes) c[campo] = valorFinal;
+      } else {
+        c[campo] = valorFinal;
+      }
       guardarConfigFinanzas();
     }
     function desactivarCentro(id){
@@ -1192,7 +1247,17 @@
       if(!dbFinanzas.trainerSettings) dbFinanzas.trainerSettings={};
       if(!dbFinanzas.trainerSettings[key]) dbFinanzas.trainerSettings[key]={};
       const numericFields = ['aporteIndividualCliente','canonFijoIndependiente','coordBonusPorPt','coordMaxPts','coordMaxBonus'];
-      dbFinanzas.trainerSettings[key][campo] = numericFields.includes(campo) ? parseNum(valor) : valor;
+      const valorFinal = numericFields.includes(campo) ? parseNum(valor) : valor;
+      const valorAnterior = dbFinanzas.trainerSettings[key][campo];
+      if (CAMPOS_TEMPORALES_TRAINER.includes(campo) && valorAnterior !== undefined && valorFinal !== valorAnterior) {
+        const mes = mesTrabajoKey();
+        const soloEsteMes = confirm(`Cambio de "${campo}" para ${key}.\n\nAceptar = aplicar SOLO a ${etiquetaMes(mes)} (no toca otros meses).\nCancelar = aplicar DESDE ${etiquetaMes(mes)} en adelante (nunca recalcula meses anteriores).`);
+        if(!dbFinanzas.trainerSettingsVersiones) dbFinanzas.trainerSettingsVersiones = {};
+        registrarVersionTemporal(dbFinanzas.trainerSettingsVersiones, key, campo, valorFinal, valorAnterior, mes, soloEsteMes);
+        if (!soloEsteMes) dbFinanzas.trainerSettings[key][campo] = valorFinal;
+      } else {
+        dbFinanzas.trainerSettings[key][campo] = valorFinal;
+      }
       guardarConfigFinanzas();
     }
 
