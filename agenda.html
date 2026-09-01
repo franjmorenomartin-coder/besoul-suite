@@ -1226,8 +1226,28 @@ miércoles 07:00-09:00"></textarea>
 
 
 
-        function estadoLocalAgendaParaNube() {
+        function estadoLocalAgendaParaNube(trainerKeyScope) {
 
+            // Escritura dirigida: si se conoce el trainerKey afectado, solo se envían
+            // sus propios sub-mapas (notación de punto) con merge:true, para que Firestore
+            // fusione a nivel de campo y nunca pise los datos de otro entrenador que se
+            // hayan guardado casi al mismo tiempo (evita "last write wins" sobre el documento
+            // completo). "notas" sigue siendo un mapa plano (clave "trainerKey__clave", no
+            // anidado) y por eso se envía entero como excepción documentada — riesgo residual
+            // menor y aceptado, ver BESOUL_WORK_STATE.md.
+            if (trainerKeyScope) {
+                return {
+                    [`clientes.${trainerKeyScope}`]: dbClientes[trainerKeyScope] || [],
+                    [`agenda.${trainerKeyScope}`]: dbAgenda[trainerKeyScope] || {},
+                    [`pruebasCRM.${trainerKeyScope}`]: dbPruebasCRM[trainerKeyScope] || {},
+                    [`disponibilidadReservas.${trainerKeyScope}`]: dbDisponibilidadReservas[trainerKeyScope] || {},
+                    [`historicoClientes.${trainerKeyScope}`]: dbHistoricoClientes[trainerKeyScope] || {},
+                    notas: dbNotas || {},
+                    ultimaActualizacionLocal: new Date().toISOString()
+                };
+            }
+
+            // Fallback legacy (sin trainerKey conocido): documento completo, como antes.
             return {
 
                 // En la versión con Firebase Authentication, los usuarios/roles se leen de besoulUsers.
@@ -1250,17 +1270,19 @@ miércoles 07:00-09:00"></textarea>
 
 
 
-        function guardarEstadoNubeAgenda() {
+        function guardarEstadoNubeAgenda(trainerKeyScope) {
 
             if (!window.bsAgendaCloudDocRef || window.bsAgendaAplicandoNube) return;
 
             try {
 
-                const payload = estadoLocalAgendaParaNube();
+                const scope = trainerKeyScope || entrenadorVisto;
+
+                const payload = estadoLocalAgendaParaNube(scope);
 
                 payload.actualizadoEn = firebase.firestore.FieldValue.serverTimestamp();
 
-                window.bsAgendaCloudDocRef.set(payload)
+                window.bsAgendaCloudDocRef.set(payload, { merge: true })
                     .then(() => publicarReservasPublicas())
                     .catch(err => console.error('Error guardando agenda en Firebase:', err));
 
@@ -1274,13 +1296,15 @@ miércoles 07:00-09:00"></textarea>
 
 
 
-        function programarGuardadoNubeAgenda() {
+        function programarGuardadoNubeAgenda(trainerKeyScope) {
 
             if (!window.bsAgendaCloudDocRef || window.bsAgendaAplicandoNube) return;
 
+            const scope = trainerKeyScope || entrenadorVisto;
+
             clearTimeout(window.bsAgendaCloudTimer);
 
-            window.bsAgendaCloudTimer = setTimeout(guardarEstadoNubeAgenda, 350);
+            window.bsAgendaCloudTimer = setTimeout(() => guardarEstadoNubeAgenda(scope), 350);
 
         }
 
@@ -2234,7 +2258,7 @@ function calcularRentabilidadFicha(ficha) {
 
 
 
-        function calcularContadorClases(ficha) {
+        function calcularContadorClases(ficha, claveMes = claveMesVisible()) {
 
             const fichaBase = fichaBaseParaContador(ficha);
 
@@ -2250,6 +2274,8 @@ function calcularRentabilidadFicha(ficha) {
 
             if (esBono) {
 
+                // Los bonos tienen ventana de vigencia propia (p.ej. 3 meses desde la compra),
+                // no un ciclo mensual — nunca se resetean por mes, no usan claveMes.
                 const inicio = fichaBase.fechaCompra ? new Date(`${fichaBase.fechaCompra}T00:00:00`) : new Date(lunesActual.getFullYear(), lunesActual.getMonth(), 1);
 
                 const fin = sumarMeses(inicio, 3);
@@ -2276,11 +2302,30 @@ function calcularRentabilidadFicha(ficha) {
 
             }
 
+            // Plan mensual no acumulable: el mes (claveMes, formato YYYY-MM) es parte
+            // de la identidad del saldo. Si ese mes ya quedó cerrado/respaldado en el
+            // histórico (guardarResumenClienteMes), se usa el snapshot congelado en vez
+            // de recalcular en vivo — evita que un cambio posterior de tarifa/modalidad
+            // altere retroactivamente un mes ya cerrado.
+            const snapshotMes = dbHistoricoClientes[entrenadorVisto]?.[fichaBase.id]?.[claveMes];
+            if (snapshotMes) {
+                const contratadasHist = snapshotMes.sesionesContratadas ?? contratadas;
+                const usadasHist = snapshotMes.sesionesAgendadas ?? 0;
+                return {
+                    tipo: 'mensual',
+                    contratadas: contratadasHist,
+                    usadas: usadasHist,
+                    restantes: Math.max(0, contratadasHist - usadasHist),
+                    exceso: Math.max(0, usadasHist - contratadasHist),
+                    periodo: snapshotMes.etiquetaMes || etiquetaMesDesdeClave(claveMes),
+                    historico: true
+                };
+            }
 
+            const [anioMesVista, mesMesVista] = claveMes.split('-').map(x => parseInt(x, 10));
+            const inicioMes = new Date(anioMesVista, mesMesVista - 1, 1);
 
-            const inicioMes = new Date(lunesActual.getFullYear(), lunesActual.getMonth(), 1);
-
-            const finMes = new Date(lunesActual.getFullYear(), lunesActual.getMonth() + 1, 1);
+            const finMes = new Date(anioMesVista, mesMesVista, 1);
 
             const usadas = contarSesionesAgendadas(fichaBase, formatoFechaLocal(inicioMes), formatoFechaLocal(finMes));
 
@@ -2296,7 +2341,9 @@ function calcularRentabilidadFicha(ficha) {
 
                 exceso: Math.max(0, usadas - contratadas),
 
-                periodo: inicioMes.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+                periodo: inicioMes.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }),
+
+                historico: false
 
             };
 
@@ -5682,7 +5729,7 @@ Cancelar = no hacer nada`,
                 alert('La baja se aplicó localmente pero hubo un error al sincronizar con la nube. Vuelve a intentarlo.');
             }
 
-            guardarEstadoNubeAgenda();
+            guardarEstadoNubeAgenda(s.trainerKey);
             publicarReservasPublicas();
             recalcularKPIs();
             renderClientes();
@@ -5806,7 +5853,7 @@ Cancelar = no hacer nada`,
                 const fs = firebase.firestore();
                 await fs.collection(BS_RESERVAS_COLLECTION).doc(id).set({ estado:'aceptada', aceptadaEn: firebase.firestore.FieldValue.serverTimestamp(), aceptadaPor: usuarioLogeado }, { merge:true });
             } catch(e) { console.error(e); }
-            guardarEstadoNubeAgenda();
+            guardarEstadoNubeAgenda(trainer);
             publicarReservasPublicas();
             recalcularKPIs(); renderAgenda(); renderSolicitudesReservas();
         }
