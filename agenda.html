@@ -656,7 +656,33 @@ miércoles 07:00-09:00"></textarea>
 
 
 
-                <div class="grid grid-cols-2 gap-3">
+                <div id="field-actividad-especial-toggle" class="hidden p-3 bg-purple-500/5 border border-purple-500/20 rounded space-y-2">
+                    <label class="flex items-center gap-2 text-purple-100 font-bold cursor-pointer">
+                        <input type="checkbox" id="cust-es-actividad" onchange="toggleActividadEspecialFields()" class="w-4 h-4 accent-purple-400">
+                        <span>Cliente de actividad especial (Pilates, Ciclo Indoor...)</span>
+                    </label>
+                </div>
+                <div id="field-actividad-especial" class="hidden bg-slate-950/50 p-3 rounded border border-purple-500/20 space-y-2">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div><label class="text-slate-400 block mb-1">Actividad</label><select id="cust-actividad-id" onchange="actualizarOpcionesModalidadActividad()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select></div>
+                        <div><label class="text-slate-400 block mb-1">Modalidad</label><select id="cust-actividad-modalidad" onchange="actualizarOpcionesSegmentoActividad()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select></div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <div><label class="text-slate-400 block mb-1">Segmento</label><select id="cust-actividad-segmento" onchange="actualizarOpcionesPlanActividad()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select></div>
+                        <div><label class="text-slate-400 block mb-1">Plan (sesiones)</label><select id="cust-actividad-plan" onchange="actualizarPreviewPrecioActividad()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select></div>
+                        <div><label class="text-slate-400 block mb-1">Nº personas</label><input type="number" id="cust-actividad-personas" min="1" max="6" value="1" onchange="actualizarPreviewPrecioActividad()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></div>
+                    </div>
+                    <div class="p-2 bg-slate-950 border border-slate-800 rounded">
+                        <span class="text-slate-500 text-[9px] block uppercase font-bold">Facturación de este plan</span>
+                        <div class="text-xs font-black text-purple-300 font-mono" id="lbl-precio-actividad">0.00 €</div>
+                    </div>
+                    <div id="field-actividad-bono-date" class="hidden">
+                        <label class="text-amber-400 block mb-1">Fecha compra bono</label>
+                        <input type="date" id="cust-actividad-bono-date" class="w-full bg-slate-950 border border-amber-500/40 rounded p-2 text-white">
+                    </div>
+                </div>
+
+                <div id="field-descuento-estandar" class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="text-slate-400 block mb-1">Descuento aplicado (%)</label>
                         <input type="text" id="cust-discount" inputmode="decimal" pattern="[0-9]+([\.,][0-9]+)?" value="0" oninput="autoCalcularTarifa()" onblur="normalizarCampoDescuento()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="0,0">
@@ -685,7 +711,7 @@ miércoles 07:00-09:00"></textarea>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-3">
+                <div id="field-modalidad-estandar" class="grid grid-cols-2 gap-3">
 
                     <div>
 
@@ -731,7 +757,7 @@ miércoles 07:00-09:00"></textarea>
 
 
 
-                <div class="grid grid-cols-2 gap-3">
+                <div id="field-tipo-compra-estandar" class="grid grid-cols-2 gap-3">
 
                     <div>
 
@@ -1154,6 +1180,48 @@ miércoles 07:00-09:00"></textarea>
 
         };
 
+        // Espejo exacto de la misma constante en finanzas.html (ver esa copia para el
+        // comentario completo). El valor por defecto se combina con dbCatalogoActividades
+        // (lo que el admin haya editado desde Finanzas) para obtener el catálogo vivo.
+        const DEFAULT_CATALOGO_ACTIVIDADES = {
+            ciclo_indoor: {
+                id: 'ciclo_indoor', nombre: 'Ciclo Indoor / Spinning', centroId: 'alfa_prime', activo: true,
+                unidadCiclo: 'semanas', duracionCiclo: 4,
+                reparto: { partes: [{ destino: 'entrenador', pct: 50 }, { destino: 'centro', pct: 35 }, { destino: 'besoul', pct: 15 }] },
+                modalidades: {
+                    plan: { nombre: 'Plan por ciclo (4 semanas)', tipo: 'ciclo_no_acumulable', segmentos: {
+                        general: { nombre: 'General', porPersona: true, planes: [{ sesiones: 4, precio: 55 }, { sesiones: 8, precio: 75 }, { sesiones: 12, precio: 95 }] },
+                        empresa: { nombre: 'Empresa', porPersona: true, planes: [{ sesiones: 4, precio: 45 }, { sesiones: 8, precio: 65 }, { sesiones: 12, precio: 85 }] },
+                        jubilados: { nombre: 'Jubilados', porPersona: true, planes: [{ sesiones: 4, precio: 45 }, { sesiones: 8, precio: 65 }, { sesiones: 12, precio: 85 }] }
+                    }}
+                }
+            },
+            pilates_maquina: {
+                id: 'pilates_maquina', nombre: 'Pilates Máquina', centroId: 'alfa_prime', activo: true,
+                unidadCiclo: 'meses', duracionCiclo: 1,
+                reparto: { partes: [{ destino: 'entrenador', pct: 50 }, { destino: 'centro', pct: 35 }, { destino: 'besoul', pct: 15 }] },
+                modalidades: {
+                    plan: { nombre: 'Plan mensual', tipo: 'ciclo_no_acumulable', segmentos: {
+                        general: { nombre: 'General', porPersona: true, planes: [{ sesiones: 4, precio: 65 }, { sesiones: 8, precio: 95 }, { sesiones: 12, precio: 120 }] },
+                        empresa: { nombre: 'Empresa', porPersona: true, planes: [{ sesiones: 4, precio: 55 }, { sesiones: 8, precio: 85 }, { sesiones: 12, precio: 110 }] },
+                        jubilados: { nombre: 'Jubilados', porPersona: true, planes: [{ sesiones: 4, precio: 55 }, { sesiones: 8, precio: 85 }, { sesiones: 12, precio: 110 }] }
+                    }},
+                    bono10: { nombre: 'Bono 10 clases', tipo: 'bono_vigencia', segmentos: {
+                        individual: { nombre: 'Individual', porPersona: false, planes: [{ sesiones: 10, precio: 450 }] },
+                        pareja: { nombre: 'Pareja', porPersona: false, planes: [{ sesiones: 10, precio: 600 }] },
+                        trio: { nombre: 'Trío', porPersona: false, planes: [{ sesiones: 10, precio: 800 }] }
+                    }},
+                    vip: { nombre: 'Sala VIP / Personalizado', tipo: 'ciclo_no_acumulable', segmentos: {
+                        individual: { nombre: 'Individual', porPersona: true, planes: [{ sesiones: 4, precio: 180 }, { sesiones: 8, precio: 320 }, { sesiones: 12, precio: 420 }] },
+                        pareja: { nombre: 'Pareja', porPersona: true, planes: [{ sesiones: 4, precio: 120 }, { sesiones: 8, precio: 210 }, { sesiones: 12, precio: 285 }] },
+                        trio: { nombre: 'Trío', porPersona: true, planes: [{ sesiones: 4, precio: 100 }, { sesiones: 8, precio: 170 }, { sesiones: 12, precio: 225 }] }
+                    }}
+                }
+            }
+        };
+        function catalogoActividadesVivo() { return { ...DEFAULT_CATALOGO_ACTIVIDADES, ...dbCatalogoActividades }; }
+        function actividadesAutorizadasParaTrainer(trainerKey) { return (dbTrainerActividades && dbTrainerActividades[trainerKey]) || []; }
+
 
 
         // HEX MAP EXACTO PARA SINCRONIZACIÓN VISUAL DE BOLITAS Y CELDAS
@@ -1200,6 +1268,14 @@ miércoles 07:00-09:00"></textarea>
 
         let dbNotas = JSON.parse(localStorage.getItem('bs_db_notas_v6')) || {};
         let dbHistoricoClientes = JSON.parse(localStorage.getItem('bs_db_historico_clientes_v6')) || {};
+
+        // Catálogo de actividades especiales (Pilates/Ciclo/futuras) — solo lectura desde
+        // agenda.html: la edición vive en Finanzas (finanzas.html escribe en este mismo
+        // documento vía agendaRef). Aquí solo se lee para poblar el selector de ficha.
+        let dbCatalogoActividades = {};
+        let dbTrainerActividades = {};
+        let dbTarifasActividadVersiones = {};
+        let dbRepartoActividadVersiones = {};
 
 
 
@@ -1345,6 +1421,11 @@ miércoles 07:00-09:00"></textarea>
 
                 dbNotas = data.notas || {};
                 dbHistoricoClientes = data.historicoClientes || {};
+
+                dbCatalogoActividades = data.catalogoActividades || {};
+                dbTrainerActividades = data.trainerActividades || {};
+                dbTarifasActividadVersiones = data.tarifasActividadVersiones || {};
+                dbRepartoActividadVersiones = data.repartoActividadVersiones || {};
 
 
 
@@ -1938,6 +2019,8 @@ miércoles 07:00-09:00"></textarea>
         function sesionesContratadasFicha(ficha) {
 
             if (!ficha) return 0;
+
+            if (ficha.actividadEspecialId) return parseInt(ficha.planSesiones) || 0;
 
             if ((ficha.tipoCompra === 'Bono') || (ficha.modalidad && ficha.modalidad.includes('Bono'))) return 10;
 
@@ -2849,7 +2932,83 @@ function calcularRentabilidadFicha(ficha) {
 
         }
 
-
+        // Cliente de actividad especial (Pilates, Ciclo Indoor...): reparto porcentual en vez
+        // de rango/canon PT. Modelo mixto: el mismo trainer puede tener cartera PT estándar Y
+        // clientes de actividad a la vez — esta ficha concreta es de uno u otro tipo, nunca ambos.
+        function toggleActividadEspecialFields() {
+            const activo = !!document.getElementById('cust-es-actividad')?.checked;
+            const campo = document.getElementById('field-actividad-especial');
+            if (campo) campo.classList.toggle('hidden', !activo);
+            ['field-modalidad-estandar', 'field-tipo-compra-estandar', 'field-descuento-estandar'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.toggle('hidden', activo);
+            });
+            if (activo) {
+                const selAct = document.getElementById('cust-actividad-id');
+                if (selAct) {
+                    const disponibles = actividadesAutorizadasParaTrainer(entrenadorVisto);
+                    const catalogo = catalogoActividadesVivo();
+                    selAct.innerHTML = disponibles.map(id => catalogo[id]).filter(Boolean).filter(a => a.activo !== false)
+                        .map(a => `<option value="${a.id}">${escapeHTML(a.nombre)}</option>`).join('');
+                }
+                actualizarOpcionesModalidadActividad();
+            }
+        }
+        function nombreModalidadActividadParaFicha(actividadId, modalidadId, segmentoId) {
+            const act = catalogoActividadesVivo()[actividadId];
+            const modalidad = act?.modalidades?.[modalidadId];
+            const segmento = modalidad?.segmentos?.[segmentoId];
+            return [act?.nombre, modalidad?.nombre, segmento?.nombre].filter(Boolean).join(' · ') || 'Actividad especial';
+        }
+        function actividadSeleccionadaModal() {
+            const id = document.getElementById('cust-actividad-id')?.value;
+            return id ? catalogoActividadesVivo()[id] : null;
+        }
+        function actualizarOpcionesModalidadActividad() {
+            const act = actividadSeleccionadaModal();
+            const sel = document.getElementById('cust-actividad-modalidad');
+            if (!sel) return;
+            const modalidades = act?.modalidades || {};
+            sel.innerHTML = Object.keys(modalidades).map(id => `<option value="${id}">${escapeHTML(modalidades[id].nombre)}</option>`).join('');
+            actualizarOpcionesSegmentoActividad();
+        }
+        function actualizarOpcionesSegmentoActividad() {
+            const act = actividadSeleccionadaModal();
+            const modId = document.getElementById('cust-actividad-modalidad')?.value;
+            const sel = document.getElementById('cust-actividad-segmento');
+            if (!sel) return;
+            const segmentos = act?.modalidades?.[modId]?.segmentos || {};
+            sel.innerHTML = Object.keys(segmentos).map(id => `<option value="${id}">${escapeHTML(segmentos[id].nombre)}${segmentos[id].porPersona ? '' : ' (precio total, no por persona)'}</option>`).join('');
+            actualizarOpcionesPlanActividad();
+        }
+        function actualizarOpcionesPlanActividad() {
+            const act = actividadSeleccionadaModal();
+            const modId = document.getElementById('cust-actividad-modalidad')?.value;
+            const segId = document.getElementById('cust-actividad-segmento')?.value;
+            const sel = document.getElementById('cust-actividad-plan');
+            if (!sel) return;
+            const planes = act?.modalidades?.[modId]?.segmentos?.[segId]?.planes || [];
+            sel.innerHTML = planes.map(p => `<option value="${p.sesiones}">${p.sesiones} sesiones — ${p.precio.toFixed(2)} €</option>`).join('');
+            const esBono = act?.modalidades?.[modId]?.tipo === 'bono_vigencia';
+            const campoBono = document.getElementById('field-actividad-bono-date');
+            if (campoBono) campoBono.classList.toggle('hidden', !esBono);
+            actualizarPreviewPrecioActividad();
+        }
+        function actualizarPreviewPrecioActividad() {
+            const act = actividadSeleccionadaModal();
+            const modId = document.getElementById('cust-actividad-modalidad')?.value;
+            const segId = document.getElementById('cust-actividad-segmento')?.value;
+            const planSesiones = Number(document.getElementById('cust-actividad-plan')?.value);
+            const numPersonas = Math.max(1, parseInt(document.getElementById('cust-actividad-personas')?.value) || 1);
+            const segmento = act?.modalidades?.[modId]?.segmentos?.[segId];
+            const plan = segmento?.planes?.find(p => p.sesiones === planSesiones);
+            const lbl = document.getElementById('lbl-precio-actividad');
+            if (!lbl) return;
+            if (!plan) { lbl.innerText = '0.00 €'; return; }
+            const total = segmento.porPersona ? plan.precio * numPersonas : plan.precio;
+            const modalidadTipo = act?.modalidades?.[modId]?.tipo;
+            lbl.innerText = `${total.toFixed(2)} €` + (modalidadTipo === 'bono_vigencia' ? ' (bono, se reconoce por sesión agendada)' : ' (facturación del plan, no por sesión)');
+        }
 
         // MOTOR FINANCIERO CORREGIDO Y EXACTO
 
@@ -3081,6 +3240,12 @@ function calcularRentabilidadFicha(ficha) {
 
             toggleBonoFields();
 
+            const togAct = document.getElementById('field-actividad-especial-toggle');
+            const chkAct = document.getElementById('cust-es-actividad');
+            if (togAct) togAct.classList.toggle('hidden', tabFichaActiva === 'grupo' || !actividadesAutorizadasParaTrainer(entrenadorVisto).length);
+            if (chkAct) chkAct.checked = false;
+            toggleActividadEspecialFields();
+
         }
 
 
@@ -3169,6 +3334,25 @@ function calcularRentabilidadFicha(ficha) {
                 if (document.getElementById('cust-open-group')) document.getElementById('cust-open-group').checked = false;
                 toggleGrupoAbiertoFields();
 
+            }
+
+            const togAct = document.getElementById('field-actividad-especial-toggle');
+            const chkAct = document.getElementById('cust-es-actividad');
+            const yaEsActividad = !!c.actividadEspecialId;
+            if (togAct) togAct.classList.toggle('hidden', c.tipo === 'grupo' || (!yaEsActividad && !actividadesAutorizadasParaTrainer(entrenadorVisto).length));
+            if (chkAct) chkAct.checked = yaEsActividad;
+            toggleActividadEspecialFields();
+            if (yaEsActividad) {
+                const selId = document.getElementById('cust-actividad-id'); if (selId) selId.value = c.actividadEspecialId;
+                actualizarOpcionesModalidadActividad();
+                const selMod = document.getElementById('cust-actividad-modalidad'); if (selMod) selMod.value = c.modalidadId;
+                actualizarOpcionesSegmentoActividad();
+                const selSeg = document.getElementById('cust-actividad-segmento'); if (selSeg) selSeg.value = c.segmentoId;
+                actualizarOpcionesPlanActividad();
+                const selPlan = document.getElementById('cust-actividad-plan'); if (selPlan) selPlan.value = c.planSesiones;
+                const inpPer = document.getElementById('cust-actividad-personas'); if (inpPer) inpPer.value = c.numPersonas || 1;
+                const inpBono = document.getElementById('cust-actividad-bono-date'); if (inpBono) inpBono.value = c.fechaCompra || '';
+                actualizarPreviewPrecioActividad();
             }
 
 
@@ -3320,6 +3504,27 @@ function calcularRentabilidadFicha(ficha) {
             const grupoAbierto = tabFichaActiva === 'grupo' ? !!document.getElementById('cust-open-group')?.checked : false;
             const capacidadGrupoAbiertoVal = grupoAbierto ? Math.max(1, Math.min(20, parseInt(document.getElementById('cust-open-group-capacity')?.value || '6', 10) || 6)) : 0;
 
+            const esActividadEspecial = tabFichaActiva !== 'grupo' && !!document.getElementById('cust-es-actividad')?.checked;
+            let actividadEspecialId = '', modalidadIdActividad = '', segmentoIdActividad = '', planSesionesActividad = 0, numPersonasActividad = 1, fechaCompraActividad = '';
+            if (esActividadEspecial) {
+                actividadEspecialId = document.getElementById('cust-actividad-id')?.value || '';
+                modalidadIdActividad = document.getElementById('cust-actividad-modalidad')?.value || '';
+                segmentoIdActividad = document.getElementById('cust-actividad-segmento')?.value || '';
+                planSesionesActividad = Number(document.getElementById('cust-actividad-plan')?.value) || 0;
+                numPersonasActividad = Math.max(1, parseInt(document.getElementById('cust-actividad-personas')?.value) || 1);
+                const actCat = catalogoActividadesVivo()[actividadEspecialId];
+                const esBonoActividad = actCat?.modalidades?.[modalidadIdActividad]?.tipo === 'bono_vigencia';
+                fechaCompraActividad = esBonoActividad ? (document.getElementById('cust-actividad-bono-date')?.value || '') : '';
+                if (!actividadEspecialId || !modalidadIdActividad || !segmentoIdActividad || !planSesionesActividad) {
+                    alert('Selecciona actividad, modalidad, segmento y plan de sesiones.');
+                    return;
+                }
+                if (esBonoActividad && !fechaCompraActividad) {
+                    alert('Este plan es un bono con vigencia: indica la fecha de compra.');
+                    return;
+                }
+            }
+
 
 
             if(!name) {
@@ -3408,13 +3613,19 @@ function calcularRentabilidadFicha(ficha) {
                 grupoAbierto: tipoReal === 'grupo' ? grupoAbierto : false,
                 capacidadGrupoAbierto: tipoReal === 'grupo' ? capacidadGrupoAbiertoVal : 0,
 
-                modalidad: mod,
+                modalidad: esActividadEspecial ? `Actividad: ${nombreModalidadActividadParaFicha(actividadEspecialId, modalidadIdActividad, segmentoIdActividad)}` : mod,
 
-                factor: factor,
+                factor: esActividadEspecial ? 1 : factor,
 
-                tipoCompra: pType,
+                tipoCompra: esActividadEspecial ? (catalogoActividadesVivo()[actividadEspecialId]?.modalidades?.[modalidadIdActividad]?.tipo === 'bono_vigencia' ? 'Bono' : 'Mensualidad') : pType,
 
-                fechaCompra: pDate,
+                fechaCompra: esActividadEspecial ? fechaCompraActividad : pDate,
+
+                actividadEspecialId: esActividadEspecial ? actividadEspecialId : '',
+                modalidadId: esActividadEspecial ? modalidadIdActividad : '',
+                segmentoId: esActividadEspecial ? segmentoIdActividad : '',
+                planSesiones: esActividadEspecial ? planSesionesActividad : 0,
+                numPersonas: esActividadEspecial ? numPersonasActividad : 0,
 
                 color: color,
                 descuentoPct: descuentoPct,

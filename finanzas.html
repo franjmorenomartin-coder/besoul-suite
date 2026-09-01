@@ -206,6 +206,13 @@
             <div id="trainers-config" class="space-y-2 max-h-[560px] overflow-y-auto pr-1"></div>
           </div>
         </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+          <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+            <div><h2 class="text-sm font-bold text-white">Actividades especiales</h2><p class="text-xs text-slate-400">Catálogo de tarifas y reparto porcentual (Pilates, Ciclo Indoor, futuras actividades) — datos configurables, con vigencia por mes.</p></div>
+            <button onclick="crearActividadEspecial()" class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-2 rounded-lg text-xs font-bold">+ Actividad</button>
+          </div>
+          <div id="actividades-config" class="space-y-3"></div>
+        </div>
       </section>
     </main>
   </div>
@@ -239,6 +246,52 @@
       lagunillas: { id:'lagunillas', nombre:'Lagunillas', orden:4, canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true, visibleCRM:true, visibleAgenda:true, visibleReservas:true, visibleQR:true }
     };
 
+    // Catálogo genérico de "actividades especiales" (Pilates Máquina, Ciclo Indoor, y
+    // cualquier futura actividad con reparto porcentual en vez de rango/canon PT).
+    // Esto es SOLO el valor inicial por defecto (igual que DEFAULT_CENTROS con Inacua/etc.):
+    // el admin puede editarlo desde Finanzas > Configuración > Actividades especiales, y
+    // esa edición queda versionada por mes vía tarifasActividadVersiones/repartoActividadVersiones
+    // (ver dbAgendaShared más abajo). El motor de cálculo (construirCalculoVivo,
+    // calcularFacturacionActividadFicha, repartoEfectivoActividad) no conoce "Pilates" ni
+    // "Verónica" ni ningún porcentaje: todo sale de esta estructura de datos.
+    // Espejo exacto de esta misma constante en agenda.html (duplicada por no haber build
+    // step/módulos compartidos entre páginas — mismo patrón ya usado para TARIFAS_2026).
+    const DEFAULT_CATALOGO_ACTIVIDADES = {
+      ciclo_indoor: {
+        id: 'ciclo_indoor', nombre: 'Ciclo Indoor / Spinning', centroId: 'alfa_prime', activo: true,
+        unidadCiclo: 'semanas', duracionCiclo: 4,
+        reparto: { partes: [{ destino: 'entrenador', pct: 50 }, { destino: 'centro', pct: 35 }, { destino: 'besoul', pct: 15 }] },
+        modalidades: {
+          plan: { nombre: 'Plan por ciclo (4 semanas)', tipo: 'ciclo_no_acumulable', segmentos: {
+            general: { nombre: 'General', porPersona: true, planes: [{ sesiones: 4, precio: 55 }, { sesiones: 8, precio: 75 }, { sesiones: 12, precio: 95 }] },
+            empresa: { nombre: 'Empresa', porPersona: true, planes: [{ sesiones: 4, precio: 45 }, { sesiones: 8, precio: 65 }, { sesiones: 12, precio: 85 }] },
+            jubilados: { nombre: 'Jubilados', porPersona: true, planes: [{ sesiones: 4, precio: 45 }, { sesiones: 8, precio: 65 }, { sesiones: 12, precio: 85 }] }
+          }}
+        }
+      },
+      pilates_maquina: {
+        id: 'pilates_maquina', nombre: 'Pilates Máquina', centroId: 'alfa_prime', activo: true,
+        unidadCiclo: 'meses', duracionCiclo: 1,
+        reparto: { partes: [{ destino: 'entrenador', pct: 50 }, { destino: 'centro', pct: 35 }, { destino: 'besoul', pct: 15 }] },
+        modalidades: {
+          plan: { nombre: 'Plan mensual', tipo: 'ciclo_no_acumulable', segmentos: {
+            general: { nombre: 'General', porPersona: true, planes: [{ sesiones: 4, precio: 65 }, { sesiones: 8, precio: 95 }, { sesiones: 12, precio: 120 }] },
+            empresa: { nombre: 'Empresa', porPersona: true, planes: [{ sesiones: 4, precio: 55 }, { sesiones: 8, precio: 85 }, { sesiones: 12, precio: 110 }] },
+            jubilados: { nombre: 'Jubilados', porPersona: true, planes: [{ sesiones: 4, precio: 55 }, { sesiones: 8, precio: 85 }, { sesiones: 12, precio: 110 }] }
+          }},
+          bono10: { nombre: 'Bono 10 clases', tipo: 'bono_vigencia', segmentos: {
+            individual: { nombre: 'Individual', porPersona: false, planes: [{ sesiones: 10, precio: 450 }] },
+            pareja: { nombre: 'Pareja', porPersona: false, planes: [{ sesiones: 10, precio: 600 }] },
+            trio: { nombre: 'Trío', porPersona: false, planes: [{ sesiones: 10, precio: 800 }] }
+          }},
+          vip: { nombre: 'Sala VIP / Personalizado', tipo: 'ciclo_no_acumulable', segmentos: {
+            individual: { nombre: 'Individual', porPersona: true, planes: [{ sesiones: 4, precio: 180 }, { sesiones: 8, precio: 320 }, { sesiones: 12, precio: 420 }] },
+            pareja: { nombre: 'Pareja', porPersona: true, planes: [{ sesiones: 4, precio: 120 }, { sesiones: 8, precio: 210 }, { sesiones: 12, precio: 285 }] },
+            trio: { nombre: 'Trío', porPersona: true, planes: [{ sesiones: 4, precio: 100 }, { sesiones: 8, precio: 170 }, { sesiones: 12, precio: 225 }] }
+          }}
+        }
+      }
+    };
     const DEFAULT_CENTER_BY_TRAINER = {
       // Asignación oficial actual. Todo lo que no esté aquí cae por defecto en Inacua, salvo Fran, que se excluye de Finanzas.
       carmen: 'alfa_prime',
@@ -320,11 +373,15 @@
     // sobre cualquier entrada "desde ... en adelante" con el mismo 'desde'.
     const CAMPOS_TEMPORALES_TRAINER = ['canonFijoIndependiente','aporteIndividualCliente','coordBonusPorPt','coordMaxPts','coordMaxBonus','pactoEspecial','sistemaPago','centroId'];
     const CAMPOS_TEMPORALES_CENTRO = ['canonFijo','ptsIncluidos','canonPt','canonPtReducidoDesde','canonPtReducido'];
-    function valorEfectivoTemporal(versiones, campo, mesKey, valorFallback){
-      const candidatas = (versiones||[]).filter(v => campo in v && v.desde <= mesKey && (!v.hasta || mesKey <= v.hasta));
-      if (!candidatas.length) return valorFallback;
+    function entradaEfectivaTemporal(entradas, mesKey){
+      const candidatas = (entradas||[]).filter(e => e.desde <= mesKey && (!e.hasta || mesKey <= e.hasta));
+      if (!candidatas.length) return null;
       candidatas.sort((a,b) => (a.desde < b.desde ? -1 : a.desde > b.desde ? 1 : (a.hasta?1:0)-(b.hasta?1:0)));
-      return candidatas[candidatas.length-1][campo];
+      return candidatas[candidatas.length-1];
+    }
+    function valorEfectivoTemporal(versiones, campo, mesKey, valorFallback){
+      const entrada = entradaEfectivaTemporal((versiones||[]).filter(v => campo in v), mesKey);
+      return entrada ? entrada[campo] : valorFallback;
     }
     function registrarVersionTemporal(bucket, id, campo, valorNuevo, valorAnteriorLive, mesDesde, soloEsteMes){
       if (!bucket[id]) bucket[id] = [];
@@ -356,6 +413,73 @@
       const resuelto = { ...centroLive };
       CAMPOS_TEMPORALES_CENTRO.forEach(c => { resuelto[c] = valorEfectivoTemporal(versiones, c, mesKey, centroLive[c]); });
       return resuelto;
+    }
+
+    // --- FASE 9-13: catálogo de "actividades especiales" (reparto porcentual, no PT estándar) ---
+    // Vive en besoulSuite/agenda (agendaData), NO en besoulSuite/finanzas: así agenda.html
+    // (donde el PT crea la ficha del cliente de actividad) puede leerlo/escribirlo con las
+    // Rules ya desplegadas hoy (signedIn() sobre docId=='agenda'), sin necesitar un cambio de
+    // Rules para exponer besoulSuite/finanzas (restringido a admin) a un PT no-admin como
+    // Verónica. finanzas.html solo LEE agendaData (ya lo hace en vivo vía agendaRef.onSnapshot)
+    // y ESCRIBE la config a través de agendaRef directamente (ver editar* más abajo).
+    function catalogoActividadesVivo(){ return { ...DEFAULT_CATALOGO_ACTIVIDADES, ...(agendaData.catalogoActividades || {}) }; }
+    function catalogoActividadVivo(actividadId){ return catalogoActividadesVivo()[actividadId] || null; }
+    function actividadEfectivaParaMes(actividadId, mesKey){
+      const live = catalogoActividadVivo(actividadId);
+      if (!live) return null;
+      const versiones = agendaData.tarifasActividadVersiones?.[actividadId];
+      const entrada = versiones && versiones.length ? entradaEfectivaTemporal(versiones, mesKey) : null;
+      return entrada ? { ...live, modalidades: entrada.modalidades } : live;
+    }
+    function repartoLiveActividad(actividadId){ return catalogoActividadVivo(actividadId)?.reparto || null; }
+    function repartoEfectivoActividad(actividadId, mesKey){
+      const versiones = agendaData.repartoActividadVersiones?.[actividadId];
+      const entrada = versiones && versiones.length ? entradaEfectivaTemporal(versiones, mesKey) : null;
+      if (entrada) return { partes: entrada.partes };
+      return repartoLiveActividad(actividadId) || { partes: [] };
+    }
+    // Reparto monetario determinista a céntimos (método del mayor resto / largest remainder):
+    // garantiza que la suma de las partes es EXACTAMENTE igual al importe original, sin
+    // depender de que los porcentajes dividan el importe en múltiplos exactos de céntimo.
+    function distribuirReparto(monto, partes){
+      const centavos = Math.round((Number(monto) || 0) * 100);
+      const pesos = (partes || []).map(p => ({ destino: p.destino, pct: Number(p.pct) || 0 }));
+      const totalPct = pesos.reduce((s, p) => s + p.pct, 0);
+      const resultado = {};
+      if (!pesos.length || totalPct <= 0 || centavos <= 0) { pesos.forEach(p => resultado[p.destino] = 0); return resultado; }
+      const brutos = pesos.map(p => (centavos * p.pct) / totalPct);
+      const floors = brutos.map(b => Math.floor(b));
+      const sobrante = centavos - floors.reduce((s, f) => s + f, 0);
+      const orden = brutos.map((b, i) => ({ i, resto: b - floors[i] })).sort((a, b) => b.resto - a.resto);
+      const finales = floors.slice();
+      for (let k = 0; k < sobrante; k++) finales[orden[k % orden.length].i] += 1;
+      pesos.forEach((p, i) => { resultado[p.destino] = finales[i] / 100; });
+      return resultado;
+    }
+    function validarSumaReparto(partes){
+      const suma = (partes || []).reduce((s, p) => s + (Number(p.pct) || 0), 0);
+      return Math.abs(suma - 100) < 0.001;
+    }
+    // Facturación de una ficha de actividad especial: el PLAN elegido determina el importe
+    // (nunca precio-por-sesión × sesiones agendadas) salvo en modalidades tipo 'bono_vigencia',
+    // que reconocen ingreso conforme se consumen sesiones dentro de su ventana de vigencia
+    // (igual filosofía que el bono PT estándar: se reutiliza sesionesAgendadasFacturablesFichaMes,
+    // que ya cuenta citas de esta ficha en agenda sin conocer nada de actividades especiales).
+    function calcularFacturacionActividadFicha(ficha, trainerKey, mesKey){
+      if (!ficha || !ficha.actividadEspecialId) return { total: 0, tipo: 'sin_actividad', sesionesAgendadas: 0 };
+      const cat = actividadEfectivaParaMes(ficha.actividadEspecialId, mesKey);
+      const modalidad = cat?.modalidades?.[ficha.modalidadId];
+      const segmento = modalidad?.segmentos?.[ficha.segmentoId];
+      const plan = segmento ? (segmento.planes || []).find(p => Number(p.sesiones) === Number(ficha.planSesiones)) : null;
+      if (!segmento || !plan) return { total: 0, tipo: 'actividad_sin_tarifa', sesionesAgendadas: 0 };
+      const numPersonas = Math.max(1, parseInt(ficha.numPersonas) || 1);
+      const precioTotal = segmento.porPersona ? plan.precio * numPersonas : plan.precio;
+      const sesionesAgendadas = sesionesAgendadasFacturablesFichaMes(ficha, trainerKey, mesKey);
+      if (modalidad.tipo === 'bono_vigencia') {
+        const valorSesion = plan.sesiones ? precioTotal / plan.sesiones : 0;
+        return { total: sesionesAgendadas * valorSesion, tipo: 'actividad_bono', sesionesAgendadas, sesionesContratadas: plan.sesiones, precioTotal, actividadId: ficha.actividadEspecialId };
+      }
+      return { total: precioTotal, tipo: 'actividad_mensual', sesionesAgendadas, sesionesContratadas: plan.sesiones, precioTotal, actividadId: ficha.actividadEspecialId };
     }
     function registrarAuditoriaCierre(mes, accion, detalle=''){
       if(!dbFinanzas.auditoriaCierres) dbFinanzas.auditoriaCierres = {};
@@ -767,10 +891,26 @@
         const lista = Array.isArray(agendaData.clientes?.[key]) ? agendaData.clientes[key] : [];
         let facturacion = 0, clientes = 0, fichasActivas = 0, facturacionMensual = 0, facturacionVariable = 0, sesionesBonosSueltas = 0;
         let facturacionAgenda = 0, desviacionAgenda = 0, sesionesMensualesPrevistas = 0, sesionesMensualesAgendadas = 0;
+        let facturacionActividades = 0, clientesActividades = 0, actividadPtNeto = 0, actividadCentroShare = 0, actividadBesoulShare = 0;
         const motivosDesviacion = [];
         lista.forEach(f => {
           if (f?.vinculacion) return;
           if (normalizarEstado(f.estadoCliente || 'activo') !== 'activo') return;
+          // Ficha de actividad especial: NUNCA pasa por calcularComisionAvanzada (rango/canon PT).
+          // Su reparto es un porcentaje directo (entrenador/centro/besoul) resuelto por mes desde
+          // el catálogo — así un mismo trainer puede tener cartera PT estándar + actividades a la
+          // vez, sin mezclar ambos modelos (modelo mixto pedido para Verónica, pero genérico).
+          if (f.actividadEspecialId) {
+            fichasActivas += 1;
+            clientesActividades += Math.max(1, parseInt(f.numPersonas) || 1);
+            const calcAct = calcularFacturacionActividadFicha(f, key, mesKey);
+            facturacionActividades += calcAct.total;
+            const reparto = distribuirReparto(calcAct.total, repartoEfectivoActividad(f.actividadEspecialId, mesKey).partes);
+            actividadPtNeto += reparto.entrenador || 0;
+            actividadCentroShare += reparto.centro || 0;
+            actividadBesoulShare += reparto.besoul || 0;
+            return;
+          }
           fichasActivas += 1;
           clientes += contarPersonasFicha(f);
           const calcFicha = calcularFacturacionFichaFinanzas(f, key, mesKey);
@@ -804,24 +944,34 @@
           sesionesMensualesAgendadas = 0;
           motivosDesviacion.length = 0;
           clientes = 0;
+          facturacionActividades = 0; clientesActividades = 0; actividadPtNeto = 0; actividadCentroShare = 0; actividadBesoulShare = 0;
         }
         const aporteCliente = soloImputacionGastos ? 0 : parseNum(settings.aporteIndividualCliente ?? 0) * clientes;
         const reparto = soloImputacionGastos
           ? { pt:0, bs:0, bonus:0, coordinacionBonus:0, sistemaAplicado:'CEO · solo imputación gastos', repartoDetalle:'Bea/Soraya computan como coste de sede, pero sus carteras no generan ingresos BESOUL ni liquidación PT en Finanzas.', fechaAlta:settings.fechaAlta || '', antiguedad:yearsBetween(fechaAltaSettings(settings), fechaReferenciaMes(mesKey)), posteriores:0, elegibleRango2:false, elegibleRango3:false, elegibleCoordinador:false, coordinadorAutorizado:false, sistemaEfectivo:'solo_gastos', ptsActivosCentro:0 }
           : calcularComisionAvanzada(facturacion, settings, { key, centroId, aporteClientes: aporteCliente, fechaReferencia: fechaReferenciaMes(mesKey) });
-        const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, facturacion, facturacionAgenda, desviacionAgenda, sesionesMensualesPrevistas, sesionesMensualesAgendadas, desviacionSesiones: sesionesMensualesPrevistas - sesionesMensualesAgendadas, motivosDesviacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, fichasActivas, soloImputacionGastos, ptNeto:reparto.pt, bsBruto:reparto.bs, pactoEspecial, aporteCliente, aporteCentroCliente: aporteCliente, bonus:reparto.bonus || 0, coordinacionBonus:reparto.coordinacionBonus || 0, sistemaAplicado:reparto.sistemaAplicado, repartoDetalle:reparto.repartoDetalle || '', fechaAlta:reparto.fechaAlta, antiguedad:reparto.antiguedad, posteriores:reparto.posteriores, elegibleRango2:reparto.elegibleRango2, elegibleRango3:reparto.elegibleRango3, elegibleCoordinador:reparto.elegibleCoordinador, coordinadorAutorizado:reparto.coordinadorAutorizado, sistemaEfectivo:reparto.sistemaEfectivo, ptsActivosCentro:reparto.ptsActivosCentro || 0 };
+        // El PT-neto y el bruto BESOUL suman el reparto PT estándar + el reparto de actividades
+        // especiales (porcentual, ya resuelto arriba por ficha) — coexisten sin mezclarse porque
+        // cada uno viene de una fuente de cálculo independiente (rango/canon vs. % de catálogo).
+        const ptNetoTotal = reparto.pt + actividadPtNeto;
+        const bsBrutoTotal = reparto.bs + actividadBesoulShare;
+        const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, facturacion: facturacion + facturacionActividades, facturacionPt: facturacion, facturacionActividades, clientesActividades, actividadCentroShare, facturacionAgenda, desviacionAgenda, sesionesMensualesPrevistas, sesionesMensualesAgendadas, desviacionSesiones: sesionesMensualesPrevistas - sesionesMensualesAgendadas, motivosDesviacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, fichasActivas, soloImputacionGastos, ptNeto:ptNetoTotal, bsBruto:bsBrutoTotal, pactoEspecial, aporteCliente, aporteCentroCliente: aporteCliente, bonus:reparto.bonus || 0, coordinacionBonus:reparto.coordinacionBonus || 0, sistemaAplicado:reparto.sistemaAplicado, repartoDetalle:reparto.repartoDetalle || '', fechaAlta:reparto.fechaAlta, antiguedad:reparto.antiguedad, posteriores:reparto.posteriores, elegibleRango2:reparto.elegibleRango2, elegibleRango3:reparto.elegibleRango3, elegibleCoordinador:reparto.elegibleCoordinador, coordinadorAutorizado:reparto.coordinadorAutorizado, sistemaEfectivo:reparto.sistemaEfectivo, ptsActivosCentro:reparto.ptsActivosCentro || 0 };
         trainers.push(row);
-        if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0 };
+        if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0, ingresosActividades:0 };
         centros[centroId].trainers.push(row);
-        centros[centroId].facturacion += facturacion;
+        centros[centroId].facturacion += facturacion + facturacionActividades;
         centros[centroId].facturacionAgenda += facturacionAgenda;
         centros[centroId].desviacionAgenda += desviacionAgenda;
         centros[centroId].sesionesMensualesPrevistas += sesionesMensualesPrevistas;
         centros[centroId].sesionesMensualesAgendadas += sesionesMensualesAgendadas;
         centros[centroId].canonClientesTotal += aporteCliente;
-        centros[centroId].ptNeto += reparto.pt;
-        centros[centroId].bsBruto += reparto.bs;
-        centros[centroId].clientes += clientes;
+        centros[centroId].ptNeto += ptNetoTotal;
+        centros[centroId].bsBruto += bsBrutoTotal;
+        centros[centroId].clientes += clientes + clientesActividades;
+        // Ingreso del CENTRO por actividades especiales: NUNCA fue dinero de BESOUL (a diferencia
+        // del canon, que sí se resta del bsBruto de BESOUL), así que se reporta aparte y no entra
+        // en total.beneficio — es contabilidad informativa del reparto de un tercero (Alfa Prime).
+        centros[centroId].ingresosActividades = (centros[centroId].ingresosActividades || 0) + actividadCentroShare;
       });
       Object.values(centros).forEach(c => {
         // Coste de sede separado en dos capas:
@@ -832,7 +982,7 @@
       });
       const gastos = totalGastosMes(mesKey);
       const otrosIngresos = totalOtrosIngresosMes(mesKey);
-      const total = Object.values(centros).reduce((acc,c)=>{ acc.facturacion+=c.facturacion; acc.facturacionAgenda+=c.facturacionAgenda||0; acc.desviacionAgenda+=c.desviacionAgenda||0; acc.sesionesMensualesPrevistas+=c.sesionesMensualesPrevistas||0; acc.sesionesMensualesAgendadas+=c.sesionesMensualesAgendadas||0; acc.ptNeto+=c.ptNeto; acc.bsBruto+=c.bsBruto; acc.canones+=c.canon; acc.canonClientesTotal+=c.canonClientesTotal||0; acc.clientes+=c.clientes; return acc; }, {facturacion:0,facturacionAgenda:0,desviacionAgenda:0,sesionesMensualesPrevistas:0,sesionesMensualesAgendadas:0,ptNeto:0,bsBruto:0,canones:0,canonClientesTotal:0,clientes:0});
+      const total = Object.values(centros).reduce((acc,c)=>{ acc.facturacion+=c.facturacion; acc.facturacionAgenda+=c.facturacionAgenda||0; acc.desviacionAgenda+=c.desviacionAgenda||0; acc.sesionesMensualesPrevistas+=c.sesionesMensualesPrevistas||0; acc.sesionesMensualesAgendadas+=c.sesionesMensualesAgendadas||0; acc.ptNeto+=c.ptNeto; acc.bsBruto+=c.bsBruto; acc.canones+=c.canon; acc.canonClientesTotal+=c.canonClientesTotal||0; acc.clientes+=c.clientes; acc.ingresosActividades+=c.ingresosActividades||0; return acc; }, {facturacion:0,facturacionAgenda:0,desviacionAgenda:0,sesionesMensualesPrevistas:0,sesionesMensualesAgendadas:0,ptNeto:0,bsBruto:0,canones:0,canonClientesTotal:0,clientes:0,ingresosActividades:0});
       total.gastos = gastos;
       total.otrosIngresos = otrosIngresos;
       total.ingresosBesoul = total.bsBruto + otrosIngresos;
@@ -896,7 +1046,7 @@
       document.getElementById('kpi-gastos-total').innerText = dinero(calculoActual.total.gastos);
       document.getElementById('kpi-beneficio-neto').innerText = dinero(calculoActual.total.beneficio);
       renderAlertasCarrera();
-      renderCentrosResumen(); renderGastos(); renderOtrosIngresos(); renderHistorico(); renderConfigCentros(); renderConfigTrainers();
+      renderCentrosResumen(); renderGastos(); renderOtrosIngresos(); renderHistorico(); renderConfigCentros(); renderConfigTrainers(); renderConfigActividades();
     }
 
     function renderAlertasCarrera(){
@@ -1240,7 +1390,141 @@
             <div class="md:col-span-2 text-[10px] text-slate-500">${escapeHTML(row.repartoDetalle || 'Configura fecha de alta para calcular rango automático.')}</div>
             <input value="${escapeHTML(settings.coordNotas||'')}" onchange="editarTrainer('${key}','coordNotas',this.value)" class="md:col-span-5 bg-slate-900 border border-slate-800 rounded p-2 text-white" placeholder="Notas gerencia/coordinador">
           </div>
+          ${Object.keys(catalogoActividadesVivo()).length ? `<div class="flex flex-wrap gap-2 items-center pt-2 border-t border-slate-800">
+            <span class="text-[10px] text-slate-500 uppercase font-bold">Actividades autorizadas:</span>
+            ${Object.values(catalogoActividadesVivo()).map(act => `<label class="flex items-center gap-1.5 text-slate-300 bg-slate-900 border border-slate-800 rounded px-2 py-1"><input type="checkbox" onchange="toggleActividadTrainer('${key}','${act.id}',this.checked)" ${actividadesAutorizadasTrainer(key).includes(act.id)?'checked':''} class="accent-cyan-400"> ${escapeHTML(act.nombre)}</label>`).join('')}
+          </div>` : ''}
         </div>`; }).join('') || '<div class="text-xs text-slate-500 text-center py-6">Sin entrenadores operativos.</div>';
+    }
+    function actividadesAutorizadasTrainer(key){ return (agendaData.trainerActividades?.[key]) || []; }
+    function toggleActividadTrainer(key, actividadId, checked){
+      const mapa = { ...(agendaData.trainerActividades || {}) };
+      const actuales = new Set(mapa[key] || []);
+      if (checked) actuales.add(actividadId); else actuales.delete(actividadId);
+      mapa[key] = Array.from(actuales);
+      agendaData.trainerActividades = mapa;
+      guardarCatalogoActividadesNube({ [`trainerActividades.${key}`]: mapa[key] });
+      pintarTodo();
+    }
+    function registrarVersionActividadCompleta(bucket, id, datosNuevos, datosAnterioresLive, mesDesde, soloEsteMes){
+      if (!bucket[id]) bucket[id] = [];
+      const versiones = bucket[id];
+      if (!versiones.length && datosAnterioresLive) versiones.push({ desde:'0000-01', ...datosAnterioresLive, _legacy:true });
+      const entrada = soloEsteMes ? { desde: mesDesde, hasta: mesDesde, ...datosNuevos } : { desde: mesDesde, ...datosNuevos };
+      entrada._registradoEn = new Date().toISOString();
+      entrada._registradoPor = usuarioFinanzasEmail || '';
+      versiones.push(entrada);
+    }
+    function guardarCatalogoActividadesNube(payload){
+      if (!agendaRef) return;
+      agendaRef.set(payload, { merge:true }).catch(err => { console.error(err); alert('Error guardando el catálogo de actividades. Revisa permisos/reglas.'); });
+    }
+    function crearActividadEspecial(){
+      const nombre = prompt('Nombre de la nueva actividad especial (ej.: Pilates Máquina):');
+      if (!nombre || !nombre.trim()) return;
+      const id = slugCentro(nombre);
+      if (!id) { alert('Nombre no válido.'); return; }
+      if (catalogoActividadesVivo()[id]) { alert('Ya existe una actividad con ese nombre/ID.'); return; }
+      const centroId = prompt('¿Centro al que pertenece? (id exacto, ej.: alfa_prime):', 'alfa_prime') || 'sin_centro';
+      const nueva = { id, nombre: nombre.trim(), centroId, activo: true, unidadCiclo:'meses', duracionCiclo:1, reparto:{ partes:[{destino:'entrenador',pct:50},{destino:'centro',pct:35},{destino:'besoul',pct:15}] }, modalidades:{} };
+      const catalogo = { ...(agendaData.catalogoActividades || {}) };
+      catalogo[id] = nueva;
+      agendaData.catalogoActividades = catalogo;
+      guardarCatalogoActividadesNube({ [`catalogoActividades.${id}`]: nueva });
+      alert('Actividad creada. Edita sus tarifas y reparto desde el panel, y marca qué entrenadores pueden impartirla en su ficha.');
+      pintarTodo();
+    }
+    function desactivarActividadEspecial(actividadId){
+      const act = catalogoActividadesVivo()[actividadId];
+      if (!act) return;
+      if (!confirm(`¿${act.activo===false?'Reactivar':'Desactivar'} "${act.nombre}"? Los clientes ya dados de alta con esta actividad no se ven afectados; solo deja de ofrecerse para fichas nuevas.`)) return;
+      const catalogo = { ...(agendaData.catalogoActividades || {}) };
+      const base = { ...act, activo: act.activo === false };
+      catalogo[actividadId] = base;
+      agendaData.catalogoActividades = catalogo;
+      guardarCatalogoActividadesNube({ [`catalogoActividades.${actividadId}`]: base });
+      pintarTodo();
+    }
+    function editarRepartoActividadDesdeUI(actividadId){
+      const act = catalogoActividadesVivo()[actividadId];
+      if (!act) return;
+      const actual = act.reparto?.partes || [];
+      const texto = prompt(`Reparto de "${act.nombre}" — formato "destino:porcentaje" separado por comas, debe sumar 100.\nEj.: entrenador:50, centro:35, besoul:15`, actual.map(p=>`${p.destino}:${p.pct}`).join(', '));
+      if (texto === null) return;
+      const partes = texto.split(',').map(t=>t.trim()).filter(Boolean).map(t=>{ const [destino,pct]=t.split(':').map(s=>(s||'').trim()); return { destino, pct:Number(pct) }; });
+      if (!partes.length || partes.some(p=>!p.destino || !Number.isFinite(p.pct))) { alert('Formato no válido. Usa: entrenador:50, centro:35, besoul:15'); return; }
+      if (!validarSumaReparto(partes)) { alert(`El reparto debe sumar exactamente 100% (suma actual: ${partes.reduce((s,p)=>s+p.pct,0)}%).`); return; }
+      const mes = mesTrabajoKey();
+      const anteriorLive = act.reparto ? { partes: JSON.parse(JSON.stringify(act.reparto.partes||[])) } : null;
+      const soloEsteMes = anteriorLive ? confirm(`Cambio de reparto para "${act.nombre}".\n\nAceptar = aplicar SOLO a ${etiquetaMes(mes)}.\nCancelar = aplicar DESDE ${etiquetaMes(mes)} en adelante (nunca recalcula meses anteriores).`) : false;
+      const payload = {};
+      if (anteriorLive) {
+        if (!agendaData.repartoActividadVersiones) agendaData.repartoActividadVersiones = {};
+        registrarVersionActividadCompleta(agendaData.repartoActividadVersiones, actividadId, { partes }, anteriorLive, mes, soloEsteMes);
+        payload[`repartoActividadVersiones.${actividadId}`] = agendaData.repartoActividadVersiones[actividadId];
+      }
+      if (!soloEsteMes || !anteriorLive) {
+        const catalogo = { ...(agendaData.catalogoActividades||{}) };
+        const base = { ...act, reparto:{ partes } };
+        catalogo[actividadId] = base;
+        agendaData.catalogoActividades = catalogo;
+        payload[`catalogoActividades.${actividadId}`] = base;
+      }
+      guardarCatalogoActividadesNube(payload);
+      pintarTodo();
+    }
+    function editarTarifasActividadDesdeUI(actividadId){
+      const act = catalogoActividadesVivo()[actividadId];
+      if (!act) return;
+      const actualJSON = JSON.stringify(act.modalidades || {}, null, 2);
+      const texto = prompt(`Tarifas de "${act.nombre}" en JSON (modalidades → segmentos → planes[{sesiones,precio}]). Edita con cuidado, respeta el formato:`, actualJSON);
+      if (texto === null) return;
+      let modalidades;
+      try { modalidades = JSON.parse(texto); } catch(e) { alert('JSON no válido: ' + e.message); return; }
+      const mes = mesTrabajoKey();
+      const anteriorLive = act.modalidades ? { modalidades: JSON.parse(JSON.stringify(act.modalidades)) } : null;
+      const soloEsteMes = anteriorLive ? confirm(`Cambio de tarifas para "${act.nombre}".\n\nAceptar = aplicar SOLO a ${etiquetaMes(mes)}.\nCancelar = aplicar DESDE ${etiquetaMes(mes)} en adelante (nunca recalcula meses anteriores).`) : false;
+      const payload = {};
+      if (anteriorLive) {
+        if (!agendaData.tarifasActividadVersiones) agendaData.tarifasActividadVersiones = {};
+        registrarVersionActividadCompleta(agendaData.tarifasActividadVersiones, actividadId, { modalidades }, anteriorLive, mes, soloEsteMes);
+        payload[`tarifasActividadVersiones.${actividadId}`] = agendaData.tarifasActividadVersiones[actividadId];
+      }
+      if (!soloEsteMes || !anteriorLive) {
+        const catalogo = { ...(agendaData.catalogoActividades||{}) };
+        const base = { ...act, modalidades };
+        catalogo[actividadId] = base;
+        agendaData.catalogoActividades = catalogo;
+        payload[`catalogoActividades.${actividadId}`] = base;
+      }
+      guardarCatalogoActividadesNube(payload);
+      pintarTodo();
+    }
+    function renderConfigActividades(){
+      const cont = document.getElementById('actividades-config');
+      if (!cont) return;
+      const catalogo = catalogoActividadesVivo();
+      const mes = mesTrabajoKey();
+      cont.innerHTML = Object.values(catalogo).map(act => {
+        const reparto = repartoEfectivoActividad(act.id, mes).partes || [];
+        const modalidadesEfectivas = actividadEfectivaParaMes(act.id, mes)?.modalidades || {};
+        const numPlanes = Object.values(modalidadesEfectivas).reduce((s, m) => s + Object.keys(m.segmentos || {}).length, 0);
+        return `
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2 text-xs ${act.activo === false ? 'opacity-50' : ''}">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div><b class="text-white">${escapeHTML(act.nombre)}</b><div class="text-[10px] text-slate-500">${escapeHTML(act.id)} · ${escapeHTML(nombreCentro(act.centroId))}${act.activo === false ? ' · INACTIVA' : ''}</div></div>
+            <div class="flex gap-2">
+              <button onclick="editarTarifasActividadDesdeUI('${act.id}')" class="bg-slate-800 text-white px-2 py-1 rounded text-[10px] font-bold">Editar tarifas</button>
+              <button onclick="editarRepartoActividadDesdeUI('${act.id}')" class="bg-slate-800 text-white px-2 py-1 rounded text-[10px] font-bold">Editar reparto</button>
+              <button onclick="desactivarActividadEspecial('${act.id}')" class="bg-red-500/10 text-red-400 border border-red-500/30 px-2 py-1 rounded text-[10px] font-bold">${act.activo === false ? 'Reactivar' : 'Desactivar'}</button>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-3 text-[11px] text-slate-400">
+            <span>Reparto vigente (${etiquetaMes(mes)}): ${reparto.map(p => `<b class="text-cyan-300">${escapeHTML(p.destino)} ${p.pct}%</b>`).join(' · ') || '<span class="text-red-400">sin configurar</span>'}</span>
+            <span>${numPlanes} segmento(s) de tarifa configurados</span>
+          </div>
+        </div>`;
+      }).join('') || '<div class="text-xs text-slate-500 text-center py-6">Sin actividades especiales configuradas.</div>';
     }
 
     function editarTrainer(key,campo,valor){
