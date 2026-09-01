@@ -904,7 +904,16 @@ miércoles 07:00-09:00"></textarea>
                 <p class="text-slate-300 font-semibold">Rentabilidad Real: <span id="nota-info-profit" class="text-emerald-400 font-bold font-mono">---</span></p>
                 <p id="nota-info-recurrente" class="hidden text-[10px] text-amber-300 font-bold leading-relaxed">↻ Sesión recurrente semanal.</p>
                 <p id="nota-info-recuperacion" class="hidden text-[10px] text-cyan-300 font-bold leading-relaxed">↩ Recuperación no facturable confirmada por administración.</p>
-                <p class="text-[10px] text-slate-500 leading-relaxed">Puedes arrastrar esta cita a otra franja del calendario para moverla. Las notas se conservarán al moverla.</p>
+                <p class="text-[10px] text-slate-500 leading-relaxed">En escritorio también puedes arrastrar esta cita a otra franja del calendario. Las notas se conservan al moverla.</p>
+
+                <div class="p-3 bg-slate-950/50 border border-slate-800 rounded space-y-2">
+                    <span class="text-[10px] font-black text-cyan-300 uppercase tracking-wide block">Reprogramar</span>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <select id="reprog-dia" onchange="actualizarHorasReprogramar()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-xs"></select>
+                        <select id="reprog-hora" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-xs"></select>
+                    </div>
+                    <button type="button" onclick="moverSesionDesdeModalNota()" class="w-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-3 py-2 rounded font-bold text-[10px] hover:bg-cyan-500/20 transition">Mover a esta franja</button>
+                </div>
 
                 <div id="panel-recuperacion-admin" class="hidden p-3 bg-cyan-500/5 border border-cyan-500/25 rounded space-y-2">
                     <label class="flex items-start gap-2 text-[11px] text-cyan-100 font-bold cursor-pointer leading-relaxed">
@@ -3662,7 +3671,7 @@ function calcularRentabilidadFicha(ficha) {
                     ${contadorHTML}
 
                     <details class="mt-1">
-                        <summary class="text-xs text-slate-500 font-semibold cursor-pointer select-none hover:text-slate-400 w-fit">Más acciones</summary>
+                        <summary onclick="event.stopPropagation()" class="text-xs text-slate-500 font-semibold cursor-pointer select-none hover:text-slate-400 w-fit">Más acciones</summary>
                         <div class="flex flex-wrap gap-3 mt-1.5">
                             <button onclick="event.stopPropagation(); editarFicha('${botonEditarId}')" class="text-cyan-400 text-xs font-bold hover:underline">${textoBoton}</button>
                             <button onclick="event.stopPropagation(); abrirModalHistoricoCliente('${botonEditarId}')" class="text-amber-400 text-xs font-bold hover:underline">Histórico</button>
@@ -6318,12 +6327,75 @@ Cancelar = no hacer nada`,
             prepararPanelRecurrenciaSesion(clave, obj);
             prepararPanelRecuperacionSesion(clave, obj);
             prepararPanelGrupoAbiertoSesion(clave, obj);
+            poblarSelectorReprogramarDias();
 
         }
 
 
 
         function cerrarModalNota() { document.getElementById('modal-nota').classList.add('hidden'); }
+
+        // Reprogramar sin drag (mobile-first): elegir día/hora válidos y mover la
+        // cita reutilizando exactamente la misma lógica que ya usa el drag&drop
+        // de escritorio (soltarFichaEnCelda con claveOrigen), sin duplicar reglas
+        // de solapamiento/disponibilidad.
+        function iniciosValidosDia(fechaISO) {
+            const inicios = [];
+            huecosOperativosDia(fechaISO).forEach(h => {
+                for (let m = h.inicio; m + 45 <= h.fin; m += 15) inicios.push(m);
+            });
+            return inicios;
+        }
+
+        function poblarSelectorReprogramarDias() {
+            const selDia = document.getElementById('reprog-dia');
+            if (!selDia) return;
+            const dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+            const fechaActualCita = String(celdaNotaSeleccionada || '').split('_')[0];
+            selDia.innerHTML = '';
+            for (let i = 0; i < 7; i++) {
+                const f = new Date(lunesActual);
+                f.setDate(f.getDate() + i);
+                const iso = formatoFechaLocal(f);
+                const opt = document.createElement('option');
+                opt.value = iso;
+                opt.textContent = `${dias[i]} ${f.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}`;
+                if (iso === fechaActualCita) opt.selected = true;
+                selDia.appendChild(opt);
+            }
+            actualizarHorasReprogramar();
+        }
+
+        function actualizarHorasReprogramar() {
+            const selDia = document.getElementById('reprog-dia');
+            const selHora = document.getElementById('reprog-hora');
+            if (!selDia || !selHora) return;
+            const inicios = iniciosValidosDia(selDia.value);
+            selHora.innerHTML = '';
+            if (!inicios.length) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = 'Sin huecos libres este día';
+                selHora.appendChild(opt);
+                return;
+            }
+            inicios.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = formatoMinutosHorario(m);
+                opt.textContent = `${formatoMinutosHorario(m)} – ${formatoMinutosHorario(m + 45)}`;
+                selHora.appendChild(opt);
+            });
+        }
+
+        function moverSesionDesdeModalNota() {
+            const selDia = document.getElementById('reprog-dia');
+            const selHora = document.getElementById('reprog-hora');
+            if (!selDia || !selHora || !selHora.value) { alert('Elige un día con huecos disponibles.'); return; }
+            const claveDestino = `${selDia.value}_${selHora.value}`;
+            if (claveDestino === celdaNotaSeleccionada) { alert('Esa ya es la franja actual de la sesión.'); return; }
+            soltarFichaEnCelda(claveDestino, '', celdaNotaSeleccionada);
+            cerrarModalNota();
+        }
 
 
 
