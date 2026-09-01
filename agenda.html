@@ -51,6 +51,22 @@
 
         ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
 
+        :root {
+            --bs-surface: rgba(148,163,184,.05);
+            --bs-surface-hover: rgba(148,163,184,.09);
+            --bs-border: rgba(148,163,184,.10);
+            --bs-radius: 1.25rem;
+            --bs-radius-sm: .9rem;
+        }
+        .bs-card { background: var(--bs-surface); border: 1px solid var(--bs-border); border-radius: var(--bs-radius); }
+        .bs-kpi { background: var(--bs-surface); border-radius: var(--bs-radius-sm); padding: .8rem 1rem; }
+        .bs-kpi-label { color: #94a3b8; font-size: .72rem; font-weight: 600; display: block; margin-bottom: .15rem; }
+        .bs-kpi-value { font-size: 1.4rem; font-weight: 900; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+        .bs-btn-primary { background: #f59e0b; color: #0f172a; font-weight: 800; transition: background-color .15s ease; }
+        .bs-btn-primary:hover { background: #fbbf24; }
+        .bs-btn-ghost { color: #94a3b8; font-weight: 600; transition: color .15s ease, background-color .15s ease; }
+        .bs-btn-ghost:hover { color: #f1f5f9; background: rgba(148,163,184,.08); }
+
 
         @media (max-width: 640px) {
             input, select, textarea { font-size: 16px !important; }
@@ -87,8 +103,8 @@
                 background: rgba(2,6,23,.96) !important;
             }
             #app-content > .bg-slate-950 .grid.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap:.45rem !important; }
-            #app-content > .bg-slate-950 .bg-slate-900 { padding:.45rem .55rem !important; border-radius:.85rem !important; }
-            #app-content > .bg-slate-950 span[id^="kpi-"] { font-size:.8rem !important; }
+            #app-content > .bg-slate-950 .bs-kpi { padding:.6rem .7rem !important; }
+            #app-content > .bg-slate-950 span[id^="kpi-"] { font-size:1.05rem !important; }
             #admin-trainer-filter-block { width:100%; }
             #admin-trainer-filter-block select { flex:1; min-width:0; }
             #agenda-main {
@@ -122,12 +138,9 @@
                 grid-template-columns: 1fr 1fr;
             }
             #panel-agenda .flex.flex-wrap.gap-2.justify-end button {
-                font-size:.72rem !important;
+                font-size:.78rem !important;
                 padding:.65rem .5rem !important;
                 border-radius:.9rem !important;
-            }
-            #panel-agenda .flex.flex-wrap.gap-2.justify-end button:nth-child(3) {
-                grid-column: span 2;
             }
 
             #agenda-slots-grid { min-width:0 !important; overflow:visible !important; }
@@ -157,22 +170,22 @@
                 margin-bottom:.75rem;
             }
             .agenda-mobile-kpis .kpi-card {
-                background: rgba(15,23,42,.74);
-                border: 1px solid rgba(51,65,85,.9);
+                background: var(--bs-surface);
+                border: 1px solid var(--bs-border);
                 border-radius: 1rem;
-                padding:.65rem .7rem;
+                padding:.75rem .85rem;
             }
             .agenda-mobile-kpis .kpi-label {
                 display:block;
                 color:#94a3b8;
-                font-size:.58rem;
+                font-size:.72rem;
                 text-transform:uppercase;
-                font-weight:800;
-                letter-spacing:.04em;
+                font-weight:700;
+                letter-spacing:.03em;
                 margin-bottom:.2rem;
             }
             .agenda-mobile-kpis .kpi-value {
-                font-size:.95rem;
+                font-size:1.15rem;
                 font-weight:900;
                 font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
             }
@@ -187,11 +200,11 @@
                 padding:1rem !important;
                 margin:0 !important;
             }
-            #modal-disponibilidad-reservas, #modal-solicitudes-reservas, #modal-historico-cliente {
+            #modal-disponibilidad-reservas, #modal-solicitudes-reservas, #modal-historico-cliente, #modal-solicitudes-eliminacion {
                 align-items:flex-end !important;
                 padding:0 !important;
             }
-            #modal-disponibilidad-reservas > div, #modal-solicitudes-reservas > div, #modal-historico-cliente > div {
+            #modal-disponibilidad-reservas > div, #modal-solicitudes-reservas > div, #modal-historico-cliente > div, #modal-solicitudes-eliminacion > div {
                 width:100% !important;
                 max-width:none !important;
                 max-height:90dvh !important;
@@ -200,6 +213,10 @@
                 padding:1rem !important;
             }
             #mobile-agenda-tabs { display:grid !important; }
+            #mob-tab-agenda, #mob-tab-clientes, #mob-tab-grupos, #mob-tab-reservas {
+                font-size: .8rem !important;
+                padding: .7rem .5rem !important;
+            }
         }
 
         @media (min-width: 768px) {
@@ -273,7 +290,7 @@
 
     <div id="app-content" class="hidden flex-1 flex flex-col">
 
-        <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+        <header class="bg-transparent border-b border-white/5 px-6 py-5 flex flex-col md:flex-row justify-between items-center gap-4">
 
             <div class="flex items-center gap-4">
 
@@ -287,21 +304,22 @@
 
                 <div>
 
-                    <h1 class="text-lg font-extrabold text-white tracking-tight">BESOUL Agenda <span class="text-amber-500 font-medium text-sm">v4.1 Cloud</span></h1>
+                    <h1 class="text-2xl font-black text-white tracking-tight">Agenda</h1>
 
-                    <p class="text-xs text-slate-400">Usuario activo: <span id="lbl-usuario-logeado" class="text-amber-400 font-bold uppercase">---</span> (<span id="lbl-rol" class="text-slate-300 italic">---</span>)</p>
+                    <p class="text-sm text-slate-400 mt-0.5">PT: <span id="lbl-usuario-logeado" class="text-amber-400 font-bold uppercase">---</span> <span id="lbl-rol" class="text-slate-500 italic">---</span></p>
 
                 </div>
 
             </div>
 
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
 
-                <button onclick="abrirModalDisponibilidadReservas()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/20 transition">Disponibilidad</button>
-                <button onclick="abrirModalSolicitudesReservas()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20 transition">Reservas <span id="badge-reservas-pendientes" class="hidden ml-1 bg-emerald-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[9px] font-black">0</span></button>
-                <button id="btn-admin-entrenadores" onclick="abrirModalEntrenadores()" class="hidden px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition">Entrenadores</button>
+                <button onclick="abrirModalDisponibilidadReservas()" class="bs-btn-primary px-4 py-2.5 text-sm rounded-xl transition">+ Disponibilidad</button>
+                <button onclick="abrirModalSolicitudesReservas()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Reservas <span id="badge-reservas-pendientes" class="hidden ml-1 bg-emerald-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
+                <button id="btn-admin-entrenadores" onclick="abrirModalEntrenadores()" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Entrenadores</button>
+                <button id="btn-admin-solicitudes-eliminacion" onclick="abrirModalSolicitudesEliminacion()" class="hidden relative bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Solicitudes <span id="badge-solicitudes-eliminacion" class="hidden ml-1 bg-red-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
 
-                <button onclick="logout()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-400 border border-slate-800 hover:text-white transition">Salir</button>
+                <button onclick="logout()" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Salir</button>
 
             </div>
 
@@ -311,65 +329,65 @@
 
         <!-- FILTROS Y KPIs -->
 
-        <div class="bg-slate-950 px-6 py-4 border-b border-slate-900 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+        <div class="bg-slate-950 px-6 py-5 border-b border-white/5 flex flex-col xl:flex-row xl:items-center justify-between gap-5">
 
-            <div class="flex flex-wrap gap-4 items-center text-xs">
+            <div class="flex flex-wrap gap-4 items-center text-sm">
 
                 <div id="admin-trainer-filter-block" class="hidden flex items-center gap-2">
 
-                    <label class="text-slate-400 font-bold">Auditar PT:</label>
+                    <label class="text-slate-400 font-semibold">Auditar PT:</label>
 
-                    <select id="select-trainer-filter" onchange="cambiarEntrenadorVisto()" class="bg-slate-900 border border-slate-800 rounded p-1.5 text-white font-medium"></select>
+                    <select id="select-trainer-filter" onchange="cambiarEntrenadorVisto()" class="bg-slate-900 border border-slate-800 rounded-lg p-1.5 text-white font-medium"></select>
 
                 </div>
 
-                <div class="bg-slate-900 p-1.5 rounded border border-slate-800 flex items-center gap-2">
+                <div class="flex items-center gap-1.5">
 
-                    <button onclick="navegarSemana(-1)" class="bg-slate-950 border border-slate-800 hover:border-slate-700 px-2.5 py-1 rounded text-[11px] font-bold">◀ Ant.</button>
+                    <button onclick="navegarSemana(-1)" class="bs-btn-ghost px-2.5 py-1.5 rounded-lg text-sm">◀</button>
 
-                    <span id="lbl-rango-semana" class="font-mono text-[11px] text-amber-400 font-bold px-1">---</span>
+                    <span id="lbl-rango-semana" class="font-mono text-sm text-amber-400 font-bold px-1.5 min-w-[9rem] text-center">---</span>
 
-                    <button onclick="navegarSemana(1)" class="bg-slate-950 border border-slate-800 hover:border-slate-700 px-2.5 py-1 rounded text-[11px] font-bold">Sig. ▶</button>
+                    <button onclick="navegarSemana(1)" class="bs-btn-ghost px-2.5 py-1.5 rounded-lg text-sm">▶</button>
 
-                    <button onclick="irSemanaActual()" class="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-1 rounded text-[11px] font-bold ml-1">Hoy</button>
+                    <button onclick="irSemanaActual()" class="bs-btn-ghost text-amber-400 px-2.5 py-1.5 rounded-lg text-sm ml-1">Hoy</button>
 
                 </div>
 
             </div>
 
-            
 
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-xs">
 
-                <div class="bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
 
-                    <span id="kpi-label-rentabilidad" class="text-slate-400 text-[10px] uppercase font-bold block">Rentabilidad Sesión Promedio</span>
+                <div class="bs-kpi">
 
-                    <span id="kpi-rentabilidad-total" class="text-sm font-black text-emerald-400 font-mono">0.00 €</span>
+                    <span id="kpi-label-rentabilidad" class="bs-kpi-label">Rentabilidad/sesión</span>
 
-                </div>
-
-                <div class="bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">
-
-                    <span id="kpi-label-facturacion" class="text-slate-400 text-[10px] uppercase font-bold block">Facturación Mes Cartera</span>
-
-                    <span id="kpi-facturacion-cartera" class="text-sm font-black text-white font-mono">0.00 €</span>
+                    <span id="kpi-rentabilidad-total" class="bs-kpi-value text-emerald-400">0.00 €</span>
 
                 </div>
 
-                <div class="bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">
+                <div class="bs-kpi">
 
-                    <span id="kpi-label-atletas" class="text-slate-400 text-[10px] uppercase font-bold block">Atletas Activos Red</span>
+                    <span id="kpi-label-facturacion" class="bs-kpi-label">Facturación cartera</span>
 
-                    <span id="kpi-atletas-activos" class="text-sm font-black text-amber-400 font-mono">0</span>
+                    <span id="kpi-facturacion-cartera" class="bs-kpi-value text-white">0.00 €</span>
 
                 </div>
 
-                <div class="bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">
+                <div class="bs-kpi">
 
-                    <span id="kpi-label-sesiones" class="text-slate-400 text-[10px] uppercase font-bold block">Sesiones Agendadas</span>
+                    <span id="kpi-label-atletas" class="bs-kpi-label">Atletas activos</span>
 
-                    <span id="kpi-sesiones-semana" class="text-sm font-black text-cyan-400 font-mono">0</span>
+                    <span id="kpi-atletas-activos" class="bs-kpi-value text-amber-400">0</span>
+
+                </div>
+
+                <div class="bs-kpi">
+
+                    <span id="kpi-label-sesiones" class="bs-kpi-label">Sesiones agendadas</span>
+
+                    <span id="kpi-sesiones-semana" class="bs-kpi-value text-cyan-400">0</span>
 
                 </div>
 
@@ -383,17 +401,17 @@
 
             <!-- COLUMNA CLIENTES -->
 
-            <div id="panel-clientes" class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[720px]">
+            <div id="panel-clientes" class="bs-card p-4 flex flex-col h-[720px]">
 
-                <div class="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
+                <div class="flex justify-between items-center mb-3 border-b border-white/5 pb-3">
 
-                    <div class="flex flex-wrap gap-2 items-center">
+                    <div class="flex flex-wrap gap-3 items-center">
 
-                        <button id="tab-ind" onclick="cambiarFichaTab('individual')" class="text-xs font-bold uppercase tracking-wider text-amber-400 border-b-2 border-amber-400 pb-1">Atletas</button>
+                        <button id="tab-ind" onclick="cambiarFichaTab('individual')" class="text-sm font-bold tracking-wide text-amber-400 border-b-2 border-amber-400 pb-1.5">Atletas</button>
 
-                        <button id="tab-grp" onclick="cambiarFichaTab('grupo')" class="text-xs font-bold uppercase tracking-wider text-slate-500 pb-1 ml-2">Grupos</button>
+                        <button id="tab-grp" onclick="cambiarFichaTab('grupo')" class="text-sm font-bold tracking-wide text-slate-500 pb-1.5">Grupos</button>
 
-                        <select id="filter-client-status" onchange="cambiarFiltroEstadoClientes()" class="ml-2 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[10px] text-slate-300 font-bold">
+                        <select id="filter-client-status" onchange="cambiarFiltroEstadoClientes()" class="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-300 font-semibold">
                             <option value="activo">Activos</option>
                             <option value="inactivo">Inactivos</option>
                             <option value="baja">Bajas</option>
@@ -402,7 +420,7 @@
 
                     </div>
 
-                    <button onclick="mostrarModalNuevoCliente()" class="bg-amber-500 text-slate-950 px-2.5 py-1 rounded font-bold text-[10px] hover:bg-amber-600 transition shadow">+ Alta Ficha</button>
+                    <button onclick="mostrarModalNuevoCliente()" class="bs-btn-primary px-3 py-1.5 rounded-lg text-xs">+ Alta</button>
 
                 </div>
 
@@ -414,41 +432,43 @@
 
             <!-- COLUMNA CALENDARIO -->
 
-            <div id="panel-agenda" class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col h-[720px]">
+            <div id="panel-agenda" class="lg:col-span-2 bs-card p-4 flex flex-col h-[720px]">
 
-                <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-2 border-b border-slate-800 pb-2 mb-3">
+                <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-3 border-b border-white/5 pb-3 mb-3">
 
                     <div>
-                        <h2 class="text-xs font-bold uppercase text-slate-300 tracking-wider">Agenda por slots · sesiones de 45 min</h2>
-                        <p id="lbl-agenda-slots-info" class="text-[10px] text-slate-500 mt-1">Vista por días: solo aparecen los slots de 45 min habilitados por el PT y sus sesiones.</p>
+                        <h2 class="text-base font-bold text-white tracking-tight">Semana</h2>
+                        <p id="lbl-agenda-slots-info" class="text-xs text-slate-500 mt-0.5">Vista por días: solo aparecen los slots de 45 min habilitados por el PT y sus sesiones.</p>
                     </div>
 
                     <div class="flex flex-wrap gap-2 justify-end">
-                        <button id="btn-toggle-vista-agenda" onclick="toggleVistaAgendaSlots()" class="bg-slate-950 text-slate-300 border border-slate-700 text-[10px] font-bold px-2 py-1 rounded hover:text-white transition">Vista avanzada</button>
-                        <button onclick="abrirModalDisponibilidadReservas()" class="bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold px-2 py-1 rounded hover:bg-cyan-500/20 transition">+ Disponibilidad</button>
-                        <button onclick="guardarMesEnHistorico()" class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-1 rounded">Respaldar Semana</button>
+                        <button id="btn-toggle-vista-agenda" onclick="toggleVistaAgendaSlots()" class="bs-btn-ghost text-xs px-2.5 py-1.5 rounded-lg">Vista avanzada</button>
+                        <button onclick="guardarMesEnHistorico()" class="bs-btn-ghost text-xs px-2.5 py-1.5 rounded-lg">Respaldar semana</button>
                     </div>
 
                 </div>
 
-                <div id="agenda-kpi-extended" class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-3">
-                    <div class="bg-slate-950/55 border border-slate-800 rounded-xl p-2">
-                        <span class="block text-[9px] text-slate-500 uppercase font-black">Facturación prevista</span>
-                        <b id="kpi-ext-previsto" class="text-emerald-400 font-mono text-sm">0.00 €</b>
+                <details id="agenda-kpi-extended-wrap" class="mb-3">
+                    <summary class="text-xs text-slate-500 font-semibold cursor-pointer select-none hover:text-slate-400">Más métricas de la semana</summary>
+                    <div id="agenda-kpi-extended" class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
+                        <div class="bs-kpi">
+                            <span class="bs-kpi-label">Facturación prevista</span>
+                            <b id="kpi-ext-previsto" class="text-emerald-400 font-mono text-base font-black">0.00 €</b>
+                        </div>
+                        <div class="bs-kpi">
+                            <span class="bs-kpi-label">Valor agenda</span>
+                            <b id="kpi-ext-agenda" class="text-cyan-300 font-mono text-base font-black">0.00 €</b>
+                        </div>
+                        <div class="bs-kpi">
+                            <span class="bs-kpi-label">Desviación</span>
+                            <b id="kpi-ext-desviacion" class="text-amber-300 font-mono text-base font-black">0.00 €</b>
+                        </div>
+                        <div class="bs-kpi">
+                            <span class="bs-kpi-label">Ocupación</span>
+                            <b id="kpi-ext-ocupacion" class="text-white font-mono text-base font-black">0%</b>
+                        </div>
                     </div>
-                    <div class="bg-slate-950/55 border border-slate-800 rounded-xl p-2">
-                        <span class="block text-[9px] text-slate-500 uppercase font-black">Valor agenda</span>
-                        <b id="kpi-ext-agenda" class="text-cyan-300 font-mono text-sm">0.00 €</b>
-                    </div>
-                    <div class="bg-slate-950/55 border border-slate-800 rounded-xl p-2">
-                        <span class="block text-[9px] text-slate-500 uppercase font-black">Desviación</span>
-                        <b id="kpi-ext-desviacion" class="text-amber-300 font-mono text-sm">0.00 €</b>
-                    </div>
-                    <div class="bg-slate-950/55 border border-slate-800 rounded-xl p-2">
-                        <span class="block text-[9px] text-slate-500 uppercase font-black">Ocupación</span>
-                        <b id="kpi-ext-ocupacion" class="text-white font-mono text-sm">0%</b>
-                    </div>
-                </div>
+                </details>
 
                 <div class="flex-1 overflow-auto">
 
@@ -996,6 +1016,51 @@ miércoles 07:00-09:00"></textarea>
                 <button onclick="cerrarModalSolicitudesReservas()" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
             </div>
             <div id="reservas-lista" class="space-y-2"></div>
+        </div>
+    </div>
+
+    <!-- MODAL SOLICITAR ELIMINACIÓN (PT) -->
+    <div id="modal-solicitar-eliminacion" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+        <div class="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl p-4 sm:p-6 w-full sm:max-w-md space-y-4 max-h-[88dvh] overflow-y-auto">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-sm font-black text-red-300 uppercase tracking-wider">Solicitar eliminación</h3>
+                    <p class="text-xs text-slate-400 mt-1">Ficha: <span id="elim-cliente-nombre" class="text-white font-bold">---</span></p>
+                </div>
+                <button onclick="cerrarModalSolicitarEliminacion()" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
+            </div>
+            <p class="text-xs text-slate-500">La ficha no se modifica todavía. Un administrador revisará el impacto y decidirá si aprueba o rechaza la baja.</p>
+            <div>
+                <label class="text-xs font-bold text-slate-400 block mb-1">Motivo</label>
+                <select id="elim-motivo" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white">
+                    <option value="duplicada">Ficha duplicada</option>
+                    <option value="error">Creada por error</option>
+                    <option value="incorrecto">Cliente incorrecto</option>
+                    <option value="otro">Otro</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-xs font-bold text-slate-400 block mb-1">Detalle (opcional)</label>
+                <textarea id="elim-detalle" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white" placeholder="Contexto adicional para el administrador..."></textarea>
+            </div>
+            <div class="flex justify-end gap-2">
+                <button onclick="cerrarModalSolicitarEliminacion()" class="bs-btn-ghost px-3.5 py-2 rounded-xl text-sm">Cancelar</button>
+                <button id="elim-btn-confirmar" onclick="confirmarSolicitudEliminacion()" class="bg-red-500/10 text-red-300 border border-red-500/30 hover:bg-red-500/20 transition px-3.5 py-2 rounded-xl text-sm font-bold">Enviar solicitud</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL BANDEJA SOLICITUDES DE ELIMINACIÓN (ADMIN) -->
+    <div id="modal-solicitudes-eliminacion" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 w-full max-w-5xl space-y-4 my-2 sm:my-8 max-h-[calc(100dvh-1rem)] overflow-y-auto">
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <h3 class="text-sm font-bold text-red-300 uppercase tracking-wider">Solicitudes de eliminación</h3>
+                    <p class="text-xs text-slate-400 mt-1">Impacto recalculado en vivo. Si el cliente tiene citas futuras, la aprobación queda bloqueada hasta que se reubiquen o cancelen.</p>
+                </div>
+                <button onclick="cerrarModalSolicitudesEliminacion()" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
+            </div>
+            <div id="solicitudes-eliminacion-lista" class="space-y-2"></div>
         </div>
     </div>
 
@@ -2251,23 +2316,11 @@ function calcularRentabilidadFicha(ficha) {
 
             return `
 
-                <div class="mt-2 p-2 rounded bg-slate-900/70 border border-slate-800/70">
+                <div class="mt-1.5 text-xs text-slate-400 font-mono">
 
-                    <div class="flex justify-between text-[9px] uppercase font-bold text-slate-500">
+                    <b class="text-white">${info.contratadas}</b> contratadas · <b class="text-cyan-400">${info.usadas}</b> usadas · <b class="${colorRestantes}">${info.restantes}</b> restantes${avisoExceso}
 
-                        <span>Clases</span><span>${escapeHTML(etiqueta)}</span>
-
-                    </div>
-
-                    <div class="flex justify-between items-center mt-1 font-mono text-[10px]">
-
-                        <span class="text-slate-300">Contratadas: <b class="text-white">${info.contratadas}</b></span>
-
-                        <span class="text-slate-300">Usadas: <b class="text-cyan-400">${info.usadas}</b></span>
-
-                        <span class="${colorRestantes}">Restan: <b>${info.restantes}</b>${avisoExceso}</span>
-
-                    </div>
+                    <span class="block text-[11px] text-slate-600 mt-0.5">${escapeHTML(etiqueta)}</span>
 
                 </div>`;
 
@@ -2346,15 +2399,18 @@ function calcularRentabilidadFicha(ficha) {
                 if (rolActivo === 'admin') {
                     document.getElementById('admin-trainer-filter-block').classList.remove('hidden');
                     document.getElementById('btn-admin-entrenadores').classList.remove('hidden');
+                    document.getElementById('btn-admin-solicitudes-eliminacion').classList.remove('hidden');
                     configurarSelectorAdmin();
                 } else {
                     document.getElementById('admin-trainer-filter-block').classList.add('hidden');
                     document.getElementById('btn-admin-entrenadores').classList.add('hidden');
+                    document.getElementById('btn-admin-solicitudes-eliminacion').classList.add('hidden');
                 }
 
                 iniciarSincronizacionNubeAgenda();
                 iniciarSincronizacionLeadsCRMAgenda();
                 iniciarModuloReservasAgenda();
+                iniciarModuloSolicitudesEliminacion();
                 buildColorPicker(); 
                 asegurarEstadoMobileAgenda();
                 irSemanaActual();
@@ -3467,7 +3523,7 @@ function calcularRentabilidadFicha(ficha) {
                 const esVinculado = !!c.vinculacion;
 
                 const puedeAgendar = !esVinculado && clienteActivoParaAgenda(c);
-                item.className = `p-3 rounded-lg border border-slate-800 bg-slate-950/70 text-xs flex flex-col gap-1 ${puedeAgendar ? 'cursor-grab active:cursor-grabbing' : 'cursor-default opacity-80'} hover:border-slate-600 transition ${fichaSeleccionadaMovilId === c.id ? 'ring-2 ring-amber-400 border-amber-400 bg-amber-500/10' : ''}`;
+                item.className = `p-3.5 rounded-2xl bg-white/[.03] text-sm flex flex-col gap-1 ${puedeAgendar ? 'cursor-grab active:cursor-grabbing' : 'cursor-default opacity-80'} hover:bg-white/[.05] transition ${fichaSeleccionadaMovilId === c.id ? 'ring-2 ring-amber-400 bg-amber-500/10' : ''}`;
 
                 if (puedeAgendar) {
 
@@ -3500,21 +3556,28 @@ function calcularRentabilidadFicha(ficha) {
 
                 const modalidadTxt = esVinculado ? 'Cliente guardado desde grupo' : `${escapeHTML(c.modalidad)} [${c.factor}d/sem]`;
 
-                const notaFacturacionTxt = esVinculado ? '<div class="text-[8px] text-slate-500 mt-0.5">Dato estadístico · no suma a cartera</div>' : '';
-                const descuentoBadge = obtenerDescuentoFicha(c) > 0 ? `<span class="ml-1 text-[8px] bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded px-1 py-0.5 align-middle">-${obtenerDescuentoFicha(c)}%</span>` : '';
-                const contratoBadge = c.contratoCliente?.firmado ? '<span class="ml-1 text-[8px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded px-1 py-0.5 align-middle">CONTRATO</span>' : '';
-                const origenBadge = (c.origenCRM || c.fuenteCaptacion) ? `<span class="ml-1 text-[8px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded px-1 py-0.5 align-middle">CRM</span>` : '';
-                const origenLinea = (c.origenCRM || c.fuenteCaptacion || c.medioCaptacion) ? `<div class="text-[8px] text-cyan-300 mt-0.5 truncate max-w-[220px]">Origen: ${escapeHTML([c.fuenteCaptacion, c.medioCaptacion].filter(Boolean).join(' · ') || 'CRM')}</div>` : '';
-                const estadoBadge = estadoClienteFicha(c) !== 'activo' ? `<span class="ml-1 text-[8px] ${claseBadgeEstadoCliente(c)} border rounded px-1 py-0.5 align-middle">${escapeHTML(etiquetaEstadoCliente(c)).toUpperCase()}</span>` : '';
+                const notaFacturacionTxt = esVinculado ? '<div class="text-[11px] text-slate-500 mt-0.5">Dato estadístico · no suma a cartera</div>' : '';
+                const descuentoBadge = obtenerDescuentoFicha(c) > 0 ? `<span class="text-[10px] bg-amber-500/10 text-amber-400 rounded-full px-1.5 py-0.5 align-middle font-bold">-${obtenerDescuentoFicha(c)}%</span>` : '';
+                const contratoBadge = c.contratoCliente?.firmado ? '<span class="text-[10px] bg-emerald-500/10 text-emerald-400 rounded-full px-1.5 py-0.5 align-middle font-bold">CONTRATO</span>' : '';
+                const origenBadge = (c.origenCRM || c.fuenteCaptacion) ? `<span class="text-[10px] bg-cyan-500/10 text-cyan-400 rounded-full px-1.5 py-0.5 align-middle font-bold">CRM</span>` : '';
+                const origenLinea = (c.origenCRM || c.fuenteCaptacion || c.medioCaptacion) ? `<div class="text-[11px] text-cyan-300 mt-0.5 truncate max-w-[220px]">Origen: ${escapeHTML([c.fuenteCaptacion, c.medioCaptacion].filter(Boolean).join(' · ') || 'CRM')}</div>` : '';
+                const estadoBadge = estadoClienteFicha(c) !== 'activo' ? `<span class="text-[10px] ${claseBadgeEstadoCliente(c)} rounded-full px-1.5 py-0.5 align-middle font-bold">${escapeHTML(etiquetaEstadoCliente(c)).toUpperCase()}</span>` : '';
 
                 const botonEditarId = esVinculado ? c.vinculacion : c.id;
 
                 const textoBoton = esVinculado ? 'Editar grupo' : 'Editar';
+                const solicitudPendienteCliente = !esVinculado && tieneSolicitudEliminacionPendiente(c.id, entrenadorVisto);
+                const bajaYaAprobada = estadoClienteFicha(c) === 'baja';
+                const botonSolicitarEliminacionHTML = (esVinculado || bajaYaAprobada) ? '' : (
+                    solicitudPendienteCliente
+                        ? `<span class="text-amber-400 text-xs font-bold">Solicitud pendiente</span>`
+                        : `<button onclick="event.stopPropagation(); abrirModalSolicitarEliminacion('${c.id}')" class="text-red-400 text-xs font-bold hover:underline">Solicitar eliminación</button>`
+                );
                 const botonBorrarHTML = (rolActivo === 'admin' && !esVinculado)
-                    ? `<button onclick="event.stopPropagation(); borrarFichaCliente('${c.id}')" class="text-red-400 text-[10px] mt-1 font-bold hover:underline">Borrar</button>`
+                    ? `<button onclick="event.stopPropagation(); borrarFichaCliente('${c.id}')" class="text-slate-600 text-[10px] hover:text-red-400 hover:underline" title="Eliminación física inmediata e irreversible. Uso solo de emergencia — el flujo normal es Solicitar eliminación.">Borrar (legacy)</button>`
                     : '';
                 const botonReservasHTML = (!esVinculado && c.tipo === 'individual' && clienteActivoParaAgenda(c))
-                    ? `<button onclick="event.stopPropagation(); copiarLinkReservaCliente('${c.id}')" class="text-cyan-300 text-[10px] mt-1 font-bold hover:underline">Link reservas${c.reservasOnlineActivas === false ? ' (off)' : ''}</button>`
+                    ? `<button onclick="event.stopPropagation(); copiarLinkReservaCliente('${c.id}')" class="text-cyan-300 text-xs font-bold hover:underline">Link reservas${c.reservasOnlineActivas === false ? ' (off)' : ''}</button>`
                     : '';
 
                 const contadorHTML = renderContadorHTML(c);
@@ -3523,42 +3586,44 @@ function calcularRentabilidadFicha(ficha) {
 
                 item.innerHTML = `
 
-                    <div class="flex justify-between items-start">
+                    <div class="flex justify-between items-start gap-2">
 
                         <div class="min-w-0">
 
-                            <span class="inline-block w-2.5 h-2.5 rounded-full mr-1" style="background-color: ${CODIGOS_HEX[c.color] || '#f59e0b'}"></span>
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <span class="inline-block w-2 h-2 rounded-full shrink-0" style="background-color: ${CODIGOS_HEX[c.color] || '#f59e0b'}"></span>
+                                <strong class="text-white text-sm">${escapeHTML(c.nombre)}</strong>
+                                ${esVinculado ? '<span class="text-[10px] bg-cyan-500/10 text-cyan-400 rounded-full px-1.5 py-0.5 align-middle font-bold">GRUPO</span>' : ''}${origenBadge}${descuentoBadge}${contratoBadge}${estadoBadge}
+                            </div>
 
-                            <strong class="text-white text-xs uppercase">${escapeHTML(c.nombre)}</strong>
-
-                            ${esVinculado ? '<span class="ml-1 text-[8px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded px-1 py-0.5 align-middle">GRUPO</span>' : ''}${origenBadge}${descuentoBadge}${contratoBadge}${estadoBadge}
-
-                            <div class="text-slate-500 text-[9px] mt-0.5 truncate max-w-[220px]">${txtExtra}</div>
-
-                            <div class="text-[9px] text-slate-400 mt-0.5">${modalidadTxt}</div>
+                            <div class="text-slate-500 text-xs mt-1">${escapeHTML(modalidadTxt)}${txtExtra ? ' · ' + txtExtra : ''}</div>
 
                             ${notaFacturacionTxt}
                             ${origenLinea}
-                            ${puedeAgendar ? `<div class="text-[9px] text-amber-300 mt-1 font-bold">📌 Tocar para agendar ${c.tipo === 'grupo' ? 'grupo completo' : 'sesión'} · 45 min</div>` : ''}
+                            ${puedeAgendar ? `<div class="text-xs text-amber-300 mt-1.5 font-semibold">Tocar para agendar ${c.tipo === 'grupo' ? 'grupo completo' : 'sesión'} · 45 min</div>` : ''}
 
                         </div>
 
-                        <div class="text-right flex flex-col items-end shrink-0">
+                        <div class="text-right shrink-0">
 
-                            <span class="${esVinculado ? 'text-cyan-400' : 'text-emerald-400'} font-black">${factTotal.toFixed(2)}€</span>
-
-                            ${esVinculado ? '<span class="text-[8px] text-slate-500 uppercase">estadístico</span>' : ''}
-
-                            <button onclick="event.stopPropagation(); editarFicha('${botonEditarId}')" class="text-cyan-500 text-[10px] mt-2 font-bold hover:underline">${textoBoton}</button>
-                            <button onclick="event.stopPropagation(); abrirModalHistoricoCliente('${botonEditarId}')" class="text-amber-400 text-[10px] mt-1 font-bold hover:underline">Histórico</button>
-                            ${botonReservasHTML}
-                            ${botonBorrarHTML}
+                            <span class="${esVinculado ? 'text-cyan-400' : 'text-emerald-400'} font-black text-base">${factTotal.toFixed(2)}€</span>
 
                         </div>
 
                     </div>
 
                     ${contadorHTML}
+
+                    <details class="mt-1">
+                        <summary class="text-xs text-slate-500 font-semibold cursor-pointer select-none hover:text-slate-400 w-fit">Más acciones</summary>
+                        <div class="flex flex-wrap gap-3 mt-1.5">
+                            <button onclick="event.stopPropagation(); editarFicha('${botonEditarId}')" class="text-cyan-400 text-xs font-bold hover:underline">${textoBoton}</button>
+                            <button onclick="event.stopPropagation(); abrirModalHistoricoCliente('${botonEditarId}')" class="text-amber-400 text-xs font-bold hover:underline">Histórico</button>
+                            ${botonReservasHTML}
+                            ${botonSolicitarEliminacionHTML}
+                        </div>
+                        ${botonBorrarHTML ? `<div class="mt-1.5">${botonBorrarHTML}</div>` : ''}
+                    </details>
 
                 `;
 
@@ -4123,7 +4188,7 @@ Cancelar = no hacer nada`,
             return `<div class="agenda-mobile-kpis">
                 <div class="kpi-card"><span class="kpi-label">Facturación prevista</span><span class="kpi-value text-emerald-400">${(resumen.facturacionPrevista || 0).toFixed(0)} €</span></div>
                 <div class="kpi-card"><span class="kpi-label">Valor agenda</span><span class="kpi-value text-cyan-300">${(resumen.valorAgenda || 0).toFixed(0)} €</span></div>
-                <div class="kpi-card"><span class="kpi-label">Ocupación</span><span class="kpi-value text-white">${(resumen.ocupacionPct || 0).toFixed(0)}%</span><span class="block text-[10px] text-slate-500">${resumen.slotsOcupados}/${resumen.slotsHabilitados} slots</span></div>
+                <div class="kpi-card"><span class="kpi-label">Ocupación</span><span class="kpi-value text-white">${(resumen.ocupacionPct || 0).toFixed(0)}%</span><span class="block text-xs text-slate-500 mt-0.5">${resumen.slotsOcupados}/${resumen.slotsHabilitados} slots</span></div>
                 <div class="kpi-card"><span class="kpi-label">Desviación</span><span class="kpi-value text-amber-300">${(resumen.desviacion || 0).toFixed(0)} €</span></div>
             </div>`;
         }
@@ -4211,15 +4276,15 @@ Cancelar = no hacer nada`,
         function clasesSlotBesoul(tipo) {
             const mobile = isMobileAgenda();
             const base = mobile
-                ? 'group relative rounded-3xl border px-3.5 py-2.5 min-h-[58px] shadow-lg transition overflow-hidden'
-                : 'group relative rounded-3xl border px-3 py-2.5 min-h-[64px] shadow-lg transition overflow-hidden';
-            const hover = ' hover:-translate-y-[1px] hover:shadow-xl';
-            if (tipo === 'libre') return base + hover + ' cursor-pointer bg-emerald-500/10 border-emerald-400/45 text-emerald-100 hover:bg-emerald-500/16';
-            if (tipo === 'grupo-abierto') return base + hover + ' cursor-pointer bg-amber-500/12 border-amber-400/75 text-amber-100 hover:bg-amber-500/18';
-            if (tipo === 'grupo-completo') return base + ' cursor-pointer bg-red-500/14 border-red-400/70 text-red-100 opacity-95';
-            if (tipo === 'valoracion') return base + hover + ' cursor-pointer bg-cyan-500/10 border-cyan-300/70 text-cyan-100 border-dashed';
-            if (tipo === 'ocupado') return base + hover + ' cursor-pointer bg-slate-700/30 border-slate-500/40 text-slate-100';
-            return base + ' bg-slate-950/50 border-slate-800 text-slate-500';
+                ? 'group relative rounded-2xl px-4 py-3 min-h-[66px] transition overflow-hidden'
+                : 'group relative rounded-2xl px-3.5 py-3 min-h-[70px] transition overflow-hidden';
+            const hover = ' hover:bg-white/[.02]';
+            if (tipo === 'libre') return base + hover + ' cursor-pointer bg-emerald-500/[.07] text-emerald-100';
+            if (tipo === 'grupo-abierto') return base + hover + ' cursor-pointer bg-amber-500/[.09] text-amber-100';
+            if (tipo === 'grupo-completo') return base + ' cursor-pointer bg-red-500/[.10] text-red-100 opacity-95';
+            if (tipo === 'valoracion') return base + hover + ' cursor-pointer bg-cyan-500/[.07] text-cyan-100 border border-dashed border-cyan-300/25';
+            if (tipo === 'ocupado') return base + hover + ' cursor-pointer bg-white/[.045] text-slate-100';
+            return base + ' bg-white/[.015] text-slate-500';
         }
 
         function activarDropLibreSlot(el, clave) {
@@ -4249,18 +4314,15 @@ Cancelar = no hacer nada`,
             const card = document.createElement('div');
             card.dataset.clave = clave;
 
-            const horaHTML = `<div class="flex items-start justify-between gap-2">
-                <div>
-                    <div class="text-[12px] font-black tracking-tight">${hora} - ${horaFin}</div>
-                </div>`;
+            const horaHTML = `<div class="text-xs font-bold text-slate-500 tracking-tight">${hora} – ${horaFin}</div>`;
 
             if (cobertura && !cobertura.esInicio) {
                 const objBloque = buscarFichaPorId(cobertura.obj?.id) || cobertura.obj || {};
                 card.className = clasesSlotBesoul('ocupado') + ' opacity-60';
                 card.title = `Bloque reservado por ${objBloque.nombre || 'sesión'} (${etiquetaFranja45(cobertura.claveInicio.split('_')[1])})`;
-                card.innerHTML = `${horaHTML}<span class="text-[10px] text-slate-400">ocupado</span></div>
-                    <div class="mt-1 text-[11px] font-bold truncate">${escapeHTML(objBloque.nombre || 'Ocupado')}</div>
-                    <div class="text-[10px] text-slate-400">Bloque de sesión</div>`;
+                card.innerHTML = `${horaHTML}
+                    <div class="mt-1.5 text-base font-bold text-slate-300 truncate">${escapeHTML(objBloque.nombre || 'Ocupado')}</div>
+                    <div class="text-xs text-slate-500">Bloque de sesión</div>`;
                 return card;
             }
 
@@ -4272,7 +4334,7 @@ Cancelar = no hacer nada`,
                 const esGrupo = esGrupoAbierto(objOriginal) || esGrupoAbierto(obj);
                 const rent = esGrupo ? calcularRentabilidadGrupoAbierto(objOriginal, entrenadorVisto) : calcularRentabilidadFicha(obj);
                 const nota = obtenerNotaAgenda(cobertura.claveInicio);
-                const notaHTML = nota ? `<div class="mt-1 text-[10px] text-amber-200 truncate">📝 ${escapeHTML(nota)}</div>` : '';
+                const notaHTML = nota ? `<div class="mt-1.5 text-xs text-amber-200/90 truncate">📝 ${escapeHTML(nota)}</div>` : '';
 
                 card.setAttribute('draggable', 'true');
                 card.ondragstart = (e) => {
@@ -4288,9 +4350,9 @@ Cancelar = no hacer nada`,
                     const detalle = textoDetallePruebaCRM(objOriginal);
                     card.className = clasesSlotBesoul('valoracion');
                     card.title = 'Valoración comercial procedente del CRM. No suma facturación ni sesiones.';
-                    card.innerHTML = `${horaHTML}<span class="text-[9px] px-2 py-0.5 rounded-full bg-cyan-400/15 text-cyan-200 border border-cyan-300/30">VALORACIÓN</span></div>
-                        <div class="mt-1 text-[12px] font-black text-white uppercase truncate">${escapeHTML(objOriginal.nombre || obj.nombre || 'Valoración')}</div>
-                        <div class="text-[10px] text-cyan-200/80 truncate">${escapeHTML(detalle)}</div>${notaHTML}`;
+                    card.innerHTML = `<div class="flex items-start justify-between gap-2">${horaHTML}<span class="text-[10px] px-2 py-0.5 rounded-full bg-cyan-400/10 text-cyan-200 font-bold shrink-0">Valoración</span></div>
+                        <div class="mt-1.5 text-lg font-black text-white truncate">${escapeHTML(objOriginal.nombre || obj.nombre || 'Valoración')}</div>
+                        <div class="text-xs text-cyan-200/70 truncate">${escapeHTML(detalle)}</div>${notaHTML}`;
                     card.onclick = () => {
                         if (fichaSeleccionadaMovilId) {
                             agendarFichaSeleccionadaEnCelda(cobertura.claveInicio);
@@ -4318,10 +4380,10 @@ Cancelar = no hacer nada`,
                     const completo = asistentes >= capacidad;
                     card.className = clasesSlotBesoul(completo ? 'grupo-completo' : 'grupo-abierto');
                     card.title = completo ? 'Grupo completo. Haz clic para ver detalles.' : 'Grupo abierto con plazas disponibles. Haz clic para gestionar.';
-                    card.innerHTML = `${horaHTML}<span class="text-[16px]">${completo ? '🔴' : '👥'}</span></div>
-                        <div class="mt-1 text-[12px] font-black ${completo ? 'text-red-100' : 'text-amber-100'} truncate">${escapeHTML(obj.nombre || 'Grupo abierto')}</div>
-                        <div class="text-[10px] font-bold ${completo ? 'text-red-200' : 'text-amber-200'}">${completo ? 'Completo' : 'Grupo abierto'} · ${asistentes}/${capacidad} plazas</div>
-                        <div class="text-[10px] opacity-80">${rent.toFixed(2)}€ · 45 min</div>${notaHTML}`;
+                    card.innerHTML = `<div class="flex items-start justify-between gap-2">${horaHTML}<span class="text-base shrink-0">${completo ? '🔴' : '👥'}</span></div>
+                        <div class="mt-1.5 text-lg font-black ${completo ? 'text-red-100' : 'text-amber-100'} truncate">${escapeHTML(obj.nombre || 'Grupo abierto')}</div>
+                        <div class="text-xs font-semibold ${completo ? 'text-red-300' : 'text-amber-300'}">${completo ? 'Completo' : 'Grupo abierto'} · ${asistentes}/${capacidad} plazas</div>
+                        <div class="text-xs text-slate-500">${rent.toFixed(2)}€</div>${notaHTML}`;
                     card.onclick = () => {
                         if (fichaSeleccionadaMovilId) {
                             agendarFichaSeleccionadaEnCelda(cobertura.claveInicio);
@@ -4334,9 +4396,9 @@ Cancelar = no hacer nada`,
 
                 card.className = clasesSlotBesoul('ocupado');
                 card.title = 'Slot ocupado. Haz clic para ver notas/detalles o arrastra para mover la cita.';
-                card.innerHTML = `${horaHTML}<span class="text-[9px] px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-300 border border-slate-400/20">OCUPADO</span></div>
-                    <div class="mt-1 text-[12px] font-black text-white uppercase truncate">${escapeHTML(obj.nombre || 'Cliente')}</div>
-                    <div class="text-[10px] text-slate-400">Individual · ${rent.toFixed(2)}€</div>${notaHTML}`;
+                card.innerHTML = `${horaHTML}
+                    <div class="mt-1.5 text-lg font-black text-white truncate">${escapeHTML(obj.nombre || 'Cliente')}</div>
+                    <div class="text-xs text-slate-500">Individual · ${rent.toFixed(2)}€</div>${notaHTML}`;
                 card.onclick = () => {
                     if (fichaSeleccionadaMovilId) {
                         agendarFichaSeleccionadaEnCelda(cobertura.claveInicio);
@@ -4352,18 +4414,16 @@ Cancelar = no hacer nada`,
                 card.title = fichaSeleccionadaMovilId ? 'Toca para agendar la ficha seleccionada.' : 'Slot libre habilitado por disponibilidad del PT.';
                 activarDropLibreSlot(card, clave);
                 card.onclick = () => gestionarSlotLibreDisponibilidad(clave);
-                card.innerHTML = `${horaHTML}<span class="text-xl leading-none text-emerald-100/90">+</span></div>
-                    <div class="mt-1 text-[12px] font-black text-emerald-100">Libre</div>
-                    <div class="text-[10px] text-emerald-200/75">${fichaSeleccionadaMovilId ? 'Tocar para agendar' : 'Individual · 45 min'}</div>`;
+                card.innerHTML = `<div class="text-xs font-bold text-emerald-300/70">${hora} – ${horaFin}</div>
+                    <div class="mt-1.5 text-base font-bold text-emerald-100">Disponible</div>`;
                 return card;
             }
 
             card.className = clasesSlotBesoul('no-disponible');
             card.title = 'Hora no publicada. Haz clic para habilitar este slot antes de agendar.';
             card.onclick = () => { if (habilitarSlotSobreLaMarcha(clave)) renderAgenda(); };
-            card.innerHTML = `${horaHTML}<span class="text-[10px] text-slate-500">+</span></div>
-                <div class="mt-1 text-[11px] font-bold">No habilitado</div>
-                <div class="text-[10px] text-slate-500">Clic para habilitar</div>`;
+            card.innerHTML = `<div class="text-xs font-bold text-slate-600">${hora} – ${horaFin}</div>
+                <div class="mt-1.5 text-sm font-bold text-slate-400">No habilitado</div>`;
             return card;
         }
 
@@ -4531,14 +4591,14 @@ Cancelar = no hacer nada`,
 
         function crearDivisorGap(duracion) {
             const div = document.createElement('div');
-            div.className = 'flex items-center gap-2 px-1 py-0.5 text-[10px] text-slate-600';
-            div.innerHTML = `<span class="flex-1 border-t border-dashed border-slate-800"></span><span class="shrink-0">${escapeHTML(textoDuracionMinutos(duracion))} libre</span><span class="flex-1 border-t border-dashed border-slate-800"></span>`;
+            div.className = 'flex items-center gap-2 px-1 py-1 text-xs text-slate-600';
+            div.innerHTML = `<span class="flex-1 border-t border-dashed border-white/5"></span><span class="shrink-0">${escapeHTML(textoDuracionMinutos(duracion))} libre</span><span class="flex-1 border-t border-dashed border-white/5"></span>`;
             return div;
         }
 
         function crearBloqueSlotLibre(fechaISO, segmento) {
             const wrap = document.createElement('div');
-            wrap.className = 'rounded-2xl border border-emerald-500/25 bg-emerald-500/5 px-3 py-2.5';
+            wrap.className = 'rounded-2xl px-3.5 py-2.5 bg-white/[.02]';
 
             const iniciosCliente = new Set(iniciosClienteOptimizadosDia(fechaISO));
             const inicios = [];
@@ -4552,10 +4612,10 @@ Cancelar = no hacer nada`,
             cabecera.className = 'flex items-center justify-between gap-2';
             cabecera.innerHTML = `
                 <div>
-                    <div class="text-[12px] font-black text-emerald-100 tracking-tight">${formatoMinutosHorario(segmento.inicio)} – ${formatoMinutosHorario(segmento.fin)}</div>
-                    <div class="text-[10px] text-emerald-300/70">Libre · 45 min${iniciosCliente.has(segmento.inicio) ? ' · óptimo' : ''}</div>
+                    <div class="text-xs font-bold text-slate-500 tracking-tight">${formatoMinutosHorario(segmento.inicio)} – ${formatoMinutosHorario(segmento.fin)}</div>
+                    <div class="text-sm font-bold text-emerald-300/80 mt-0.5">Disponible</div>
                 </div>
-                <button type="button" class="shrink-0 bg-emerald-500/15 text-emerald-200 border border-emerald-500/30 rounded-lg px-2.5 py-1.5 text-[10px] font-black hover:bg-emerald-500/25 transition">+ Añadir</button>
+                <button type="button" aria-label="Añadir sesión" class="shrink-0 w-9 h-9 flex items-center justify-center rounded-full bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition text-lg font-black leading-none">+</button>
             `;
             cabecera.querySelector('button').onclick = () => agendar(segmento.inicio);
             wrap.appendChild(cabecera);
@@ -4564,9 +4624,9 @@ Cancelar = no hacer nada`,
 
             if (inicios.length > 1) {
                 const detalles = document.createElement('details');
-                detalles.className = 'mt-1.5';
+                detalles.className = 'mt-1';
                 const resumen = document.createElement('summary');
-                resumen.className = 'text-[10px] text-emerald-300/60 cursor-pointer select-none hover:text-emerald-200';
+                resumen.className = 'text-[11px] text-slate-600 cursor-pointer select-none hover:text-slate-400';
                 resumen.textContent = 'Cambiar inicio';
                 detalles.appendChild(resumen);
 
@@ -4574,19 +4634,19 @@ Cancelar = no hacer nada`,
                 fila.className = 'flex items-center gap-1.5 mt-1.5';
 
                 const select = document.createElement('select');
-                select.className = 'flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-[10px] font-bold text-slate-200';
+                select.className = 'flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-300';
                 select.setAttribute('aria-label', `Inicios válidos dentro del hueco de ${fechaISO}`);
                 inicios.forEach(m => {
                     const opt = document.createElement('option');
                     opt.value = String(m);
-                    opt.textContent = `${formatoMinutosHorario(m)}–${formatoMinutosHorario(m + 45)}${iniciosCliente.has(m) ? ' ·óptimo' : ''}`;
+                    opt.textContent = `${formatoMinutosHorario(m)}–${formatoMinutosHorario(m + 45)}${iniciosCliente.has(m) ? ' · óptimo' : ''}`;
                     if (m === segmento.inicio) opt.selected = true;
                     select.appendChild(opt);
                 });
 
                 const btnUsar = document.createElement('button');
                 btnUsar.type = 'button';
-                btnUsar.className = 'shrink-0 bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[10px] font-black hover:bg-slate-700 transition';
+                btnUsar.className = 'shrink-0 bs-btn-ghost rounded-lg px-2.5 py-1.5 text-xs';
                 btnUsar.textContent = 'Usar';
                 btnUsar.onclick = () => agendar(parseInt(select.value, 10));
 
@@ -4602,20 +4662,20 @@ Cancelar = no hacer nada`,
         function crearPanelInsightsDia(fechaISO) {
             const r = resumenHuecosDia(fechaISO);
             const detalles = document.createElement('details');
-            detalles.className = 'rounded-xl border border-slate-800/60 bg-slate-950/20 px-3 py-2 text-[10px] text-slate-500';
+            detalles.className = 'text-xs text-slate-500';
 
-            const resumenTxt = r.microGaps.length
-                ? `Insights · ${r.microGaps.length} microgap${r.microGaps.length === 1 ? '' : 's'} (${textoDuracionMinutos(r.minutosMicroGap)}) · capacidad libre: ${r.capacidadSesiones} sesión${r.capacidadSesiones === 1 ? '' : 'es'}`
-                : `Insights · sin microgaps · capacidad libre: ${r.capacidadSesiones} sesión${r.capacidadSesiones === 1 ? '' : 'es'}`;
+            const nHuecos = r.microGaps.length + r.huecosUtiles.length;
+            const resumenTxt = `${nHuecos} hueco${nHuecos === 1 ? '' : 's'} detectado${nHuecos === 1 ? '' : 's'} · ${r.capacidadSesiones} sesión${r.capacidadSesiones === 1 ? '' : 'es'} disponible${r.capacidadSesiones === 1 ? '' : 's'}`;
             const sugerencia = r.minutosMicroGap >= 15
-                ? `<div class="mt-1.5 text-amber-300/70">Reorganizando ${escapeHTML(textoDuracionMinutos(r.minutosMicroGap))} podrías liberar espacio para otra sesión de 45 min.</div>`
+                ? `<div class="mt-2 text-amber-300/70">Reorganizando ${escapeHTML(textoDuracionMinutos(r.minutosMicroGap))} podrías liberar espacio para otra sesión de 45 min.</div>`
                 : '';
 
             detalles.innerHTML = `
                 <summary class="cursor-pointer select-none hover:text-slate-400">${escapeHTML(resumenTxt)}</summary>
-                <div class="mt-1.5 space-y-1 pl-1">
+                <div class="mt-2 space-y-1 pl-0.5">
                     <div>Operativo: <b class="text-slate-400">${textoDuracionMinutos(r.minutosOperativos)}</b></div>
                     <div>Ocupado: <b class="text-slate-400">${textoDuracionMinutos(r.minutosOcupados)}</b></div>
+                    <div>Microgaps: <b class="text-slate-400">${textoDuracionMinutos(r.minutosMicroGap)}</b></div>
                 </div>
                 ${sugerencia}
             `;
@@ -4656,10 +4716,10 @@ Cancelar = no hacer nada`,
                 const fechaISO = formatoFechaLocal(fecha);
                 const citasDia = intervalosOcupadosDia(fechaISO).length;
                 const activo = idxDia === diaActivo;
-                htmlTabs += `<button type="button" onclick="setDiaMovilAgenda(${idxDia})" class="${activo ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-slate-950/70 text-slate-300 border-slate-800'} border rounded-2xl px-3 py-2 text-center">
-                    <span class="block text-[11px] font-black uppercase">${dias[idxDia]}</span>
-                    <span class="block text-[10px] font-bold ${activo ? 'text-slate-900' : 'text-amber-300'}">${fecha.toLocaleDateString('es-ES', { day:'numeric', month:'short' })}</span>
-                    <span class="block text-[9px] ${activo ? 'text-slate-800' : 'text-slate-500'}">${citasDia} citas</span>
+                htmlTabs += `<button type="button" onclick="setDiaMovilAgenda(${idxDia})" class="${activo ? 'bg-amber-500 text-slate-950' : 'bg-white/[.03] text-slate-300'} rounded-2xl px-3 py-2.5 text-center">
+                    <span class="block text-xs font-black uppercase">${dias[idxDia]}</span>
+                    <span class="block text-[11px] font-bold ${activo ? 'text-slate-900' : 'text-amber-300'}">${fecha.toLocaleDateString('es-ES', { day:'numeric', month:'short' })}</span>
+                    <span class="block text-[11px] ${activo ? 'text-slate-800' : 'text-slate-500'}">${citasDia} citas</span>
                 </button>`;
             }
             htmlTabs += '</div>';
@@ -4676,10 +4736,10 @@ Cancelar = no hacer nada`,
                 ${htmlTabs}
                 <div class="flex items-center justify-between gap-2 mb-2 px-1">
                     <div>
-                        <div class="text-sm font-black text-white capitalize">${tituloDia}</div>
-                        <div class="text-[11px] text-slate-500">${hayTimeline ? 'Toca una cita o añade una sesión nueva.' : 'Sin disponibilidad publicada para este día.'}</div>
+                        <div class="text-base font-black text-white capitalize">${tituloDia}</div>
+                        <div class="text-xs text-slate-500">${hayTimeline ? 'Toca una cita o añade una sesión nueva.' : 'Sin disponibilidad publicada para este día.'}</div>
                     </div>
-                    <button onclick="abrirModalDisponibilidadReservas()" class="shrink-0 bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-3 py-2 rounded-2xl text-[10px] font-black">+ Horario</button>
+                    <button onclick="abrirModalDisponibilidadReservas()" class="shrink-0 bs-btn-ghost px-3 py-2 rounded-2xl text-xs">+ Horario</button>
                 </div>
                 <div id="agenda-mobile-slot-list" class="agenda-mobile-slot-list"></div>
             `;
@@ -4718,31 +4778,33 @@ Cancelar = no hacer nada`,
             cols.className = 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3 pb-2';
 
             let totalSlots = 0;
+            const hoyISO = formatoFechaLocal(new Date());
 
             for (let idxDia = 0; idxDia < 7; idxDia++) {
                 const fecha = new Date(lunesActual);
                 fecha.setDate(fecha.getDate() + idxDia);
                 const fechaISO = formatoFechaLocal(fecha);
+                const esHoy = fechaISO === hoyISO;
                 const timelinePreview = construirTimelineDia(fechaISO);
                 totalSlots += timelinePreview.length;
 
                 const col = document.createElement('section');
-                col.className = 'bg-slate-950/35 border border-slate-800/80 rounded-3xl p-2.5 min-h-[240px]';
+                col.className = `rounded-2xl p-2.5 min-h-[240px] ${esHoy ? 'bg-amber-500/[.04]' : 'bg-white/[.015]'}`;
 
                 const fechaTxt = fecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
-                col.innerHTML = `<div class="sticky top-0 z-10 -mx-1 mb-2 px-2 py-2 rounded-2xl bg-slate-950/90 border border-slate-800 text-center backdrop-blur">
-                    <div class="text-[11px] font-black text-slate-200 uppercase tracking-wide">${dias[idxDia]}</div>
-                    <div class="text-[10px] text-amber-300 font-bold">${fechaTxt}</div>
+                col.innerHTML = `<div class="sticky top-0 z-10 -mx-1 mb-2 px-2 py-2 text-center">
+                    <div class="text-xs font-black uppercase tracking-wide ${esHoy ? 'text-amber-300' : 'text-slate-400'}">${dias[idxDia]}</div>
+                    <div class="text-[11px] ${esHoy ? 'text-amber-400 font-bold' : 'text-slate-600'}">${fechaTxt}</div>
                 </div>`;
 
                 const list = document.createElement('div');
-                list.className = 'space-y-2';
+                list.className = 'space-y-1.5';
 
                 if (!timelinePreview.length) {
                     const empty = document.createElement('button');
                     empty.type = 'button';
-                    empty.className = 'w-full rounded-2xl border border-dashed border-slate-700/80 bg-slate-900/40 px-3 py-4 text-center text-[11px] text-slate-500 hover:border-cyan-400/40 hover:text-cyan-300 transition';
-                    empty.innerHTML = '<div class="font-bold text-slate-400">Sin slots</div><div class="text-[10px] mt-1">+ Añadir disponibilidad</div>';
+                    empty.className = 'w-full rounded-2xl border border-dashed border-white/10 px-3 py-4 text-center text-xs text-slate-500 hover:border-cyan-400/30 hover:text-cyan-300 transition';
+                    empty.innerHTML = '<div class="font-bold text-slate-400">Sin slots</div><div class="text-[11px] mt-1">+ Añadir disponibilidad</div>';
                     empty.onclick = () => abrirModalDisponibilidadReservas();
                     list.appendChild(empty);
                 } else {
@@ -5356,6 +5418,298 @@ Cancelar = no hacer nada`,
             cerrarModalDisponibilidadReservas();
             renderAgenda();
             alert(recurrente ? 'Disponibilidad recurrente guardada. Se generarán slots de 45 min todas las semanas.' : 'Disponibilidad guardada solo para la semana visible.');
+        }
+
+        // === BESOUL SOLICITUDES DE ELIMINACIÓN DE CLIENTE (baja lógica con aprobación admin) ===
+        const BS_SOLICITUDES_ELIMINACION_COLLECTION = 'besoulSolicitudesEliminacion';
+        let dbSolicitudesEliminacion = {};
+        window.bsEliminacionUnsub = null;
+
+        function etiquetaMotivoEliminacion(motivo) {
+            const mapa = { duplicada: 'Ficha duplicada', error: 'Creada por error', incorrecto: 'Cliente incorrecto', otro: 'Otro' };
+            return mapa[motivo] || motivo || '—';
+        }
+
+        function formatoFechaHoraSolicitud(ts) {
+            if (!ts) return '---';
+            try {
+                const d = ts.toDate ? ts.toDate() : new Date(ts);
+                return d.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+            } catch (e) { return '---'; }
+        }
+
+        // Fuente única para el impacto de eliminar un cliente: se usa tanto para el
+        // snapshot al crear la solicitud como para el recálculo en vivo del admin.
+        function calcularImpactoEliminacionCliente(trainerKey, clienteId) {
+            const hoyISO = formatoFechaLocal(new Date());
+            const agendaTrainer = dbAgenda[trainerKey] || {};
+            let citasFuturas = 0;
+            let asistenciasGrupoAbiertoFuturas = 0;
+
+            Object.keys(agendaTrainer).forEach(clave => {
+                const cita = agendaTrainer[clave];
+                if (!cita) return;
+                const fechaClave = clave.split('_')[0];
+                if (fechaClave < hoyISO) return;
+                if (cita.id === clienteId) { citasFuturas++; return; }
+                if (esGrupoAbierto(cita)) {
+                    const asistentes = asistentesGrupoAbierto(cita);
+                    if (asistentes.some(a => (a.id || a.clientId) === clienteId)) asistenciasGrupoAbiertoFuturas++;
+                }
+            });
+
+            const listaClientes = dbClientes[trainerKey] || [];
+            const ficha = listaClientes.find(c => c.id === clienteId) || null;
+            const gruposVinculados = [];
+            if (ficha) {
+                if (ficha.vinculacion) {
+                    const padre = listaClientes.find(c => c.id === ficha.vinculacion);
+                    if (padre) gruposVinculados.push({ id: padre.id, nombre: padre.nombre, rol: 'integrante-de' });
+                }
+                if (ficha.tipo === 'grupo') {
+                    listaClientes.forEach(c => { if (c.vinculacion === ficha.id) gruposVinculados.push({ id: c.id, nombre: c.nombre, rol: 'integrante' }); });
+                }
+            }
+
+            const tieneHistorico = !!(dbHistoricoClientes[trainerKey] && dbHistoricoClientes[trainerKey][clienteId] && Object.keys(dbHistoricoClientes[trainerKey][clienteId]).length);
+            const contador = ficha ? calcularContadorClases(ficha) : { contratadas: 0, usadas: 0 };
+
+            return {
+                citasFuturas,
+                asistenciasGrupoAbiertoFuturas,
+                tieneHistorico,
+                clasesContratadas: contador.contratadas,
+                clasesUsadas: contador.usadas,
+                gruposVinculados
+            };
+        }
+
+        function tieneSolicitudEliminacionPendiente(clienteId, trainerKey) {
+            return Object.values(dbSolicitudesEliminacion || {}).some(s =>
+                s.clienteId === clienteId && s.trainerKey === trainerKey && String(s.estado || 'pendiente').toLowerCase() === 'pendiente'
+            );
+        }
+
+        function abrirModalSolicitarEliminacion(clienteId) {
+            const ficha = (dbClientes[entrenadorVisto] || []).find(c => c.id === clienteId);
+            if (!ficha) return;
+            if (tieneSolicitudEliminacionPendiente(clienteId, entrenadorVisto)) {
+                alert('Ya existe una solicitud pendiente para esta ficha.');
+                return;
+            }
+            window.bsEliminacionClienteId = clienteId;
+            document.getElementById('elim-cliente-nombre').textContent = ficha.nombre || 'Cliente';
+            document.getElementById('elim-motivo').value = 'duplicada';
+            document.getElementById('elim-detalle').value = '';
+            document.getElementById('modal-solicitar-eliminacion').classList.remove('hidden');
+        }
+
+        function cerrarModalSolicitarEliminacion() {
+            document.getElementById('modal-solicitar-eliminacion').classList.add('hidden');
+            window.bsEliminacionClienteId = '';
+        }
+
+        async function confirmarSolicitudEliminacion() {
+            const clienteId = window.bsEliminacionClienteId;
+            const trainerKey = entrenadorVisto;
+            const ficha = (dbClientes[trainerKey] || []).find(c => c.id === clienteId);
+            if (!clienteId || !ficha) { cerrarModalSolicitarEliminacion(); return; }
+            if (tieneSolicitudEliminacionPendiente(clienteId, trainerKey)) {
+                alert('Ya existe una solicitud pendiente para esta ficha.');
+                cerrarModalSolicitarEliminacion();
+                return;
+            }
+            const motivo = document.getElementById('elim-motivo').value;
+            const detalle = document.getElementById('elim-detalle').value.trim();
+            const impacto = calcularImpactoEliminacionCliente(trainerKey, clienteId);
+            const btn = document.getElementById('elim-btn-confirmar');
+            if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+            try {
+                const fs = firebase.firestore();
+                const ref = fs.collection(BS_SOLICITUDES_ELIMINACION_COLLECTION).doc();
+                await ref.set({
+                    clienteId,
+                    clienteNombre: ficha.nombre || '',
+                    trainerKey,
+                    centroId: dbCredenciales[trainerKey]?.centroId || '',
+                    centroNombre: dbCredenciales[trainerKey]?.centroNombre || '',
+                    solicitadoPor: usuarioLogeado,
+                    solicitadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                    motivo,
+                    motivoTexto: detalle,
+                    estado: 'pendiente',
+                    revisadoPor: '',
+                    revisadoEn: null,
+                    notasAdmin: '',
+                    snapshotCitasFuturas: impacto.citasFuturas,
+                    snapshotTieneHistorico: impacto.tieneHistorico,
+                    snapshotClasesContratadas: impacto.clasesContratadas,
+                    snapshotClasesUsadas: impacto.clasesUsadas,
+                    snapshotGruposVinculados: impacto.gruposVinculados,
+                    snapshotAsistenciasGrupoAbiertoFuturas: impacto.asistenciasGrupoAbiertoFuturas
+                });
+                cerrarModalSolicitarEliminacion();
+                renderClientes();
+                alert('Solicitud de eliminación enviada. Un administrador la revisará.');
+            } catch (e) {
+                console.error(e);
+                alert('No se ha podido enviar la solicitud.');
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = 'Enviar solicitud'; }
+            }
+        }
+
+        function solicitudesEliminacionPendientesVisibles() {
+            return Object.values(dbSolicitudesEliminacion || {}).filter(s => String(s.estado || 'pendiente').toLowerCase() === 'pendiente');
+        }
+
+        function actualizarBadgeSolicitudesEliminacion() {
+            const badge = document.getElementById('badge-solicitudes-eliminacion');
+            if (!badge) return;
+            const n = solicitudesEliminacionPendientesVisibles().length;
+            badge.textContent = n;
+            badge.classList.toggle('hidden', n === 0);
+        }
+
+        function abrirModalSolicitudesEliminacion() {
+            if (rolActivo !== 'admin') return;
+            renderSolicitudesEliminacion();
+            document.getElementById('modal-solicitudes-eliminacion')?.classList.remove('hidden');
+        }
+
+        function cerrarModalSolicitudesEliminacion() {
+            document.getElementById('modal-solicitudes-eliminacion')?.classList.add('hidden');
+        }
+
+        function renderSolicitudesEliminacion() {
+            const cont = document.getElementById('solicitudes-eliminacion-lista');
+            if (!cont) return;
+            if (rolActivo !== 'admin') { cont.innerHTML = ''; return; }
+            const lista = Object.entries(dbSolicitudesEliminacion || {}).map(([id, s]) => ({ id, ...s }))
+                .sort((a, b) => (b.solicitadoEn?.seconds || 0) - (a.solicitadoEn?.seconds || 0));
+            if (!lista.length) {
+                cont.innerHTML = '<div class="text-xs text-slate-500 text-center py-8 border border-dashed border-slate-800 rounded-xl">No hay solicitudes de eliminación.</div>';
+                actualizarBadgeSolicitudesEliminacion();
+                return;
+            }
+            cont.innerHTML = '';
+            lista.forEach(s => {
+                const estado = String(s.estado || 'pendiente').toLowerCase();
+                const impacto = calcularImpactoEliminacionCliente(s.trainerKey, s.clienteId);
+                const bloqueado = impacto.citasFuturas > 0 || impacto.asistenciasGrupoAbiertoFuturas > 0;
+                const color = estado === 'pendiente' ? 'amber' : estado === 'aprobada' ? 'emerald' : 'slate';
+                const row = document.createElement('div');
+                row.className = 'bg-slate-950/70 border border-slate-800 rounded-xl p-3 space-y-2 text-xs';
+                row.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+                        <div class="md:col-span-3">
+                            <div class="text-white font-black uppercase">${escapeHTML(s.clienteNombre || 'Cliente')}</div>
+                            <div class="text-slate-500 text-[10px]">Motivo: ${escapeHTML(etiquetaMotivoEliminacion(s.motivo))}${s.motivoTexto ? ' — ' + escapeHTML(s.motivoTexto) : ''}</div>
+                        </div>
+                        <div class="md:col-span-2"><span class="text-slate-500 text-[9px] uppercase font-bold block">Entrenador</span><span class="text-white font-bold">${escapeHTML(s.solicitadoPor || nombreEntrenador(s.trainerKey))}</span></div>
+                        <div class="md:col-span-2"><span class="text-slate-500 text-[9px] uppercase font-bold block">Fecha</span><span class="text-cyan-300 font-mono font-bold">${formatoFechaHoraSolicitud(s.solicitadoEn)}</span></div>
+                        <div class="md:col-span-2"><span class="text-slate-500 text-[9px] uppercase font-bold block">Estado</span><span class="text-${color}-300 font-bold uppercase">${escapeHTML(estado)}</span></div>
+                        <div class="md:col-span-3 flex flex-wrap md:justify-end gap-2">
+                            ${estado === 'pendiente' ? `<button onclick="rechazarSolicitudEliminacion('${s.id}')" class="bg-red-500/10 text-red-300 border border-red-500/30 px-2 py-1.5 rounded font-bold text-[10px]">Rechazar</button><button onclick="aprobarSolicitudEliminacion('${s.id}')" class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-2 py-1.5 rounded font-bold text-[10px]">Revisar y aprobar</button>` : ''}
+                        </div>
+                    </div>
+                    <div class="border-t border-slate-800 pt-2 grid grid-cols-2 md:grid-cols-5 gap-2 text-[10px]">
+                        <div class="${impacto.citasFuturas > 0 ? 'text-red-300 font-bold' : 'text-slate-500'}">Citas futuras: ${impacto.citasFuturas}</div>
+                        <div class="${impacto.asistenciasGrupoAbiertoFuturas > 0 ? 'text-red-300 font-bold' : 'text-slate-500'}">Grupos abiertos futuros: ${impacto.asistenciasGrupoAbiertoFuturas}</div>
+                        <div class="text-slate-500">Histórico: ${impacto.tieneHistorico ? 'Sí' : 'No'}</div>
+                        <div class="text-slate-500">Clases: ${impacto.clasesUsadas}/${impacto.clasesContratadas}</div>
+                        <div class="text-slate-500">Grupos vinculados: ${impacto.gruposVinculados.length ? escapeHTML(impacto.gruposVinculados.map(g => g.nombre).join(', ')) : '—'}</div>
+                    </div>
+                    ${bloqueado ? `<div class="text-[10px] text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-2 py-1.5">Este cliente tiene ${impacto.citasFuturas} cita(s) futura(s)${impacto.asistenciasGrupoAbiertoFuturas ? ` y ${impacto.asistenciasGrupoAbiertoFuturas} asistencia(s) a grupo(s) abierto(s) futura(s)` : ''}. Reubica o cancela estas citas antes de aprobar la baja.</div>` : ''}
+                `;
+                cont.appendChild(row);
+            });
+            actualizarBadgeSolicitudesEliminacion();
+        }
+
+        async function rechazarSolicitudEliminacion(id) {
+            if (rolActivo !== 'admin') { alert('Solo un administrador puede rechazar solicitudes.'); return; }
+            const notas = prompt('Notas para el entrenador (opcional):') || '';
+            try {
+                const fs = firebase.firestore();
+                await fs.collection(BS_SOLICITUDES_ELIMINACION_COLLECTION).doc(id).set({
+                    estado: 'rechazada',
+                    revisadoPor: usuarioLogeado,
+                    revisadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                    notasAdmin: notas
+                }, { merge: true });
+            } catch (e) { console.error(e); alert('No se ha podido rechazar la solicitud.'); }
+        }
+
+        async function aprobarSolicitudEliminacion(id) {
+            if (rolActivo !== 'admin') { alert('Solo un administrador puede aprobar bajas.'); return; }
+            const s = dbSolicitudesEliminacion[id];
+            if (!s) return;
+            const impacto = calcularImpactoEliminacionCliente(s.trainerKey, s.clienteId);
+            if (impacto.citasFuturas > 0 || impacto.asistenciasGrupoAbiertoFuturas > 0) {
+                alert(`Este cliente tiene ${impacto.citasFuturas} cita(s) futura(s)${impacto.asistenciasGrupoAbiertoFuturas ? ` y ${impacto.asistenciasGrupoAbiertoFuturas} asistencia(s) a grupo(s) abierto(s) futura(s)` : ''}.\nReubica o cancela estas citas antes de aprobar la baja.`);
+                return;
+            }
+            const ficha = (dbClientes[s.trainerKey] || []).find(c => c.id === s.clienteId);
+            if (!ficha) { alert('No se ha encontrado la ficha del cliente.'); return; }
+            if (!confirm(`¿Confirmas la baja de "${ficha.nombre}"? La ficha pasará a estado "Baja" pero se conservará su histórico.`)) return;
+
+            const notas = prompt('Notas para el entrenador (opcional):') || '';
+            const ahoraISO = new Date().toISOString();
+
+            ficha.estadoCliente = 'baja';
+            ficha.eliminadoEn = ahoraISO;
+            ficha.eliminadoPor = usuarioLogeado;
+            ficha.motivoEliminacion = s.motivo;
+            ficha.solicitudEliminacionId = id;
+
+            localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
+
+            try {
+                const fs = firebase.firestore();
+                await fs.collection(BS_SOLICITUDES_ELIMINACION_COLLECTION).doc(id).set({
+                    estado: 'aprobada',
+                    revisadoPor: usuarioLogeado,
+                    revisadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+                    notasAdmin: notas
+                }, { merge: true });
+
+                if (ficha.reservaToken) {
+                    await fs.collection(BS_PUBLIC_CLIENTS_COLLECTION).doc(ficha.reservaToken).set({ activo: false }, { merge: true });
+                }
+            } catch (e) {
+                console.error(e);
+                alert('La baja se aplicó localmente pero hubo un error al sincronizar con la nube. Vuelve a intentarlo.');
+            }
+
+            guardarEstadoNubeAgenda();
+            publicarReservasPublicas();
+            recalcularKPIs();
+            renderClientes();
+            renderAgenda();
+            renderSolicitudesEliminacion();
+            alert(`Ficha de "${ficha.nombre}" dada de baja correctamente.`);
+        }
+
+        function iniciarModuloSolicitudesEliminacion() {
+            try {
+                if (!window.firebase || !firebase.apps.length) return;
+                const fs = firebase.firestore();
+                if (window.bsEliminacionUnsub) { try { window.bsEliminacionUnsub(); } catch (e) {} }
+                let query = fs.collection(BS_SOLICITUDES_ELIMINACION_COLLECTION);
+                if (rolActivo !== 'admin' && usuarioLogeado) {
+                    query = query.where('trainerKey', '==', usuarioLogeado);
+                }
+                window.bsEliminacionUnsub = query.onSnapshot(snapshot => {
+                    const mapa = {};
+                    snapshot.forEach(doc => mapa[doc.id] = { id: doc.id, ...(doc.data() || {}) });
+                    dbSolicitudesEliminacion = mapa;
+                    actualizarBadgeSolicitudesEliminacion();
+                    renderClientes();
+                    const modal = document.getElementById('modal-solicitudes-eliminacion');
+                    if (modal && !modal.classList.contains('hidden')) renderSolicitudesEliminacion();
+                }, err => console.error('Error leyendo solicitudes de eliminación:', err));
+            } catch (err) { console.error('Error iniciando módulo de solicitudes de eliminación:', err); }
         }
 
         function estadoReservaActivo(reserva) {
