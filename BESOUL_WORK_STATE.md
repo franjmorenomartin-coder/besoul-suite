@@ -179,7 +179,19 @@ El usuario sustituyó las instrucciones parciales por un prompt maestro ampliado
 - `c32aab4` — **FASE 4 (Firestore Security)**: `firestore.rules` completo preparado (SEC-010 + ownership `besoulPublicClients` + aislamiento opcional por trainerKey en `besoulSuite/agenda`, comentado, a activar tras validar Fase 2 en producción). **NO desplegado** — este entorno no tiene Firebase CLI ni credenciales (motivo de STOP explícito nº4, solo para la acción de *desplegar*, no para prepararlo).
 - `3d446e4` — **FASE 14 (mobile, parte "Reprogramar")**: `modal-nota` gana selector de día/hora + botón "Mover a esta franja", reutilizando `soltarFichaEnCelda(destino,'',origen)` (la misma lógica que ya usa el drag de escritorio) y `huecosOperativosDia` (motor de AGENDA-015). El flujo "tocar cliente → tocar slot" para citas NUEVAS ya existía de antes (`fichaSeleccionadaMovilId`/`seleccionarFichaParaAgendaMovil`) — confirmado funcional, no requería cambios. Fix menor de paso: `<summary>` "Más acciones" de la tarjeta de cliente no tenía `stopPropagation`, así que abrirlo también seleccionaba el cliente para agendar (efecto no intencionado de UI-003A).
 
-### HALLAZGO IMPORTANTE — Miguel Fenech / identidad trainerKey (FASE 5) — REQUIERE TU VERIFICACIÓN, NO LO HE CORREGIDO
+### MIGUEL FENECH — RESUELTO (2026-09-01)
+
+**Causa confirmada**: `besoulUsers/miguel.fenech@besoulfitness.com` tenía `trainerKey = "Lillo"` (con mayúscula) mientras los datos operativos (agenda, clientes) usaban `"lillo"` (minúscula) — case mismatch simple, exactamente la hipótesis que se había planteado abajo.
+
+**Corrección**: aplicada manualmente por el usuario en Firestore, `"Lillo"` → `"lillo"`. **No se ha migrado ningún dato, no se ha movido nada, no hay alias ni hardcode específico para Miguel** — funcionamiento recuperado correctamente porque los datos operativos ya estaban en la clave correcta desde el principio; solo el perfil estaba mal.
+
+**Protección estructural añadida** (commit siguiente, para prevenir recurrencia en general, no solo para Miguel): nueva función `normalizarTrainerKey(valor)` en `agenda.html` (minúsculas, sin acentos vía `\p{Diacritic}`, sin espacios, solo `[a-z0-9._-]`), aplicada en `crearEntrenador()` al dar de alta un nuevo PT. La validación de duplicados (`if (dbCredenciales[user])`) ya operaba sobre la clave normalizada, así que dos claves que solo difieran en mayúsculas/acentos ya no pueden coexistir al crear un entrenador nuevo desde la app. **No se ha hecho migración masiva de trainerKeys existentes** (solo se protegen altas nuevas, tal como se pidió). `guardarEntrenadorExistente()` no necesita el mismo cambio porque no crea claves nuevas, reutiliza la existente.
+
+**Verónica Dell'Agnese debe darse de alta usando este mecanismo ya protegido** (`crearEntrenador()` con la normalización activa) — sin necesidad de ningún paso manual adicional para evitar su propio case-mismatch.
+
+---
+
+### Hallazgo original (contexto, ya resuelto arriba)
 
 **No puedo determinar cuál es el dato correcto sin consultar Firestore real** (sin credenciales en este entorno) — esto es el motivo de STOP nº7 ("no puedes determinar cuál es el dato correcto"), aplicado específicamente a este punto, no a toda la baseline.
 

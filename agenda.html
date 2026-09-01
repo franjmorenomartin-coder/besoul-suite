@@ -2649,9 +2649,23 @@ function calcularRentabilidadFicha(ficha) {
 
         }
 
+        // Normaliza una clave interna de entrenador (trainerKey) de forma estable:
+        // minúsculas, sin acentos/diacríticos, sin espacios, solo [a-z0-9._-].
+        // Evita que "Lillo" y "lillo" puedan coexistir como identidades distintas
+        // (incidencia real detectada: Miguel Fenech, trainerKey con mayúscula
+        // inconsistente entre besoulUsers y los datos operativos).
+        function normalizarTrainerKey(valor) {
+            return String(valor || '')
+                .trim()
+                .toLowerCase()
+                .normalize('NFD').replace(/\p{Diacritic}/gu, '')
+                .replace(/\s+/g, '_')
+                .replace(/[^a-z0-9._-]/g, '');
+        }
+
         async function crearEntrenador() {
 
-            const user = document.getElementById('new-trainer-user').value.trim().toLowerCase().replace(/\s+/g, '');
+            const user = normalizarTrainerKey(document.getElementById('new-trainer-user').value);
 
             const nombre = document.getElementById('new-trainer-name').value.trim();
 
