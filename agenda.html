@@ -1281,7 +1281,7 @@ miércoles 07:00-09:00"></textarea>
 
         function guardarEstadoNubeAgenda(trainerKeyScope) {
 
-            if (!window.bsAgendaCloudDocRef || window.bsAgendaAplicandoNube) return;
+            if (!window.bsAgendaCloudDocRef || window.bsAgendaAplicandoNube) return Promise.resolve();
 
             try {
 
@@ -1291,13 +1291,18 @@ miércoles 07:00-09:00"></textarea>
 
                 payload.actualizadoEn = firebase.firestore.FieldValue.serverTimestamp();
 
-                window.bsAgendaCloudDocRef.set(payload, { merge: true })
+                // Devuelve la promesa (antes se descartaba) para que quien lo necesite
+                // pueda esperar a que el guardado+publicación terminen de verdad, sin
+                // cambiar el comportamiento de las llamadas existentes que la ignoran.
+                return window.bsAgendaCloudDocRef.set(payload, { merge: true })
                     .then(() => publicarReservasPublicas())
                     .catch(err => console.error('Error guardando agenda en Firebase:', err));
 
             } catch (err) {
 
                 console.error('Error preparando agenda para Firebase:', err);
+
+                return Promise.resolve();
 
             }
 
@@ -5310,7 +5315,7 @@ Cancelar = no hacer nada`,
             copiarTextoBesoul(`${urlBaseBesoul()}reservas.html`, 'Link del portal de reservas copiado. Para clientes reales, usa el botón “Link reservas” de su ficha.');
         }
 
-        function copiarLinkReservaCliente(idCliente) {
+        async function copiarLinkReservaCliente(idCliente) {
             const c = (dbClientes[entrenadorVisto] || []).find(x => x.id === idCliente);
             if (!c) return;
             if (!c.email || !c.telefono) {
@@ -5320,12 +5325,16 @@ Cancelar = no hacer nada`,
             if (c.reservasOnlineActivas === false) {
                 if (!confirm('Este cliente tiene reservas online desactivadas. ¿Quieres copiar igualmente el enlace? El portal le indicará que debe contactar con BESOUL.')) return;
             }
+            // Espera a que el guardado + publicarReservasPublicas() terminen de verdad
+            // antes de copiar el enlace: evita compartir un link cuyo documento
+            // besoulPublicClients/{token} todavía no existe en Firestore (race real
+            // detectado -- antes esto era fire-and-forget).
             if (!c.reservaToken) {
                 c.reservaToken = generarTokenReservaCliente();
                 localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
-                guardarEstadoNubeAgenda();
+                await guardarEstadoNubeAgenda();
             } else {
-                publicarReservasPublicas();
+                await publicarReservasPublicas();
             }
             copiarTextoBesoul(urlReservasCliente(c.reservaToken), `Link de reservas de ${c.nombre} copiado.`);
         }
