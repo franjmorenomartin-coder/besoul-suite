@@ -378,6 +378,18 @@ Para que una futura sesión no tenga que releer todo el prompt del usuario, resu
 
 **Siguiente**: UI-003D Dashboard mobile.
 
+## UI-003D — Dashboard mobile (2026-09-02)
+
+**Jerarquía KPI**: 12 cajas iguales (`grid-cols-2 md:grid-cols-4 2xl:grid-cols-12`) → 2 cifras dominantes (Beneficio neto, Facturación — `text-3xl`) + rejilla secundaria de 10 cajas más pequeñas debajo. Mismos IDs exactos (`kpi-beneficio`, `kpi-facturacion`, `kpi-besoul`, etc.) — `pintarKPIs()` no se toca.
+
+**`tabla-centros`/`tabla-trainers` → cards en mobile**: ambas tablas eran de solo lectura (cero `onclick`/listeners por fila, confirmado antes de tocar nada), así que la conversión es la más segura de las tres páginas — ningún contrato JS que preservar más allá del `id` del `tbody`. `pintarTablas(res)` ahora rellena también `#cards-centros-mobile`/`#cards-trainers-mobile` (mismos arrays `centros`/`trainers`, mismos filtros ya aplicados) sin tocar la función que alimenta el gráfico ni las tablas desktop.
+
+**Dejado intencionadamente con scroll horizontal contenido**: el mapa de ocupación (`#heatmap`, matriz día×hora, `min-w-[700px]`) — es una rejilla densa, no una lista de entidades, así que "cards" no es la forma natural de representarlo; se mantiene con su propio `overflow-x-auto` interno, no scroll de página. Mismo criterio que la tabla de desglose por entrenador en Finanzas (UI-003C).
+
+**Listeners revisados**: `pintarTablas`/`pintarHeatmap`/`pintarGraficas`/`pintarOportunidades` no tienen ningún `onclick` en sus plantillas — dashboard es de solo lectura por diseño (`<p class="...">Dashboard de solo lectura...</p>` ya en el header). Cero riesgo de romper una acción.
+
+**Siguiente**: UI-003E navegación global (header/bottom-nav consistentes en todos los módulos, respetando permisos reales).
+
 ## PWA — verificación (2026-09-02)
 
 Revisado `sw.js`: estrategia network-first con fallback a caché (correcta, no sirve HTML obsoleto mientras hay conexión — sin bug). Se subió `CACHE_NAME` de v5 a v6 (commit `8e743df`) para que los usuarios offline reciban el código de esta sesión en cuanto vuelvan a conectar.

@@ -123,19 +123,23 @@
     </section>
 
     <main class="flex-1 p-4 md:p-6 space-y-6">
-      <section class="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-12 gap-3">
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Facturación</p><p id="kpi-facturacion" class="text-lg font-black text-white font-mono mt-1">0,00 €</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">BESOUL bruto</p><p id="kpi-besoul" class="text-lg font-black text-emerald-400 font-mono mt-1">0,00 €</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Coste sede</p><p id="kpi-coste" class="text-lg font-black text-red-300 font-mono mt-1">0,00 €</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Beneficio neto</p><p id="kpi-beneficio" class="text-lg font-black text-cyan-400 font-mono mt-1">0,00 €</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Clientes activos</p><p id="kpi-clientes" class="text-lg font-black text-amber-400 font-mono mt-1">0</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Entrenadores</p><p id="kpi-trainers" class="text-lg font-black text-white font-mono mt-1">0</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Sesiones</p><p id="kpi-sesiones" class="text-lg font-black text-blue-300 font-mono mt-1">0</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Conversión CRM</p><p id="kpi-conversion" class="text-lg font-black text-purple-300 font-mono mt-1">0%</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Canon clientes centro</p><p id="kpi-canon-clientes" class="text-lg font-black text-red-200 font-mono mt-1">0,00 €</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Valor agenda</p><p id="kpi-valor-agenda" class="text-lg font-black text-cyan-300 font-mono mt-1">0,00 €</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Desviación cartera</p><p id="kpi-desviacion-agenda" class="text-lg font-black text-amber-300 font-mono mt-1">0,00 €</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Ocupación disp.</p><p id="kpi-ocupacion-disponibilidad" class="text-lg font-black text-emerald-300 font-mono mt-1">0%</p></div>
+      <!-- Jerarquía: 2 cifras dominantes (lo esencial de un vistazo) + rejilla secundaria más
+           compacta debajo, en vez de 12 cajas idénticas -- mismos ids, pintarKPIs() sin cambios. -->
+      <section class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="bg-gradient-to-br from-purple-500/10 via-slate-900 to-slate-900 border border-purple-500/30 rounded-2xl p-5"><p class="text-[11px] uppercase font-bold text-purple-300">Beneficio neto</p><p id="kpi-beneficio" class="text-3xl font-black text-white font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5"><p class="text-[11px] uppercase font-bold text-slate-400">Facturación</p><p id="kpi-facturacion" class="text-3xl font-black text-white font-mono mt-1">0,00 €</p></div>
+      </section>
+      <section class="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-10 gap-3">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">BESOUL bruto</p><p id="kpi-besoul" class="text-sm font-black text-emerald-400 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Coste sede</p><p id="kpi-coste" class="text-sm font-black text-red-300 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Clientes activos</p><p id="kpi-clientes" class="text-sm font-black text-amber-400 font-mono mt-1">0</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Entrenadores</p><p id="kpi-trainers" class="text-sm font-black text-white font-mono mt-1">0</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Sesiones</p><p id="kpi-sesiones" class="text-sm font-black text-blue-300 font-mono mt-1">0</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Conversión CRM</p><p id="kpi-conversion" class="text-sm font-black text-purple-300 font-mono mt-1">0%</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Canon clientes</p><p id="kpi-canon-clientes" class="text-sm font-black text-red-200 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Valor agenda</p><p id="kpi-valor-agenda" class="text-sm font-black text-cyan-300 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Desviación</p><p id="kpi-desviacion-agenda" class="text-sm font-black text-amber-300 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Ocupación disp.</p><p id="kpi-ocupacion-disponibilidad" class="text-sm font-black text-emerald-300 font-mono mt-1">0%</p></div>
       </section>
 
       <section id="insights" class="bg-slate-900 border border-slate-800 rounded-xl p-4 hidden"></section>
@@ -173,23 +177,29 @@
           <p class="text-[11px] text-slate-500 mb-4">Detecta el aprovechamiento real de la disponibilidad publicada por los PT.</p>
           <div id="heatmap" class="min-w-[700px]"></div>
         </div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 overflow-x-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
           <h2 class="text-sm font-black text-white mb-1">Top entrenadores</h2>
           <p class="text-[11px] text-slate-500 mb-4">Ranking del periodo/mes por facturación, clientes, canon centro y margen Besoul real.</p>
-          <table class="w-full min-w-[760px] text-left text-xs">
-            <thead class="text-[10px] uppercase text-slate-500 border-b border-slate-800"><tr><th class="py-2">Entrenador</th><th>Centro</th><th>Clientes</th><th>Facturación</th><th>BESOUL bruto</th><th>Canon centro</th><th>Neto Besoul</th><th>Sistema</th></tr></thead>
-            <tbody id="tabla-trainers" class="divide-y divide-slate-800/70"></tbody>
-          </table>
+          <div class="hidden md:block overflow-x-auto">
+            <table class="w-full min-w-[760px] text-left text-xs">
+              <thead class="text-[10px] uppercase text-slate-500 border-b border-slate-800"><tr><th class="py-2">Entrenador</th><th>Centro</th><th>Clientes</th><th>Facturación</th><th>BESOUL bruto</th><th>Canon centro</th><th>Neto Besoul</th><th>Sistema</th></tr></thead>
+              <tbody id="tabla-trainers" class="divide-y divide-slate-800/70"></tbody>
+            </table>
+          </div>
+          <div id="cards-trainers-mobile" class="md:hidden space-y-2"></div>
         </div>
       </section>
 
       <section class="grid grid-cols-1 2xl:grid-cols-2 gap-4">
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 overflow-x-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
           <h2 class="text-sm font-black text-white mb-4">Centros</h2>
-          <table class="w-full min-w-[760px] text-left text-xs">
-            <thead class="text-[10px] uppercase text-slate-500 border-b border-slate-800"><tr><th class="py-2">Centro</th><th>PT</th><th>Clientes</th><th>Facturación</th><th>% Fact.</th><th>Canon clientes</th><th>Coste centro</th><th>Neto centro</th></tr></thead>
-            <tbody id="tabla-centros" class="divide-y divide-slate-800/70"></tbody>
-          </table>
+          <div class="hidden md:block overflow-x-auto">
+            <table class="w-full min-w-[760px] text-left text-xs">
+              <thead class="text-[10px] uppercase text-slate-500 border-b border-slate-800"><tr><th class="py-2">Centro</th><th>PT</th><th>Clientes</th><th>Facturación</th><th>% Fact.</th><th>Canon clientes</th><th>Coste centro</th><th>Neto centro</th></tr></thead>
+              <tbody id="tabla-centros" class="divide-y divide-slate-800/70"></tbody>
+            </table>
+          </div>
+          <div id="cards-centros-mobile" class="md:hidden space-y-2"></div>
         </div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 overflow-x-auto">
           <h2 class="text-sm font-black text-white mb-4">Slots libres y oportunidades</h2>
@@ -889,8 +899,40 @@ function pintarTablas(res){
   const totalFact = res.current.total.facturacion || 0;
   const centros = Object.values(res.current.centros || {}).filter(c=>c.id !== 'sin_centro' && ((c.trainers||[]).length || c.facturacion || c.canon));
   document.getElementById('tabla-centros').innerHTML = centros.map(c=>`<tr class="hover:bg-slate-950/50"><td class="py-2 font-bold text-white">${escapeHTML(c.nombre)}</td><td>${numero((c.trainers||[]).length)}</td><td>${numero(c.clientes||0)}</td><td class="font-mono">${dinero(c.facturacion||0)}</td><td>${pct(totalFact ? (c.facturacion||0)/totalFact : 0)}</td><td class="font-mono text-red-200">${dinero(c.canonClientesTotal??c.canonClienteTotal??0)}</td><td class="font-mono text-red-300">${dinero(c.canon||0)}</td><td class="font-mono ${(c.bsBruto-c.canon)>=0?'text-cyan-300':'text-red-300'}">${dinero((c.bsBruto||0)-(c.canon||0))}</td></tr>`).join('') || '<tr><td colspan="8" class="py-8 text-center text-slate-500">Sin datos.</td></tr>';
+  const cardsCentros = document.getElementById('cards-centros-mobile');
+  if (cardsCentros) {
+    cardsCentros.innerHTML = centros.map(c => {
+      const neto = (c.bsBruto||0)-(c.canon||0);
+      return `<div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
+        <div class="flex items-start justify-between gap-2">
+          <div><div class="font-bold text-white text-sm">${escapeHTML(c.nombre)}</div><div class="text-[10px] text-slate-500">${numero((c.trainers||[]).length)} PT · ${numero(c.clientes||0)} clientes</div></div>
+          <div class="text-right"><div class="text-[9px] text-slate-500 uppercase font-bold">Neto centro</div><div class="${neto>=0?'text-cyan-300':'text-red-300'} font-black text-sm">${dinero(neto)}</div></div>
+        </div>
+        <div class="grid grid-cols-3 gap-2 text-[10px] pt-2 border-t border-slate-800/60">
+          <div><span class="text-slate-500 block">Fact.</span><span class="text-slate-200 font-semibold">${dinero(c.facturacion||0)}</span></div>
+          <div><span class="text-slate-500 block">% Fact.</span><span class="text-slate-200 font-semibold">${pct(totalFact ? (c.facturacion||0)/totalFact : 0)}</span></div>
+          <div><span class="text-slate-500 block">Coste</span><span class="text-red-300 font-semibold">${dinero(c.canon||0)}</span></div>
+        </div>
+      </div>`;
+    }).join('') || '<div class="py-6 text-center text-slate-500 text-xs">Sin datos.</div>';
+  }
   const trainers = (res.current.trainers || []).filter(t => !document.getElementById('filter-trainer').value || t.key === document.getElementById('filter-trainer').value).filter(t => !document.getElementById('filter-center').value || t.centroId === document.getElementById('filter-center').value).sort((a,b)=>(b.facturacion||0)-(a.facturacion||0)).slice(0,20);
   document.getElementById('tabla-trainers').innerHTML = trainers.map(t=>`<tr class="hover:bg-slate-950/50"><td class="py-2 font-bold text-white">${escapeHTML(t.nombre)}<div class="text-[10px] text-slate-500">${escapeHTML(t.key)}</div></td><td>${escapeHTML(nombreCentro(t.centroId))}</td><td>${numero(t.clientes||0)}</td><td class="font-mono">${dinero(t.facturacion||0)}</td><td class="font-mono text-emerald-300">${dinero(t.bsBruto||0)}</td><td class="font-mono text-red-200">${dinero(t.canonCentroShare||0)}</td><td class="font-mono ${(t.bsNetoCentro||0)>=0?'text-cyan-300':'text-red-300'}">${dinero(t.bsNetoCentro||0)}</td><td class="text-cyan-300 text-[10px]">${escapeHTML(t.sistemaAplicado||'---')}</td></tr>`).join('') || '<tr><td colspan="8" class="py-8 text-center text-slate-500">Sin datos.</td></tr>';
+  const cardsTrainers = document.getElementById('cards-trainers-mobile');
+  if (cardsTrainers) {
+    cardsTrainers.innerHTML = trainers.map(t => `<div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
+      <div class="flex items-start justify-between gap-2">
+        <div><div class="font-bold text-white text-sm">${escapeHTML(t.nombre)}</div><div class="text-[10px] text-slate-500">${escapeHTML(nombreCentro(t.centroId))} · ${numero(t.clientes||0)} clientes</div></div>
+        <div class="text-right"><div class="text-[9px] text-slate-500 uppercase font-bold">Neto Besoul</div><div class="${(t.bsNetoCentro||0)>=0?'text-cyan-300':'text-red-300'} font-black text-sm">${dinero(t.bsNetoCentro||0)}</div></div>
+      </div>
+      <div class="grid grid-cols-3 gap-2 text-[10px] pt-2 border-t border-slate-800/60">
+        <div><span class="text-slate-500 block">Fact.</span><span class="text-slate-200 font-semibold">${dinero(t.facturacion||0)}</span></div>
+        <div><span class="text-slate-500 block">BESOUL bruto</span><span class="text-emerald-300 font-semibold">${dinero(t.bsBruto||0)}</span></div>
+        <div><span class="text-slate-500 block">Canon</span><span class="text-red-200 font-semibold">${dinero(t.canonCentroShare||0)}</span></div>
+      </div>
+      <div class="text-[10px] text-cyan-300">${escapeHTML(t.sistemaAplicado||'---')}</div>
+    </div>`).join('') || '<div class="py-6 text-center text-slate-500 text-xs">Sin datos.</div>';
+  }
 }
 function pintarHeatmap(res){
   const hours=[]; for(let h=6; h<22; h++) hours.push(`${String(h).padStart(2,'0')}:00`);
