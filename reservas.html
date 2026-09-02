@@ -44,12 +44,15 @@
         <h2 class="text-sm font-black text-amber-400 uppercase">Introduce tu código de reserva</h2>
         <p class="text-xs text-slate-400 mt-1 mb-3">Normalmente debes entrar desde el enlace que te ha enviado BESOUL. Si solo tienes el código, escríbelo aquí.</p>
         <div class="flex flex-col md:flex-row gap-2">
-          <input id="manual-token" type="text" class="flex-1 bg-slate-900 border border-slate-800 rounded p-3 text-white" placeholder="Código / token de reserva">
-          <button onclick="usarTokenManual()" class="bg-amber-500 text-slate-950 font-black rounded px-4 py-3">Continuar</button>
+          <input id="manual-token" type="text" class="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-3 text-white focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="Código / token de reserva">
+          <button onclick="usarTokenManual()" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl px-4 py-3 transition">Continuar</button>
         </div>
       </div>
 
-      <div id="loading" class="text-center text-slate-400 text-sm py-10">Cargando disponibilidad...</div>
+      <div id="loading" class="text-center text-slate-400 text-sm py-14">
+        <svg class="animate-spin w-6 h-6 mx-auto mb-3 text-amber-500" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/><path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+        Cargando disponibilidad...
+      </div>
 
       <div id="app" class="hidden space-y-5">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -82,22 +85,24 @@
         <div id="selected-panel" class="hidden bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-4">
           <h2 class="text-sm font-black text-cyan-300 uppercase">2. Confirmar solicitud</h2>
           <p class="text-xs text-slate-300 mt-1">Hueco seleccionado: <span id="selected-slot" class="font-black text-white">---</span></p>
-          <label class="block text-xs text-slate-400 mt-4 mb-1">Comentario para el entrenador, si lo necesitas</label>
-          <textarea id="comments" class="w-full bg-slate-950 border border-slate-800 rounded p-3 text-white h-24" placeholder="Ej.: preferiría intensidad suave, tengo una molestia, puedo llegar 5 minutos antes..."></textarea>
+          <label for="comments" class="block text-xs text-slate-400 mt-4 mb-1">Comentario para el entrenador, si lo necesitas</label>
+          <textarea id="comments" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white h-24 focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="Ej.: preferiría intensidad suave, tengo una molestia, puedo llegar 5 minutos antes..."></textarea>
           <div class="flex flex-col md:flex-row justify-end gap-2 mt-4">
-            <button onclick="cancelarSeleccion()" class="bg-slate-800 text-slate-300 font-bold rounded px-4 py-3">Cambiar hora</button>
-            <button onclick="enviarSolicitud()" id="send-btn" class="bg-cyan-400 text-slate-950 font-black rounded px-4 py-3">Enviar solicitud</button>
+            <button onclick="cancelarSeleccion()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl px-4 py-3 transition">Cambiar hora</button>
+            <button onclick="enviarSolicitud()" id="send-btn" class="bg-cyan-400 hover:bg-cyan-500 text-slate-950 font-black rounded-xl px-4 py-3 transition">Enviar solicitud</button>
           </div>
         </div>
       </div>
 
-      <div id="success" class="hidden bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-5 text-center">
-        <div class="text-3xl mb-2">✅</div>
-        <h2 class="text-lg font-black text-emerald-300">Solicitud enviada</h2>
-        <p class="text-sm text-slate-300 mt-2">Tu entrenador o BESOUL revisará la solicitud y te confirmará la reserva. Recuerda que todavía no está confirmada.</p>
+      <div id="success" class="hidden text-center p-8 md:p-10 space-y-4" role="status" aria-live="polite">
+        <div class="w-16 h-16 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto">
+          <svg viewBox="0 0 24 24" class="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        </div>
+        <h2 class="text-lg font-black text-white">Solicitud enviada</h2>
+        <p class="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">Tu entrenador o BESOUL revisará la solicitud y te confirmará la reserva. Recuerda que todavía no está confirmada.</p>
       </div>
 
-      <div id="error" class="hidden bg-red-500/10 border border-red-500/30 rounded-xl p-5 text-center text-red-200"></div>
+      <div id="error" class="hidden bg-red-500/10 border border-red-500/30 rounded-xl p-5 text-center text-red-200" role="alert" aria-live="assertive"></div>
     </section>
   </main>
 
