@@ -101,14 +101,24 @@
       </div>
 
       <section id="view-directo" class="space-y-6">
-        <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-4">
-          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center"><h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Facturación cartera</h3><div id="kpi-fact-total" class="text-lg font-black text-white">0,00 €</div></div>
-          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center"><h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Neto PT estimado</h3><div id="kpi-pt-total" class="text-lg font-black text-amber-400">0,00 €</div></div>
-          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center"><h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">BESOUL antes gastos</h3><div id="kpi-bs-bruto" class="text-lg font-black text-emerald-400">0,00 €</div></div>
-          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center"><h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Otros ingresos</h3><div id="kpi-otros-ingresos-total" class="text-lg font-black text-lime-300">0,00 €</div></div>
-          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center"><h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Cánones centros</h3><div id="kpi-canones-total" class="text-lg font-black text-red-400">0,00 €</div></div>
-          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center"><h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Gastos empresa</h3><div id="kpi-gastos-total" class="text-lg font-black text-red-300">0,00 €</div></div>
-          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center"><h3 class="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">Beneficio neto</h3><div id="kpi-beneficio-neto" class="text-lg font-black text-cyan-400">0,00 €</div></div>
+        <!-- Jerarquía KPI: 2 cifras dominantes (lo que hay que saber ya) + fila secundaria más
+             pequeña debajo (detalle de reparto), en vez de 7 cajas con el mismo peso visual. -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="bg-gradient-to-br from-cyan-500/10 via-slate-900 to-slate-900 border border-cyan-500/30 rounded-2xl p-5">
+            <h3 class="text-[11px] font-bold uppercase text-cyan-300 tracking-wider mb-1">Beneficio neto</h3>
+            <div id="kpi-beneficio-neto" class="text-3xl font-black text-white">0,00 €</div>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+            <h3 class="text-[11px] font-bold uppercase text-slate-400 tracking-wider mb-1">Facturación cartera</h3>
+            <div id="kpi-fact-total" class="text-3xl font-black text-white">0,00 €</div>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 md:grid-cols-5 gap-3">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center"><h3 class="text-[9px] font-bold uppercase text-slate-500 tracking-wider mb-1">Neto PT</h3><div id="kpi-pt-total" class="text-sm font-black text-amber-400">0,00 €</div></div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center"><h3 class="text-[9px] font-bold uppercase text-slate-500 tracking-wider mb-1">BESOUL bruto</h3><div id="kpi-bs-bruto" class="text-sm font-black text-emerald-400">0,00 €</div></div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center"><h3 class="text-[9px] font-bold uppercase text-slate-500 tracking-wider mb-1">Otros ingr.</h3><div id="kpi-otros-ingresos-total" class="text-sm font-black text-lime-300">0,00 €</div></div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center"><h3 class="text-[9px] font-bold uppercase text-slate-500 tracking-wider mb-1">Cánones</h3><div id="kpi-canones-total" class="text-sm font-black text-red-400">0,00 €</div></div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center"><h3 class="text-[9px] font-bold uppercase text-slate-500 tracking-wider mb-1">Gastos</h3><div id="kpi-gastos-total" class="text-sm font-black text-red-300">0,00 €</div></div>
         </div>
 
         <div id="alertas-carrera" class="hidden bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-xs text-amber-100"></div>
@@ -176,7 +186,7 @@
             <h2 class="text-base font-bold text-white">Histórico de cierres mensuales</h2>
             <p class="text-xs text-slate-400">Cada cierre queda congelado. Para cambiar un mes cerrado, administración debe reabrir edición y después recalcular/cerrar de nuevo.</p>
           </div>
-          <table class="w-full min-w-[760px] text-left text-xs border-collapse">
+          <table class="hidden md:table w-full min-w-[760px] text-left text-xs border-collapse">
             <thead>
               <tr class="border-b border-slate-800 text-amber-400 font-bold uppercase">
                 <th class="py-3 px-4">Mes</th><th class="py-3 px-4">Facturación</th><th class="py-3 px-4">Neto PT</th><th class="py-3 px-4">BESOUL antes gastos</th><th class="py-3 px-4">Otros ingresos</th><th class="py-3 px-4">Gastos</th><th class="py-3 px-4">Beneficio neto</th><th class="py-3 px-4">Acción</th>
@@ -184,6 +194,7 @@
             </thead>
             <tbody id="tabla-historico-cuerpo" class="divide-y divide-slate-800/50 text-slate-300"></tbody>
           </table>
+          <div id="historico-cards-mobile" class="md:hidden space-y-3"></div>
         </div>
       </section>
 
@@ -1095,13 +1106,13 @@
             <div><h3 class="text-sm font-black text-white">${escapeHTML(c.nombre)}</h3><p class="text-[10px] text-slate-500">${c.trainers.length} entrenador(es) · ${numero(c.clientes)} cliente(s)</p></div>
             <div class="text-right"><div class="text-[10px] text-slate-500 uppercase font-bold">Neto centro</div><div class="text-sm font-black text-cyan-400">${dinero(c.bsBruto - c.canon)}</div></div>
           </div>
-          <div class="grid grid-cols-2 md:grid-cols-6 gap-2 text-center text-[10px]">
-            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase">Fact. cartera</span><b>${dinero(c.facturacion)}</b></div>
-            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase">Valor agenda</span><b>${dinero(c.facturacionAgenda||0)}</b><small class="block text-[9px] text-slate-500">${numero(c.sesionesMensualesAgendadas||0)}/${numero(c.sesionesMensualesPrevistas||0)} ses. mensuales</small></div>
-            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase">Desv.</span><b class="${claseDesviacion(c.desviacionAgenda||0)}">${dinero(c.desviacionAgenda||0)}</b></div>
-            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase">PT</span><b class="text-amber-400">${dinero(c.ptNeto)}</b></div>
-            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase">BESOUL</span><b class="text-emerald-400">${dinero(c.bsBruto)}</b></div>
-            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase">Coste sede</span><b class="text-red-400">-${dinero(c.canon)}</b><small class="block text-[9px] text-slate-500">${escapeHTML(descripcionCanonCentro(c))}</small></div>
+          <div class="grid grid-cols-2 md:grid-cols-6 gap-2 text-center text-[11px]">
+            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">Fact. cartera</span><b>${dinero(c.facturacion)}</b></div>
+            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">Valor agenda</span><b>${dinero(c.facturacionAgenda||0)}</b><small class="block text-[9px] text-slate-500">${numero(c.sesionesMensualesAgendadas||0)}/${numero(c.sesionesMensualesPrevistas||0)} ses. mensuales</small></div>
+            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">Desv.</span><b class="${claseDesviacion(c.desviacionAgenda||0)}">${dinero(c.desviacionAgenda||0)}</b></div>
+            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">PT</span><b class="text-amber-400">${dinero(c.ptNeto)}</b></div>
+            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">BESOUL</span><b class="text-emerald-400">${dinero(c.bsBruto)}</b></div>
+            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">Coste sede</span><b class="text-red-400">-${dinero(c.canon)}</b><small class="block text-[9px] text-slate-500">${escapeHTML(descripcionCanonCentro(c))}</small></div>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-[11px] min-w-[1040px]"><thead class="text-slate-500 uppercase"><tr><th class="text-left py-2">Entrenador</th><th class="text-right">Clientes</th><th class="text-right">Fact. cartera</th><th class="text-right">Valor agenda</th><th class="text-right">Desviación</th><th class="text-right">Neto PT</th><th class="text-right">BESOUL bruto</th><th class="text-right">Coste sede</th><th class="text-right">BESOUL neto</th></tr></thead><tbody class="divide-y divide-slate-800/60">
@@ -1126,11 +1137,11 @@
       if(lblTotal) lblTotal.innerText = dinero(totalMes);
       if (!lista.length) { cont.innerHTML = `<div class="text-xs text-slate-500 text-center py-6">No hay gastos registrados en el mes seleccionado.${locked ? ' Mes cerrado: reabre edición para añadir gastos.' : ''}</div>`; return; }
       cont.innerHTML = lista.map((g,idx)=>`
-        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-xs">
-          <select ${locked?'disabled':''} onchange="editarGasto(${idx}, 'categoria', this.value)" class="md:col-span-2 bg-slate-900 border border-slate-800 rounded p-2 text-white">${GASTO_CATEGORIAS.map(cat=>`<option value="${escapeHTML(cat)}" ${g.categoria===cat?'selected':''}>${escapeHTML(cat)}</option>`).join('')}</select>
-          <input ${locked?'disabled':''} onchange="editarGasto(${idx}, 'concepto', this.value)" value="${escapeHTML(g.concepto||'')}" class="md:col-span-4 bg-slate-900 border border-slate-800 rounded p-2 text-white" placeholder="Concepto">
-          <select ${locked?'disabled':''} onchange="editarGasto(${idx}, 'tipo', this.value)" class="md:col-span-2 bg-slate-900 border border-slate-800 rounded p-2 text-white"><option value="fijo" ${g.tipo==='fijo'?'selected':''}>Fijo</option><option value="variable" ${g.tipo==='variable'?'selected':''}>Variable</option></select>
-          <input ${locked?'disabled':''} onchange="editarGasto(${idx}, 'importe', this.value)" value="${escapeHTML(g.importe||0)}" class="md:col-span-2 bg-slate-900 border border-slate-800 rounded p-2 text-white text-right font-mono" placeholder="0">
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-12 gap-2 md:items-center text-xs">
+          <div class="md:col-span-2"><label class="md:hidden text-[10px] text-slate-500 block mb-1">Categoría</label><select ${locked?'disabled':''} onchange="editarGasto(${idx}, 'categoria', this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white">${GASTO_CATEGORIAS.map(cat=>`<option value="${escapeHTML(cat)}" ${g.categoria===cat?'selected':''}>${escapeHTML(cat)}</option>`).join('')}</select></div>
+          <div class="md:col-span-4"><label class="md:hidden text-[10px] text-slate-500 block mb-1">Concepto</label><input ${locked?'disabled':''} onchange="editarGasto(${idx}, 'concepto', this.value)" value="${escapeHTML(g.concepto||'')}" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" placeholder="Concepto"></div>
+          <div class="md:col-span-2"><label class="md:hidden text-[10px] text-slate-500 block mb-1">Tipo</label><select ${locked?'disabled':''} onchange="editarGasto(${idx}, 'tipo', this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white"><option value="fijo" ${g.tipo==='fijo'?'selected':''}>Fijo</option><option value="variable" ${g.tipo==='variable'?'selected':''}>Variable</option></select></div>
+          <div class="md:col-span-2"><label class="md:hidden text-[10px] text-slate-500 block mb-1">Importe</label><input ${locked?'disabled':''} onchange="editarGasto(${idx}, 'importe', this.value)" value="${escapeHTML(g.importe||0)}" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right font-mono" placeholder="0"></div>
           <button ${locked?'disabled':''} onclick="borrarGasto(${idx})" class="md:col-span-2 bg-red-500/10 text-red-400 border border-red-500/30 rounded p-2 font-bold">Borrar</button>
         </div>`).join('');
     }
@@ -1180,14 +1191,14 @@
       const locked = mesEstaCerrado(mes) && !mesEnEdicion(mes);
       if (!lista.length) { cont.innerHTML = `<div class="text-xs text-slate-500 text-center py-6">No hay otros ingresos registrados en el mes seleccionado.${locked ? ' Mes cerrado: reabre edición para añadir ingresos.' : ''}</div>`; return; }
       cont.innerHTML = lista.map((g,idx)=>`
-        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-xs ${locked?'opacity-80':''}">
-          <input type="date" onchange="editarOtroIngreso(${idx}, 'fecha', this.value)" value="${escapeHTML(g.fecha||'')}" ${locked?'disabled':''} class="md:col-span-2 bg-slate-900 border border-slate-800 rounded p-2 text-white disabled:opacity-50">
-          <select onchange="editarOtroIngreso(${idx}, 'categoria', this.value)" ${locked?'disabled':''} class="md:col-span-2 bg-slate-900 border border-slate-800 rounded p-2 text-white disabled:opacity-50">${INGRESO_CATEGORIAS.map(cat=>`<option value="${escapeHTML(cat)}" ${g.categoria===cat?'selected':''}>${escapeHTML(cat)}</option>`).join('')}</select>
-          <input onchange="editarOtroIngreso(${idx}, 'concepto', this.value)" value="${escapeHTML(g.concepto||'')}" ${locked?'disabled':''} class="md:col-span-3 bg-slate-900 border border-slate-800 rounded p-2 text-white disabled:opacity-50" placeholder="Concepto">
-          <select onchange="editarOtroIngreso(${idx}, 'centroId', this.value)" ${locked?'disabled':''} class="md:col-span-2 bg-slate-900 border border-slate-800 rounded p-2 text-white disabled:opacity-50"><option value="">Sin centro asociado</option>${Object.values(getCentros({incluirInactivos:true})).map(c=>`<option value="${escapeHTML(c.id)}" ${g.centroId===c.id?'selected':''}>${escapeHTML(c.nombre)}</option>`).join('')}</select>
-          <input onchange="editarOtroIngreso(${idx}, 'importe', this.value)" value="${escapeHTML(g.importe||0)}" ${locked?'disabled':''} class="md:col-span-2 bg-slate-900 border border-slate-800 rounded p-2 text-white text-right font-mono disabled:opacity-50" placeholder="0">
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-12 gap-2 md:items-center text-xs ${locked?'opacity-80':''}">
+          <div class="md:col-span-2"><label class="md:hidden text-[10px] text-slate-500 block mb-1">Fecha</label><input type="date" onchange="editarOtroIngreso(${idx}, 'fecha', this.value)" value="${escapeHTML(g.fecha||'')}" ${locked?'disabled':''} class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white disabled:opacity-50"></div>
+          <div class="md:col-span-2"><label class="md:hidden text-[10px] text-slate-500 block mb-1">Categoría</label><select onchange="editarOtroIngreso(${idx}, 'categoria', this.value)" ${locked?'disabled':''} class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white disabled:opacity-50">${INGRESO_CATEGORIAS.map(cat=>`<option value="${escapeHTML(cat)}" ${g.categoria===cat?'selected':''}>${escapeHTML(cat)}</option>`).join('')}</select></div>
+          <div class="md:col-span-3"><label class="md:hidden text-[10px] text-slate-500 block mb-1">Concepto</label><input onchange="editarOtroIngreso(${idx}, 'concepto', this.value)" value="${escapeHTML(g.concepto||'')}" ${locked?'disabled':''} class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white disabled:opacity-50" placeholder="Concepto"></div>
+          <div class="md:col-span-2"><label class="md:hidden text-[10px] text-slate-500 block mb-1">Centro</label><select onchange="editarOtroIngreso(${idx}, 'centroId', this.value)" ${locked?'disabled':''} class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white disabled:opacity-50"><option value="">Sin centro asociado</option>${Object.values(getCentros({incluirInactivos:true})).map(c=>`<option value="${escapeHTML(c.id)}" ${g.centroId===c.id?'selected':''}>${escapeHTML(c.nombre)}</option>`).join('')}</select></div>
+          <div class="md:col-span-2"><label class="md:hidden text-[10px] text-slate-500 block mb-1">Importe</label><input onchange="editarOtroIngreso(${idx}, 'importe', this.value)" value="${escapeHTML(g.importe||0)}" ${locked?'disabled':''} class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right font-mono disabled:opacity-50" placeholder="0"></div>
           <button onclick="borrarOtroIngreso(${idx})" ${locked?'disabled':''} class="md:col-span-1 bg-red-500/10 text-red-400 border border-red-500/30 rounded p-2 font-bold disabled:opacity-30">Borrar</button>
-          <input onchange="editarOtroIngreso(${idx}, 'notas', this.value)" value="${escapeHTML(g.notas||'')}" ${locked?'disabled':''} class="md:col-span-12 bg-slate-900 border border-slate-800 rounded p-2 text-white disabled:opacity-50" placeholder="Notas internas / motivo">
+          <div class="md:col-span-12"><label class="md:hidden text-[10px] text-slate-500 block mb-1">Notas</label><input onchange="editarOtroIngreso(${idx}, 'notas', this.value)" value="${escapeHTML(g.notas||'')}" ${locked?'disabled':''} class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white disabled:opacity-50" placeholder="Notas internas / motivo"></div>
         </div>`).join('');
     }
     function asegurarOtrosIngresosMes(){ const m=obtenerMesIngresos(); if(!puedeEditarMes(m,'otros ingresos')) return null; if(!dbFinanzas.otrosIngresos) dbFinanzas.otrosIngresos={}; if(!Array.isArray(dbFinanzas.otrosIngresos[m])) dbFinanzas.otrosIngresos[m]=[]; return dbFinanzas.otrosIngresos[m]; }
@@ -1198,13 +1209,51 @@
 
     function renderHistorico(){
       const tbody = document.getElementById('tabla-historico-cuerpo');
+      const cardsWrap = document.getElementById('historico-cards-mobile');
       const hist = dbFinanzas.historico || {};
       const keys = Object.keys(hist).sort().reverse();
       const papeleraKeys = Object.keys(dbFinanzas.historicoBorrado || {}).filter(k => (dbFinanzas.historicoBorrado[k]||[]).length && !hist[k]).sort().reverse();
-      if (!keys.length && !papeleraKeys.length) { tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-slate-500">No hay cierres guardados.</td></tr>'; return; }
+      if (!keys.length && !papeleraKeys.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-slate-500">No hay cierres guardados.</td></tr>';
+        if (cardsWrap) cardsWrap.innerHTML = '<div class="py-6 text-center text-slate-500 text-xs">No hay cierres guardados.</div>';
+        return;
+      }
       const filasActivas = keys.map(k=>{ const h=hist[k]; const t=h.total||{}; const aud=(dbFinanzas.auditoriaCierres?.[k]||[]).length; return `<tr class="hover:bg-slate-900/40"><td class="py-3 px-4 font-bold text-white">${escapeHTML(etiquetaMes(k))}<div class="text-[10px] text-emerald-300">Cerrado</div>${aud?`<div class="text-[9px] text-slate-500">${aud} mov. auditoría</div>`:''}</td><td class="py-3 px-4">${dinero(t.facturacion)}</td><td class="py-3 px-4 text-amber-400">${dinero(t.ptNeto)}</td><td class="py-3 px-4 text-emerald-400">${dinero(t.bsBruto)}</td><td class="py-3 px-4 text-lime-300">${dinero(t.otrosIngresos||0)}</td><td class="py-3 px-4 text-red-300">${dinero(t.gastos)}</td><td class="py-3 px-4 text-cyan-400 font-bold">${dinero(t.beneficio)}</td><td class="py-3 px-4"><div class="flex gap-2 flex-wrap"><button onclick="cargarMesHistorico('${k}')" class="text-amber-300 hover:underline">Ver</button><button onclick="reabrirMesCerradoParaEdicion('${k}')" class="text-cyan-300 hover:underline">Reabrir</button><button onclick="recalcularCierreMes('${k}')" class="text-emerald-300 hover:underline">Recalcular</button><button onclick="borrarHistorico('${k}')" class="text-red-400 hover:underline">Borrar</button></div></td></tr>`; }).join('');
       const filasPapelera = papeleraKeys.map(k=>{ const ultimo=(dbFinanzas.historicoBorrado[k]||[]).slice(-1)[0]; return `<tr class="bg-slate-950/60 opacity-70"><td class="py-3 px-4 font-bold text-slate-400">${escapeHTML(etiquetaMes(k))}<div class="text-[10px] text-red-400">En papelera · ${escapeHTML(ultimo?.borradoPor||'')}</div></td><td class="py-3 px-4 text-slate-600" colspan="6">Cierre borrado el ${ultimo ? new Date(ultimo.borradoEn).toLocaleString('es-ES') : ''}</td><td class="py-3 px-4"><button onclick="restaurarHistoricoBorrado('${k}')" class="text-emerald-300 hover:underline font-bold">Restaurar</button></td></tr>`; }).join('');
       tbody.innerHTML = filasActivas + filasPapelera;
+      if (cardsWrap) {
+        const cardsActivas = keys.map(k=>{
+          const h=hist[k]; const t=h.total||{}; const aud=(dbFinanzas.auditoriaCierres?.[k]||[]).length;
+          return `<div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+            <div class="flex items-start justify-between gap-2">
+              <div><div class="font-bold text-white text-sm">${escapeHTML(etiquetaMes(k))}</div><div class="text-[10px] text-emerald-300">Cerrado${aud ? ` · ${aud} mov. auditoría` : ''}</div></div>
+              <div class="text-right"><div class="text-[9px] text-slate-500 uppercase font-bold">Beneficio</div><div class="text-cyan-400 font-black">${dinero(t.beneficio)}</div></div>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-slate-800/60">
+              <div><span class="text-slate-500 block">Facturación</span><span class="text-slate-200 font-semibold">${dinero(t.facturacion)}</span></div>
+              <div><span class="text-slate-500 block">Neto PT</span><span class="text-amber-400 font-semibold">${dinero(t.ptNeto)}</span></div>
+              <div><span class="text-slate-500 block">BESOUL bruto</span><span class="text-emerald-400 font-semibold">${dinero(t.bsBruto)}</span></div>
+              <div><span class="text-slate-500 block">Gastos</span><span class="text-red-300 font-semibold">${dinero(t.gastos)}</span></div>
+            </div>
+            <div class="flex gap-2 flex-wrap pt-1 text-[11px]">
+              <button onclick="cargarMesHistorico('${k}')" class="text-amber-300 font-bold">Ver</button>
+              <button onclick="reabrirMesCerradoParaEdicion('${k}')" class="text-cyan-300 font-bold">Reabrir</button>
+              <button onclick="recalcularCierreMes('${k}')" class="text-emerald-300 font-bold">Recalcular</button>
+              <button onclick="borrarHistorico('${k}')" class="text-red-400 font-bold">Borrar</button>
+            </div>
+          </div>`;
+        }).join('');
+        const cardsPapelera = papeleraKeys.map(k=>{
+          const ultimo=(dbFinanzas.historicoBorrado[k]||[]).slice(-1)[0];
+          return `<div class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-2 opacity-70">
+            <div class="font-bold text-slate-400">${escapeHTML(etiquetaMes(k))}</div>
+            <div class="text-[10px] text-red-400">En papelera · ${escapeHTML(ultimo?.borradoPor||'')}</div>
+            <div class="text-[10px] text-slate-600">Borrado el ${ultimo ? new Date(ultimo.borradoEn).toLocaleString('es-ES') : ''}</div>
+            <button onclick="restaurarHistoricoBorrado('${k}')" class="text-emerald-300 font-bold text-[11px]">Restaurar</button>
+          </div>`;
+        }).join('');
+        cardsWrap.innerHTML = cardsActivas + cardsPapelera;
+      }
     }
     function cargarMesHistorico(key){ mesSeleccionadoFinanzas = key; mesCerradoEditando = null; switchTab('directo'); }
     function crearSnapshotCierre(key){
@@ -1288,6 +1337,11 @@
         const esBase = !!DEFAULT_CENTROS[c.id];
         const activo = c.activo !== false;
         const disabledClass = activo ? 'border-slate-800' : 'border-red-500/30 opacity-70';
+        const versionesCentro = dbFinanzas.centrosVersiones?.[c.id] || [];
+        const camposVersionadosCentro = [...new Set(versionesCentro.filter(v => !v._legacy).flatMap(v => Object.keys(v).filter(k => !k.startsWith('_') && k !== 'desde' && k !== 'hasta')))];
+        const badgeVigenciaCentro = camposVersionadosCentro.length
+          ? `<span class="inline-flex items-center gap-1 bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 rounded-full px-2 py-0.5 text-[10px] font-bold" title="Estos campos tienen valores distintos según el mes: ${escapeHTML(camposVersionadosCentro.join(', '))}.">⏱ Vigencia temporal</span>`
+          : '';
         return `
         <div class="bg-slate-950 border ${disabledClass} rounded-xl p-3 space-y-3 text-xs">
           <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
@@ -1296,7 +1350,7 @@
               <input value="${escapeHTML(c.id)}" disabled class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-slate-500 font-mono">
             </div>
             <div class="md:col-span-4">
-              <label class="text-[10px] text-slate-500 block mb-1">Nombre visible</label>
+              <label class="text-[10px] text-slate-500 flex items-center gap-2 mb-1 flex-wrap"><span>Nombre visible</span>${badgeVigenciaCentro}</label>
               <input value="${escapeHTML(c.nombre)}" onchange="editarCentro('${c.id}','nombre',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white">
             </div>
             <div>
@@ -1392,10 +1446,15 @@
         const sistemaSeleccionado = settings.sistemaPago === 'base' ? 'rango1' : (settings.sistemaPago === 'bonus_15' ? 'rango2' : (settings.sistemaPago === 'canon_1000' ? 'rango3' : (settings.sistemaPago || 'auto')));
         const posteriores = contarPosterioresCentro(key, centro, fechaAltaSettings(settings));
         const activosCentroCoord = contarActivosCentroParaCoordinacion(key, centro);
+        const versionesTrainer = dbFinanzas.trainerSettingsVersiones?.[key] || [];
+        const camposVersionados = [...new Set(versionesTrainer.filter(v => !v._legacy).flatMap(v => Object.keys(v).filter(k => !k.startsWith('_') && k !== 'desde' && k !== 'hasta')))];
+        const badgeVigencia = camposVersionados.length
+          ? `<span class="inline-flex items-center gap-1 bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 rounded-full px-2 py-0.5 text-[10px] font-bold" title="Estos campos tienen valores distintos según el mes: ${escapeHTML(camposVersionados.join(', '))}. Un cambio nuevo siempre pregunta 'solo este mes' o 'desde este mes en adelante' y nunca toca meses ya pasados.">⏱ Vigencia temporal</span>`
+          : '';
         return `
         <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-3 text-xs">
           <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
-            <div class="md:col-span-3"><b class="text-white">${escapeHTML(nombrePerfil(p))}</b><div class="text-[10px] text-slate-500">${escapeHTML(key)} · ${escapeHTML(p.rol||'')} · ${escapeHTML(row.sistemaAplicado || '')}</div></div>
+            <div class="md:col-span-3"><div class="flex items-center gap-2 flex-wrap"><b class="text-white">${escapeHTML(nombrePerfil(p))}</b>${badgeVigencia}</div><div class="text-[10px] text-slate-500">${escapeHTML(key)} · ${escapeHTML(p.rol||'')} · ${escapeHTML(row.sistemaAplicado || '')}</div></div>
             <select onchange="editarTrainer('${key}','centroId',this.value)" class="md:col-span-3 bg-slate-900 border border-slate-800 rounded p-2 text-white">${opcionesCentro.replace(`value=\"${centro}\"`,`value=\"${centro}\" selected`)}</select>
             <div class="md:col-span-2"><label class="text-[10px] text-slate-500 block mb-1">Fecha alta</label><input type="date" value="${escapeHTML(settings.fechaAlta||'')}" onchange="editarTrainer('${key}','fechaAlta',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white"></div>
             <select onchange="editarTrainer('${key}','sistemaPago',this.value)" class="md:col-span-2 bg-slate-900 border border-slate-800 rounded p-2 text-white">${opcionesSistema.replace(`value=\"${settings.sistemaPago || 'auto'}\"`,`value=\"${settings.sistemaPago || 'auto'}\" selected`)}</select>
@@ -1537,10 +1596,16 @@
         const reparto = repartoEfectivoActividad(act.id, mes).partes || [];
         const modalidadesEfectivas = actividadEfectivaParaMes(act.id, mes)?.modalidades || {};
         const numPlanes = Object.values(modalidadesEfectivas).reduce((s, m) => s + Object.keys(m.segmentos || {}).length, 0);
+        const tieneVigenciaTarifas = (agendaData.tarifasActividadVersiones?.[act.id] || []).some(v => !v._legacy);
+        const tieneVigenciaReparto = (agendaData.repartoActividadVersiones?.[act.id] || []).some(v => !v._legacy);
+        const badgesVigenciaAct = [
+          tieneVigenciaTarifas ? '<span class="inline-flex items-center gap-1 bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 rounded-full px-2 py-0.5 text-[10px] font-bold">⏱ Tarifas con vigencia</span>' : '',
+          tieneVigenciaReparto ? '<span class="inline-flex items-center gap-1 bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 rounded-full px-2 py-0.5 text-[10px] font-bold">⏱ Reparto con vigencia</span>' : ''
+        ].filter(Boolean).join(' ');
         return `
         <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2 text-xs ${act.activo === false ? 'opacity-50' : ''}">
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <div><b class="text-white">${escapeHTML(act.nombre)}</b><div class="text-[10px] text-slate-500">${escapeHTML(act.id)} · ${escapeHTML(nombreCentro(act.centroId))}${act.activo === false ? ' · INACTIVA' : ''}</div></div>
+            <div><div class="flex items-center gap-2 flex-wrap"><b class="text-white">${escapeHTML(act.nombre)}</b>${badgesVigenciaAct}</div><div class="text-[10px] text-slate-500">${escapeHTML(act.id)} · ${escapeHTML(nombreCentro(act.centroId))}${act.activo === false ? ' · INACTIVA' : ''}</div></div>
             <div class="flex gap-2">
               <button onclick="editarTarifasActividadDesdeUI('${act.id}')" class="bg-slate-800 text-white px-2 py-1 rounded text-[10px] font-bold">Editar tarifas</button>
               <button onclick="editarRepartoActividadDesdeUI('${act.id}')" class="bg-slate-800 text-white px-2 py-1 rounded text-[10px] font-bold">Editar reparto</button>

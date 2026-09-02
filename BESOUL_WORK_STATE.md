@@ -362,6 +362,22 @@ Para que una futura sesión no tenga que releer todo el prompt del usuario, resu
 
 **Siguiente**: UI-003C Finanzas mobile.
 
+## UI-003C — Finanzas mobile (2026-09-02)
+
+**Jerarquía KPI**: la fila de 7 cajas iguales (`grid-cols-2 md:grid-cols-3 xl:grid-cols-7`) se sustituye por 2 cifras dominantes (Beneficio neto, Facturación cartera — `text-3xl`, cards más grandes) + una fila secundaria de 5 cajas más pequeñas debajo (Neto PT/BESOUL bruto/Otros ingresos/Cánones/Gastos). Mismos IDs exactos (`kpi-beneficio-neto`, `kpi-fact-total`, etc.) — `pintarTodo()` sigue escribiendo en los mismos elementos, cero cambios de JS.
+
+**Indicador de vigencia temporal** ("SOLO ESTE MES" vs "DESDE EN ADELANTE" visualmente inequívoco, pedido explícito): nuevo badge "⏱ Vigencia temporal" en la card de cada entrenador (`renderConfigTrainers`), cada centro (`renderConfigCentros`) y cada actividad especial (`renderConfigActividades`, separado en "Tarifas con vigencia"/"Reparto con vigencia"), calculado leyendo si `trainerSettingsVersiones`/`centrosVersiones`/`tarifasActividadVersiones`/`repartoActividadVersiones` tienen alguna entrada real (no solo la base `_legacy`). Tooltip explica qué campos varían por mes. No se toca el motor de cálculo, es puramente informativo sobre datos que ya existían.
+
+**Histórico → cards en mobile**: la tabla (`min-w-[760px]`, forzaba scroll horizontal) se mantiene intacta en desktop (`hidden md:table`); nueva vista de cards (`md:hidden`) con la misma jerarquía (beneficio destacado arriba, 4 cifras secundarias, mismos botones Ver/Reabrir/Recalcular/Borrar apuntando a las mismas funciones). `renderHistorico()` ahora rellena ambas vistas desde el mismo `dbFinanzas.historico`/`historicoBorrado`, sin lógica nueva.
+
+**Gastos/Otros ingresos**: cada campo de las cards (ya eran `<div>`, no tablas) gana una etiqueta visible solo en mobile (`md:hidden`) — antes, al apilarse verticalmente en pantallas pequeñas, un `<select>`/`<input>` suelto sin contexto no se entendía sin mirar la posición en la rejilla de escritorio. Mismos `onchange`/`onclick`/índices exactos.
+
+**Texto**: labels de la card-resumen por centro subidos de `text-[10px]` a `text-[11px]` para las cifras principales (el detalle secundario real, tipo "ses. mensuales" o el desglose de coste de sede, se queda en 9px como metadata). La tabla técnica de desglose por entrenador DENTRO de cada centro (9 columnas con sub-detalle) se deja tal cual, con su propio scroll horizontal contenido (`overflow-x-auto` local, no de página) — es detalle de auditoría denso, no la vista principal, y comprimirlo a cards sin perder legibilidad requeriría su propio ticket.
+
+**Listeners revisados**: ninguna función de negocio tocada (`editarGasto`, `editarOtroIngreso`, `borrarGasto`, `borrarOtroIngreso`, `cargarMesHistorico`, `reabrirMesCerradoParaEdicion`, `recalcularCierreMes`, `borrarHistorico`, `restaurarHistoricoBorrado`, `editarTrainer`, `editarCentro`) — todas siguen recibiendo exactamente los mismos argumentos desde los mismos `onclick`/`onchange`, solo cambia el HTML que los envuelve.
+
+**Siguiente**: UI-003D Dashboard mobile.
+
 ## PWA — verificación (2026-09-02)
 
 Revisado `sw.js`: estrategia network-first con fallback a caché (correcta, no sirve HTML obsoleto mientras hay conexión — sin bug). Se subió `CACHE_NAME` de v5 a v6 (commit `8e743df`) para que los usuarios offline reciban el código de esta sesión en cuanto vuelvan a conectar.
