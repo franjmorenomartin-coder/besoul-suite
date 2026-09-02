@@ -43,15 +43,15 @@
       </div>
       <div class="space-y-3 text-xs">
         <div>
-          <label class="text-slate-400 block mb-1">Email administrador</label>
-          <input type="email" id="login-email" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="administracion@besoulfitness.com">
+          <label for="login-email" class="text-slate-400 block mb-1">Email administrador</label>
+          <input type="email" id="login-email" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="administracion@besoulfitness.com">
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Contraseña</label>
-          <input type="password" id="login-pass" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="••••••••">
+          <label for="login-pass" class="text-slate-400 block mb-1">Contraseña</label>
+          <input type="password" id="login-pass" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="••••••••">
         </div>
-        <p id="auth-error" class="hidden text-red-400 text-[11px] leading-relaxed"></p>
-        <button onclick="loginDashboard()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-lg transition uppercase tracking-wider mt-2">Entrar</button>
+        <p id="auth-error" class="hidden text-red-400 text-[11px] leading-relaxed" role="alert" aria-live="assertive"></p>
+        <button onclick="loginDashboard()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-xl transition uppercase tracking-wider mt-2">Entrar</button>
       </div>
     </div>
   </div>
@@ -77,11 +77,23 @@
       </div>
     </header>
 
+    <!-- Navegación global inferior (mobile). dashboard.html es admin-only (bloqueado en su
+         propio login), los 5 accesos se muestran siempre. -->
+    <nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800" style="padding-bottom: env(safe-area-inset-bottom);">
+      <div class="grid grid-cols-5 text-center">
+        <a href="./dashboard.html" class="flex flex-col items-center gap-0.5 py-2.5 text-purple-400"><span class="text-base leading-none">◆</span><span class="text-[10px] font-bold">Dashboard</span></a>
+        <a href="./agenda.html" class="flex flex-col items-center gap-0.5 py-2.5 text-slate-500"><span class="text-base leading-none">▤</span><span class="text-[10px] font-bold">Agenda</span></a>
+        <a href="./crm.html" class="flex flex-col items-center gap-0.5 py-2.5 text-slate-500"><span class="text-base leading-none">◎</span><span class="text-[10px] font-bold">CRM</span></a>
+        <a href="./finanzas.html" class="flex flex-col items-center gap-0.5 py-2.5 text-slate-500"><span class="text-base leading-none">€</span><span class="text-[10px] font-bold">Finanzas</span></a>
+        <a href="./index.html" class="flex flex-col items-center gap-0.5 py-2.5 text-slate-500"><span class="text-base leading-none">⋯</span><span class="text-[10px] font-bold">Más</span></a>
+      </div>
+    </nav>
+
     <section class="bg-slate-950 border-b border-slate-900 px-4 md:px-6 py-4 space-y-3">
       <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3 text-xs">
         <div>
-          <label class="text-slate-400 block mb-1">Periodo</label>
-          <select id="filter-period" onchange="cambiarPeriodo()" class="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white">
+          <label for="filter-period" class="text-slate-400 block mb-1">Periodo</label>
+          <select id="filter-period" onchange="cambiarPeriodo()" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
             <option value="month">Mes actual</option>
             <option value="previousMonth">Mes anterior</option>
             <option value="week">Semana actual</option>
@@ -91,24 +103,24 @@
           </select>
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Desde</label>
-          <input type="date" id="filter-start" onchange="aplicarDashboard()" class="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white">
+          <label for="filter-start" class="text-slate-400 block mb-1">Desde</label>
+          <input type="date" id="filter-start" onchange="aplicarDashboard()" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Hasta</label>
-          <input type="date" id="filter-end" onchange="aplicarDashboard()" class="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white">
+          <label for="filter-end" class="text-slate-400 block mb-1">Hasta</label>
+          <input type="date" id="filter-end" onchange="aplicarDashboard()" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Centro</label>
-          <select id="filter-center" onchange="aplicarDashboard()" class="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white"></select>
+          <label for="filter-center" class="text-slate-400 block mb-1">Centro</label>
+          <select id="filter-center" onchange="aplicarDashboard()" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"></select>
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Entrenador</label>
-          <select id="filter-trainer" onchange="aplicarDashboard()" class="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white"></select>
+          <label for="filter-trainer" class="text-slate-400 block mb-1">Entrenador</label>
+          <select id="filter-trainer" onchange="aplicarDashboard()" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"></select>
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Vista</label>
-          <select id="filter-view" onchange="aplicarDashboard()" class="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white">
+          <label for="filter-view" class="text-slate-400 block mb-1">Vista</label>
+          <select id="filter-view" onchange="aplicarDashboard()" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
             <option value="general">General</option>
             <option value="finanzas">Finanzas</option>
             <option value="agenda">Ocupación Agenda</option>
@@ -116,26 +128,30 @@
           </select>
         </div>
         <div class="flex items-end">
-          <button onclick="exportarResumenCSV()" class="w-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 rounded-lg p-2 font-bold hover:bg-emerald-500/20">Export CSV</button>
+          <button onclick="exportarResumenCSV()" class="w-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 rounded-xl p-2 font-bold hover:bg-emerald-500/20 transition">Export CSV</button>
         </div>
       </div>
       <p class="text-[11px] text-slate-500 leading-relaxed">Dashboard de solo lectura. Cálculo financiero sincronizado con Finanzas: mismos rangos, centros, cánones, desviaciones y cierres.</p>
     </section>
 
-    <main class="flex-1 p-4 md:p-6 space-y-6">
-      <section class="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-12 gap-3">
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Facturación</p><p id="kpi-facturacion" class="text-lg font-black text-white font-mono mt-1">0,00 €</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">BESOUL bruto</p><p id="kpi-besoul" class="text-lg font-black text-emerald-400 font-mono mt-1">0,00 €</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Coste sede</p><p id="kpi-coste" class="text-lg font-black text-red-300 font-mono mt-1">0,00 €</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Beneficio neto</p><p id="kpi-beneficio" class="text-lg font-black text-cyan-400 font-mono mt-1">0,00 €</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Clientes activos</p><p id="kpi-clientes" class="text-lg font-black text-amber-400 font-mono mt-1">0</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Entrenadores</p><p id="kpi-trainers" class="text-lg font-black text-white font-mono mt-1">0</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Sesiones</p><p id="kpi-sesiones" class="text-lg font-black text-blue-300 font-mono mt-1">0</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Conversión CRM</p><p id="kpi-conversion" class="text-lg font-black text-purple-300 font-mono mt-1">0%</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Canon clientes centro</p><p id="kpi-canon-clientes" class="text-lg font-black text-red-200 font-mono mt-1">0,00 €</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Valor agenda</p><p id="kpi-valor-agenda" class="text-lg font-black text-cyan-300 font-mono mt-1">0,00 €</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Desviación cartera</p><p id="kpi-desviacion-agenda" class="text-lg font-black text-amber-300 font-mono mt-1">0,00 €</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-slate-400">Ocupación disp.</p><p id="kpi-ocupacion-disponibilidad" class="text-lg font-black text-emerald-300 font-mono mt-1">0%</p></div>
+    <main class="flex-1 p-4 md:p-6 pb-24 md:pb-6 space-y-6">
+      <!-- Jerarquía: 2 cifras dominantes (lo esencial de un vistazo) + rejilla secundaria más
+           compacta debajo, en vez de 12 cajas idénticas -- mismos ids, pintarKPIs() sin cambios. -->
+      <section class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="bg-gradient-to-br from-purple-500/10 via-slate-900 to-slate-900 border border-purple-500/30 rounded-2xl p-5"><p class="text-[11px] uppercase font-bold text-purple-300">Beneficio neto</p><p id="kpi-beneficio" class="text-3xl font-black text-white font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5"><p class="text-[11px] uppercase font-bold text-slate-400">Facturación</p><p id="kpi-facturacion" class="text-3xl font-black text-white font-mono mt-1">0,00 €</p></div>
+      </section>
+      <section class="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-10 gap-3">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">BESOUL bruto</p><p id="kpi-besoul" class="text-sm font-black text-emerald-400 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Coste sede</p><p id="kpi-coste" class="text-sm font-black text-red-300 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Clientes activos</p><p id="kpi-clientes" class="text-sm font-black text-amber-400 font-mono mt-1">0</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Entrenadores</p><p id="kpi-trainers" class="text-sm font-black text-white font-mono mt-1">0</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Sesiones</p><p id="kpi-sesiones" class="text-sm font-black text-blue-300 font-mono mt-1">0</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Conversión CRM</p><p id="kpi-conversion" class="text-sm font-black text-purple-300 font-mono mt-1">0%</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Canon clientes</p><p id="kpi-canon-clientes" class="text-sm font-black text-red-200 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Valor agenda</p><p id="kpi-valor-agenda" class="text-sm font-black text-cyan-300 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Desviación</p><p id="kpi-desviacion-agenda" class="text-sm font-black text-amber-300 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Ocupación disp.</p><p id="kpi-ocupacion-disponibilidad" class="text-sm font-black text-emerald-300 font-mono mt-1">0%</p></div>
       </section>
 
       <section id="insights" class="bg-slate-900 border border-slate-800 rounded-xl p-4 hidden"></section>
@@ -173,23 +189,29 @@
           <p class="text-[11px] text-slate-500 mb-4">Detecta el aprovechamiento real de la disponibilidad publicada por los PT.</p>
           <div id="heatmap" class="min-w-[700px]"></div>
         </div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 overflow-x-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
           <h2 class="text-sm font-black text-white mb-1">Top entrenadores</h2>
           <p class="text-[11px] text-slate-500 mb-4">Ranking del periodo/mes por facturación, clientes, canon centro y margen Besoul real.</p>
-          <table class="w-full min-w-[760px] text-left text-xs">
-            <thead class="text-[10px] uppercase text-slate-500 border-b border-slate-800"><tr><th class="py-2">Entrenador</th><th>Centro</th><th>Clientes</th><th>Facturación</th><th>BESOUL bruto</th><th>Canon centro</th><th>Neto Besoul</th><th>Sistema</th></tr></thead>
-            <tbody id="tabla-trainers" class="divide-y divide-slate-800/70"></tbody>
-          </table>
+          <div class="hidden md:block overflow-x-auto">
+            <table class="w-full min-w-[760px] text-left text-xs">
+              <thead class="text-[10px] uppercase text-slate-500 border-b border-slate-800"><tr><th class="py-2">Entrenador</th><th>Centro</th><th>Clientes</th><th>Facturación</th><th>BESOUL bruto</th><th>Canon centro</th><th>Neto Besoul</th><th>Sistema</th></tr></thead>
+              <tbody id="tabla-trainers" class="divide-y divide-slate-800/70"></tbody>
+            </table>
+          </div>
+          <div id="cards-trainers-mobile" class="md:hidden space-y-2"></div>
         </div>
       </section>
 
       <section class="grid grid-cols-1 2xl:grid-cols-2 gap-4">
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 overflow-x-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
           <h2 class="text-sm font-black text-white mb-4">Centros</h2>
-          <table class="w-full min-w-[760px] text-left text-xs">
-            <thead class="text-[10px] uppercase text-slate-500 border-b border-slate-800"><tr><th class="py-2">Centro</th><th>PT</th><th>Clientes</th><th>Facturación</th><th>% Fact.</th><th>Canon clientes</th><th>Coste centro</th><th>Neto centro</th></tr></thead>
-            <tbody id="tabla-centros" class="divide-y divide-slate-800/70"></tbody>
-          </table>
+          <div class="hidden md:block overflow-x-auto">
+            <table class="w-full min-w-[760px] text-left text-xs">
+              <thead class="text-[10px] uppercase text-slate-500 border-b border-slate-800"><tr><th class="py-2">Centro</th><th>PT</th><th>Clientes</th><th>Facturación</th><th>% Fact.</th><th>Canon clientes</th><th>Coste centro</th><th>Neto centro</th></tr></thead>
+              <tbody id="tabla-centros" class="divide-y divide-slate-800/70"></tbody>
+            </table>
+          </div>
+          <div id="cards-centros-mobile" class="md:hidden space-y-2"></div>
         </div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 overflow-x-auto">
           <h2 class="text-sm font-black text-white mb-4">Slots libres y oportunidades</h2>
@@ -272,6 +294,121 @@ function defaultsCentro(id,nombre=''){ return {id, nombre:nombre||id, orden:99, 
 function centrosValidos(){ return Object.keys(getCentros({incluirInactivos:true})).concat(['sin_centro','sin-centro']); }
 function centroValido(id){ return centrosValidos().includes(String(id || '')); }
 function getCentros(opts={}){ const {incluirInactivos=false}=opts; const res={}; const source={...DEFAULT_CENTROS, ...(dbFinanzas.centros||{})}; Object.keys(source).forEach(rawId=>{ const c={...(DEFAULT_CENTROS[rawId]||defaultsCentro(rawId, source[rawId]?.nombre||rawId)), ...(source[rawId]||{})}; c.id=String(c.id||rawId); c.nombre=String(c.nombre||c.id).trim(); c.orden=parseNum(c.orden??99); if(esCentroTecnicoDescartable(c.id,c.nombre)) return; if(!incluirInactivos && c.activo===false) return; res[c.id]=c; }); return Object.fromEntries(Object.entries(res).sort((a,b)=>{ const ao=Number(a[1].orden??99), bo=Number(b[1].orden??99); if(ao!==bo) return ao-bo; return String(a[1].nombre||'').localeCompare(String(b[1].nombre||''),'es'); })); }
+// --- Port exacto de finanzas.html: temporalidad de trainerSettings/centros (FASE 6-7) +
+// catálogo de actividades especiales con reparto porcentual (FASE 9-13, Verónica). Dashboard
+// tiene su propio motor de cálculo duplicado (construirCalculoMes, no reutiliza
+// construirCalculoVivo de finanzas.html), así que sin este bloque quedaba desincronizado: no
+// resolvía canon/rango por mes, y una ficha con actividadEspecialId devolvía 0€ de facturación
+// porque calcularFacturacionFichaFinanzas busca TARIFAS_2026[ficha.modalidad], que no existe
+// para una ficha de actividad (auditoría Verónica, 2026-09-02 -- ver BESOUL_WORK_STATE.md).
+const CAMPOS_TEMPORALES_TRAINER = ['canonFijoIndependiente','aporteIndividualCliente','coordBonusPorPt','coordMaxPts','coordMaxBonus','pactoEspecial','sistemaPago','centroId'];
+const CAMPOS_TEMPORALES_CENTRO = ['canonFijo','ptsIncluidos','canonPt','canonPtReducidoDesde','canonPtReducido'];
+function entradaEfectivaTemporal(entradas, mesKey){
+  const candidatas = (entradas||[]).filter(e => e.desde <= mesKey && (!e.hasta || mesKey <= e.hasta));
+  if (!candidatas.length) return null;
+  candidatas.sort((a,b) => (a.desde < b.desde ? -1 : a.desde > b.desde ? 1 : (a.hasta?1:0)-(b.hasta?1:0)));
+  return candidatas[candidatas.length-1];
+}
+function valorEfectivoTemporal(versiones, campo, mesKey, valorFallback){
+  const entrada = entradaEfectivaTemporal((versiones||[]).filter(v => campo in v), mesKey);
+  return entrada ? entrada[campo] : valorFallback;
+}
+function settingsTrainerParaMes(key, mesKey){
+  const live = dbFinanzas.trainerSettings?.[key] || {};
+  const versiones = dbFinanzas.trainerSettingsVersiones?.[key];
+  if (!versiones || !versiones.length) return live;
+  const resuelto = { ...live };
+  CAMPOS_TEMPORALES_TRAINER.forEach(c => { resuelto[c] = valorEfectivoTemporal(versiones, c, mesKey, live[c]); });
+  return resuelto;
+}
+function centroParaMes(centroLive, mesKey){
+  const versiones = dbFinanzas.centrosVersiones?.[centroLive.id];
+  if (!versiones || !versiones.length) return centroLive;
+  const resuelto = { ...centroLive };
+  CAMPOS_TEMPORALES_CENTRO.forEach(c => { resuelto[c] = valorEfectivoTemporal(versiones, c, mesKey, centroLive[c]); });
+  return resuelto;
+}
+const DEFAULT_CATALOGO_ACTIVIDADES = {
+  ciclo_indoor: {
+    id: 'ciclo_indoor', nombre: 'Ciclo Indoor / Spinning', centroId: 'alfa_prime', activo: true,
+    unidadCiclo: 'semanas', duracionCiclo: 4,
+    reparto: { partes: [{ destino: 'entrenador', pct: 50 }, { destino: 'centro', pct: 35 }, { destino: 'besoul', pct: 15 }] },
+    modalidades: {
+      plan: { nombre: 'Plan por ciclo (4 semanas)', tipo: 'ciclo_no_acumulable', segmentos: {
+        general: { nombre: 'General', porPersona: true, planes: [{ sesiones: 4, precio: 55 }, { sesiones: 8, precio: 75 }, { sesiones: 12, precio: 95 }] },
+        empresa: { nombre: 'Empresa', porPersona: true, planes: [{ sesiones: 4, precio: 45 }, { sesiones: 8, precio: 65 }, { sesiones: 12, precio: 85 }] },
+        jubilados: { nombre: 'Jubilados', porPersona: true, planes: [{ sesiones: 4, precio: 45 }, { sesiones: 8, precio: 65 }, { sesiones: 12, precio: 85 }] }
+      }}
+    }
+  },
+  pilates_maquina: {
+    id: 'pilates_maquina', nombre: 'Pilates Máquina', centroId: 'alfa_prime', activo: true,
+    unidadCiclo: 'meses', duracionCiclo: 1,
+    reparto: { partes: [{ destino: 'entrenador', pct: 50 }, { destino: 'centro', pct: 35 }, { destino: 'besoul', pct: 15 }] },
+    modalidades: {
+      plan: { nombre: 'Plan mensual', tipo: 'ciclo_no_acumulable', segmentos: {
+        general: { nombre: 'General', porPersona: true, planes: [{ sesiones: 4, precio: 65 }, { sesiones: 8, precio: 95 }, { sesiones: 12, precio: 120 }] },
+        empresa: { nombre: 'Empresa', porPersona: true, planes: [{ sesiones: 4, precio: 55 }, { sesiones: 8, precio: 85 }, { sesiones: 12, precio: 110 }] },
+        jubilados: { nombre: 'Jubilados', porPersona: true, planes: [{ sesiones: 4, precio: 55 }, { sesiones: 8, precio: 85 }, { sesiones: 12, precio: 110 }] }
+      }},
+      bono10: { nombre: 'Bono 10 clases', tipo: 'bono_vigencia', segmentos: {
+        individual: { nombre: 'Individual', porPersona: false, planes: [{ sesiones: 10, precio: 450 }] },
+        pareja: { nombre: 'Pareja', porPersona: false, planes: [{ sesiones: 10, precio: 600 }] },
+        trio: { nombre: 'Trío', porPersona: false, planes: [{ sesiones: 10, precio: 800 }] }
+      }},
+      vip: { nombre: 'Sala VIP / Personalizado', tipo: 'ciclo_no_acumulable', segmentos: {
+        individual: { nombre: 'Individual', porPersona: true, planes: [{ sesiones: 4, precio: 180 }, { sesiones: 8, precio: 320 }, { sesiones: 12, precio: 420 }] },
+        pareja: { nombre: 'Pareja', porPersona: true, planes: [{ sesiones: 4, precio: 120 }, { sesiones: 8, precio: 210 }, { sesiones: 12, precio: 285 }] },
+        trio: { nombre: 'Trío', porPersona: true, planes: [{ sesiones: 4, precio: 100 }, { sesiones: 8, precio: 170 }, { sesiones: 12, precio: 225 }] }
+      }}
+    }
+  }
+};
+function catalogoActividadesVivo(){ return { ...DEFAULT_CATALOGO_ACTIVIDADES, ...(agendaData.catalogoActividades || {}) }; }
+function actividadEfectivaParaMes(actividadId, mesKey){
+  const live = catalogoActividadesVivo()[actividadId];
+  if (!live) return null;
+  const versiones = agendaData.tarifasActividadVersiones?.[actividadId];
+  const entrada = versiones && versiones.length ? entradaEfectivaTemporal(versiones, mesKey) : null;
+  return entrada ? { ...live, modalidades: entrada.modalidades } : live;
+}
+function repartoEfectivoActividad(actividadId, mesKey){
+  const versiones = agendaData.repartoActividadVersiones?.[actividadId];
+  const entrada = versiones && versiones.length ? entradaEfectivaTemporal(versiones, mesKey) : null;
+  if (entrada) return { partes: entrada.partes };
+  return catalogoActividadesVivo()[actividadId]?.reparto || { partes: [] };
+}
+function distribuirReparto(monto, partes){
+  const centavos = Math.round((Number(monto) || 0) * 100);
+  const pesos = (partes || []).map(p => ({ destino: p.destino, pct: Number(p.pct) || 0 }));
+  const totalPct = pesos.reduce((s, p) => s + p.pct, 0);
+  const resultado = {};
+  if (!pesos.length || totalPct <= 0 || centavos <= 0) { pesos.forEach(p => resultado[p.destino] = 0); return resultado; }
+  const brutos = pesos.map(p => (centavos * p.pct) / totalPct);
+  const floors = brutos.map(b => Math.floor(b));
+  const sobrante = centavos - floors.reduce((s, f) => s + f, 0);
+  const orden = brutos.map((b, i) => ({ i, resto: b - floors[i] })).sort((a, b) => b.resto - a.resto);
+  const finales = floors.slice();
+  for (let k = 0; k < sobrante; k++) finales[orden[k % orden.length].i] += 1;
+  pesos.forEach((p, i) => { resultado[p.destino] = finales[i] / 100; });
+  return resultado;
+}
+function calcularFacturacionActividadFicha(ficha, trainerKey, mesKey){
+  if (!ficha || !ficha.actividadEspecialId) return { total: 0, tipo: 'sin_actividad', sesionesAgendadas: 0 };
+  const cat = actividadEfectivaParaMes(ficha.actividadEspecialId, mesKey);
+  const modalidad = cat?.modalidades?.[ficha.modalidadId];
+  const segmento = modalidad?.segmentos?.[ficha.segmentoId];
+  const plan = segmento ? (segmento.planes || []).find(p => Number(p.sesiones) === Number(ficha.planSesiones)) : null;
+  if (!segmento || !plan) return { total: 0, tipo: 'actividad_sin_tarifa', sesionesAgendadas: 0 };
+  const numPersonas = Math.max(1, parseInt(ficha.numPersonas) || 1);
+  const precioTotal = segmento.porPersona ? plan.precio * numPersonas : plan.precio;
+  const sesionesAgendadas = sesionesAgendadasFacturablesFichaMes(ficha, trainerKey, mesKey);
+  if (modalidad.tipo === 'bono_vigencia') {
+    const valorSesion = plan.sesiones ? precioTotal / plan.sesiones : 0;
+    return { total: sesionesAgendadas * valorSesion, tipo: 'actividad_bono', sesionesAgendadas, sesionesContratadas: plan.sesiones, precioTotal, actividadId: ficha.actividadEspecialId };
+  }
+  return { total: precioTotal, tipo: 'actividad_mensual', sesionesAgendadas, sesionesContratadas: plan.sesiones, precioTotal, actividadId: ficha.actividadEspecialId };
+}
 function trainerKeyPerfil(p){ return String(p?.trainerKey || '').trim(); }
 function nombrePerfil(p){ return String(p?.nombre || p?.email || p?.trainerKey || '').trim(); }
 function trainerByKey(key){ return perfilesUsuarios.find(p => trainerKeyPerfil(p) === key); }
@@ -285,8 +422,8 @@ function esPerfilOperativo(p){
       const clientes = (agendaData.clientes && agendaData.clientes[key]) || [];
       return Array.isArray(clientes) && clientes.length > 0;
     }
-function centroTrainer(key, perfil){
-      const settings = dbFinanzas.trainerSettings?.[key] || {};
+function centroTrainer(key, perfil, mesKey){
+      const settings = mesKey ? settingsTrainerParaMes(key, mesKey) : (dbFinanzas.trainerSettings?.[key] || {});
       const nombre = nombrePerfil(perfil).toLowerCase();
       // Primero respetamos una asignación manual, siempre que apunte al maestro de centros.
       if (settings.centroId && centroValido(settings.centroId) && settings.centroId !== 'sin_centro') return settings.centroId;
@@ -618,17 +755,29 @@ function calcularCanonCentroYAsignar(c){
 function construirCalculoMes(mesKey = mesActualKey()){
       const centrosBase = { ...getCentros(), sin_centro: { id:'sin_centro', nombre:'Dirección / sin centro', canonFijo:0, canonPt:0, activo:true } };
       const centros = {};
-      Object.keys(centrosBase).forEach(id => centros[id] = { ...centrosBase[id], trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0 });
+      Object.keys(centrosBase).forEach(id => centros[id] = { ...centroParaMes(centrosBase[id], mesKey), trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0 });
       const trainers = [];
       perfilesUsuarios.filter(esPerfilOperativo).forEach(perfil => {
         const key = trainerKeyPerfil(perfil);
         const lista = Array.isArray(agendaData.clientes?.[key]) ? agendaData.clientes[key] : [];
         let facturacion = 0, clientes = 0, fichasActivas = 0, facturacionMensual = 0, facturacionVariable = 0, sesionesBonosSueltas = 0;
         let facturacionAgenda = 0, desviacionAgenda = 0, sesionesMensualesPrevistas = 0, sesionesMensualesAgendadas = 0;
+        let facturacionActividades = 0, clientesActividades = 0, actividadPtNeto = 0, actividadCentroShare = 0, actividadBesoulShare = 0;
         const motivosDesviacion = [];
         lista.forEach(f => {
           if (f?.vinculacion) return;
           if (normalizarEstado(f.estadoCliente || 'activo') !== 'activo') return;
+          if (f.actividadEspecialId) {
+            fichasActivas += 1;
+            clientesActividades += Math.max(1, parseInt(f.numPersonas) || 1);
+            const calcAct = calcularFacturacionActividadFicha(f, key, mesKey);
+            facturacionActividades += calcAct.total;
+            const reparto = distribuirReparto(calcAct.total, repartoEfectivoActividad(f.actividadEspecialId, mesKey).partes);
+            actividadPtNeto += reparto.entrenador || 0;
+            actividadCentroShare += reparto.centro || 0;
+            actividadBesoulShare += reparto.besoul || 0;
+            return;
+          }
           fichasActivas += 1;
           clientes += contarPersonasFicha(f);
           const calcFicha = calcularFacturacionFichaFinanzas(f, key, mesKey);
@@ -646,8 +795,8 @@ function construirCalculoMes(mesKey = mesActualKey()){
             }
           }
         });
-        const settings = dbFinanzas.trainerSettings?.[key] || {};
-        const centroId = centroTrainer(key, perfil);
+        const settings = settingsTrainerParaMes(key, mesKey);
+        const centroId = centroTrainer(key, perfil, mesKey);
         const pactoEspecial = !!settings.pactoEspecial;
         const soloImputacionGastos = TRAINERS_SOLO_IMPUTACION_GASTOS.includes(key);
         const clientesAgendaNoComputados = soloImputacionGastos ? clientes : 0;
@@ -662,24 +811,28 @@ function construirCalculoMes(mesKey = mesActualKey()){
           sesionesMensualesAgendadas = 0;
           motivosDesviacion.length = 0;
           clientes = 0;
+          facturacionActividades = 0; clientesActividades = 0; actividadPtNeto = 0; actividadCentroShare = 0; actividadBesoulShare = 0;
         }
         const aporteCliente = soloImputacionGastos ? 0 : parseNum(settings.aporteIndividualCliente ?? 0) * clientes;
         const reparto = soloImputacionGastos
           ? { pt:0, bs:0, bonus:0, coordinacionBonus:0, sistemaAplicado:'CEO · solo imputación gastos', repartoDetalle:'Bea/Soraya computan como coste de sede, pero sus carteras no generan ingresos BESOUL ni liquidación PT en Finanzas.', fechaAlta:settings.fechaAlta || '', antiguedad:yearsBetween(fechaAltaSettings(settings), fechaReferenciaMes(mesKey)), posteriores:0, elegibleRango2:false, elegibleRango3:false, elegibleCoordinador:false, coordinadorAutorizado:false, sistemaEfectivo:'solo_gastos', ptsActivosCentro:0 }
           : calcularComisionAvanzada(facturacion, settings, { key, centroId, aporteClientes: aporteCliente, fechaReferencia: fechaReferenciaMes(mesKey) });
-        const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, facturacion, facturacionAgenda, desviacionAgenda, sesionesMensualesPrevistas, sesionesMensualesAgendadas, desviacionSesiones: sesionesMensualesPrevistas - sesionesMensualesAgendadas, motivosDesviacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, fichasActivas, soloImputacionGastos, ptNeto:reparto.pt, bsBruto:reparto.bs, pactoEspecial, aporteCliente, aporteCentroCliente: aporteCliente, bonus:reparto.bonus || 0, coordinacionBonus:reparto.coordinacionBonus || 0, sistemaAplicado:reparto.sistemaAplicado, repartoDetalle:reparto.repartoDetalle || '', fechaAlta:reparto.fechaAlta, antiguedad:reparto.antiguedad, posteriores:reparto.posteriores, elegibleRango2:reparto.elegibleRango2, elegibleRango3:reparto.elegibleRango3, elegibleCoordinador:reparto.elegibleCoordinador, coordinadorAutorizado:reparto.coordinadorAutorizado, sistemaEfectivo:reparto.sistemaEfectivo, ptsActivosCentro:reparto.ptsActivosCentro || 0 };
+        const ptNetoTotal = reparto.pt + actividadPtNeto;
+        const bsBrutoTotal = reparto.bs + actividadBesoulShare;
+        const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, facturacion: facturacion + facturacionActividades, facturacionPt: facturacion, facturacionActividades, clientesActividades, actividadCentroShare, facturacionAgenda, desviacionAgenda, sesionesMensualesPrevistas, sesionesMensualesAgendadas, desviacionSesiones: sesionesMensualesPrevistas - sesionesMensualesAgendadas, motivosDesviacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, fichasActivas, soloImputacionGastos, ptNeto:ptNetoTotal, bsBruto:bsBrutoTotal, pactoEspecial, aporteCliente, aporteCentroCliente: aporteCliente, bonus:reparto.bonus || 0, coordinacionBonus:reparto.coordinacionBonus || 0, sistemaAplicado:reparto.sistemaAplicado, repartoDetalle:reparto.repartoDetalle || '', fechaAlta:reparto.fechaAlta, antiguedad:reparto.antiguedad, posteriores:reparto.posteriores, elegibleRango2:reparto.elegibleRango2, elegibleRango3:reparto.elegibleRango3, elegibleCoordinador:reparto.elegibleCoordinador, coordinadorAutorizado:reparto.coordinadorAutorizado, sistemaEfectivo:reparto.sistemaEfectivo, ptsActivosCentro:reparto.ptsActivosCentro || 0 };
         trainers.push(row);
-        if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0 };
+        if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0, ingresosActividades:0 };
         centros[centroId].trainers.push(row);
-        centros[centroId].facturacion += facturacion;
+        centros[centroId].facturacion += facturacion + facturacionActividades;
         centros[centroId].facturacionAgenda += facturacionAgenda;
         centros[centroId].desviacionAgenda += desviacionAgenda;
         centros[centroId].sesionesMensualesPrevistas += sesionesMensualesPrevistas;
         centros[centroId].sesionesMensualesAgendadas += sesionesMensualesAgendadas;
         centros[centroId].canonClientesTotal += aporteCliente;
-        centros[centroId].ptNeto += reparto.pt;
-        centros[centroId].bsBruto += reparto.bs;
-        centros[centroId].clientes += clientes;
+        centros[centroId].ptNeto += ptNetoTotal;
+        centros[centroId].bsBruto += bsBrutoTotal;
+        centros[centroId].clientes += clientes + clientesActividades;
+        centros[centroId].ingresosActividades = (centros[centroId].ingresosActividades || 0) + actividadCentroShare;
       });
       Object.values(centros).forEach(c => {
         // Coste de sede separado en dos capas:
@@ -690,7 +843,7 @@ function construirCalculoMes(mesKey = mesActualKey()){
       });
       const gastos = gastosMes(mesKey);
       const otrosIngresos = otrosIngresosMes(mesKey);
-      const total = Object.values(centros).reduce((acc,c)=>{ acc.facturacion+=c.facturacion; acc.facturacionAgenda+=c.facturacionAgenda||0; acc.desviacionAgenda+=c.desviacionAgenda||0; acc.sesionesMensualesPrevistas+=c.sesionesMensualesPrevistas||0; acc.sesionesMensualesAgendadas+=c.sesionesMensualesAgendadas||0; acc.ptNeto+=c.ptNeto; acc.bsBruto+=c.bsBruto; acc.canones+=c.canon; acc.canonClientesTotal+=c.canonClientesTotal||0; acc.clientes+=c.clientes; return acc; }, {facturacion:0,facturacionAgenda:0,desviacionAgenda:0,sesionesMensualesPrevistas:0,sesionesMensualesAgendadas:0,ptNeto:0,bsBruto:0,canones:0,canonClientesTotal:0,clientes:0});
+      const total = Object.values(centros).reduce((acc,c)=>{ acc.facturacion+=c.facturacion; acc.facturacionAgenda+=c.facturacionAgenda||0; acc.desviacionAgenda+=c.desviacionAgenda||0; acc.sesionesMensualesPrevistas+=c.sesionesMensualesPrevistas||0; acc.sesionesMensualesAgendadas+=c.sesionesMensualesAgendadas||0; acc.ptNeto+=c.ptNeto; acc.bsBruto+=c.bsBruto; acc.canones+=c.canon; acc.canonClientesTotal+=c.canonClientesTotal||0; acc.clientes+=c.clientes; acc.ingresosActividades+=c.ingresosActividades||0; return acc; }, {facturacion:0,facturacionAgenda:0,desviacionAgenda:0,sesionesMensualesPrevistas:0,sesionesMensualesAgendadas:0,ptNeto:0,bsBruto:0,canones:0,canonClientesTotal:0,clientes:0,ingresosActividades:0});
       total.gastos = gastos;
       total.otrosIngresos = otrosIngresos;
       total.ingresosBesoul = total.bsBruto + otrosIngresos;
@@ -889,8 +1042,40 @@ function pintarTablas(res){
   const totalFact = res.current.total.facturacion || 0;
   const centros = Object.values(res.current.centros || {}).filter(c=>c.id !== 'sin_centro' && ((c.trainers||[]).length || c.facturacion || c.canon));
   document.getElementById('tabla-centros').innerHTML = centros.map(c=>`<tr class="hover:bg-slate-950/50"><td class="py-2 font-bold text-white">${escapeHTML(c.nombre)}</td><td>${numero((c.trainers||[]).length)}</td><td>${numero(c.clientes||0)}</td><td class="font-mono">${dinero(c.facturacion||0)}</td><td>${pct(totalFact ? (c.facturacion||0)/totalFact : 0)}</td><td class="font-mono text-red-200">${dinero(c.canonClientesTotal??c.canonClienteTotal??0)}</td><td class="font-mono text-red-300">${dinero(c.canon||0)}</td><td class="font-mono ${(c.bsBruto-c.canon)>=0?'text-cyan-300':'text-red-300'}">${dinero((c.bsBruto||0)-(c.canon||0))}</td></tr>`).join('') || '<tr><td colspan="8" class="py-8 text-center text-slate-500">Sin datos.</td></tr>';
+  const cardsCentros = document.getElementById('cards-centros-mobile');
+  if (cardsCentros) {
+    cardsCentros.innerHTML = centros.map(c => {
+      const neto = (c.bsBruto||0)-(c.canon||0);
+      return `<div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
+        <div class="flex items-start justify-between gap-2">
+          <div><div class="font-bold text-white text-sm">${escapeHTML(c.nombre)}</div><div class="text-[10px] text-slate-500">${numero((c.trainers||[]).length)} PT · ${numero(c.clientes||0)} clientes</div></div>
+          <div class="text-right"><div class="text-[9px] text-slate-500 uppercase font-bold">Neto centro</div><div class="${neto>=0?'text-cyan-300':'text-red-300'} font-black text-sm">${dinero(neto)}</div></div>
+        </div>
+        <div class="grid grid-cols-3 gap-2 text-[10px] pt-2 border-t border-slate-800/60">
+          <div><span class="text-slate-500 block">Fact.</span><span class="text-slate-200 font-semibold">${dinero(c.facturacion||0)}</span></div>
+          <div><span class="text-slate-500 block">% Fact.</span><span class="text-slate-200 font-semibold">${pct(totalFact ? (c.facturacion||0)/totalFact : 0)}</span></div>
+          <div><span class="text-slate-500 block">Coste</span><span class="text-red-300 font-semibold">${dinero(c.canon||0)}</span></div>
+        </div>
+      </div>`;
+    }).join('') || '<div class="py-6 text-center text-slate-500 text-xs">Sin datos.</div>';
+  }
   const trainers = (res.current.trainers || []).filter(t => !document.getElementById('filter-trainer').value || t.key === document.getElementById('filter-trainer').value).filter(t => !document.getElementById('filter-center').value || t.centroId === document.getElementById('filter-center').value).sort((a,b)=>(b.facturacion||0)-(a.facturacion||0)).slice(0,20);
   document.getElementById('tabla-trainers').innerHTML = trainers.map(t=>`<tr class="hover:bg-slate-950/50"><td class="py-2 font-bold text-white">${escapeHTML(t.nombre)}<div class="text-[10px] text-slate-500">${escapeHTML(t.key)}</div></td><td>${escapeHTML(nombreCentro(t.centroId))}</td><td>${numero(t.clientes||0)}</td><td class="font-mono">${dinero(t.facturacion||0)}</td><td class="font-mono text-emerald-300">${dinero(t.bsBruto||0)}</td><td class="font-mono text-red-200">${dinero(t.canonCentroShare||0)}</td><td class="font-mono ${(t.bsNetoCentro||0)>=0?'text-cyan-300':'text-red-300'}">${dinero(t.bsNetoCentro||0)}</td><td class="text-cyan-300 text-[10px]">${escapeHTML(t.sistemaAplicado||'---')}</td></tr>`).join('') || '<tr><td colspan="8" class="py-8 text-center text-slate-500">Sin datos.</td></tr>';
+  const cardsTrainers = document.getElementById('cards-trainers-mobile');
+  if (cardsTrainers) {
+    cardsTrainers.innerHTML = trainers.map(t => `<div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
+      <div class="flex items-start justify-between gap-2">
+        <div><div class="font-bold text-white text-sm">${escapeHTML(t.nombre)}</div><div class="text-[10px] text-slate-500">${escapeHTML(nombreCentro(t.centroId))} · ${numero(t.clientes||0)} clientes</div></div>
+        <div class="text-right"><div class="text-[9px] text-slate-500 uppercase font-bold">Neto Besoul</div><div class="${(t.bsNetoCentro||0)>=0?'text-cyan-300':'text-red-300'} font-black text-sm">${dinero(t.bsNetoCentro||0)}</div></div>
+      </div>
+      <div class="grid grid-cols-3 gap-2 text-[10px] pt-2 border-t border-slate-800/60">
+        <div><span class="text-slate-500 block">Fact.</span><span class="text-slate-200 font-semibold">${dinero(t.facturacion||0)}</span></div>
+        <div><span class="text-slate-500 block">BESOUL bruto</span><span class="text-emerald-300 font-semibold">${dinero(t.bsBruto||0)}</span></div>
+        <div><span class="text-slate-500 block">Canon</span><span class="text-red-200 font-semibold">${dinero(t.canonCentroShare||0)}</span></div>
+      </div>
+      <div class="text-[10px] text-cyan-300">${escapeHTML(t.sistemaAplicado||'---')}</div>
+    </div>`).join('') || '<div class="py-6 text-center text-slate-500 text-xs">Sin datos.</div>';
+  }
 }
 function pintarHeatmap(res){
   const hours=[]; for(let h=6; h<22; h++) hours.push(`${String(h).padStart(2,'0')}:00`);

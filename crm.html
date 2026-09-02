@@ -24,8 +24,10 @@
     ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
     @media (max-width: 640px) {
       input, select, textarea { font-size: 16px !important; }
-      #modal-lead { align-items: flex-start !important; padding: 0.5rem !important; }
-      #modal-lead-panel { max-height: 94vh; overflow-y: auto; padding: 1rem !important; margin-top: 0.5rem !important; margin-bottom: 0.5rem !important; }
+      /* Bottom-sheet en vez de panel anclado arriba, mismo patrón ya validado en agenda.html
+         (align-items:flex-end + radio solo arriba) -- ver DESIGN_SYSTEM_BESOUL.md #9. */
+      #modal-lead { align-items: flex-end !important; padding: 0 !important; }
+      #modal-lead-panel { max-height: 92dvh; overflow-y: auto; width: 100% !important; max-width: none !important; border-radius: 1.5rem 1.5rem 0 0 !important; margin: 0 !important; padding: 1rem !important; }
       #modal-lead .modal-actions-sticky { position: sticky; bottom: -1rem; background: #0f172a; padding-top: 0.75rem; padding-bottom: 0.25rem; }
     }
   </style>
@@ -44,15 +46,15 @@
       </div>
       <div class="space-y-3 text-xs">
         <div>
-          <label class="text-slate-400 block mb-1">Email *</label>
-          <input type="email" id="login-email" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="tu@email.com" autocomplete="email">
+          <label for="login-email" class="text-slate-400 block mb-1">Email *</label>
+          <input type="email" id="login-email" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="tu@email.com" autocomplete="email">
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Contraseña</label>
-          <input type="password" id="login-pass" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="••••••••" autocomplete="current-password">
+          <label for="login-pass" class="text-slate-400 block mb-1">Contraseña</label>
+          <input type="password" id="login-pass" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="••••••••" autocomplete="current-password">
         </div>
-        <button onclick="loginCRM()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-lg transition uppercase tracking-wider mt-2">Entrar al CRM</button>
-        <p id="auth-error" class="hidden text-red-400 text-[11px] leading-relaxed"></p>
+        <button onclick="loginCRM()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-xl transition uppercase tracking-wider mt-2">Entrar al CRM</button>
+        <p id="auth-error" class="hidden text-red-400 text-[11px] leading-relaxed" role="alert" aria-live="assertive"></p>
       </div>
     </div>
   </div>
@@ -70,12 +72,28 @@
         </div>
       </div>
       <div class="flex items-center gap-2 flex-wrap justify-end">
+        <a id="nav-dashboard" href="dashboard.html" class="hidden px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">Dashboard</a>
         <a href="agenda.html" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">Agenda</a>
-        <a href="finanzas.html" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">Finanzas</a>
+        <a id="nav-finanzas" href="finanzas.html" class="hidden px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">Finanzas</a>
         <button onclick="abrirModalLead()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-500 text-slate-950 hover:bg-amber-600 transition">+ Nuevo lead</button>
         <button onclick="logoutCRM()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-400 border border-slate-800 hover:text-white transition">Salir</button>
       </div>
     </header>
+
+    <!-- Navegación global inferior (mobile): igual criterio de permisos que el header --
+         los enlaces a Dashboard/Finanzas solo se muestran a admin (esAdmin() real, no un
+         permiso visual inventado aparte). CRM no tiene bottom-nav propia hoy, así que esta
+         es la única barra inferior de esta página (sin conflicto de dos barras apiladas,
+         a diferencia de agenda.html, que conserva su tab-bar interna sin tocar). -->
+    <nav id="bottom-nav-global" class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800" style="padding-bottom: env(safe-area-inset-bottom);">
+      <div id="bottom-nav-items" class="grid grid-cols-3 text-center">
+        <a id="bn-dashboard" href="dashboard.html" class="hidden flex-col items-center gap-0.5 py-2.5 text-slate-500"><span class="text-base leading-none">◆</span><span class="text-[10px] font-bold">Dashboard</span></a>
+        <a href="agenda.html" class="flex flex-col items-center gap-0.5 py-2.5 text-slate-500"><span class="text-base leading-none">▤</span><span class="text-[10px] font-bold">Agenda</span></a>
+        <a href="crm.html" class="flex flex-col items-center gap-0.5 py-2.5 text-cyan-400"><span class="text-base leading-none">◎</span><span class="text-[10px] font-bold">CRM</span></a>
+        <a id="bn-finanzas" href="finanzas.html" class="hidden flex-col items-center gap-0.5 py-2.5 text-slate-500"><span class="text-base leading-none">€</span><span class="text-[10px] font-bold">Finanzas</span></a>
+        <a href="index.html" class="flex flex-col items-center gap-0.5 py-2.5 text-slate-500"><span class="text-base leading-none">⋯</span><span class="text-[10px] font-bold">Más</span></a>
+      </div>
+    </nav>
 
     <section class="bg-slate-950 px-6 py-4 border-b border-slate-900 space-y-4">
       <div class="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-10 gap-3 text-center text-xs">
@@ -93,33 +111,33 @@
 
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-6 gap-3 text-xs">
         <div>
-          <label class="text-slate-400 block mb-1">Mes</label>
-          <input type="month" id="filter-month" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+          <label for="filter-month" class="text-slate-400 block mb-1">Mes</label>
+          <input type="month" id="filter-month" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Centro</label>
-          <select id="filter-center" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+          <label for="filter-center" class="text-slate-400 block mb-1">Centro</label>
+          <select id="filter-center" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"></select>
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Entrenador</label>
-          <select id="filter-trainer" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+          <label for="filter-trainer" class="text-slate-400 block mb-1">Entrenador</label>
+          <select id="filter-trainer" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"></select>
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Estado</label>
-          <select id="filter-status" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+          <label for="filter-status" class="text-slate-400 block mb-1">Estado</label>
+          <select id="filter-status" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"></select>
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Fuente</label>
-          <select id="filter-source" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+          <label for="filter-source" class="text-slate-400 block mb-1">Fuente</label>
+          <select id="filter-source" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"></select>
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Buscar</label>
-          <input type="text" id="filter-search" oninput="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="nombre, teléfono, nota...">
+          <label for="filter-search" class="text-slate-400 block mb-1">Buscar</label>
+          <input type="text" id="filter-search" oninput="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="nombre, teléfono, nota...">
         </div>
       </div>
     </section>
 
-    <main class="flex-1 p-6 grid grid-cols-1 xl:grid-cols-4 gap-6">
+    <main class="flex-1 p-6 pb-24 md:pb-6 grid grid-cols-1 xl:grid-cols-4 gap-6">
       <section class="xl:col-span-3 bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col min-h-[700px]">
         <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
           <div>
@@ -128,7 +146,7 @@
           </div>
           <button onclick="exportarLeadsCSV()" class="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">Export CSV</button>
         </div>
-        <div class="overflow-x-auto flex-1">
+        <div class="hidden md:block overflow-x-auto flex-1">
           <table class="w-full min-w-[1200px] text-left text-xs border-collapse">
             <thead>
               <tr class="text-slate-400 uppercase font-bold border-b border-slate-800">
@@ -146,6 +164,7 @@
             <tbody id="lead-table-body" class="divide-y divide-slate-800/60 text-slate-300"></tbody>
           </table>
         </div>
+        <div id="lead-cards-mobile" class="md:hidden flex-1 space-y-3 overflow-y-auto"></div>
       </section>
 
       <aside class="bg-slate-900 border border-slate-800 rounded-xl p-4 min-h-[700px]">
@@ -155,7 +174,7 @@
     </main>
   </div>
 
-  <div id="modal-lead" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+  <div id="modal-lead" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div id="modal-lead-panel" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 w-full max-w-5xl space-y-4 my-2 sm:my-8 max-h-[94vh] overflow-y-auto">
       <div class="flex items-start justify-between gap-4">
         <div>
@@ -495,6 +514,15 @@ async function iniciarSesionAutenticada(user) {
   document.getElementById('lbl-usuario').innerText = nombreUsuarioPerfil();
   document.getElementById('lbl-rol').innerText = esAdmin() ? 'Administrador' : 'Entrenador';
   document.getElementById('filter-month').value = mesActualInput();
+  // Dashboard/Finanzas son admin-only (bloqueado en su propio login) -- el enlace solo se
+  // muestra si el usuario real puede entrar, nunca un permiso visual inventado aparte.
+  if (esAdmin()) {
+    ['nav-dashboard','nav-finanzas','bn-dashboard','bn-finanzas'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.classList.remove('hidden'); if (el.closest('#bottom-nav-items')) el.classList.add('flex'); }
+    });
+    document.getElementById('bottom-nav-items')?.classList.replace('grid-cols-3','grid-cols-5');
+  }
 
   await cargarCentros();
   await cargarUsuariosBesoul();
@@ -704,6 +732,10 @@ function aplicarFiltros() {
   const { iniISO, finISO } = inicioFinMes(month);
 
   leadsFiltrados = leads.filter(l => {
+    // Leads dados de baja lógica (eliminarLead) nunca vuelven a aparecer en el tablero activo,
+    // igual que un cliente en 'baja' desaparece de Agenda — el documento se conserva en Firestore
+    // (con eliminadoEn/eliminadoPor) por si hace falta auditar o recuperar manualmente.
+    if (l.estado === 'Eliminado') return false;
     const created = l.createdAt || l.updatedAt || '';
     if (created && (created < iniISO || created >= finISO)) return false;
     if (centro && normalizarCentroId(l.centroId) !== centro) return false;
@@ -737,10 +769,12 @@ function badgeEstado(estado) {
 }
 function renderTablaLeads() {
   const tbody = document.getElementById('lead-table-body');
+  const cardsWrap = document.getElementById('lead-cards-mobile');
   tbody.innerHTML = '';
   document.getElementById('lead-count-label').innerText = `${leadsFiltrados.length} leads filtrados`;
   if (!leadsFiltrados.length) {
     tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-500">No hay leads con estos filtros.</td></tr>`;
+    if (cardsWrap) cardsWrap.innerHTML = `<div class="py-8 text-center text-slate-500 text-xs">No hay leads con estos filtros.</div>`;
     return;
   }
   leadsFiltrados.forEach(l => {
@@ -770,6 +804,39 @@ function renderTablaLeads() {
       </td>`;
     tbody.appendChild(tr);
   });
+  renderCardsLeadsMobile();
+}
+
+// Vista mobile de la misma lista (leadsFiltrados) que renderTablaLeads() -- mismos datos, mismo
+// abrirModalLead(id) como única acción por fila; nunca una fuente de estado independiente. Tabla
+// (desktop, md:block) y cards (mobile, md:hidden) se alternan por CSS, no por JS, así que ambas
+// siempre reflejan el mismo filtrado sin duplicar lógica de negocio, solo la plantilla visual.
+function renderCardsLeadsMobile() {
+  const cont = document.getElementById('lead-cards-mobile');
+  if (!cont) return;
+  cont.innerHTML = leadsFiltrados.map(l => {
+    const ultimoEvento = (l.historial || [])[0];
+    return `
+    <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0">
+          <div class="font-bold text-white text-sm truncate">${escapeHTML(l.nombre)}</div>
+          <div class="text-[11px] text-slate-500 truncate">${escapeHTML(l.telefono)}${l.email ? ' · ' + escapeHTML(l.email) : ''}</div>
+        </div>
+        ${badgeEstado(l.estado)}
+      </div>
+      <div class="grid grid-cols-2 gap-x-3 gap-y-2 text-[11px] pt-2 border-t border-slate-800/60">
+        <div><span class="text-slate-500 block">Entrenador</span><span class="text-slate-200 font-semibold">${escapeHTML(textoTrainer(l.trainerKey))}</span></div>
+        <div><span class="text-slate-500 block">Origen</span><span class="text-slate-200 font-semibold">${escapeHTML(labelFuenteCRM(l.fuente))}</span></div>
+        <div><span class="text-slate-500 block">Centro</span><span class="text-slate-200 font-semibold">${escapeHTML(textoCentro(l.centroId))}</span></div>
+        <div><span class="text-slate-500 block">Próx. acción</span><span class="text-slate-200 font-semibold">${escapeHTML(l.proximaAccion || '---')}</span></div>
+      </div>
+      <div class="flex items-center justify-between gap-2 pt-1">
+        <span class="text-[10px] text-slate-500 truncate">${ultimoEvento ? escapeHTML(ultimoEvento.tipo) + ' · ' + formatoFecha(ultimoEvento.fecha) : 'Sin actividad registrada'}</span>
+        <button onclick="abrirModalLead('${l.id}')" class="shrink-0 bg-amber-500/10 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-lg font-bold text-[11px]">Abrir</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function contarPor(lista, campo) {
@@ -1198,12 +1265,40 @@ async function sincronizarClienteAgendaDesdeLeadConvertido(leadId) {
     });
   } catch (err) {
     console.error('No se pudo actualizar la ficha de Agenda desde CRM:', err);
+    // Se relanza a propósito: el único llamador (guardarLead) ya envuelve esto en su propio
+    // try/catch con alert() al usuario. Si se traga el error aquí, guardarLead cierra el modal
+    // como si todo hubiera ido bien aunque la ficha de Agenda se haya quedado desincronizada del
+    // lead -- exactamente el caso de "falso éxito" ya corregido para WhatsApp en agenda.html.
+    // El lead en sí puede haberse guardado bien (ver guardarLead) -- el mensaje lo aclara.
+    throw new Error('El lead se guardó, pero no se pudo sincronizar su ficha vinculada en Agenda. Revisa la ficha del cliente manualmente e inténtalo de nuevo.');
+  }
+}
+
+async function fusionarHistorialConServidor(leadId, historialLocal) {
+  // eventosTemporales/historialLocal es una foto tomada al ABRIR el modal. Si otra persona añadió
+  // una entrada de historial a este mismo lead mientras el modal seguía abierto, un guardado
+  // directo con {merge:true} reemplazaría el array entero y esa entrada desaparecería sin aviso
+  // (Firestore no fusiona arrays elemento a elemento). Se vuelve a leer el servidor justo antes de
+  // guardar y se añaden las entradas que falten localmente, nunca al revés.
+  if (!leadId) return historialLocal;
+  try {
+    const snap = await db.collection('besoulLeads').doc(leadId).get();
+    const historialServidor = Array.isArray(snap.data()?.historial) ? snap.data().historial : [];
+    const firma = e => `${e?.fecha || ''}|${e?.texto || ''}|${e?.userEmail || ''}`;
+    const firmasLocales = new Set(historialLocal.map(firma));
+    const soloEnServidor = historialServidor.filter(e => !firmasLocales.has(firma(e)));
+    if (!soloEnServidor.length) return historialLocal;
+    return [...historialLocal, ...soloEnServidor].sort((a, b) => String(b?.fecha || '').localeCompare(String(a?.fecha || '')));
+  } catch (err) {
+    console.error('No se pudo fusionar historial concurrente, se guarda solo con los cambios locales:', err);
+    return historialLocal;
   }
 }
 
 async function guardarLead() {
   try {
     const data = recogerLeadFormulario();
+    if (leadEditandoId) data.historial = await fusionarHistorialConServidor(leadEditandoId, data.historial);
     data.updatedAt = ahoraISO();
     data.updatedByEmail = perfil.email;
     data.updatedByName = nombreUsuarioPerfil();
@@ -1227,10 +1322,20 @@ async function guardarLead() {
   }
 }
 async function eliminarLead() {
+  // Baja lógica, no hard-delete: igual que borrarFichaCliente en agenda.html y el flujo de
+  // solicitudes de eliminación, se conserva el documento (histórico/auditoría) en vez de
+  // destruirlo. 'Perdido' ya existe como estado de retiro normal; 'Eliminado' se reserva para
+  // cuando el propio admin decide quitar el lead de la vista activa (p.ej. duplicado, spam).
   if (!leadEditandoId || !esAdmin()) return;
-  if (!confirm('¿Eliminar este lead? Esta acción no borra ningún cliente de Agenda.')) return;
+  if (!confirm('¿Eliminar este lead? Se marcará como eliminado y dejará de aparecer en el tablero activo, pero no se borra el registro (puedes recuperarlo cambiando su estado). Esta acción no borra ningún cliente de Agenda.')) return;
   await sincronizarPruebaAgendaDesdeLead(leadEditandoId, { estado:'Eliminado', trainerKey:'' }, false);
-  await db.collection('besoulLeads').doc(leadEditandoId).delete();
+  await db.collection('besoulLeads').doc(leadEditandoId).set({
+    estado: 'Eliminado',
+    eliminadoEn: firebase.firestore.FieldValue.serverTimestamp(),
+    eliminadoPor: perfil.email,
+    updatedAt: new Date().toISOString(),
+    updatedByEmail: perfil.email
+  }, { merge:true });
   cerrarModalLead();
 }
 
@@ -1274,42 +1379,63 @@ async function convertirLeadEnCliente() {
     creadoDesdeCRMEn: ahoraISO()
   };
 
-  await db.runTransaction(async tx => {
-    const agendaRef = db.collection('besoulSuite').doc('agenda');
-    const leadRef = db.collection('besoulLeads').doc(leadEditandoId);
-    const agendaSnap = await tx.get(agendaRef);
-    const agendaData = agendaSnap.exists ? agendaSnap.data() : {};
-    const clientes = agendaData.clientes || {};
-    const agenda = agendaData.agenda || {};
-    eliminarPruebaAgendaEnObjeto(agenda, leadEditandoId);
-    if (!Array.isArray(clientes[trainerKey])) clientes[trainerKey] = [];
-    const existe = clientes[trainerKey].some(c => c.leadId === leadEditandoId || c.id === nuevoClienteId);
-    if (!existe) clientes[trainerKey].push(nuevoCliente);
-    tx.set(agendaRef, {
-      clientes,
-      agenda,
-      ultimaActualizacionLocal: ahoraISO(),
-      actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge:true });
-    tx.set(leadRef, {
-      ...leadActualizado,
-      estado: 'Convertido a cliente',
-      convertido: true,
-      convertedAt: ahoraISO(),
-      convertedByEmail: perfil.email,
-      convertedByName: nombreUsuarioPerfil(),
-      convertedTrainerKey: trainerKey,
-      convertedClientId: nuevoClienteId,
-      agendaPruebaVisible: false,
-      agendaPruebaClave: '',
-      agendaPruebaError: '',
-      updatedAt: ahoraISO(),
-      historial: [
-        { tipo:'Conversión', texto:`Lead convertido en cliente de Agenda bajo ${textoTrainer(trainerKey)}.`, fecha:ahoraISO(), usuario:nombreUsuarioPerfil(), userEmail:perfil.email },
-        ...(leadActualizado.historial || [])
-      ]
-    }, { merge:true });
-  });
+  const btnConvert = document.getElementById('btn-convert');
+  if (btnConvert) { btnConvert.disabled = true; btnConvert.classList.add('opacity-50','pointer-events-none'); }
+  // clienteIdFinal se reasigna DENTRO de la transacción en cada intento/reintento -- nunca fijo
+  // como nuevoClienteId, que solo describe el cliente que ESTE intento crearía si gana la carrera.
+  // Firestore reintenta automáticamente la transacción si el documento cambió entre la lectura y
+  // el commit (dos conversiones casi simultáneas del mismo lead): en el reintento, si otro intento
+  // ya creó el cliente (detectado por leadId, no por el id fijo), reutilizamos su id REAL en vez de
+  // escribir en el lead un convertedClientId que apunta a un cliente que nunca llegó a crearse.
+  let clienteIdFinal = nuevoClienteId;
+  try {
+    await db.runTransaction(async tx => {
+      const agendaRef = db.collection('besoulSuite').doc('agenda');
+      const leadRef = db.collection('besoulLeads').doc(leadEditandoId);
+      const agendaSnap = await tx.get(agendaRef);
+      const agendaData = agendaSnap.exists ? agendaSnap.data() : {};
+      const clientes = agendaData.clientes || {};
+      const agenda = agendaData.agenda || {};
+      eliminarPruebaAgendaEnObjeto(agenda, leadEditandoId);
+      if (!Array.isArray(clientes[trainerKey])) clientes[trainerKey] = [];
+      const existente = clientes[trainerKey].find(c => c.leadId === leadEditandoId);
+      if (existente) {
+        clienteIdFinal = existente.id;
+      } else {
+        clientes[trainerKey].push(nuevoCliente);
+        clienteIdFinal = nuevoClienteId;
+      }
+      tx.set(agendaRef, {
+        clientes,
+        agenda,
+        ultimaActualizacionLocal: ahoraISO(),
+        actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge:true });
+      tx.set(leadRef, {
+        ...leadActualizado,
+        estado: 'Convertido a cliente',
+        convertido: true,
+        convertedAt: ahoraISO(),
+        convertedByEmail: perfil.email,
+        convertedByName: nombreUsuarioPerfil(),
+        convertedTrainerKey: trainerKey,
+        convertedClientId: clienteIdFinal,
+        agendaPruebaVisible: false,
+        agendaPruebaClave: '',
+        agendaPruebaError: '',
+        updatedAt: ahoraISO(),
+        historial: [
+          { tipo:'Conversión', texto:`Lead convertido en cliente de Agenda bajo ${textoTrainer(trainerKey)}.`, fecha:ahoraISO(), usuario:nombreUsuarioPerfil(), userEmail:perfil.email },
+          ...(leadActualizado.historial || [])
+        ]
+      }, { merge:true });
+    });
+  } catch (err) {
+    console.error(err);
+    alert('No se ha podido convertir el lead. Revisa tu conexión e inténtalo de nuevo.');
+    if (btnConvert) { btnConvert.disabled = false; btnConvert.classList.remove('opacity-50','pointer-events-none'); }
+    return;
+  }
   alert('Cliente creado en Agenda. Revisa su ficha para completar tarifa, contrato y datos operativos.');
   cerrarModalLead();
 }
