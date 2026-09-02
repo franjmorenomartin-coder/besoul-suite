@@ -200,11 +200,11 @@
                 padding:1rem !important;
                 margin:0 !important;
             }
-            #modal-disponibilidad-reservas, #modal-solicitudes-reservas, #modal-historico-cliente, #modal-solicitudes-eliminacion {
+            #modal-disponibilidad-reservas, #modal-solicitudes-reservas, #modal-historico-cliente, #modal-solicitudes-eliminacion, #modal-avisos-manana {
                 align-items:flex-end !important;
                 padding:0 !important;
             }
-            #modal-disponibilidad-reservas > div, #modal-solicitudes-reservas > div, #modal-historico-cliente > div, #modal-solicitudes-eliminacion > div {
+            #modal-disponibilidad-reservas > div, #modal-solicitudes-reservas > div, #modal-historico-cliente > div, #modal-solicitudes-eliminacion > div, #modal-avisos-manana > div {
                 width:100% !important;
                 max-width:none !important;
                 max-height:90dvh !important;
@@ -316,6 +316,7 @@
 
                 <button onclick="abrirModalDisponibilidadReservas()" class="bs-btn-primary px-4 py-2.5 text-sm rounded-xl transition">+ Disponibilidad</button>
                 <button onclick="abrirModalSolicitudesReservas()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Reservas <span id="badge-reservas-pendientes" class="hidden ml-1 bg-emerald-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
+                <button onclick="abrirModalAvisosManana()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Avisos mañana <span id="badge-avisos-manana" class="hidden ml-1 bg-cyan-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
                 <button id="btn-admin-entrenadores" onclick="abrirModalEntrenadores()" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Entrenadores</button>
                 <button id="btn-admin-solicitudes-eliminacion" onclick="abrirModalSolicitudesEliminacion()" class="hidden relative bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Solicitudes <span id="badge-solicitudes-eliminacion" class="hidden ml-1 bg-red-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
 
@@ -1096,6 +1097,33 @@ miércoles 07:00-09:00"></textarea>
                 <button onclick="cerrarModalSolicitudesEliminacion()" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
             </div>
             <div id="solicitudes-eliminacion-lista" class="space-y-2"></div>
+        </div>
+    </div>
+
+    <!-- MODAL AVISOS DE MAÑANA (WhatsApp click-to-chat) -->
+    <div id="modal-avisos-manana" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 w-full max-w-lg space-y-4 my-2 sm:my-8 max-h-[calc(100dvh-1rem)] overflow-y-auto">
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <h3 class="text-sm font-bold text-cyan-300 uppercase tracking-wider">Avisos de mañana</h3>
+                    <p class="text-xs text-slate-400 mt-1"><span id="lbl-avisos-manana-fecha">---</span> · pulsa WhatsApp para avisar a cada cliente. Nunca se envía nada automáticamente.</p>
+                </div>
+                <button onclick="cerrarModalAvisosManana()" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
+            </div>
+            <div id="lista-avisos-manana" class="space-y-2"></div>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIRMACIÓN + OFERTA WHATSAPP TRAS UNA ACCIÓN (motor único, ver abrirWhatsApp/ofrecerWhatsApp) -->
+    <div id="modal-whatsapp-offer" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 w-full max-w-sm space-y-4 text-center">
+            <div class="text-3xl text-emerald-400">✓</div>
+            <div id="whatsapp-offer-titulo" class="text-sm font-bold text-white">Acción realizada</div>
+            <div id="whatsapp-offer-detalle" class="text-xs text-slate-400">---</div>
+            <div class="flex flex-col gap-2 pt-2">
+                <button id="whatsapp-offer-btn" onclick="confirmarEnvioWhatsAppOfrecido()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-3 rounded-lg text-sm">Enviar WhatsApp</button>
+                <button onclick="cerrarModalWhatsAppOffer()" class="w-full bg-slate-800 text-slate-300 font-bold py-2 rounded-lg text-xs">Terminar</button>
+            </div>
         </div>
     </div>
 
@@ -1948,6 +1976,163 @@ miércoles 07:00-09:00"></textarea>
 
             return fecha.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
+        }
+
+        // === BESOUL WHATSAPP CLICK-TO-CHAT · motor único (MVP) ===
+        // Sin infraestructura externa (nada de WhatsApp Business API/Twilio/webhooks): el PT/admin
+        // siempre pulsa un botón explícito y se abre wa.me con el mensaje precargado. wa.me no
+        // informa de entrega/lectura, así que nunca se afirma "enviado"/"entregado"/"leído" —
+        // como mucho, "WhatsApp abierto". Un único motor centralizado (no reimplementar por flujo).
+        function normalizarTelefonoWhatsApp(telefono) {
+            if (!telefono) return null;
+            let t = String(telefono).replace(/[^\d+]/g, '');
+            if (t.startsWith('+')) t = t.slice(1);
+            if (t.startsWith('00')) t = t.slice(2);
+            // Móvil/fijo español de 9 dígitos sin prefijo de país -> anteponer 34. Cualquier otro
+            // número (ya con prefijo, o de otro país) se deja tal cual, sin duplicar prefijos.
+            if (/^[6789]\d{8}$/.test(t)) t = '34' + t;
+            if (!/^\d{8,15}$/.test(t)) return null;
+            return t;
+        }
+        const BS_WHATSAPP_PLANTILLAS = {
+            reminder_tomorrow: d => `Hola ${d.nombre}, te recordamos tu sesión${d.actividad ? ` de ${d.actividad}` : ''} mañana a las ${d.hora} en ${d.centro}. ¡Te esperamos!`,
+            reservation_accepted: d => `Hola ${d.nombre}, tu reserva${d.actividad ? ` de ${d.actividad}` : ''} ha sido confirmada para ${d.fecha} a las ${d.hora} en ${d.centro}. ¡Te esperamos!`,
+            reservation_rejected: d => `Hola ${d.nombre}, no hemos podido confirmar tu reserva para ${d.fecha} a las ${d.hora}. Puedes consultar otras franjas disponibles o contactar con nosotros.`,
+            appointment_created: d => `Hola ${d.nombre}, hemos agendado tu sesión para ${d.fecha} a las ${d.hora} en ${d.centro}. ¡Te esperamos!`,
+            appointment_rescheduled: d => `Hola ${d.nombre}, tu sesión ha sido actualizada. La nueva fecha es ${d.fecha} a las ${d.hora} en ${d.centro}.`,
+            appointment_cancelled: d => `Hola ${d.nombre}, te informamos de que tu sesión prevista para ${d.fecha} a las ${d.hora} ha sido cancelada. Contacta con nosotros si necesitas reprogramarla.`
+        };
+        function crearMensajeWhatsApp(tipo, datos) {
+            const plantilla = BS_WHATSAPP_PLANTILLAS[tipo];
+            return plantilla ? plantilla(datos || {}) : '';
+        }
+        function crearUrlWhatsApp(telefono, mensaje) {
+            const normalizado = normalizarTelefonoWhatsApp(telefono);
+            if (!normalizado) return null;
+            return `https://wa.me/${normalizado}?text=${encodeURIComponent(mensaje || '')}`;
+        }
+        function abrirWhatsApp(telefono, mensaje) {
+            const url = crearUrlWhatsApp(telefono, mensaje);
+            if (!url) { alert('No se puede abrir WhatsApp: revisa el teléfono de este cliente.'); return; }
+            window.open(url, '_blank', 'noopener');
+        }
+        function centroNombreEntrenador(trainerKey) {
+            return dbCredenciales[trainerKey]?.centroNombre || dbCredenciales[trainerKey]?.centroId || 'BESOUL';
+        }
+        // clave = "YYYY-MM-DD_HH:MM" -> {fecha:"DD/MM/YYYY", hora:"HH:MM"} para las plantillas.
+        function fechaHoraLegibleDesdeClave(clave) {
+            const partes = String(clave || '').split('_');
+            const fechaISO = partes[0] || '';
+            const hora = partes[1] || '';
+            const d = fechaISO ? new Date(fechaISO + 'T00:00:00') : null;
+            return { fecha: d && !Number.isNaN(d.getTime()) ? formatoFechaCorta(d) : fechaISO, hora };
+        }
+
+        // Oferta genérica "acción realizada -> ¿enviar WhatsApp?" reutilizable desde cualquier
+        // flujo (nueva cita, reprogramación, cancelación, reserva aceptada/rechazada...). Nunca se
+        // abre WhatsApp automáticamente: siempre requiere el clic explícito del botón del modal.
+        let bsWhatsAppOfferPendiente = null;
+        function ofrecerWhatsApp(tipo, datos, tituloAccion) {
+            bsWhatsAppOfferPendiente = { tipo, datos: datos || {} };
+            const el = document.getElementById('modal-whatsapp-offer');
+            if (!el) return;
+            const titulo = document.getElementById('whatsapp-offer-titulo');
+            const detalle = document.getElementById('whatsapp-offer-detalle');
+            if (titulo) titulo.innerText = tituloAccion || 'Acción realizada';
+            if (detalle) detalle.innerText = (datos && datos.nombre) ? datos.nombre : 'Cliente';
+            const btn = document.getElementById('whatsapp-offer-btn');
+            const sinTelefono = !normalizarTelefonoWhatsApp(datos && datos.telefono);
+            if (btn) {
+                btn.disabled = sinTelefono;
+                btn.innerText = sinTelefono ? 'Revisar teléfono' : 'Enviar WhatsApp';
+                btn.className = sinTelefono
+                    ? 'w-full bg-slate-800 text-slate-500 font-bold py-3 rounded-lg text-sm cursor-not-allowed'
+                    : 'w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-3 rounded-lg text-sm';
+            }
+            el.classList.remove('hidden');
+        }
+        function confirmarEnvioWhatsAppOfrecido() {
+            if (!bsWhatsAppOfferPendiente) return;
+            const { tipo, datos } = bsWhatsAppOfferPendiente;
+            abrirWhatsApp(datos.telefono, crearMensajeWhatsApp(tipo, datos));
+        }
+        function cerrarModalWhatsAppOffer() {
+            document.getElementById('modal-whatsapp-offer')?.classList.add('hidden');
+            bsWhatsAppOfferPendiente = null;
+        }
+
+        // === Avisos de mañana ===
+        function fechaMananaISO() {
+            const d = new Date();
+            d.setDate(d.getDate() + 1);
+            return formatoFechaLocal(d);
+        }
+        function listaAvisosManana() {
+            const manana = fechaMananaISO();
+            const agendaDia = dbAgenda[entrenadorVisto] || {};
+            const avisos = [];
+            Object.keys(agendaDia).forEach(clave => {
+                const partes = clave.split('_');
+                const fechaClave = partes[0];
+                const hora = partes[1] || '';
+                if (fechaClave !== manana) return;
+                const cita = agendaDia[clave];
+                if (!cita || esCitaPruebaCRM(cita)) return;
+                const actividad = cita.actividadEspecialId ? nombreModalidadActividadParaFicha(cita.actividadEspecialId, cita.modalidadId, cita.segmentoId) : '';
+                if (esGrupoAbierto(cita)) {
+                    asistentesGrupoAbierto(cita).forEach(a => {
+                        avisos.push({ hora, nombre: a.nombre || 'Cliente', telefono: a.telefono || a.phone || '', actividad, clave });
+                    });
+                } else if (Array.isArray(cita.integrantesObj) && cita.integrantesObj.length) {
+                    cita.integrantesObj.forEach(m => {
+                        avisos.push({ hora, nombre: m.nombre || 'Cliente', telefono: m.telefono || '', actividad, clave });
+                    });
+                } else {
+                    avisos.push({ hora, nombre: cita.nombre || 'Cliente', telefono: cita.telefono || '', actividad, clave });
+                }
+            });
+            avisos.sort((a, b) => a.hora.localeCompare(b.hora));
+            return avisos;
+        }
+        function actualizarBadgeAvisosManana() {
+            const badge = document.getElementById('badge-avisos-manana');
+            if (!badge) return;
+            const n = listaAvisosManana().length;
+            badge.innerText = n;
+            badge.classList.toggle('hidden', n === 0);
+        }
+        let bsAvisosMananaCache = [];
+        function abrirModalAvisosManana() {
+            renderAvisosManana();
+            document.getElementById('modal-avisos-manana')?.classList.remove('hidden');
+        }
+        function cerrarModalAvisosManana() {
+            document.getElementById('modal-avisos-manana')?.classList.add('hidden');
+        }
+        function renderAvisosManana() {
+            const cont = document.getElementById('lista-avisos-manana');
+            if (!cont) return;
+            bsAvisosMananaCache = listaAvisosManana();
+            const lbl = document.getElementById('lbl-avisos-manana-fecha');
+            if (lbl) lbl.innerText = formatoFechaCorta(new Date(fechaMananaISO() + 'T00:00:00'));
+            if (!bsAvisosMananaCache.length) { cont.innerHTML = '<div class="text-xs text-slate-500 text-center py-8">No hay sesiones agendadas para mañana.</div>'; return; }
+            const centro = centroNombreEntrenador(entrenadorVisto);
+            cont.innerHTML = bsAvisosMananaCache.map((a, idx) => {
+                const tieneTelefono = !!normalizarTelefonoWhatsApp(a.telefono);
+                return `<div class="flex items-center justify-between gap-3 bg-slate-950 border border-slate-800 rounded-xl p-3">
+                    <div class="min-w-0">
+                        <div class="text-sm font-bold text-white truncate">${escapeHTML(a.hora)} · ${escapeHTML(a.nombre)}</div>
+                        <div class="text-[10px] text-slate-500 truncate">${escapeHTML(centro)}${a.actividad ? ' · ' + escapeHTML(a.actividad) : ''}${a.telefono ? ' · ' + escapeHTML(a.telefono) : ' · sin teléfono'}</div>
+                    </div>
+                    <button ${tieneTelefono ? '' : 'disabled'} onclick="enviarAvisoMananaWhatsApp(${idx})" class="${tieneTelefono ? 'bg-emerald-500 hover:bg-emerald-600 text-slate-950' : 'bg-slate-800 text-slate-500 cursor-not-allowed'} font-bold px-3 py-2 rounded-lg text-[11px] whitespace-nowrap">${tieneTelefono ? 'WhatsApp' : 'Revisar tel.'}</button>
+                </div>`;
+            }).join('');
+        }
+        function enviarAvisoMananaWhatsApp(idx) {
+            const a = bsAvisosMananaCache[idx];
+            if (!a) return;
+            const centro = centroNombreEntrenador(entrenadorVisto);
+            abrirWhatsApp(a.telefono, crearMensajeWhatsApp('reminder_tomorrow', { nombre: a.nombre, hora: a.hora, centro, actividad: a.actividad }));
         }
 
 
@@ -5450,6 +5635,10 @@ Cancelar = no hacer nada`,
                 localStorage.setItem('bs_db_notas_v6', JSON.stringify(dbNotas));
                 guardarEstadoNubeAgenda();
                 recalcularKPIs(); renderClientes(); renderAgenda();
+                {
+                    const { fecha, hora } = fechaHoraLegibleDesdeClave(clave);
+                    ofrecerWhatsApp('appointment_rescheduled', { nombre: citaMovida.nombre, telefono: citaMovida.telefono, fecha, hora, centro: centroNombreEntrenador(entrenadorVisto) }, 'Sesión reprogramada');
+                }
                 return;
             }
 
@@ -5484,6 +5673,14 @@ Cancelar = no hacer nada`,
                 programarGuardadoNubeAgenda();
 
                 recalcularKPIs(); renderClientes(); renderAgenda();
+
+                // Aviso opcional de cita nueva: solo para clientes individuales, no para grupos
+                // (un grupo abierto recién creado todavía no tiene asistentes a quien avisar; un
+                // grupo cerrado necesitaría un aviso por integrante, ver "Avisos de mañana").
+                if (c.tipo !== 'grupo' && !esGrupoAbierto(c)) {
+                    const { fecha, hora } = fechaHoraLegibleDesdeClave(clave);
+                    ofrecerWhatsApp('appointment_created', { nombre: c.nombre, telefono: c.telefono, fecha, hora, centro: centroNombreEntrenador(entrenadorVisto) }, 'Cita agendada');
+                }
 
             }
         }
@@ -6095,18 +6292,47 @@ Cancelar = no hacer nada`,
             try {
                 const fs = firebase.firestore();
                 await fs.collection(BS_RESERVAS_COLLECTION).doc(id).set({ estado:'aceptada', aceptadaEn: firebase.firestore.FieldValue.serverTimestamp(), aceptadaPor: usuarioLogeado }, { merge:true });
-            } catch(e) { console.error(e); }
+            } catch(e) {
+                console.error(e);
+                alert('La sesión se agendó localmente, pero no se pudo marcar la solicitud como aceptada en el servidor. No se ofrecerá WhatsApp hasta confirmarlo (reintenta).');
+                guardarEstadoNubeAgenda(trainer);
+                recalcularKPIs(); renderAgenda(); renderSolicitudesReservas();
+                return;
+            }
             guardarEstadoNubeAgenda(trainer);
             publicarReservasPublicas();
             recalcularKPIs(); renderAgenda(); renderSolicitudesReservas();
+            // Aviso opcional tras aceptar: solo después de guardar con éxito (ver arriba), nunca antes.
+            {
+                const fechaD = r.fechaISO ? new Date(r.fechaISO + 'T00:00:00') : null;
+                ofrecerWhatsApp('reservation_accepted', {
+                    nombre: cliente.nombre || r.clientName,
+                    telefono: cliente.telefono || r.telefono,
+                    fecha: fechaD && !Number.isNaN(fechaD.getTime()) ? formatoFechaCorta(fechaD) : (r.fechaISO || ''),
+                    hora: r.hora || '',
+                    centro: centroNombreEntrenador(trainer),
+                    actividad: r.tipoReserva === 'grupo_abierto' ? (r.grupoNombre || '') : ''
+                }, 'Reserva aceptada');
+            }
         }
 
         async function rechazarSolicitudReserva(id) {
+            const r = dbSolicitudesReservas[id];
             const motivo = prompt('Motivo de rechazo/cancelación (opcional):') || '';
             try {
                 const fs = firebase.firestore();
                 await fs.collection(BS_RESERVAS_COLLECTION).doc(id).set({ estado:'rechazada', rechazadaEn: firebase.firestore.FieldValue.serverTimestamp(), rechazadaPor: usuarioLogeado, motivoRechazo: motivo }, { merge:true });
-            } catch(e) { alert('No se pudo rechazar la solicitud.'); console.error(e); }
+            } catch(e) { alert('No se pudo rechazar la solicitud.'); console.error(e); return; }
+            // Aviso opcional tras rechazar: solo tras el await exitoso (si falla, ya hemos vuelto arriba).
+            if (r) {
+                const fechaD = r.fechaISO ? new Date(r.fechaISO + 'T00:00:00') : null;
+                ofrecerWhatsApp('reservation_rejected', {
+                    nombre: r.clientName || 'Cliente',
+                    telefono: r.telefono || '',
+                    fecha: fechaD && !Number.isNaN(fechaD.getTime()) ? formatoFechaCorta(fechaD) : (r.fechaISO || ''),
+                    hora: r.hora || ''
+                }, 'Reserva rechazada');
+            }
         }
 
         function iniciarModuloReservasAgenda() {
@@ -6228,6 +6454,7 @@ Cancelar = no hacer nada`,
 
         function recalcularKPIs() {
             actualizarLabelsKPIMes();
+            actualizarBadgeAvisosManana();
 
             const resumen = calcularResumenAgendaEntrenador();
 
@@ -6655,6 +6882,7 @@ Cancelar = no hacer nada`,
 
             const cobertura = obtenerCoberturaCitaAgenda(celdaNotaSeleccionada);
             const claveBorrar = cobertura ? cobertura.claveInicio : celdaNotaSeleccionada;
+            const citaCancelada = dbAgenda[entrenadorVisto]?.[claveBorrar];
             delete dbAgenda[entrenadorVisto][claveBorrar];
             fijarNotaAgenda(claveBorrar, '');
 
@@ -6664,6 +6892,13 @@ Cancelar = no hacer nada`,
             programarGuardadoNubeAgenda();
 
             cerrarModalNota(); recalcularKPIs(); renderClientes(); renderAgenda();
+
+            // Aviso opcional de cancelación: solo para citas individuales (no grupo, no prueba CRM),
+            // usando los datos de la cita ANTES de borrarla.
+            if (citaCancelada && !esGrupoAbierto(citaCancelada) && citaCancelada.tipo !== 'grupo' && !esCitaPruebaCRM(citaCancelada)) {
+                const { fecha, hora } = fechaHoraLegibleDesdeClave(claveBorrar);
+                ofrecerWhatsApp('appointment_cancelled', { nombre: citaCancelada.nombre, telefono: citaCancelada.telefono, fecha, hora, centro: centroNombreEntrenador(entrenadorVisto) }, 'Sesión cancelada');
+            }
 
         }
 

@@ -277,3 +277,33 @@ Para que una futura sesión no tenga que releer todo el prompt del usuario, resu
 2. Miguel Fenech: cerrado y documentado arriba, no requiere ninguna acción de continuación salvo que el usuario reporte una recurrencia del problema.
 3. Herramienta de auditoría "matriz trainerKey" (solo lectura) sigue pendiente si se quiere detectar mismatches similares a Miguel Fenech en otros PT — no bloqueante.
 4. Continuar con el resto del roadmap maestro (mobile/reservas/CRM/finanzas completa/backup/hard-delete/UX-UI global/tests — ver fases 14-23 más arriba, siguen igual de pendientes).
+
+---
+
+## MÓDULO — BESOUL WhatsApp Click-to-Chat (2026-09-02)
+
+✅ **Implementado en `agenda.html`** (checkpoint previo: tag `checkpoint-pre-whatsapp-2026-09-02`). MVP sin infraestructura externa (nada de WhatsApp Business API/Twilio/Meta Cloud/webhooks) — el PT/admin siempre pulsa un botón explícito, se abre `wa.me` con el mensaje precargado. No hay envío automático, no se afirma "entregado"/"leído" (wa.me no lo informa) — como mucho "WhatsApp abierto".
+
+**Motor único centralizado** (nombres exactos pedidos por el usuario, todos en `agenda.html`):
+- `normalizarTelefonoWhatsApp(telefono)` — quita todo salvo dígitos/`+`, quita `+`/`00` inicial, antepone `34` SOLO a un número español de 9 dígitos sin prefijo (`/^[6789]\d{8}$/`), nunca duplica prefijo ya presente, devuelve `null` si no queda un número de 8-15 dígitos válido (evita enlaces rotos — WA-01 a WA-04 verificados a mano).
+- `crearMensajeWhatsApp(tipo, datos)` — 6 plantillas en `BS_WHATSAPP_PLANTILLAS`: `reminder_tomorrow`, `reservation_accepted`, `reservation_rejected`, `appointment_created`, `appointment_rescheduled`, `appointment_cancelled`.
+- `crearUrlWhatsApp(telefono, mensaje)` / `abrirWhatsApp(telefono, mensaje)`.
+- `ofrecerWhatsApp(tipo, datos, tituloAccion)` + modal `#modal-whatsapp-offer`: patrón genérico reutilizado en los 5 flujos de abajo — muestra "✓ acción realizada" con un botón "Enviar WhatsApp" (deshabilitado y con texto "Revisar teléfono" si el número no normaliza) y otro "Terminar". Nunca abre WhatsApp solo; siempre requiere el clic del usuario.
+
+**Flujos conectados** (los 5 pedidos en la sección 26-30 del prompt maestro):
+- Nueva cita individual (`soltarFichaEnCelda`, rama sin `claveOrigen`) → `appointment_created`. Se omite para grupos (abiertos: sin asistentes todavía; cerrados: necesitarían aviso por integrante, no implementado aquí).
+- Reprogramación (`soltarFichaEnCelda`, rama con `claveOrigen` — cubre tanto el drag de escritorio como `moverSesionDesdeModalNota()` del flujo móvil, que delega en la misma función) → `appointment_rescheduled`, usa la clave/fecha-hora DESTINO.
+- Cancelación (`borrarSesionAgenda`) → `appointment_cancelled`, usa los datos de la cita capturados ANTES de borrarla. Se omite para grupos y pruebas CRM.
+- Reserva aceptada (`aceptarSolicitudReserva`) → `reservation_accepted`, solo tras el `await` exitoso del `.set()` de Firestore (si falla, se guarda igualmente el cambio local de agenda pero se avisa al admin y NO se ofrece WhatsApp — ver WA-10).
+- Reserva rechazada (`rechazarSolicitudReserva`) → `reservation_rejected`, solo tras el `await` exitoso (ya hacía `return` en el catch original).
+
+**Avisos de mañana** (nuevo botón en el header de Agenda, junto a "Reservas", badge con recuento): `fechaMananaISO()`/`listaAvisosManana()` recorren `dbAgenda[entrenadorVisto]` filtrando por la clave de fecha = mañana real (no depende de qué semana esté navegando el calendario). Grupos abiertos y cerrados se desglosan en una fila por asistente/integrante (nunca una acción colectiva ni teléfonos cruzados entre clientes — WA-08). Badge recalculado en cada `recalcularKPIs()` (ya se llama tras todo guardado relevante).
+
+**Aislamiento (WA-13)**: todo lee `dbAgenda[entrenadorVisto]`/`dbClientes[entrenadorVisto]`, que ya está restringido por el mecanismo existente de la app (un PT no-admin no puede cambiar `entrenadorVisto`) — no se ha añadido ningún acceso nuevo cross-trainer.
+
+**No hecho a propósito / limitaciones conocidas**:
+- Grupos cerrados no reciben oferta de WhatsApp al crear/cancelar la sesión (solo en Avisos de mañana) — evita construir una UI de "N botones tras una acción" en esta pasada; ampliable después si se pide.
+- No hay persistencia de "marcado como avisado" (el prompt del usuario lo dejaba como opcional de bajo valor para el MVP) — cada apertura del modal de Avisos de mañana recalcula desde cero, sin recordar qué WhatsApp ya se pulsó.
+- No probado en navegador real (sin entorno con Firestore/credenciales aquí). WA-05/06/07/09/11/12/14 verificados por lectura de código, no ejecutados.
+
+**Pendiente si se retoma**: casos WA-01 a WA-14 completos en navegador real; considerar extender el aviso a grupos cerrados si el usuario lo pide; ampliar "avisos de mañana" con un botón "marcar todos como avisados" si aporta valor una vez probado en producción.
