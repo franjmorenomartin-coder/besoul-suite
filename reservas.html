@@ -392,8 +392,20 @@
       }
       const btn=document.getElementById('send-btn'); btn.disabled=true; btn.textContent='Enviando...';
       try{
-        const id = `${token}_${selected.iso}_${selected.hora.replace(':','')}_${Date.now()}`;
-        await db.collection('besoulReservas').doc(id).set({
+        // ID determinista en vez de aleatorio: para una reserva individual, una franja
+        // (trainerKey+clave) solo puede tener UNA solicitud activa a la vez, así que ese es
+        // literalmente su identificador. Para un grupo abierto, distintos clientes deben poder
+        // solicitar la MISMA franja/grupo en paralelo (cada uno su propia plaza), así que el id
+        // también incluye el clientId. La transacción lee ese documento exacto justo antes de
+        // escribir -- a diferencia del chequeo previo (bloqueLibre/gruposAbiertosDisponibles),
+        // que solo compara contra la copia en memoria cargada al abrir la página y por tanto no
+        // detecta una solicitud creada por otro cliente en el tiempo transcurrido desde entonces.
+        const esGrupo = selected.tipoReserva === 'grupo_abierto';
+        const id = esGrupo
+          ? `${clientData.trainerKey}__${selected.clave}__${clientData.clientId}`
+          : `${clientData.trainerKey}__${selected.clave}`;
+        const reservaRef = db.collection('besoulReservas').doc(id);
+        const payload = {
           token,
           clientId: clientData.clientId,
           clientName: clientData.clientName,
@@ -414,12 +426,30 @@
           estado: 'pendiente',
           source: 'portalCliente',
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        // Bloquea si YA existe cualquier documento en ese id, sin importar su estado (incluida
+        // una solicitud ya rechazada). Esto es deliberado, no un descuido: las Rules de Firestore
+        // desplegadas hoy solo permiten 'create' a un cliente público no autenticado, nunca
+        // 'update' sobre un documento ya existente -- sobrescribir una solicitud rechazada para
+        // reintentar la misma franja exigiría un 'update' que las Rules actuales rechazarían. La
+        // limitación conocida (una franja ya solicitada una vez, aunque fuera rechazada, no puede
+        // volver a solicitarse por el portal con el mismo id) está documentada en
+        // BESOUL_WORK_STATE.md junto con las dos formas de resolverlo sin tocar Rules ahora mismo.
+        await db.runTransaction(async tx => {
+          const snap = await tx.get(reservaRef);
+          if (snap.exists) throw new Error('SLOT_OCUPADO');
+          tx.set(reservaRef, payload);
         });
         document.getElementById('app').classList.add('hidden');
         document.getElementById('success').classList.remove('hidden');
       }catch(err){
         console.error(err);
-        alert('No se ha podido enviar la solicitud. Inténtalo de nuevo o contacta con BESOUL.');
+        if (err && err.message === 'SLOT_OCUPADO') {
+          alert('Justo acaban de solicitar esa misma franja. Elige otra hora.');
+          await init();
+        } else {
+          alert('No se ha podido enviar la solicitud. Inténtalo de nuevo o contacta con BESOUL.');
+        }
         btn.disabled=false; btn.textContent='Enviar solicitud';
       }
     }

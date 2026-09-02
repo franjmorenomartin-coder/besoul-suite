@@ -21,6 +21,13 @@ rules_version = '2';
 //      trainerKey (merge:true) desplegada en el código (commit
 //      "fix: prevent concurrent agenda overwrites") funciona sin errores —
 //      ver BESOUL_WORK_STATE.md, sección FASE 3.
+//   4. NUEVO (auditoría Reservas, 2026-09-02): besoulReservas.create ahora
+//      valida que token/clientId/trainerKey correspondan realmente a un
+//      besoulPublicClients/{token} real, no solo que tengan la forma
+//      correcta — antes cualquiera con CUALQUIER token válido de un
+//      entrenador podía escribir una reserva con el clientId de OTRO
+//      cliente del mismo entrenador (besoulPublicClients permite "get"
+//      público). Ver BESOUL_WORK_STATE.md, sección Reservas.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -186,6 +193,11 @@ service cloud.firestore {
     }
 
     match /besoulReservas/{reservaId} {
+      // El create original solo validaba la FORMA del payload, no que token/clientId/trainerKey
+      // correspondieran realmente entre sí -- cualquiera con un token válido de CUALQUIER cliente
+      // de un entrenador podía escribir una reserva suplantando a OTRO cliente del mismo
+      // entrenador, porque besoulPublicClients permite "get" público (auditoría FASE 21/Reservas,
+      // 2026-09-02). Se añade una comprobación cruzada contra el propio besoulPublicClients/{token}.
       allow create: if request.resource.data.estado == 'pendiente'
         && request.resource.data.token is string
         && request.resource.data.clientId is string
@@ -193,7 +205,10 @@ service cloud.firestore {
         && request.resource.data.fechaISO is string
         && request.resource.data.hora is string
         && request.resource.data.clave is string
-        && request.resource.data.duracionMin == 45;
+        && request.resource.data.duracionMin == 45
+        && exists(/databases/$(database)/documents/besoulPublicClients/$(request.resource.data.token))
+        && get(/databases/$(database)/documents/besoulPublicClients/$(request.resource.data.token)).data.clientId == request.resource.data.clientId
+        && get(/databases/$(database)/documents/besoulPublicClients/$(request.resource.data.token)).data.trainerKey == request.resource.data.trainerKey;
 
       // Admin ve todas. Un PT solo ve/gestiona reservas asignadas a su trainerKey.
       allow read: if isAdmin()

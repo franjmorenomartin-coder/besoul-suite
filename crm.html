@@ -1202,12 +1202,40 @@ async function sincronizarClienteAgendaDesdeLeadConvertido(leadId) {
     });
   } catch (err) {
     console.error('No se pudo actualizar la ficha de Agenda desde CRM:', err);
+    // Se relanza a propósito: el único llamador (guardarLead) ya envuelve esto en su propio
+    // try/catch con alert() al usuario. Si se traga el error aquí, guardarLead cierra el modal
+    // como si todo hubiera ido bien aunque la ficha de Agenda se haya quedado desincronizada del
+    // lead -- exactamente el caso de "falso éxito" ya corregido para WhatsApp en agenda.html.
+    // El lead en sí puede haberse guardado bien (ver guardarLead) -- el mensaje lo aclara.
+    throw new Error('El lead se guardó, pero no se pudo sincronizar su ficha vinculada en Agenda. Revisa la ficha del cliente manualmente e inténtalo de nuevo.');
+  }
+}
+
+async function fusionarHistorialConServidor(leadId, historialLocal) {
+  // eventosTemporales/historialLocal es una foto tomada al ABRIR el modal. Si otra persona añadió
+  // una entrada de historial a este mismo lead mientras el modal seguía abierto, un guardado
+  // directo con {merge:true} reemplazaría el array entero y esa entrada desaparecería sin aviso
+  // (Firestore no fusiona arrays elemento a elemento). Se vuelve a leer el servidor justo antes de
+  // guardar y se añaden las entradas que falten localmente, nunca al revés.
+  if (!leadId) return historialLocal;
+  try {
+    const snap = await db.collection('besoulLeads').doc(leadId).get();
+    const historialServidor = Array.isArray(snap.data()?.historial) ? snap.data().historial : [];
+    const firma = e => `${e?.fecha || ''}|${e?.texto || ''}|${e?.userEmail || ''}`;
+    const firmasLocales = new Set(historialLocal.map(firma));
+    const soloEnServidor = historialServidor.filter(e => !firmasLocales.has(firma(e)));
+    if (!soloEnServidor.length) return historialLocal;
+    return [...historialLocal, ...soloEnServidor].sort((a, b) => String(b?.fecha || '').localeCompare(String(a?.fecha || '')));
+  } catch (err) {
+    console.error('No se pudo fusionar historial concurrente, se guarda solo con los cambios locales:', err);
+    return historialLocal;
   }
 }
 
 async function guardarLead() {
   try {
     const data = recogerLeadFormulario();
+    if (leadEditandoId) data.historial = await fusionarHistorialConServidor(leadEditandoId, data.historial);
     data.updatedAt = ahoraISO();
     data.updatedByEmail = perfil.email;
     data.updatedByName = nombreUsuarioPerfil();
@@ -1288,42 +1316,63 @@ async function convertirLeadEnCliente() {
     creadoDesdeCRMEn: ahoraISO()
   };
 
-  await db.runTransaction(async tx => {
-    const agendaRef = db.collection('besoulSuite').doc('agenda');
-    const leadRef = db.collection('besoulLeads').doc(leadEditandoId);
-    const agendaSnap = await tx.get(agendaRef);
-    const agendaData = agendaSnap.exists ? agendaSnap.data() : {};
-    const clientes = agendaData.clientes || {};
-    const agenda = agendaData.agenda || {};
-    eliminarPruebaAgendaEnObjeto(agenda, leadEditandoId);
-    if (!Array.isArray(clientes[trainerKey])) clientes[trainerKey] = [];
-    const existe = clientes[trainerKey].some(c => c.leadId === leadEditandoId || c.id === nuevoClienteId);
-    if (!existe) clientes[trainerKey].push(nuevoCliente);
-    tx.set(agendaRef, {
-      clientes,
-      agenda,
-      ultimaActualizacionLocal: ahoraISO(),
-      actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge:true });
-    tx.set(leadRef, {
-      ...leadActualizado,
-      estado: 'Convertido a cliente',
-      convertido: true,
-      convertedAt: ahoraISO(),
-      convertedByEmail: perfil.email,
-      convertedByName: nombreUsuarioPerfil(),
-      convertedTrainerKey: trainerKey,
-      convertedClientId: nuevoClienteId,
-      agendaPruebaVisible: false,
-      agendaPruebaClave: '',
-      agendaPruebaError: '',
-      updatedAt: ahoraISO(),
-      historial: [
-        { tipo:'Conversión', texto:`Lead convertido en cliente de Agenda bajo ${textoTrainer(trainerKey)}.`, fecha:ahoraISO(), usuario:nombreUsuarioPerfil(), userEmail:perfil.email },
-        ...(leadActualizado.historial || [])
-      ]
-    }, { merge:true });
-  });
+  const btnConvert = document.getElementById('btn-convert');
+  if (btnConvert) { btnConvert.disabled = true; btnConvert.classList.add('opacity-50','pointer-events-none'); }
+  // clienteIdFinal se reasigna DENTRO de la transacción en cada intento/reintento -- nunca fijo
+  // como nuevoClienteId, que solo describe el cliente que ESTE intento crearía si gana la carrera.
+  // Firestore reintenta automáticamente la transacción si el documento cambió entre la lectura y
+  // el commit (dos conversiones casi simultáneas del mismo lead): en el reintento, si otro intento
+  // ya creó el cliente (detectado por leadId, no por el id fijo), reutilizamos su id REAL en vez de
+  // escribir en el lead un convertedClientId que apunta a un cliente que nunca llegó a crearse.
+  let clienteIdFinal = nuevoClienteId;
+  try {
+    await db.runTransaction(async tx => {
+      const agendaRef = db.collection('besoulSuite').doc('agenda');
+      const leadRef = db.collection('besoulLeads').doc(leadEditandoId);
+      const agendaSnap = await tx.get(agendaRef);
+      const agendaData = agendaSnap.exists ? agendaSnap.data() : {};
+      const clientes = agendaData.clientes || {};
+      const agenda = agendaData.agenda || {};
+      eliminarPruebaAgendaEnObjeto(agenda, leadEditandoId);
+      if (!Array.isArray(clientes[trainerKey])) clientes[trainerKey] = [];
+      const existente = clientes[trainerKey].find(c => c.leadId === leadEditandoId);
+      if (existente) {
+        clienteIdFinal = existente.id;
+      } else {
+        clientes[trainerKey].push(nuevoCliente);
+        clienteIdFinal = nuevoClienteId;
+      }
+      tx.set(agendaRef, {
+        clientes,
+        agenda,
+        ultimaActualizacionLocal: ahoraISO(),
+        actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge:true });
+      tx.set(leadRef, {
+        ...leadActualizado,
+        estado: 'Convertido a cliente',
+        convertido: true,
+        convertedAt: ahoraISO(),
+        convertedByEmail: perfil.email,
+        convertedByName: nombreUsuarioPerfil(),
+        convertedTrainerKey: trainerKey,
+        convertedClientId: clienteIdFinal,
+        agendaPruebaVisible: false,
+        agendaPruebaClave: '',
+        agendaPruebaError: '',
+        updatedAt: ahoraISO(),
+        historial: [
+          { tipo:'Conversión', texto:`Lead convertido en cliente de Agenda bajo ${textoTrainer(trainerKey)}.`, fecha:ahoraISO(), usuario:nombreUsuarioPerfil(), userEmail:perfil.email },
+          ...(leadActualizado.historial || [])
+        ]
+      }, { merge:true });
+    });
+  } catch (err) {
+    console.error(err);
+    alert('No se ha podido convertir el lead. Revisa tu conexión e inténtalo de nuevo.');
+    if (btnConvert) { btnConvert.disabled = false; btnConvert.classList.remove('opacity-50','pointer-events-none'); }
+    return;
+  }
   alert('Cliente creado en Agenda. Revisa su ficha para completar tarifa, contrato y datos operativos.');
   cerrarModalLead();
 }
