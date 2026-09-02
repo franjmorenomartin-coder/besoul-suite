@@ -44,15 +44,15 @@
       </div>
       <div class="space-y-3 text-xs">
         <div>
-          <label class="text-slate-400 block mb-1">Email *</label>
-          <input type="email" id="login-email" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="tu@email.com" autocomplete="email">
+          <label for="login-email" class="text-slate-400 block mb-1">Email *</label>
+          <input type="email" id="login-email" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="tu@email.com" autocomplete="email">
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Contraseña</label>
-          <input type="password" id="login-pass" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="••••••••" autocomplete="current-password">
+          <label for="login-pass" class="text-slate-400 block mb-1">Contraseña</label>
+          <input type="password" id="login-pass" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="••••••••" autocomplete="current-password">
         </div>
-        <button onclick="loginCRM()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-lg transition uppercase tracking-wider mt-2">Entrar al CRM</button>
-        <p id="auth-error" class="hidden text-red-400 text-[11px] leading-relaxed"></p>
+        <button onclick="loginCRM()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-xl transition uppercase tracking-wider mt-2">Entrar al CRM</button>
+        <p id="auth-error" class="hidden text-red-400 text-[11px] leading-relaxed" role="alert" aria-live="assertive"></p>
       </div>
     </div>
   </div>
@@ -93,28 +93,28 @@
 
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-6 gap-3 text-xs">
         <div>
-          <label class="text-slate-400 block mb-1">Mes</label>
-          <input type="month" id="filter-month" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+          <label for="filter-month" class="text-slate-400 block mb-1">Mes</label>
+          <input type="month" id="filter-month" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Centro</label>
-          <select id="filter-center" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+          <label for="filter-center" class="text-slate-400 block mb-1">Centro</label>
+          <select id="filter-center" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"></select>
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Entrenador</label>
-          <select id="filter-trainer" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+          <label for="filter-trainer" class="text-slate-400 block mb-1">Entrenador</label>
+          <select id="filter-trainer" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"></select>
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Estado</label>
-          <select id="filter-status" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+          <label for="filter-status" class="text-slate-400 block mb-1">Estado</label>
+          <select id="filter-status" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"></select>
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Fuente</label>
-          <select id="filter-source" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></select>
+          <label for="filter-source" class="text-slate-400 block mb-1">Fuente</label>
+          <select id="filter-source" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"></select>
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Buscar</label>
-          <input type="text" id="filter-search" oninput="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" placeholder="nombre, teléfono, nota...">
+          <label for="filter-search" class="text-slate-400 block mb-1">Buscar</label>
+          <input type="text" id="filter-search" oninput="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="nombre, teléfono, nota...">
         </div>
       </div>
     </section>
@@ -155,7 +155,7 @@
     </main>
   </div>
 
-  <div id="modal-lead" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+  <div id="modal-lead" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div id="modal-lead-panel" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 w-full max-w-5xl space-y-4 my-2 sm:my-8 max-h-[94vh] overflow-y-auto">
       <div class="flex items-start justify-between gap-4">
         <div>
