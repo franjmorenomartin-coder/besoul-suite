@@ -344,6 +344,24 @@ Para que una futura sesión no tenga que releer todo el prompt del usuario, resu
 
 **Deliberadamente NO hecho** (sección 4 del roadmap, "cambios con riesgo" — requieren revisión listener-por-listener antes de tocar el DOM, no se mezclan con un commit de estilo): sustituir las tablas de CRM/Finanzas/Dashboard por cards en mobile (patrón ya usado en agenda.html); añadir bottom-nav a los módulos que no lo tienen. Ambos quedan como el siguiente bloque de trabajo si se quiere seguir profundizando en UI, cada uno en su propio ticket/commit aislado.
 
+## UI-003B — CRM mobile (2026-09-02)
+
+✅ Checkpoint previo: tag `checkpoint-pre-ui003-estructural-2026-09-02`.
+
+**Cambio**: tabla de leads → cards en mobile (`md:hidden`), tabla se conserva intacta en desktop (`hidden md:block`) — decisión explícita de "no sobreingeniería": mantener la tabla en el DOM y alternar por CSS es más robusto que reconstruir todo el listado condicionalmente en JS.
+
+**Listeners revisados**: la tabla original solo tenía UN listener por fila (`onclick="abrirModalLead('${l.id}')"` en el botón "Abrir") — nada de sort/drag/otros handlers enganchados a las filas. La vista mobile reutiliza exactamente esa misma función global, mismo id de lead, ninguna lógica nueva. `renderTablaLeads()` ahora llama a `renderCardsLeadsMobile()` al final (nueva función, mismo array `leadsFiltrados`, mismos helpers `badgeEstado()`/`textoCentro()`/`textoTrainer()`/`labelFuenteCRM()`/`formatoFecha()` ya usados en la tabla) — un único punto de verdad para el filtrado, dos plantillas de salida.
+
+**Modal `#modal-lead`**: pasa a bottom-sheet real en mobile (`align-items:flex-end` + `border-radius` solo arriba), mismo patrón exacto ya validado en `agenda.html`. Antes solo estaba anclado arriba con altura casi completa, no era un bottom-sheet.
+
+**Copy**: corregido el texto de confirmación en `valoracion.html` (pedido suelto del usuario, sin hito propio) — "revisará tu solicitud y contactará contigo para confirmar día y hora."
+
+**No tocado**: lógica de `guardarLead`/`convertirLeadEnCliente`/`eliminarLead`/filtros — cero cambios de JS de negocio, solo plantillas de render y CSS de un modal.
+
+**Pruebas realizadas**: lectura completa de `renderTablaLeads()`/`aplicarFiltros()`/`abrirModalLead()` para confirmar el único contrato DOM real (`lead-table-body` + el id del lead pasado a `abrirModalLead`). Sin navegador real disponible aquí — pendiente validación visual del usuario en 375/390/430px y en desktop.
+
+**Siguiente**: UI-003C Finanzas mobile.
+
 ## PWA — verificación (2026-09-02)
 
 Revisado `sw.js`: estrategia network-first con fallback a caché (correcta, no sirve HTML obsoleto mientras hay conexión — sin bug). Se subió `CACHE_NAME` de v5 a v6 (commit `8e743df`) para que los usuarios offline reciban el código de esta sesión en cuanto vuelvan a conectar.

@@ -24,8 +24,10 @@
     ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
     @media (max-width: 640px) {
       input, select, textarea { font-size: 16px !important; }
-      #modal-lead { align-items: flex-start !important; padding: 0.5rem !important; }
-      #modal-lead-panel { max-height: 94vh; overflow-y: auto; padding: 1rem !important; margin-top: 0.5rem !important; margin-bottom: 0.5rem !important; }
+      /* Bottom-sheet en vez de panel anclado arriba, mismo patrón ya validado en agenda.html
+         (align-items:flex-end + radio solo arriba) -- ver DESIGN_SYSTEM_BESOUL.md #9. */
+      #modal-lead { align-items: flex-end !important; padding: 0 !important; }
+      #modal-lead-panel { max-height: 92dvh; overflow-y: auto; width: 100% !important; max-width: none !important; border-radius: 1.5rem 1.5rem 0 0 !important; margin: 0 !important; padding: 1rem !important; }
       #modal-lead .modal-actions-sticky { position: sticky; bottom: -1rem; background: #0f172a; padding-top: 0.75rem; padding-bottom: 0.25rem; }
     }
   </style>
@@ -128,7 +130,7 @@
           </div>
           <button onclick="exportarLeadsCSV()" class="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">Export CSV</button>
         </div>
-        <div class="overflow-x-auto flex-1">
+        <div class="hidden md:block overflow-x-auto flex-1">
           <table class="w-full min-w-[1200px] text-left text-xs border-collapse">
             <thead>
               <tr class="text-slate-400 uppercase font-bold border-b border-slate-800">
@@ -146,6 +148,7 @@
             <tbody id="lead-table-body" class="divide-y divide-slate-800/60 text-slate-300"></tbody>
           </table>
         </div>
+        <div id="lead-cards-mobile" class="md:hidden flex-1 space-y-3 overflow-y-auto"></div>
       </section>
 
       <aside class="bg-slate-900 border border-slate-800 rounded-xl p-4 min-h-[700px]">
@@ -741,10 +744,12 @@ function badgeEstado(estado) {
 }
 function renderTablaLeads() {
   const tbody = document.getElementById('lead-table-body');
+  const cardsWrap = document.getElementById('lead-cards-mobile');
   tbody.innerHTML = '';
   document.getElementById('lead-count-label').innerText = `${leadsFiltrados.length} leads filtrados`;
   if (!leadsFiltrados.length) {
     tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-500">No hay leads con estos filtros.</td></tr>`;
+    if (cardsWrap) cardsWrap.innerHTML = `<div class="py-8 text-center text-slate-500 text-xs">No hay leads con estos filtros.</div>`;
     return;
   }
   leadsFiltrados.forEach(l => {
@@ -774,6 +779,39 @@ function renderTablaLeads() {
       </td>`;
     tbody.appendChild(tr);
   });
+  renderCardsLeadsMobile();
+}
+
+// Vista mobile de la misma lista (leadsFiltrados) que renderTablaLeads() -- mismos datos, mismo
+// abrirModalLead(id) como única acción por fila; nunca una fuente de estado independiente. Tabla
+// (desktop, md:block) y cards (mobile, md:hidden) se alternan por CSS, no por JS, así que ambas
+// siempre reflejan el mismo filtrado sin duplicar lógica de negocio, solo la plantilla visual.
+function renderCardsLeadsMobile() {
+  const cont = document.getElementById('lead-cards-mobile');
+  if (!cont) return;
+  cont.innerHTML = leadsFiltrados.map(l => {
+    const ultimoEvento = (l.historial || [])[0];
+    return `
+    <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0">
+          <div class="font-bold text-white text-sm truncate">${escapeHTML(l.nombre)}</div>
+          <div class="text-[11px] text-slate-500 truncate">${escapeHTML(l.telefono)}${l.email ? ' · ' + escapeHTML(l.email) : ''}</div>
+        </div>
+        ${badgeEstado(l.estado)}
+      </div>
+      <div class="grid grid-cols-2 gap-x-3 gap-y-2 text-[11px] pt-2 border-t border-slate-800/60">
+        <div><span class="text-slate-500 block">Entrenador</span><span class="text-slate-200 font-semibold">${escapeHTML(textoTrainer(l.trainerKey))}</span></div>
+        <div><span class="text-slate-500 block">Origen</span><span class="text-slate-200 font-semibold">${escapeHTML(labelFuenteCRM(l.fuente))}</span></div>
+        <div><span class="text-slate-500 block">Centro</span><span class="text-slate-200 font-semibold">${escapeHTML(textoCentro(l.centroId))}</span></div>
+        <div><span class="text-slate-500 block">Próx. acción</span><span class="text-slate-200 font-semibold">${escapeHTML(l.proximaAccion || '---')}</span></div>
+      </div>
+      <div class="flex items-center justify-between gap-2 pt-1">
+        <span class="text-[10px] text-slate-500 truncate">${ultimoEvento ? escapeHTML(ultimoEvento.tipo) + ' · ' + formatoFecha(ultimoEvento.fecha) : 'Sin actividad registrada'}</span>
+        <button onclick="abrirModalLead('${l.id}')" class="shrink-0 bg-amber-500/10 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-lg font-bold text-[11px]">Abrir</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function contarPor(lista, campo) {
