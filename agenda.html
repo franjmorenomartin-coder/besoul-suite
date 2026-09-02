@@ -1410,10 +1410,22 @@ miércoles 07:00-09:00"></textarea>
 
                 payload.actualizadoEn = firebase.firestore.FieldValue.serverTimestamp();
 
+                // Hallazgo real (auditoría actividades autorizadas, 2026-09-02), confirmado
+                // contra el código fuente del SDK de Firestore: .set(payload, {merge:true})
+                // SOLO interpreta como ruta anidada las claves con punto que vienen en la
+                // opción mergeFields; las claves con punto DENTRO del propio objeto de datos
+                // (p.ej. "clientes.veronica") se tratan como un nombre de campo LITERAL de
+                // nivel superior -- es decir, esta escritura dirigida por trainerKey NUNCA
+                // tocaba el campo real anidado clientes.<trainerKey>, sino un campo fantasma
+                // separado llamado literalmente "clientes.<trainerKey>". Por eso el guardado
+                // "funcionaba" (no fallaba, no lanzaba error) pero el valor real nunca
+                // cambiaba. .update() SÍ interpreta las claves con punto del objeto como ruta
+                // anidada real (fieldPathFromDotSeparatedString) -- es el método correcto
+                // para este payload dirigido, sin cambiar su forma.
                 // Devuelve la promesa (antes se descartaba) para que quien lo necesite
                 // pueda esperar a que el guardado+publicación terminen de verdad, sin
                 // cambiar el comportamiento de las llamadas existentes que la ignoran.
-                return window.bsAgendaCloudDocRef.set(payload, { merge: true })
+                return window.bsAgendaCloudDocRef.update(payload)
                     .then(() => publicarReservasPublicas())
                     .then(() => ({ ok: true }))
                     .catch(err => { console.error('Error guardando agenda en Firebase:', err); return { ok: false, err }; });
@@ -6788,16 +6800,37 @@ Cancelar = no hacer nada`,
             return (dbClientes[trainerKey] || []).filter(c => c && c.tipo === 'individual' && !c.vinculacion && clienteActivoParaAgenda(c));
         }
 
-        function actualizarCitaGrupoAbiertoActual(cita) {
+        async function actualizarCitaGrupoAbiertoActual(cita) {
             const cobertura = obtenerCoberturaCitaAgenda(celdaNotaSeleccionada);
             const clave = cobertura ? cobertura.claveInicio : celdaNotaSeleccionada;
             if (!dbAgenda[entrenadorVisto]) dbAgenda[entrenadorVisto] = {};
-            dbAgenda[entrenadorVisto][clave] = cita;
+            const anterior = dbAgenda[entrenadorVisto][clave];
+            const scopeGuardado = entrenadorVisto;
+            dbAgenda[scopeGuardado][clave] = cita;
             localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
-            programarGuardadoNubeAgenda();
-            publicarReservasPublicasDebounced();
             recalcularKPIs(); renderAgenda();
             prepararPanelGrupoAbiertoSesion(clave, cita);
+
+            // Hotfix urgente (grupos abiertos, 2026-09-02): antes pasaba por
+            // programarGuardadoNubeAgenda() (debounce fire-and-forget, sin comprobar el
+            // resultado) -- mismo patrón de falso éxito ya corregido en guardarCliente()
+            // (commit 2ea625d), y afectado por el mismo bug de fondo del método .set() con
+            // claves de punto (ya corregido arriba en guardarEstadoNubeAgenda(), que ahora usa
+            // .update()). Aquí se espera el resultado real y se deshace el cambio local si el
+            // guardado falla, para que el panel nunca muestre un asistente que en realidad no
+            // se guardó.
+            const resultadoGuardado = await guardarEstadoNubeAgenda(scopeGuardado);
+            if (!resultadoGuardado || resultadoGuardado.ok !== true) {
+                if (anterior) dbAgenda[scopeGuardado][clave] = anterior; else delete dbAgenda[scopeGuardado][clave];
+                localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
+                recalcularKPIs(); renderAgenda();
+                prepararPanelGrupoAbiertoSesion(clave, dbAgenda[scopeGuardado][clave] || {});
+                console.error(`[BESOUL Agenda] actualizarCitaGrupoAbiertoActual: fallo al guardar en Firestore · trainerKey=${scopeGuardado} · clave=${clave} · code=${resultadoGuardado?.err?.code || '(sin código)'} · message=${resultadoGuardado?.err?.message || (resultadoGuardado?.omitido ? 'guardado omitido' : '(desconocido)')}`, resultadoGuardado?.err || resultadoGuardado);
+                alert('No se ha podido guardar el cambio del grupo abierto en el servidor. Revisa tu conexión e inténtalo de nuevo -- el cambio NO se ha guardado.');
+                return;
+            }
+
+            publicarReservasPublicasDebounced();
         }
 
         function prepararPanelGrupoAbiertoSesion(clave, obj) {
