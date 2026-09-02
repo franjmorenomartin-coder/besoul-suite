@@ -477,6 +477,59 @@ Cliente de Verónica, Pilates Máquina, segmento General, plan 8 clases, `numPer
 
 **Nota importante — límite de esta auditoría**: esto verifica que el MOTOR es correcto (probado por trazado de código con cifras reales). No puedo verificar si el perfil real de Verónica ya existe en `besoulUsers` ni si algún cliente de actividad ya está dado de alta en producción — este entorno no tiene credenciales de Firestore. Esa parte requiere que tú lo confirmes en la consola de Firebase o dentro de la propia app.
 
+## RELEASE CANDIDATE 2026-09-02
+
+Checkpoint: tag `checkpoint-pre-release-candidate-2026-09-02`. Rama `BESOUL-BASELINE`, working tree limpio salvo los dos ficheros de referencia siempre sin trackear.
+
+**Corrección real encontrada durante esta auditoría** (commit `d3ba60b`): `aprobarSolicitudEliminacion()` en `agenda.html` podía mostrar el aviso "hubo un error al sincronizar" y, sin `return`, caer igualmente en un segundo `alert` incondicional de "dada de baja correctamente" — dos mensajes contradictorios seguidos. Corregido: un único alert final que refleja el resultado real. El resto de funciones de escritura con alert de éxito (`confirmarSolicitudEliminacion`, `crearEntrenador`, `rechazarSolicitudEliminacion`, las de CRM/Reservas ya corregidas en la sesión anterior) se revisaron y ya hacían `await` antes de confirmar y no caían en el catch hacia el éxito.
+
+**Comparación estricta Finanzas vs Dashboard (post `ff1f4e4`)**: diff directo de `DEFAULT_CATALOGO_ACTIVIDADES`, `distribuirReparto`, `calcularFacturacionActividadFicha`, `entradaEfectivaTemporal`/`valorEfectivoTemporal`/`settingsTrainerParaMes`/`centroParaMes`, `sesionesAgendadasFacturablesFichaMes` y `calcularComisionAvanzada` entre ambos archivos — **sin divergencias**, texto idéntico salvo indentación. `calcularCanonCentroYAsignar`/`calcularRepartoPorTramosBesoul` no fueron tocados por el port (nunca se editaron independientemente en ninguno de los dos archivos) y se confirmaron sin divergencia por inspección. No se hizo (ni se pidió) unificar el motor duplicado — queda para una fase posterior, tal como se indicó.
+
+### Estado por módulo
+
+| Módulo | Estado |
+|---|---|
+| **Agenda** — crear/editar cliente, agendar, reprogramar, cancelar, 45 min, inicios 15 min, grupos, bonos, mensualidades | OK — verificado por lectura de código; motor AGENDA-015 no se ha tocado en ninguna fase de esta sesión (UI-003 fue solo visual, Verónica/WhatsApp fueron aditivos) |
+| **Agenda** — WhatsApp | OK — confirmado por el usuario en la revisión visual |
+| **Agenda** — Avisos mañana | OK — verificado, usa fecha real del día siguiente, no depende de la semana navegada |
+| **Agenda** — móvil sin drag obligatorio | OK — agendar (ya existía) y reprogramar (añadido esta sesión) funcionan por selección táctil; drag se conserva como acelerador de escritorio |
+| **CRM** — crear/editar lead, historial, prueba, convertir, sincronización con Agenda | OK — auditado y corregidas 3 carreras reales en la sesión anterior (commit `98d41cb`): id de cliente fantasma en reintento de conversión, error silencioso en sincronización con Agenda, pérdida de entradas de historial concurrentes |
+| **CRM** — errores visibles | OK tras los fixes de `98d41cb` |
+| **Reservas** — token/disponibilidad/solicitud/aceptación/rechazo/conflicto | OK — transacción con id determinista impide doble reserva real (commit `98d41cb`) |
+| **Reservas** — no doble reserva | OK, verificado por trazado de código |
+| **Finanzas** — cambio de mes, canon/rango/centro/tarifas temporales, mes cerrado | OK — FASE 6-7, verificado con ejemplo numérico (agosto 1.090€ no cambia al editar septiembre a 1.200€) |
+| **Finanzas** — mensualidades/bonos | OK — ya eran correctos antes de esta sesión (histórico congelado por mes para mensualidades; ventana de vigencia propia para bonos) |
+| **Finanzas** — reparto actividad especial / PT estándar / modelo mixto / Verónica / 50-35-15 / no doble facturación | OK — verificado con trazado completo (95€ → 47,50/33,25/14,25€ exacto); modelo mixto confirmado: la ficha de actividad nunca pasa por `calcularComisionAvanzada` |
+| **Dashboard** — mismos criterios económicos que Finanzas, actividades especiales, temporalidad | OK tras `ff1f4e4` — antes de ese commit era un **BLOCKER real** (cifras distintas a Finanzas para el mismo mes); ahora motor idéntico, verificado por diff directo |
+| **Valoración** — formulario, deduplicación, éxito, conversión posterior en CRM | OK — deduplicación por transacción real (email+teléfono), verificado en auditoría anterior de esta sesión |
+| **WhatsApp** | OK — confirmado por el usuario |
+| **Mobile / navegación / bottom-nav** | OK — verificado que Agenda conserva su tab-bar interna sin una segunda barra apilada; CRM/Finanzas/Dashboard con bottom-nav nueva filtrada por rol real |
+| **PWA (sw.js)** | OK — estrategia network-first correcta, sin bug; versión de caché subida a v6 esta sesión |
+| **Roles — PT no ve módulos admin** | OK — verificado contra el modelo de permisos real (`esAdmin()`/`rolActivo==='admin'`), no un permiso visual inventado |
+| **Verónica — tarifas Ciclo/Pilates/Bono/VIP y reparto 50/35/15** | OK en el motor (los tres archivos coinciden con las cifras exactas dadas por el usuario) — **validación con datos reales pendiente**: no se puede confirmar desde este entorno si ya existen fichas reales `clientes.veronica` con actividad en Firestore (sin credenciales aquí) |
+| **Firestore Rules** | **PROPUESTA PREPARADA, NO DESPLEGADA** — ver detalle abajo |
+| **Backups** | Script preparado (`scripts/backup-firestore.js`), no ejecutado nunca desde este entorno |
+
+### Firestore Rules — estado exacto (no confundir código preparado con reglas desplegadas)
+
+`firestore.rules` en la raíz del repo contiene la propuesta completa y está explícitamente marcado en su cabecera: *"ESTADO: propuesta lista para desplegar. NO se ha aplicado a producción desde este entorno."* Las reglas realmente desplegadas hoy son las documentadas en `SECURITY_RULES.md` ("Reglas Firestore actuales"), que **no incluyen**:
+- Una regla para `besoulSolicitudesEliminacion` → cae en el catch-all `allow read, write: if false` → **el flujo de baja segura de clientes (construido y usado en esta sesión) probablemente falla con permission-denied contra Firestore real ahora mismo**, hasta que alguien despliegue la propuesta.
+- Ownership por `trainerKey` en `besoulPublicClients` → cualquier usuario activo (no solo el dueño) puede tocar el enlace público de otro entrenador. Riesgo pre-existente, no introducido en esta sesión, con fix ya preparado.
+- Cross-check de `token`/`clientId`/`trainerKey` en `besoulReservas.create` → un usuario con un token válido de un entrenador podría en teoría escribir una reserva con el `clientId` de otro cliente del mismo entrenador. Riesgo pre-existente, con fix ya preparado.
+
+Ninguna de estas tres reglas se ha desplegado desde este entorno (sin Firebase CLI ni credenciales aquí). Esto **no se clasifica como blocker de esta Baseline** porque: (a) es un riesgo pre-existente antes de esta sesión, no introducido ahora; (b) el remedio ya está completamente preparado y documentado; (c) su despliegue requiere una acción manual del responsable del proyecto (Firebase Console o CLI) que este entorno no puede ejecutar. Se marca como **acción pendiente de alta prioridad para el responsable del proyecto**, no como bloqueo técnico de esta RC.
+
+### Limitaciones conocidas (no bloquean, documentadas a propósito)
+
+- Reservas: una franja ya solicitada una vez (aunque fuera rechazada) no puede reintentarse con el mismo id por el portal público, por la restricción real de las Rules actuales (`create` sí, `update` no, para clientes anónimos).
+- Motor financiero duplicado entre Finanzas y Dashboard (ahora sincronizado en resultados, pero sigue siendo dos copias de código) — unificarlo queda para una fase posterior, no es esta Baseline.
+- Sin datos reales de Verónica en Firestore para validar en producción (no verificable desde este entorno).
+- Tabla de desglose por entrenador en Finanzas y heatmap en Dashboard mantienen scroll horizontal contenido (no se convirtieron a cards, ver UI-003C/D).
+
+### Blockers
+
+**Ninguno encontrado.** El único candidato a blocker real de esta sesión (Dashboard mostrando cifras financieras distintas a Finanzas para Verónica/actividades) ya fue corregido en `ff1f4e4` y verificado por diff directo.
+
 ## PWA — verificación (2026-09-02)
 
 Revisado `sw.js`: estrategia network-first con fallback a caché (correcta, no sirve HTML obsoleto mientras hay conexión — sin bug). Se subió `CACHE_NAME` de v5 a v6 (commit `8e743df`) para que los usuarios offline reciban el código de esta sesión en cuanto vuelvan a conectar.
