@@ -1390,7 +1390,17 @@ miércoles 07:00-09:00"></textarea>
 
         function guardarEstadoNubeAgenda(trainerKeyScope) {
 
-            if (!window.bsAgendaCloudDocRef || window.bsAgendaAplicandoNube) return Promise.resolve();
+            // Hallazgo real (hotfix edición de fichas, 2026-09-02): esta función SIEMPRE
+            // resolvía en éxito, incluso cuando el guard de abajo omitía el guardado por
+            // completo, o cuando .set() fallaba de verdad -- el .catch() se limitaba a
+            // hacer console.error() sin relanzar, así que cualquier código que hiciera
+            // "await guardarEstadoNubeAgenda(...)" nunca podía enterarse de un fallo real.
+            // Se mantiene fire-and-forget para las llamadas existentes que ignoran el
+            // resultado (siguen sin romperse: la promesa nunca se rechaza, solo cambia lo
+            // que resuelve), pero ahora resuelve { ok:false, ... } en vez de éxito cuando
+            // no se ha guardado nada, para que quien SÍ necesite saberlo (guardarCliente())
+            // pueda distinguir un guardado real de uno omitido/fallido.
+            if (!window.bsAgendaCloudDocRef || window.bsAgendaAplicandoNube) return Promise.resolve({ ok: false, omitido: true });
 
             try {
 
@@ -1405,13 +1415,14 @@ miércoles 07:00-09:00"></textarea>
                 // cambiar el comportamiento de las llamadas existentes que la ignoran.
                 return window.bsAgendaCloudDocRef.set(payload, { merge: true })
                     .then(() => publicarReservasPublicas())
-                    .catch(err => console.error('Error guardando agenda en Firebase:', err));
+                    .then(() => ({ ok: true }))
+                    .catch(err => { console.error('Error guardando agenda en Firebase:', err); return { ok: false, err }; });
 
             } catch (err) {
 
                 console.error('Error preparando agenda para Firebase:', err);
 
-                return Promise.resolve();
+                return Promise.resolve({ ok: false, err });
 
             }
 
@@ -3671,7 +3682,7 @@ function calcularRentabilidadFicha(ficha) {
 
 
 
-        function guardarCliente() {
+        async function guardarCliente() {
 
             const name = document.getElementById('cust-name').value.trim();
 
@@ -3835,15 +3846,28 @@ function calcularRentabilidadFicha(ficha) {
 
 
 
+            const scopeGuardado = entrenadorVisto;
+            let idxEditado = -1;
+
             if (idFichaEditando) {
 
-                let idx = dbClientes[entrenadorVisto].findIndex(c => c.id === idFichaEditando);
+                idxEditado = dbClientes[scopeGuardado].findIndex(c => c.id === idFichaEditando);
 
-                if(idx !== -1) dbClientes[entrenadorVisto][idx] = ficha;
+                if (idxEditado === -1) {
+                    // Hallazgo real (hotfix edición de fichas, 2026-09-02): esto antes seguía
+                    // hasta guardar/cerrar como si todo hubiera ido bien, sin haber tocado nada
+                    // -- silenciosamente no-op si la ficha que se está editando ya no pertenece
+                    // al entrenadorVisto actual (p.ej. el selector de admin cambió de PT mientras
+                    // el modal estaba abierto).
+                    alert('No se ha podido guardar: esta ficha ya no pertenece al entrenador seleccionado. Cierra el modal y vuelve a abrir la ficha.');
+                    return;
+                }
+
+                dbClientes[scopeGuardado][idxEditado] = ficha;
 
             } else {
 
-                dbClientes[entrenadorVisto].push(ficha);
+                dbClientes[scopeGuardado].push(ficha);
 
             }
 
@@ -3855,11 +3879,56 @@ function calcularRentabilidadFicha(ficha) {
 
             localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
 
-            programarGuardadoNubeAgenda();
+            // Hallazgo real (hotfix edición de fichas, 2026-09-02): el guardado en la nube
+            // pasaba por programarGuardadoNubeAgenda() (debounce de 350 ms, fire-and-forget,
+            // sin await) y el modal se cerraba mostrando éxito de inmediato, ANTES de que el
+            // guardado en Firestore hubiera siquiera empezado a intentarse. Si ese guardado
+            // fallaba (o quedaba bloqueado por window.bsAgendaAplicandoNube, que además no
+            // reprogramaba ningún reintento) el error quedaba solo en consola y el cliente
+            // nunca se enteraba: la ficha parecía guardada en la UI pero el valor anterior
+            // seguía siendo el real en Firestore. Ahora se espera (await) la escritura real
+            // -- sigue usando el mismo guardado dirigido por trainerKey con merge:true de
+            // guardarEstadoNubeAgenda(), nunca el documento completo -- y solo si termina bien
+            // se cierra el modal y se muestra la ficha como guardada.
+            const btnGuardar = document.getElementById('btn-save-client');
+            if (btnGuardar) { btnGuardar.disabled = true; btnGuardar.textContent = 'Guardando...'; }
 
-            actualizarNombreEnAgendaSiCambia(ficha.id);
+            try {
 
-            cerrarModal(); recalcularKPIs(); renderClientes(); renderAgenda();
+                const resultadoGuardado = await guardarEstadoNubeAgenda(scopeGuardado);
+                if (!resultadoGuardado || resultadoGuardado.ok !== true) {
+                    throw resultadoGuardado?.err || new Error(resultadoGuardado?.omitido ? 'GUARDADO_OMITIDO_REINTENTAR' : 'GUARDADO_FALLIDO');
+                }
+
+                actualizarNombreEnAgendaSiCambia(ficha.id);
+
+                cerrarModal(); recalcularKPIs(); renderClientes(); renderAgenda();
+
+            } catch (err) {
+
+                // Deshace la mutación local: sin esto, dbClientes/localStorage seguirían
+                // mostrando el valor nuevo aunque Firestore no lo tenga -- exactamente el
+                // "falso éxito" que se pidió eliminar.
+                // Busca por id en vez de reutilizar el índice capturado antes del await: si
+                // llegó un snapshot de otro PT mientras se esperaba, dbClientes[scopeGuardado]
+                // puede ser un array distinto (reemplazado entero por aplicarEstadoNubeAgenda).
+                const idxActual = (dbClientes[scopeGuardado] || []).findIndex(c => c.id === ficha.id);
+                if (idFichaEditando) {
+                    if (fichaAnterior && idxActual !== -1) dbClientes[scopeGuardado][idxActual] = fichaAnterior;
+                } else if (idxActual !== -1) {
+                    dbClientes[scopeGuardado].splice(idxActual, 1);
+                }
+                localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
+                renderClientes();
+
+                console.error(`[BESOUL Agenda] guardarCliente: fallo al guardar en Firestore · trainerKey=${scopeGuardado} · clientId=${ficha.id} · code=${err?.code || '(sin código)'} · message=${err?.message || err}`, err);
+                alert('No se ha podido guardar la ficha en el servidor. Revisa tu conexión e inténtalo de nuevo -- el cambio NO se ha guardado.');
+
+            } finally {
+
+                if (btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = 'Guardar Ficha'; }
+
+            }
 
         }
 

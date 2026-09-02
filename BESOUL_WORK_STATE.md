@@ -557,6 +557,28 @@ Revisado `sw.js`: estrategia network-first con fallback a caché (correcta, no s
 
 **Siguiente paso real para cerrar esto**: reproducir en el navegador con el token real que falla, abrir la consola de DevTools y leer la línea `[BESOUL Reservas] Fallo en "..."`. Si `code` es `permission-denied`, hay que comparar carácter a carácter las Rules realmente pegadas en Firebase Console contra `firestore.rules` de este repo (posible error de copiado/despliegue manual, no reproducible por lectura de código). Si `code` es otra cosa (`not-found`, `unavailable`, o ninguno — es decir, una excepción JS), la etapa indicada en el log señala exactamente dónde mirar a continuación.
 
+## HOTFIX-CLIENT-SAVE — edición de ficha de cliente no persistía (2026-09-02)
+
+✅ **Blocker real confirmado y corregido, post-merge a `main` (rama `HOTFIX-CLIENT-SAVE`, sin merge todavía).**
+
+**Síntoma**: editar un campo de ficha de cliente (p.ej. teléfono) parecía guardarse (la UI lo aceptaba, el modal se cerraba sin error) pero al reabrir la ficha o recargar la página, el valor anterior seguía ahí.
+
+**Causa raíz confirmada por código** (`agenda.html`): `guardarEstadoNubeAgenda()` — la función que hace el guardado real en Firestore (`.set(payload, {merge:true})` dirigido por trainerKey) — **resolvía como éxito en TODOS los casos, incluidos los de fallo**:
+- Si el guard `!window.bsAgendaCloudDocRef || window.bsAgendaAplicandoNube` bloqueaba el guardado, devolvía `Promise.resolve()` sin distinguir "omitido" de "guardado".
+- Si `.set()` fallaba de verdad (red, permisos, cuota...), el `.catch(err => console.error(...))` interno se limitaba a loguear y devolvía una promesa RESUELTA (nunca rechazada) — el error quedaba solo en consola, nunca llegaba al código que llamó a la función.
+
+Y `guardarCliente()` (el guardado de ficha desde el modal) llamaba a esto vía `programarGuardadoNubeAgenda()` (debounce de 350 ms, fire-and-forget, sin `await`) y cerraba el modal + mostraba la ficha como guardada de forma SÍNCRONA e INCONDICIONAL, sin esperar ni comprobar el resultado real del guardado en absoluto.
+
+**Corrección aplicada** (mínima, sin tocar el mecanismo de escritura dirigida por trainerKey):
+- `guardarEstadoNubeAgenda()` ahora resuelve `{ok:true}` en éxito real y `{ok:false, err|omitido}` en cualquier otro caso — sigue sin rechazar la promesa nunca, así que las demás llamadas fire-and-forget existentes (debounce, disponibilidad, aceptar/rechazar reservas...) siguen funcionando exactamente igual, no se tocó ningún otro flujo.
+- `guardarCliente()` ahora es `async`, llama directamente (sin pasar por el debounce) a `guardarEstadoNubeAgenda(entrenadorVisto)` y hace `await` del resultado real. Solo si `ok===true` cierra el modal y muestra la ficha como guardada. Si falla: deshace la mutación local (dbClientes + localStorage vuelven al valor anterior, buscando por id, no por índice capturado, para ser seguro incluso si llegó un snapshot de otro PT mientras se esperaba), mantiene el modal abierto, muestra un `alert` explícito de que NO se ha guardado, y hace `console.error` con la etapa/trainerKey/clientId/`error.code`/`error.message` reales (sin datos personales).
+- Añadido además un guard defensivo: si al guardar `idFichaEditando` ya no aparece en `dbClientes[entrenadorVisto]` (p.ej. el selector de admin cambió de PT con el modal abierto), avisa y no guarda nada, en vez de seguir silenciosamente sin tocar nada y cerrar como si hubiera ido bien.
+- Botón "Guardar Ficha" se deshabilita y muestra "Guardando..." durante el `await` (mismo patrón ya usado en `enviarSolicitud()` de `reservas.html`), para evitar doble envío.
+
+**No tocado**: Finanzas, Reservas, WhatsApp, UI/diseño, Firestore Rules, el mecanismo de escritura dirigida por trainerKey (`estadoLocalAgendaParaNube`), ningún otro llamador de `guardarEstadoNubeAgenda()`.
+
+**Rama**: `HOTFIX-CLIENT-SAVE`, creada desde `main` (`7418fc7`). Sin merge todavía.
+
 ## Reservas — token malformado "?t=~?t=res_xxx" (confirmado y corregido, 2026-09-02)
 
 ✅ **Causa real localizada con evidencia de código, no supuesta.**
