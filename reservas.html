@@ -118,7 +118,55 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    let token = new URLSearchParams(location.search).get('t') || new URLSearchParams(location.search).get('token') || '';
+    // Contrato único de token: un token real de BESOUL siempre empieza por "res_"
+    // seguido de caracteres alfanumericos/"_" (formato real: generarTokenReservaCliente()
+    // en agenda.html produce "res_<a>_<b>", ambos en base36 minúscula). Cualquier otra
+    // cosa (URL completa, "?t=...", "~?t=...", o texto arbitrario) se intenta recuperar
+    // de forma segura aquí; si no se puede, se devuelve null y SIEMPRE se muestra el
+    // error controlado — nunca se acepta un texto arbitrario como si fuera un token.
+    const TOKEN_RESERVA_RE = /^res_[a-z0-9_]{3,60}$/;
+    function normalizarTokenReserva(raw){
+      let v = String(raw == null ? '' : raw).trim();
+      if (!v) return null;
+      // Hasta 5 rondas de decodificación por si el valor llegó envuelto varias veces
+      // (p.ej. un enlace copiado desde un mensaje que a su vez ya estaba codificado).
+      for (let i = 0; i < 5; i++) {
+        let decoded;
+        try { decoded = decodeURIComponent(v); } catch (e) { break; }
+        if (decoded === v) break;
+        v = decoded;
+      }
+      v = v.trim();
+      // Si lo pegado es una URL completa o un fragmento tipo "?t=res_x" / "~?t=res_x",
+      // el propio token real (alfabeto base36, sin "=") nunca puede contener "t=" en su
+      // interior, así que quedarnos con lo que hay tras la ÚLTIMA "t=" es seguro.
+      const idx = v.lastIndexOf('t=');
+      if (idx !== -1) v = v.slice(idx + 2).trim();
+      // Corta cualquier basura final tipo "&otro=parametro" si venía de una URL completa.
+      v = v.split('&')[0].split('#')[0].trim();
+      return TOKEN_RESERVA_RE.test(v) ? v : null;
+    }
+
+    (function autotestNormalizarTokenReserva(){
+      const casos = [
+        ['res_hbjaxre_ms5q2pzo', 'res_hbjaxre_ms5q2pzo'],
+        ['?t=res_hbjaxre_ms5q2pzo', 'res_hbjaxre_ms5q2pzo'],
+        ['~?t=res_hbjaxre_ms5q2pzo', 'res_hbjaxre_ms5q2pzo'],
+        ['https://app.besoulfitness.com/reservas.html?t=res_hbjaxre_ms5q2pzo', 'res_hbjaxre_ms5q2pzo'],
+        ['~%3Ft%3Dres_hbjaxre_ms5q2pzo', 'res_hbjaxre_ms5q2pzo'],
+        [encodeURIComponent('https://app.besoulfitness.com/reservas.html?t=res_hbjaxre_ms5q2pzo'), 'res_hbjaxre_ms5q2pzo'],
+        ['texto invalido', null],
+        ['', null],
+        ['res_', null]
+      ];
+      casos.forEach(([entrada, esperado]) => {
+        const real = normalizarTokenReserva(entrada);
+        if (real !== esperado) console.warn(`[BESOUL Reservas] autotest normalizarTokenReserva falló para "${entrada}": esperado ${esperado}, obtenido ${real}`);
+      });
+    })();
+
+    const _tParamCrudo = new URLSearchParams(location.search).get('t') || new URLSearchParams(location.search).get('token') || '';
+    let token = _tParamCrudo ? normalizarTokenReserva(_tParamCrudo) : '';
     let clientData = null;
     let scheduleData = null;
     let selected = null;
@@ -270,17 +318,24 @@
     }
 
     function usarTokenManual(){
-      const t=document.getElementById('manual-token').value.trim();
-      if(!t) return;
+      const raw=document.getElementById('manual-token').value.trim();
+      if(!raw) return;
+      // Antes esto envolvía CUALQUIER texto pegado (incluida una URL completa o un
+      // fragmento ya roto tipo "~?t=res_x") en un nuevo "?t=" sin validar ni desenvolver
+      // nada -- así es exactamente como se producía "?t=~%3Ft%3Dres_...": el usuario
+      // pegó algo que ya venía mal, y esta función lo re-envolvía en vez de recuperarlo.
+      const t = normalizarTokenReserva(raw);
+      if(!t){ alert('Ese código no tiene un formato válido. Revisa que sea el código/enlace que te envió BESOUL.'); return; }
       location.href = `${location.pathname}?t=${encodeURIComponent(t)}`;
     }
 
     async function init(){
-      if(!token){
+      if(!_tParamCrudo){
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('token-screen').classList.remove('hidden');
         return;
       }
+      if(!token) return showError('No se ha encontrado tu enlace de reservas. Pide a BESOUL que te envíe un enlace actualizado.');
       let etapa = 'lectura_besoulPublicClients';
       try{
         const clientSnap = await db.collection('besoulPublicClients').doc(token).get();

@@ -556,3 +556,30 @@ Revisado `sw.js`: estrategia network-first con fallback a caché (correcta, no s
 **Cambio aplicado** (`reservas.html`, función `init()`): el `catch` ahora registra en consola (nunca en la UI pública) la etapa exacta (`lectura_besoulPublicClients` / `lectura_besoulPublicSchedule` / `render_disponibilidad`), el token, el `trainerKey` si ya se resolvió, y `err.code`/`err.message` del error real de Firebase. El mensaje de error mostrado al cliente en pantalla no cambia. Cero cambios de Rules, cero cambios de arquitectura, cero cambios de comportamiento salvo el propio logging.
 
 **Siguiente paso real para cerrar esto**: reproducir en el navegador con el token real que falla, abrir la consola de DevTools y leer la línea `[BESOUL Reservas] Fallo en "..."`. Si `code` es `permission-denied`, hay que comparar carácter a carácter las Rules realmente pegadas en Firebase Console contra `firestore.rules` de este repo (posible error de copiado/despliegue manual, no reproducible por lectura de código). Si `code` es otra cosa (`not-found`, `unavailable`, o ninguno — es decir, una excepción JS), la etapa indicada en el log señala exactamente dónde mirar a continuación.
+
+## Reservas — token malformado "?t=~?t=res_xxx" (confirmado y corregido, 2026-09-02)
+
+✅ **Causa real localizada con evidencia de código, no supuesta.**
+
+**Síntoma reportado**: URL con `?t=~%3Ft%3Dres_hbjaxre_ms5q2pzo` en vez de `?t=res_hbjaxre_ms5q2pzo`. Decodificado una vez: el parámetro `t` recibido era literalmente el string `~?t=res_hbjaxre_ms5q2pzo`.
+
+**Origen descartado con evidencia** (no había que tocarlo, y no se tocó): todo el lado de generación en `agenda.html` es limpio.
+- `generarTokenReservaCliente()` (`agenda.html:5707`) solo produce `res_<base36>_<base36>`, sin caracteres especiales.
+- `c.reservaToken` solo se asigna en dos sitios (`agenda.html:5750` y `:6443`), ambos llamando directamente a `generarTokenReservaCliente()` — nunca desde un campo de texto libre ni desde datos pegados por un usuario.
+- `urlReservasCliente(token)` (`agenda.html:5718`) hace un único `encodeURIComponent(token)` sobre un token ya limpio — sin doble envoltura.
+- `copiarTextoBesoul()` (`agenda.html:5722`) copia el texto tal cual, sin transformarlo.
+- El módulo WhatsApp click-to-chat (`BS_WHATSAPP_PLANTILLAS`, `agenda.html:2002-2017`) **no incluye el enlace de reservas en ningún mensaje** — es un motor totalmente aparte (recordatorios/confirmaciones de citas), así que no puede ser el vector de corrupción.
+- `copiarLinkReservaCliente()` (`agenda.html:5735`) sí republica `besoulPublicClients/{token}` antes de copiar en ambas ramas: si el cliente aún no tenía token, `await guardarEstadoNubeAgenda()` (que encadena `.then(() => publicarReservasPublicas())`, `agenda.html:1406-1408`); si ya lo tenía, llama a `publicarReservasPublicas()` directamente. Confirmado que el enlace copiado desde Agenda siempre corresponde a un documento ya publicado.
+
+**Causa real**: `usarTokenManual()` en `reservas.html` (input `#manual-token`, pantalla que aparece cuando se entra sin `?t=`). Tomaba lo que hubiera en el campo, SIN normalizar ni validar, y lo envolvía directamente: `location.href = ...?t=${encodeURIComponent(t)}`. Si un usuario pegaba ahí algo que ya venía roto — una URL completa, o un fragmento tipo `~?t=res_xxx` (típico de un enlace reenviado/copiado desde un chat, con el dominio/ruta recortados y un `~` sobrante delante) — la función lo volvía a envolver en un `?t=` nuevo en vez de recuperar el token real de dentro. `encodeURIComponent("~?t=res_hbjaxre_ms5q2pzo")` produce exactamente `~%3Ft%3Dres_hbjaxre_ms5q2pzo` — coincide carácter a carácter con lo reportado. El propio token suelto (`res_hbjaxre_ms5q2pzo`) tiene el formato real de `generarTokenReservaCliente()`, así que probablemente SÍ existía como documento real — no puedo confirmarlo desde este entorno sin acceso a Firestore de producción, y no lo doy por hecho.
+
+**Corrección aplicada** (`reservas.html`): nueva función única `normalizarTokenReserva(raw)` (contrato: solo acepta tokens con formato real `res_[a-z0-9_]{3,60}`, desenvuelve hasta 5 capas de `decodeURIComponent`, recupera lo que hay tras la última `t=` si venía como `?t=...`/`~?t=...`/URL completa, corta `&`/`#` sobrantes, devuelve `null` si no puede recuperar algo válido — nunca acepta texto arbitrario). Aplicada en dos puntos:
+- `init()`: el parámetro `?t=`/`?token=` de la URL ahora se normaliza antes de usarse — si había un parámetro pero no se pudo recuperar un token válido, se muestra el error controlado existente ("No se ha encontrado tu enlace..."); si no había parámetro en absoluto, se sigue mostrando la pantalla de código manual (comportamiento sin cambios).
+- `usarTokenManual()`: ahora normaliza lo pegado en el campo antes de construir la URL; si no puede recuperar un token válido, muestra un `alert` y no redirige — así no se puede volver a generar un enlace `?t=` doblemente envuelto desde este punto.
+- Autotest determinista inline (`autotestNormalizarTokenReserva`, se ejecuta solo, `console.warn` si algo falla) cubriendo: token limpio, `?t=...`, `~?t=...`, URL completa, el string exacto reportado en producción y su equivalente URL-encoded, más casos inválidos (texto arbitrario, vacío, `res_` sin cuerpo).
+
+**Enlaces nuevos generados desde Agenda**: sin cambios — ya eran (y siguen siendo) exactamente `https://.../reservas.html?t=<token>`, un único parámetro, sin anidar.
+
+**No se modificaron datos reales, no se regeneraron tokens masivamente, no se tocaron Firestore Rules.**
+
+Commit: ver `git log` (mensaje `fix: normalize/validate reservation token, stop re-wrapping malformed manual input`).
