@@ -54,6 +54,16 @@
         </div>
       </div>
 
+      <div id="success-panel" class="hidden p-8 md:p-12 text-center space-y-4">
+        <div class="w-16 h-16 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto">
+          <svg viewBox="0 0 24 24" class="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        </div>
+        <h2 class="text-xl md:text-2xl font-black text-white">Solicitud recibida</h2>
+        <p id="success-text" class="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">---</p>
+        <p class="text-[11px] text-slate-500 pt-2">El equipo BESOUL revisará tu solicitud y se pondrá en contacto contigo para confirmar día y hora.</p>
+        <button type="button" onclick="reiniciarFormulario()" class="mt-2 text-xs font-bold text-amber-400 hover:text-amber-300 underline underline-offset-4">Enviar otra solicitud</button>
+      </div>
+
       <form id="trial-form" class="p-6 md:p-8 space-y-5" novalidate>
         <input type="text" id="lead-empresa" class="hidden" tabindex="-1" autocomplete="off">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -182,9 +192,13 @@ function pintarCentros(){
   const centroParam = normalizarCentroId(qs('centro') || qs('center'));
   const visibles = centrosDisponibles.filter(c => c.activo !== false && c.visibleQR !== false);
   select.innerHTML = '<option value="">Selecciona centro</option>' + visibles.map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.nombre)}</option>`).join('');
+  select.disabled = false;
   if (centroParam && visibles.some(c => c.id === centroParam)) select.value = centroParam;
 }
 async function cargarCentros(){
+  const select = document.getElementById('centro');
+  select.innerHTML = '<option value="">Cargando centros...</option>';
+  select.disabled = true;
   try {
     const snap = await db.collection('besoulPublicConfig').doc('centros').get();
     if (snap.exists && Array.isArray(snap.data().centros) && snap.data().centros.length) {
@@ -279,9 +293,11 @@ async function enviarSolicitud(evt){
     btn.disabled = true;
     btn.innerText = 'Enviando solicitud...';
     await registrarValoracionUnica(data);
-    document.getElementById('trial-form').reset();
-    pintarCentros();
-    mostrarMensaje('ok', `<b>Solicitud recibida.</b><br>Gracias, ${escapeHTML(data.nombre)}. El equipo BESOUL contactará contigo para confirmar tu valoración en ${escapeHTML(data.centroNombre)}.`);
+    document.getElementById('success-text').textContent = `Gracias, ${data.nombre}. El equipo BESOUL contactará contigo para confirmar tu valoración en ${data.centroNombre}.`;
+    document.getElementById('trial-form').classList.add('hidden');
+    const panel = document.getElementById('success-panel');
+    panel.classList.remove('hidden');
+    panel.scrollIntoView({behavior:'smooth', block:'center'});
   } catch (err) {
     console.error(err);
     mostrarMensaje('error', escapeHTML(err.message || 'No se ha podido enviar la solicitud. Inténtalo de nuevo.'));
@@ -289,6 +305,13 @@ async function enviarSolicitud(evt){
     btn.disabled = false;
     btn.innerText = 'Solicitar valoración';
   }
+}
+function reiniciarFormulario(){
+  document.getElementById('trial-form').reset();
+  document.getElementById('form-msg').classList.add('hidden');
+  document.getElementById('success-panel').classList.add('hidden');
+  document.getElementById('trial-form').classList.remove('hidden');
+  pintarCentros();
 }
 function inicializar(){
   if (!firebase.apps.length) firebase.initializeApp(BS_FIREBASE_CONFIG);
