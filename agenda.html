@@ -6161,6 +6161,7 @@ Cancelar = no hacer nada`,
 
             localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
 
+            let errorSincronizacion = false;
             try {
                 const fs = firebase.firestore();
                 await fs.collection(BS_SOLICITUDES_ELIMINACION_COLLECTION).doc(id).set({
@@ -6175,7 +6176,7 @@ Cancelar = no hacer nada`,
                 }
             } catch (e) {
                 console.error(e);
-                alert('La baja se aplicó localmente pero hubo un error al sincronizar con la nube. Vuelve a intentarlo.');
+                errorSincronizacion = true;
             }
 
             guardarEstadoNubeAgenda(s.trainerKey);
@@ -6184,7 +6185,13 @@ Cancelar = no hacer nada`,
             renderClientes();
             renderAgenda();
             renderSolicitudesEliminacion();
-            alert(`Ficha de "${ficha.nombre}" dada de baja correctamente.`);
+            // Un solo alert final, nunca dos mensajes contradictorios seguidos (aviso de error +
+            // "correctamente" incondicional a continuación, como ocurría antes de este fix).
+            if (errorSincronizacion) {
+                alert(`La baja de "${ficha.nombre}" se aplicó localmente, pero hubo un error al sincronizar el estado de la solicitud/enlace público con el servidor. Revisa tu conexión y comprueba manualmente el estado de la solicitud antes de darla por cerrada.`);
+            } else {
+                alert(`Ficha de "${ficha.nombre}" dada de baja correctamente.`);
+            }
         }
 
         function iniciarModuloSolicitudesEliminacion() {
