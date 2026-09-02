@@ -336,6 +336,14 @@ Para que una futura sesión no tenga que releer todo el prompt del usuario, resu
 
 **Revisado y descartado (severidad baja, ya aceptado como límite conocido del proyecto)**: desincronización de `trainerKey`/nombre denormalizado en leads si se renombra un entrenador (mismo tipo de gap ya aceptado para Miguel Fenech — no se hace migración automática); ausencia de deduplicación de leads por teléfono/email en la creación manual desde CRM (sí existe deduplicación real, vía transacción, en la creación pública desde `valoracion.html`, ya verificada aparte esta sesión).
 
+## UX/UI premium global (FASE 23) — pasada "cambios seguros" completa (2026-09-02)
+
+✅ Aplicada a las 6 páginas restantes (`agenda.html` ya tenía su rediseño completo de UI-003A): `valoracion.html`, `reservas.html`, `index.html`, `crm.html`, `finanzas.html`, `dashboard.html`. Commits: `bf4ecf9`, `21d3eca`, `ab745a6`, `8ea3060`, `e08bec9`, `0c7e448`.
+
+**Alcance seguido**: exactamente la sección 3 ("Cambios seguros") de `UI_ROADMAP_BESOUL.md` — focus rings (`focus:ring-2 focus:ring-{acento del módulo}`), radios normalizados a `rounded-xl`, `<label for>` asociado donde faltaba, `aria-live`/`role="alert"` en mensajes de error, `role="dialog" aria-modal="true"` en el modal de CRM. `valoracion.html` y `reservas.html` (client-facing, menor riesgo) recibieron además un panel de confirmación de éxito con check verde, consistente entre ambas.
+
+**Deliberadamente NO hecho** (sección 4 del roadmap, "cambios con riesgo" — requieren revisión listener-por-listener antes de tocar el DOM, no se mezclan con un commit de estilo): sustituir las tablas de CRM/Finanzas/Dashboard por cards en mobile (patrón ya usado en agenda.html); añadir bottom-nav a los módulos que no lo tienen. Ambos quedan como el siguiente bloque de trabajo si se quiere seguir profundizando en UI, cada uno en su propio ticket/commit aislado.
+
 ## PWA — verificación (2026-09-02)
 
 Revisado `sw.js`: estrategia network-first con fallback a caché (correcta, no sirve HTML obsoleto mientras hay conexión — sin bug). Se subió `CACHE_NAME` de v5 a v6 (commit `8e743df`) para que los usuarios offline reciban el código de esta sesión en cuanto vuelvan a conectar.
