@@ -65,12 +65,26 @@
         </div>
       </div>
       <div class="flex items-center gap-2 flex-wrap justify-center md:justify-end">
+        <a href="./dashboard.html" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">Dashboard</a>
         <a href="./agenda.html" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">Agenda</a>
         <a href="./crm.html" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">CRM</a>
         <button onclick="refrescarTodoManual()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition">Actualizar</button>
         <button onclick="logout()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-400 border border-slate-800 hover:text-white transition">Salir</button>
       </div>
     </header>
+
+    <!-- Navegación global inferior (mobile). finanzas.html ya es admin-only (bloqueado en su
+         propio login), así que los 5 accesos se muestran siempre -- no hace falta filtrar por
+         rol aquí, a diferencia de agenda.html/crm.html donde también entran PT. -->
+    <nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800" style="padding-bottom: env(safe-area-inset-bottom);">
+      <div class="grid grid-cols-5 text-center">
+        <a href="./dashboard.html" class="flex flex-col items-center gap-0.5 py-2.5 text-slate-500"><span class="text-base leading-none">◆</span><span class="text-[10px] font-bold">Dashboard</span></a>
+        <a href="./agenda.html" class="flex flex-col items-center gap-0.5 py-2.5 text-slate-500"><span class="text-base leading-none">▤</span><span class="text-[10px] font-bold">Agenda</span></a>
+        <a href="./crm.html" class="flex flex-col items-center gap-0.5 py-2.5 text-slate-500"><span class="text-base leading-none">◎</span><span class="text-[10px] font-bold">CRM</span></a>
+        <a href="./finanzas.html" class="flex flex-col items-center gap-0.5 py-2.5 text-emerald-400"><span class="text-base leading-none">€</span><span class="text-[10px] font-bold">Finanzas</span></a>
+        <a href="./index.html" class="flex flex-col items-center gap-0.5 py-2.5 text-slate-500"><span class="text-base leading-none">⋯</span><span class="text-[10px] font-bold">Más</span></a>
+      </div>
+    </nav>
 
     <div class="bg-slate-950 px-6 py-3 border-b border-slate-900 flex flex-wrap gap-2">
       <button id="btn-tab-directo" onclick="switchTab('directo')" class="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950 shadow">Mes en curso</button>
@@ -80,7 +94,7 @@
       <button id="btn-tab-config" onclick="switchTab('config')" class="px-4 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white bg-slate-900/50 border border-slate-800">Centros / PT</button>
     </div>
 
-    <main class="flex-1 p-6 space-y-6">
+    <main class="flex-1 p-6 pb-24 md:pb-6 space-y-6">
       <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-4 mb-6">
         <div class="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4">
           <div>

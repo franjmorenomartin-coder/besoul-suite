@@ -312,13 +312,18 @@
 
             </div>
 
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap justify-end">
 
                 <button onclick="abrirModalDisponibilidadReservas()" class="bs-btn-primary px-4 py-2.5 text-sm rounded-xl transition">+ Disponibilidad</button>
                 <button onclick="abrirModalSolicitudesReservas()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Reservas <span id="badge-reservas-pendientes" class="hidden ml-1 bg-emerald-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
                 <button onclick="abrirModalAvisosManana()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Avisos mañana <span id="badge-avisos-manana" class="hidden ml-1 bg-cyan-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
                 <button id="btn-admin-entrenadores" onclick="abrirModalEntrenadores()" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Entrenadores</button>
                 <button id="btn-admin-solicitudes-eliminacion" onclick="abrirModalSolicitudesEliminacion()" class="hidden relative bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Solicitudes <span id="badge-solicitudes-eliminacion" class="hidden ml-1 bg-red-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
+
+                <span class="w-px h-6 bg-white/10 mx-1 hidden sm:block"></span>
+                <a href="crm.html" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">CRM</a>
+                <a id="nav-dashboard" href="dashboard.html" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Dashboard</a>
+                <a id="nav-finanzas" href="finanzas.html" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Finanzas</a>
 
                 <button onclick="logout()" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Salir</button>
 
@@ -2729,11 +2734,15 @@ function calcularRentabilidadFicha(ficha) {
                     document.getElementById('admin-trainer-filter-block').classList.remove('hidden');
                     document.getElementById('btn-admin-entrenadores').classList.remove('hidden');
                     document.getElementById('btn-admin-solicitudes-eliminacion').classList.remove('hidden');
+                    document.getElementById('nav-dashboard').classList.remove('hidden');
+                    document.getElementById('nav-finanzas').classList.remove('hidden');
                     configurarSelectorAdmin();
                 } else {
                     document.getElementById('admin-trainer-filter-block').classList.add('hidden');
                     document.getElementById('btn-admin-entrenadores').classList.add('hidden');
                     document.getElementById('btn-admin-solicitudes-eliminacion').classList.add('hidden');
+                    document.getElementById('nav-dashboard').classList.add('hidden');
+                    document.getElementById('nav-finanzas').classList.add('hidden');
                 }
 
                 iniciarSincronizacionNubeAgenda();

@@ -72,12 +72,28 @@
         </div>
       </div>
       <div class="flex items-center gap-2 flex-wrap justify-end">
+        <a id="nav-dashboard" href="dashboard.html" class="hidden px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">Dashboard</a>
         <a href="agenda.html" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">Agenda</a>
-        <a href="finanzas.html" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">Finanzas</a>
+        <a id="nav-finanzas" href="finanzas.html" class="hidden px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-300 border border-slate-800 hover:text-white transition">Finanzas</a>
         <button onclick="abrirModalLead()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-500 text-slate-950 hover:bg-amber-600 transition">+ Nuevo lead</button>
         <button onclick="logoutCRM()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-400 border border-slate-800 hover:text-white transition">Salir</button>
       </div>
     </header>
+
+    <!-- Navegación global inferior (mobile): igual criterio de permisos que el header --
+         los enlaces a Dashboard/Finanzas solo se muestran a admin (esAdmin() real, no un
+         permiso visual inventado aparte). CRM no tiene bottom-nav propia hoy, así que esta
+         es la única barra inferior de esta página (sin conflicto de dos barras apiladas,
+         a diferencia de agenda.html, que conserva su tab-bar interna sin tocar). -->
+    <nav id="bottom-nav-global" class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800" style="padding-bottom: env(safe-area-inset-bottom);">
+      <div id="bottom-nav-items" class="grid grid-cols-3 text-center">
+        <a id="bn-dashboard" href="dashboard.html" class="hidden flex-col items-center gap-0.5 py-2.5 text-slate-500"><span class="text-base leading-none">◆</span><span class="text-[10px] font-bold">Dashboard</span></a>
+        <a href="agenda.html" class="flex flex-col items-center gap-0.5 py-2.5 text-slate-500"><span class="text-base leading-none">▤</span><span class="text-[10px] font-bold">Agenda</span></a>
+        <a href="crm.html" class="flex flex-col items-center gap-0.5 py-2.5 text-cyan-400"><span class="text-base leading-none">◎</span><span class="text-[10px] font-bold">CRM</span></a>
+        <a id="bn-finanzas" href="finanzas.html" class="hidden flex-col items-center gap-0.5 py-2.5 text-slate-500"><span class="text-base leading-none">€</span><span class="text-[10px] font-bold">Finanzas</span></a>
+        <a href="index.html" class="flex flex-col items-center gap-0.5 py-2.5 text-slate-500"><span class="text-base leading-none">⋯</span><span class="text-[10px] font-bold">Más</span></a>
+      </div>
+    </nav>
 
     <section class="bg-slate-950 px-6 py-4 border-b border-slate-900 space-y-4">
       <div class="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-10 gap-3 text-center text-xs">
@@ -121,7 +137,7 @@
       </div>
     </section>
 
-    <main class="flex-1 p-6 grid grid-cols-1 xl:grid-cols-4 gap-6">
+    <main class="flex-1 p-6 pb-24 md:pb-6 grid grid-cols-1 xl:grid-cols-4 gap-6">
       <section class="xl:col-span-3 bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col min-h-[700px]">
         <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
           <div>
@@ -498,6 +514,15 @@ async function iniciarSesionAutenticada(user) {
   document.getElementById('lbl-usuario').innerText = nombreUsuarioPerfil();
   document.getElementById('lbl-rol').innerText = esAdmin() ? 'Administrador' : 'Entrenador';
   document.getElementById('filter-month').value = mesActualInput();
+  // Dashboard/Finanzas son admin-only (bloqueado en su propio login) -- el enlace solo se
+  // muestra si el usuario real puede entrar, nunca un permiso visual inventado aparte.
+  if (esAdmin()) {
+    ['nav-dashboard','nav-finanzas','bn-dashboard','bn-finanzas'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.classList.remove('hidden'); if (el.closest('#bottom-nav-items')) el.classList.add('flex'); }
+    });
+    document.getElementById('bottom-nav-items')?.classList.replace('grid-cols-3','grid-cols-5');
+  }
 
   await cargarCentros();
   await cargarUsuariosBesoul();

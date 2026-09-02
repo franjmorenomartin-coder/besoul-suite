@@ -390,6 +390,24 @@ Para que una futura sesión no tenga que releer todo el prompt del usuario, resu
 
 **Siguiente**: UI-003E navegación global (header/bottom-nav consistentes en todos los módulos, respetando permisos reales).
 
+## UI-003E — Navegación global (2026-09-02)
+
+**Modelo de permisos real verificado antes de tocar nada** (no se inventó ningún permiso visual nuevo): `agenda.html`/`crm.html` — cualquier usuario activo (PT o admin) puede entrar, cada página gestiona visibilidad de acciones admin internamente. `finanzas.html`/`dashboard.html` — login bloqueado a `rol!=='admin'` (ambos ya tiraban `throw new Error(...)` antes de este cambio; confirmado leyendo el código, no asumido).
+
+**CRM (`crm.html`)**: header gana enlaces "Dashboard"/"Finanzas" (antes solo tenía "Agenda"+"Finanzas", y "Finanzas" se mostraba a CUALQUIERA aunque un PT no pudiera realmente entrar — corregido: ahora también oculto por defecto). Nueva bottom-nav (`#bottom-nav-global`, `md:hidden`, primera barra inferior de esta página, no había ninguna antes) con Dashboard/Agenda/CRM/Finanzas/Más — Dashboard y Finanzas ocultos por defecto (`hidden`) y solo se revelan (clase `hidden` quitada + `grid-cols-3`→`grid-cols-5`) dentro del mismo bloque `if (esAdmin())` que ya existía para gatear otras acciones admin de esta página — reutiliza el rol real, no lo duplica.
+
+**Finanzas/Dashboard**: ambas ya eran admin-only en su propio login, así que su bottom-nav (nueva en las dos) muestra los 5 accesos siempre, sin lógica condicional adicional. `finanzas.html` gana el enlace "Dashboard" que le faltaba en el header.
+
+**Agenda**: **NO se le añadió una segunda barra inferior** — ya tiene su propia tab-bar interna (`#mobile-agenda-tabs`: Agenda/Clientes/Grupos/Reservas, navegación DENTRO del módulo, no entre módulos) y apilar dos barras habría sido exactamente el ruido que se pidió evitar. En su lugar, el header (que no tenía NINGÚN enlace cruzado a otros módulos) gana "CRM" (siempre) y "Dashboard"/"Finanzas" (ocultos por defecto, revelados en el mismo bloque `if (rolActivo === 'admin') {...} else {...}` que ya alternaba `btn-admin-entrenadores`/`btn-admin-solicitudes-eliminacion` — mismo patrón exacto, mismo rol real). Se añadió `flex-wrap` a la fila de botones del header para que quepan sin desbordar en pantallas intermedias.
+
+**Acento del ítem activo**: cada página resalta su propio nav item con SU acento ya establecido en `DESIGN_SYSTEM_BESOUL.md` (CRM=cyan, Finanzas=emerald, Dashboard=purple) y dejan el resto en gris neutro — nunca los 5 coloreados a la vez en la misma pantalla, que es la lectura que se le da a "no utilizar cinco colores diferentes, una única acción/acento principal": uno resaltado, el resto neutro, por página.
+
+**`<main>` de las 3 páginas con nueva bottom-nav** gana `pb-24 md:pb-6` (o equivalente) para que el contenido no quede tapado detrás de la barra fija en mobile.
+
+**Listeners revisados**: cero funciones de negocio tocadas — todo son enlaces `<a href>` de navegación entre páginas o clases CSS de mostrar/ocultar reutilizando checks de rol ya existentes (`esAdmin()` en CRM, `rolActivo==='admin'` en Agenda). No se ha tocado auth ni el login de ninguna página.
+
+**Siguiente**: UI-003F coherencia final (revisión de conjunto: tipografía, espaciados, empty/success/error states, antes de parar para la revisión visual del usuario).
+
 ## PWA — verificación (2026-09-02)
 
 Revisado `sw.js`: estrategia network-first con fallback a caché (correcta, no sirve HTML obsoleto mientras hay conexión — sin bug). Se subió `CACHE_NAME` de v5 a v6 (commit `8e743df`) para que los usuarios offline reciban el código de esta sesión en cuanto vuelvan a conectar.
