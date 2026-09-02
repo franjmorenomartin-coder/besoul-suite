@@ -530,6 +530,12 @@ Ninguna de estas tres reglas se ha desplegado desde este entorno (sin Firebase C
 
 **Ninguno encontrado.** El único candidato a blocker real de esta sesión (Dashboard mostrando cifras financieras distintas a Finanzas para Verónica/actividades) ya fue corregido en `ff1f4e4` y verificado por diff directo.
 
+## Revisión final de seguridad — besoulSuite/agenda: signedIn() → isActiveUser() (2026-09-02)
+
+✅ Corregido en `firestore.rules` (propuesta, sigue sin desplegar). Hallazgo del usuario, verificado: `signedIn()` solo comprueba `request.auth != null && request.auth.token.email != null` — NO comprueba el perfil en `besoulUsers`. Un usuario autenticado pero marcado `activo:false` conservaba acceso de lectura/escritura al documento `besoulSuite/agenda` completo (todos los clientes/citas de todos los PT). Cambiado a `isActiveUser()`. Verificado que no rompe ningún flujo real: tanto `agenda.html` como el único otro escritor de este documento (`crm.html`, `convertirLeadEnCliente`) ya exigen `activo===true` a nivel de aplicación antes de dejar operar — el cambio de Rules solo cierra el hueco de que las Rules por sí solas no lo exigían. El bloque OPCIONAL/FASE 2 (comentado, aislamiento de escritura por trainerKey) sigue sin activar, cambio independiente.
+
+**Modelo de aislamiento documentado sin exagerar** (ver detalle completo en `SECURITY_RULES.md`): ownership real por trainerKey en `besoulLeads`/`besoulPublicClients`/`besoulReservas`/`besoulSolicitudesEliminacion`; `besoulSuite/finanzas` solo admin; **`besoulSuite/agenda` sin aislamiento de lectura por PT** (limitación arquitectónica real, no resuelta ni resoluble solo con Rules mientras el documento sea monolítico) y sin aislamiento de escritura activo (FASE 2 preparada, comentada, pendiente de activar tras validación en producción).
+
 ## PWA — verificación (2026-09-02)
 
 Revisado `sw.js`: estrategia network-first con fallback a caché (correcta, no sirve HTML obsoleto mientras hay conexión — sin bug). Se subió `CACHE_NAME` de v5 a v6 (commit `8e743df`) para que los usuarios offline reciban el código de esta sesión en cuanto vuelvan a conectar.

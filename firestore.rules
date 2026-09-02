@@ -28,6 +28,16 @@ rules_version = '2';
 //      entrenador podía escribir una reserva con el clientId de OTRO
 //      cliente del mismo entrenador (besoulPublicClients permite "get"
 //      público). Ver BESOUL_WORK_STATE.md, sección Reservas.
+//   5. besoulSuite/agenda: signedIn() -> isActiveUser() (revisión final de
+//      seguridad, 2026-09-02). signedIn() solo comprueba autenticación/email,
+//      no el perfil en besoulUsers -- un usuario autenticado pero marcado
+//      activo:false conservaba acceso de lectura/escritura al documento
+//      Agenda completo. No rompe ningún flujo real (agenda.html y el único
+//      otro escritor, crm.html/convertirLeadEnCliente, ya exigen perfil
+//      activo a nivel de aplicación antes de dejar operar). El bloque
+//      OPCIONAL/FASE 2 (aislamiento de escritura por trainerKey, ver más
+//      abajo) sigue SIN activar -- este cambio es independiente y no
+//      requiere que FASE 2 esté activa.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -105,18 +115,24 @@ service cloud.firestore {
     }
 
     match /besoulSuite/{docId} {
-      // Agenda compartida: cualquier usuario autenticado de BESOUL puede leer/escribir agenda.
-      allow read, write: if signedIn() && docId == 'agenda';
+      // Agenda compartida: cualquier usuario ACTIVO de BESOUL puede leer/escribir agenda.
+      // isActiveUser() (no solo signedIn()) para que un usuario autenticado pero marcado
+      // activo:false en besoulUsers no conserve acceso -- revisión de seguridad 2026-09-02.
+      // No rompe ningún flujo real: tanto agenda.html como el único otro escritor de este
+      // documento (crm.html, convertirLeadEnCliente) ya exigen perfil activo en besoulUsers
+      // antes de dejar operar a nivel de aplicación; esto solo cierra el hueco de que las
+      // Rules por sí solas no lo exigían.
+      allow read, write: if isActiveUser() && docId == 'agenda';
 
       // Finanzas sigue reservado solo para administración.
       allow read, write: if isAdmin() && docId == 'finanzas';
 
       // --- OPCIONAL / FASE 2 (no activo por defecto) ---
-      // Sustituir la línea "allow read, write: if signedIn() && docId == 'agenda';"
+      // Sustituir la línea "allow read, write: if isActiveUser() && docId == 'agenda';"
       // de arriba por lo siguiente SOLO cuando se valide que el código ya
       // escribe siempre de forma dirigida por trainerKey (merge:true):
       //
-      // allow read: if signedIn() && docId == 'agenda';
+      // allow read: if isActiveUser() && docId == 'agenda';
       // allow write: if docId == 'agenda' && (
       //   isAdmin()
       //   || (isActiveUser()
