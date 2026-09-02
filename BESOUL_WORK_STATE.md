@@ -539,3 +539,20 @@ Ninguna de estas tres reglas se ha desplegado desde este entorno (sin Firebase C
 ## PWA — verificación (2026-09-02)
 
 Revisado `sw.js`: estrategia network-first con fallback a caché (correcta, no sirve HTML obsoleto mientras hay conexión — sin bug). Se subió `CACHE_NAME` de v5 a v6 (commit `8e743df`) para que los usuarios offline reciban el código de esta sesión en cuanto vuelvan a conectar.
+
+## Reservas públicas — "No se ha podido cargar la disponibilidad" (diagnóstico, 2026-09-02)
+
+⚠️ **No es un fix del bug — es diagnóstico + instrumentación.** No se pudo reproducir aquí (sin navegador/Firestore de producción disponibles en este entorno), y la traza de código no encuentra una causa que explique el fallo.
+
+**Descartado con evidencia de código** (no por suposición):
+- `reservas.html` solo hace `.doc(token).get()` / `.doc(trainerKey).get()` contra `besoulPublicClients`/`besoulPublicSchedule` — nunca `list`/`query`/`onSnapshot` de colección. Confirmado leyendo `init()` completo (`reservas.html:278-306` tras el cambio de hoy).
+- Las Rules — tanto las YA reales (documentadas en `SECURITY_RULES.md`) como las recién propuestas en `firestore.rules` — tienen `allow get: if true;` IDÉNTICO para `besoulPublicClients` y `besoulPublicSchedule`. El despliegue de hoy solo endureció `create`/`update` de `besoulPublicClients` y añadió cross-check a `besoulReservas.create` — ninguno de los dos toca el `get` que usa la carga inicial. **Conclusión: por lo que dice el código de las Rules, el despliegue de hoy no debería poder causar este fallo.**
+- Los tokens actuales (`generarTokenReservaCliente()` en `agenda.html:5707`) solo generan `[a-z0-9_]`, sin caracteres inválidos para un ID de documento.
+- `AGENDA-015` (commit `f8b8400`) no cambió el esquema que `publicarReservasPublicas()` escribe en Firestore (verificado leyendo la función completa, `agenda.html:6384-6468`) — mismo `semanal/excepciones/bloqueos` que `reservas.html` espera.
+- Todas las funciones de render entre las dos lecturas y mostrar `#app` (`renderSlots`, `generarSlots`, `huecosLibresFecha`, `renderGroupSlots`, `gruposAbiertosDisponibles`...) ya usan `?.`/`||[]`/`||{}` de forma defensiva (endurecidas en AGENDA-015) — no se encontró un `TypeError` reproducible por inspección.
+
+**No se pudo descartar** (requiere reproducción real): un documento `besoulPublicClients/{token}` legacy/stale sin `trainerKey`, o cualquier causa que solo se manifieste con datos reales de producción — el `catch` anterior mezclaba permission-denied, red y cualquier excepción JS en un único mensaje, sin forma de distinguirlos desde aquí.
+
+**Cambio aplicado** (`reservas.html`, función `init()`): el `catch` ahora registra en consola (nunca en la UI pública) la etapa exacta (`lectura_besoulPublicClients` / `lectura_besoulPublicSchedule` / `render_disponibilidad`), el token, el `trainerKey` si ya se resolvió, y `err.code`/`err.message` del error real de Firebase. El mensaje de error mostrado al cliente en pantalla no cambia. Cero cambios de Rules, cero cambios de arquitectura, cero cambios de comportamiento salvo el propio logging.
+
+**Siguiente paso real para cerrar esto**: reproducir en el navegador con el token real que falla, abrir la consola de DevTools y leer la línea `[BESOUL Reservas] Fallo en "..."`. Si `code` es `permission-denied`, hay que comparar carácter a carácter las Rules realmente pegadas en Firebase Console contra `firestore.rules` de este repo (posible error de copiado/despliegue manual, no reproducible por lectura de código). Si `code` es otra cosa (`not-found`, `unavailable`, o ninguno — es decir, una excepción JS), la etapa indicada en el log señala exactamente dónde mirar a continuación.

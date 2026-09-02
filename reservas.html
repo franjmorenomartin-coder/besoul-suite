@@ -281,14 +281,17 @@
         document.getElementById('token-screen').classList.remove('hidden');
         return;
       }
+      let etapa = 'lectura_besoulPublicClients';
       try{
         const clientSnap = await db.collection('besoulPublicClients').doc(token).get();
         if(!clientSnap.exists) return showError('No se ha encontrado tu enlace de reservas. Pide a BESOUL que te envíe un enlace actualizado.');
         clientData = clientSnap.data();
         if(clientData.activo === false || clientData.reservasOnlineActivas === false) return showError('Tu enlace de reservas no está activo para autogestión. Contacta con BESOUL para revisar tus reservas.');
+        etapa = 'lectura_besoulPublicSchedule';
         const scheduleSnap = await db.collection('besoulPublicSchedule').doc(clientData.trainerKey).get();
         if(!scheduleSnap.exists) return showError('Tu entrenador todavía no tiene disponibilidad publicada.');
         scheduleData = scheduleSnap.data();
+        etapa = 'render_disponibilidad';
         document.getElementById('client-name').textContent = clientData.clientName || 'Cliente';
         document.getElementById('trainer-name').textContent = clientData.trainerName || scheduleData.trainerName || 'Entrenador';
         document.getElementById('center-name').textContent = clientData.centroNombre || scheduleData.centroNombre || 'Centro BESOUL';
@@ -297,7 +300,10 @@
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
       } catch(err){
-        console.error(err);
+        // Logging temporal de diagnóstico (solo consola, nunca UI pública): sin este detalle,
+        // "no se ha podido cargar la disponibilidad" mezclaba permission-denied de Firestore,
+        // errores de red y cualquier excepción JS del render en un único mensaje indistinguible.
+        console.error(`[BESOUL Reservas] Fallo en "${etapa}" · token=${token || '(vacío)'} · trainerKey=${clientData?.trainerKey || '(no resuelto)'} · code=${err?.code || '(sin código)'} · message=${err?.message || err}`, err);
         showError('No se ha podido cargar la disponibilidad. Revisa el enlace o inténtalo más tarde.');
       }
     }
