@@ -408,6 +408,28 @@ Para que una futura sesión no tenga que releer todo el prompt del usuario, resu
 
 **Siguiente**: UI-003F coherencia final (revisión de conjunto: tipografía, espaciados, empty/success/error states, antes de parar para la revisión visual del usuario).
 
+## UI-003F — coherencia final (2026-09-02)
+
+Barrido de cierre sin cambios de código adicionales — todo lo que pedía ya quedó resuelto en los pasos B-E:
+- Tipografía: revisado `text-[9px]`/`text-[10px]` restante en CRM/Finanzas/Dashboard — en todos los casos son etiquetas de metadata sobre un valor más grande (`text-sm`/`text-3xl`), nunca contenido principal en sí. Coincide con la regla pedida ("pequeño solo para metadata realmente secundaria").
+- Touch targets: los ítems de la nueva bottom-nav (`py-2.5` + icono + texto) rondan 50-56px de alto, por encima del mínimo táctil recomendado (44px).
+- Estados de éxito: `valoracion.html`/`reservas.html` comparten el mismo patrón de check verde (UI-003 rollout inicial).
+- Sin errores de sintaxis detectados en la relectura de cada bloque tocado esta sesión (agenda/crm/finanzas/dashboard).
+
+**Parada según lo pedido — no se continúa a UX/UI más allá de este punto sin revisión visual del usuario.**
+
+### Resumen para la revisión visual del usuario
+
+**Commits de esta fase estructural** (todos en `BESOUL-BASELINE`, sin merge a `main`): `f651895` (UI-003B CRM), `21533a6` (UI-003C Finanzas), `575d9cf` (UI-003D Dashboard), `431fba9` (UI-003E navegación global). Checkpoint de seguridad previo: tag `checkpoint-pre-ui003-estructural-2026-09-02`.
+
+**Módulos transformados**: CRM (tabla de leads → cards en mobile, modal bottom-sheet), Finanzas (jerarquía KPI, cards de histórico en mobile, badges de vigencia temporal, labels en gastos/ingresos), Dashboard (jerarquía KPI, tablas de centros/entrenadores → cards en mobile), navegación global (header consistente + bottom-nav nueva en CRM/Finanzas/Dashboard, header ampliado en Agenda sin segunda barra inferior).
+
+**Qué revisar en PC (desktop, ≥768px)**: las tablas de CRM/Finanzas/Dashboard deben verse exactamente igual que antes (no deberían haber cambiado en absoluto ahí); los nuevos enlaces de header (Dashboard/CRM/Finanzas cruzados) deben aparecer correctamente según el rol con el que inicies sesión — como PT no deberías ver "Dashboard" ni "Finanzas" en ningún header.
+
+**Qué revisar en móvil (375/390/430px)**: cards de leads en CRM, cards de histórico/gastos/ingresos en Finanzas, cards de centros/entrenadores en Dashboard; la bottom-nav nueva en CRM/Finanzas/Dashboard (no debe tapar contenido al hacer scroll hasta el final); en Agenda, confirma que SOLO ves su tab-bar interna de siempre (Agenda/Clientes/Grupos/Reservas) y que los enlaces cruzados nuevos del header son alcanzables (probablemente envueltos/wrap, no una segunda barra).
+
+**Limitaciones pendientes, documentadas a propósito** (no son bugs, son decisiones de alcance explicadas en las secciones UI-003C/D de arriba): la tabla técnica de desglose por entrenador dentro de cada centro en Finanzas sigue con scroll horizontal contenido (no cards); el mapa de ocupación (heatmap) en Dashboard igual; una franja de Reservas ya solicitada una vez (aunque fuera rechazada) no puede volverse a pedir por el portal público con el mismo id, por una restricción real de las Rules de Firestore actuales (ver sección "Reservas — auditoría y fixes").
+
 ## PWA — verificación (2026-09-02)
 
 Revisado `sw.js`: estrategia network-first con fallback a caché (correcta, no sirve HTML obsoleto mientras hay conexión — sin bug). Se subió `CACHE_NAME` de v5 a v6 (commit `8e743df`) para que los usuarios offline reciban el código de esta sesión en cuanto vuelvan a conectar.
