@@ -40,14 +40,14 @@
       </div>
       <div class="space-y-3 text-xs">
         <div>
-          <label class="text-slate-400 block mb-1">Email administrador</label>
-          <input type="email" id="login-user" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="administracion@besoulfitness.com">
+          <label for="login-user" class="text-slate-400 block mb-1">Email administrador</label>
+          <input type="email" id="login-user" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="administracion@besoulfitness.com">
         </div>
         <div>
-          <label class="text-slate-400 block mb-1">Contraseña</label>
-          <input type="password" id="login-pass" class="w-full bg-slate-950 border border-slate-800 rounded p-2.5 text-white" placeholder="••••••••">
+          <label for="login-pass" class="text-slate-400 block mb-1">Contraseña</label>
+          <input type="password" id="login-pass" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="••••••••">
         </div>
-        <button onclick="ejecutarLogin()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-lg transition uppercase tracking-wider mt-2">Entrar</button>
+        <button onclick="ejecutarLogin()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-xl transition uppercase tracking-wider mt-2">Entrar</button>
       </div>
     </div>
   </div>
@@ -90,7 +90,7 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2 items-end">
             <label class="text-[10px] font-bold uppercase text-slate-500 tracking-wider">
               Mes seleccionado
-              <input id="selector-mes-trabajo" type="month" onchange="cambiarMesTrabajo(this.value)" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white">
+              <input id="selector-mes-trabajo" type="month" onchange="cambiarMesTrabajo(this.value)" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
             </label>
             <button onclick="moverMesTrabajo(-1)" class="bg-slate-950 hover:bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-3 py-2 text-xs font-bold">← Mes anterior</button>
             <button onclick="irMesActual()" class="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg px-3 py-2 text-xs font-bold">Mes actual</button>
