@@ -430,6 +430,53 @@ Barrido de cierre sin cambios de código adicionales — todo lo que pedía ya q
 
 **Limitaciones pendientes, documentadas a propósito** (no son bugs, son decisiones de alcance explicadas en las secciones UI-003C/D de arriba): la tabla técnica de desglose por entrenador dentro de cada centro en Finanzas sigue con scroll horizontal contenido (no cards); el mapa de ocupación (heatmap) en Dashboard igual; una franja de Reservas ya solicitada una vez (aunque fuera rechazada) no puede volverse a pedir por el portal público con el mismo id, por una restricción real de las Rules de Firestore actuales (ver sección "Reservas — auditoría y fixes").
 
+## AUDITORÍA CRÍTICA — Verónica Dell'Agnese (2026-09-02)
+
+✅ **Bug real encontrado y corregido, con evidencia de código (no una suposición).**
+
+**Lo que se pidió**: verificar de forma estricta, sin asumir nada, que el reparto 50/35/15 (Verónica/Alfa Prime/BESOUL) para Pilates Máquina y Ciclo Indoor está realmente implementado y usado en Finanzas, Agenda y Dashboard — no solo "parece correcto".
+
+### 1. Estado encontrado
+
+- **`finanzas.html`** (motor de cálculo principal, `construirCalculoVivo()`): lógica de actividades especiales SÍ implementada y correcta (construida en FASE 9-13 de esta misma sesión, re-verificada ahora línea por línea).
+- **`agenda.html`** (creación de la ficha del cliente): SÍ implementada y correcta — `sesionesContratadasFicha()` línea 2213 (`if (ficha.actividadEspecialId) return parseInt(ficha.planSesiones) || 0;`), guardado de `actividadEspecialId`/`modalidadId`/`segmentoId`/`planSesiones`/`numPersonas` en `guardarCliente()` línea ~3818, catálogo cargado desde Firestore en `aplicarEstadoNubeAgenda()` líneas 1458-1459. Todo confirmado intacto.
+- **`dashboard.html`**: ❌ **NO implementada. Bug real confirmado.** Este archivo tiene su **propio motor de cálculo financiero completamente duplicado e independiente** de `finanzas.html` (`TARIFAS_2026` propio, `construirCalculoMes()` propio — no reutiliza `construirCalculoVivo()`). Ese motor duplicado no tenía NINGÚN conocimiento de `actividadEspecialId`, `DEFAULT_CATALOGO_ACTIVIDADES`, reparto porcentual, ni de la temporalidad de `trainerSettings`/`centros` (FASE 6-7).
+
+### 2. Problema detectado, con evidencia exacta
+
+Para una ficha de actividad de Verónica, el motor de Dashboard (antes del fix) ejecutaba `calcularFacturacionFichaFinanzas(f, key, mesKey)` → `calcularFacturacionFichaSimple(ficha)` → `tarifaBaseFicha(ficha)` → `TARIFAS_2026[ficha.modalidad]`. Como el `modalidad` de una ficha de actividad es una etiqueta descriptiva (`"Actividad: Pilates Máquina · Plan mensual · General"`, no una clave real de `TARIFAS_2026`), esa búsqueda devuelve `undefined` → `tarifaBaseFicha` devuelve `0` → la ficha entera se descarta con `{total:0, tipo:'sin_importe'}` (`dashboard.html:385` original, antes del fix).
+
+**Consecuencia real**: Dashboard mostraría a Verónica con **0€ de facturación, 0€ de reparto PT, 0€ para Alfa Prime, 0€ para BESOUL** por sus clases de Pilates/Ciclo, mientras SÍ contaría a esos clientes en "clientes activos" (`contarPersonasFicha` no distingue tipo de ficha) — un panorama doblemente incorrecto: cartera inflada, ingresos invisibles. Finanzas, mientras tanto, ya mostraba los números correctos — es decir, **Finanzas y Dashboard habrían mostrado cifras distintas para el mismo mes**, exactamente el tipo de discrepancia que motivó la sospecha del usuario.
+
+**Segundo problema, mismo origen**: el motor duplicado de Dashboard tampoco resolvía `trainerSettings`/`centros` por mes (`dbFinanzas.trainerSettings?.[key] || {}` en crudo, sin pasar por el resolutor temporal de FASE 6-7) — así que un canon/rango con vigencia "solo este mes" o "desde este mes en adelante" se habría visto YA correcto en Finanzas pero desactualizado/incorrecto en Dashboard para meses pasados.
+
+### 3. Cambios realizados
+
+**`dashboard.html`** únicamente (ni `finanzas.html` ni `agenda.html` necesitaron cambios — ya estaban bien):
+- Port exacto del motor de temporalidad de `finanzas.html`: `CAMPOS_TEMPORALES_TRAINER`, `CAMPOS_TEMPORALES_CENTRO`, `entradaEfectivaTemporal()`, `valorEfectivoTemporal()`, `settingsTrainerParaMes()`, `centroParaMes()`.
+- Port exacto del catálogo y motor de actividades especiales: `DEFAULT_CATALOGO_ACTIVIDADES` (mismos precios reales que `agenda.html`/`finanzas.html`), `catalogoActividadesVivo()`, `actividadEfectivaParaMes()`, `repartoEfectivoActividad()`, `distribuirReparto()` (redondeo determinista a céntimos, método del mayor resto), `calcularFacturacionActividadFicha()`.
+- `centroTrainer(key, perfil)` → `centroTrainer(key, perfil, mesKey)` (mismo cambio que ya se hizo en `finanzas.html`).
+- `construirCalculoMes()`: la rama `f.actividadEspecialId` ahora existe (idéntica a `construirCalculoVivo()`), nunca pasa por `calcularComisionAvanzada` (rango/canon PT estándar), se suma aparte a `ptNeto`/`bsBruto` del mismo entrenador — modelo mixto correcto. `centros[centroId].ingresosActividades` nuevo, informativo, no entra en `total.beneficio` (nunca fue dinero de BESOUL, igual que en Finanzas).
+- Verificado que NINGÚN otro trainer se ve afectado: sin `trainerSettingsVersiones` ni fichas con `actividadEspecialId`, `settingsTrainerParaMes`/la rama de actividad devuelven exactamente lo mismo que antes — cero cambio numérico para el resto de la cartera.
+
+### 4. Validación — flujo completo trazado con datos reales del código
+
+Cliente de Verónica, Pilates Máquina, segmento General, plan 8 clases, `numPersonas=1`, mes 2026-09, sin overrides temporales todavía:
+- `calcularFacturacionActividadFicha`: `plan.precio=95` (línea de `DEFAULT_CATALOGO_ACTIVIDADES.pilates_maquina.modalidades.plan.segmentos.general.planes`), `porPersona=true` → `precioTotal = 95 × 1 = 95€`.
+- `repartoEfectivoActividad` → reparto vivo `50/35/15`.
+- `distribuirReparto(95, [50,35,15])`: 9500 céntimos → 4750/3325/1425 céntimos exactos (sin resto que repartir) → **Verónica 47,50€ · Alfa Prime 33,25€ · BESOUL 14,25€**. Suma = 95,00€ exacto.
+- Este resultado es ahora **idéntico** en `construirCalculoVivo()` (Finanzas) y `construirCalculoMes()` (Dashboard) — mismo código, mismos datos de entrada, mismo resultado. Coincide exactamente con el ejemplo que el propio usuario dio en el prompt original de Verónica.
+- Caso bono (Pilates individual, bono 10, 450€, 3 sesiones agendadas el mes): `valorSesion=45€`, `total=135€` → reparto `67,50/47,25/20,25`, suma 135,00€ exacto. Verificado con la misma fórmula.
+
+### 5. Cómo verificarlo tú mismo
+
+1. En Finanzas → Configuración, marca a Verónica (una vez creada con `crearEntrenador()`) con las actividades "Pilates Máquina"/"Ciclo Indoor" autorizadas.
+2. Dale de alta un cliente de actividad en Agenda (toggle "Cliente de actividad especial").
+3. Compara el KPI "Facturación"/"Beneficio neto" del mes en `finanzas.html` y en `dashboard.html`: con este fix, deben coincidir exactamente. Antes del fix, Dashboard habría mostrado esa parte en 0.
+4. Revisa la card de Verónica en Finanzas > Configuración: si alguna vez editas su canon/reparto con "solo este mes", el badge "⏱ Vigencia temporal" debe aparecer, y el histórico de meses cerrados no debe cambiar.
+
+**Nota importante — límite de esta auditoría**: esto verifica que el MOTOR es correcto (probado por trazado de código con cifras reales). No puedo verificar si el perfil real de Verónica ya existe en `besoulUsers` ni si algún cliente de actividad ya está dado de alta en producción — este entorno no tiene credenciales de Firestore. Esa parte requiere que tú lo confirmes en la consola de Firebase o dentro de la propia app.
+
 ## PWA — verificación (2026-09-02)
 
 Revisado `sw.js`: estrategia network-first con fallback a caché (correcta, no sirve HTML obsoleto mientras hay conexión — sin bug). Se subió `CACHE_NAME` de v5 a v6 (commit `8e743df`) para que los usuarios offline reciban el código de esta sesión en cuanto vuelvan a conectar.

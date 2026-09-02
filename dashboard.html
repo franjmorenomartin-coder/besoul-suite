@@ -294,6 +294,121 @@ function defaultsCentro(id,nombre=''){ return {id, nombre:nombre||id, orden:99, 
 function centrosValidos(){ return Object.keys(getCentros({incluirInactivos:true})).concat(['sin_centro','sin-centro']); }
 function centroValido(id){ return centrosValidos().includes(String(id || '')); }
 function getCentros(opts={}){ const {incluirInactivos=false}=opts; const res={}; const source={...DEFAULT_CENTROS, ...(dbFinanzas.centros||{})}; Object.keys(source).forEach(rawId=>{ const c={...(DEFAULT_CENTROS[rawId]||defaultsCentro(rawId, source[rawId]?.nombre||rawId)), ...(source[rawId]||{})}; c.id=String(c.id||rawId); c.nombre=String(c.nombre||c.id).trim(); c.orden=parseNum(c.orden??99); if(esCentroTecnicoDescartable(c.id,c.nombre)) return; if(!incluirInactivos && c.activo===false) return; res[c.id]=c; }); return Object.fromEntries(Object.entries(res).sort((a,b)=>{ const ao=Number(a[1].orden??99), bo=Number(b[1].orden??99); if(ao!==bo) return ao-bo; return String(a[1].nombre||'').localeCompare(String(b[1].nombre||''),'es'); })); }
+// --- Port exacto de finanzas.html: temporalidad de trainerSettings/centros (FASE 6-7) +
+// catálogo de actividades especiales con reparto porcentual (FASE 9-13, Verónica). Dashboard
+// tiene su propio motor de cálculo duplicado (construirCalculoMes, no reutiliza
+// construirCalculoVivo de finanzas.html), así que sin este bloque quedaba desincronizado: no
+// resolvía canon/rango por mes, y una ficha con actividadEspecialId devolvía 0€ de facturación
+// porque calcularFacturacionFichaFinanzas busca TARIFAS_2026[ficha.modalidad], que no existe
+// para una ficha de actividad (auditoría Verónica, 2026-09-02 -- ver BESOUL_WORK_STATE.md).
+const CAMPOS_TEMPORALES_TRAINER = ['canonFijoIndependiente','aporteIndividualCliente','coordBonusPorPt','coordMaxPts','coordMaxBonus','pactoEspecial','sistemaPago','centroId'];
+const CAMPOS_TEMPORALES_CENTRO = ['canonFijo','ptsIncluidos','canonPt','canonPtReducidoDesde','canonPtReducido'];
+function entradaEfectivaTemporal(entradas, mesKey){
+  const candidatas = (entradas||[]).filter(e => e.desde <= mesKey && (!e.hasta || mesKey <= e.hasta));
+  if (!candidatas.length) return null;
+  candidatas.sort((a,b) => (a.desde < b.desde ? -1 : a.desde > b.desde ? 1 : (a.hasta?1:0)-(b.hasta?1:0)));
+  return candidatas[candidatas.length-1];
+}
+function valorEfectivoTemporal(versiones, campo, mesKey, valorFallback){
+  const entrada = entradaEfectivaTemporal((versiones||[]).filter(v => campo in v), mesKey);
+  return entrada ? entrada[campo] : valorFallback;
+}
+function settingsTrainerParaMes(key, mesKey){
+  const live = dbFinanzas.trainerSettings?.[key] || {};
+  const versiones = dbFinanzas.trainerSettingsVersiones?.[key];
+  if (!versiones || !versiones.length) return live;
+  const resuelto = { ...live };
+  CAMPOS_TEMPORALES_TRAINER.forEach(c => { resuelto[c] = valorEfectivoTemporal(versiones, c, mesKey, live[c]); });
+  return resuelto;
+}
+function centroParaMes(centroLive, mesKey){
+  const versiones = dbFinanzas.centrosVersiones?.[centroLive.id];
+  if (!versiones || !versiones.length) return centroLive;
+  const resuelto = { ...centroLive };
+  CAMPOS_TEMPORALES_CENTRO.forEach(c => { resuelto[c] = valorEfectivoTemporal(versiones, c, mesKey, centroLive[c]); });
+  return resuelto;
+}
+const DEFAULT_CATALOGO_ACTIVIDADES = {
+  ciclo_indoor: {
+    id: 'ciclo_indoor', nombre: 'Ciclo Indoor / Spinning', centroId: 'alfa_prime', activo: true,
+    unidadCiclo: 'semanas', duracionCiclo: 4,
+    reparto: { partes: [{ destino: 'entrenador', pct: 50 }, { destino: 'centro', pct: 35 }, { destino: 'besoul', pct: 15 }] },
+    modalidades: {
+      plan: { nombre: 'Plan por ciclo (4 semanas)', tipo: 'ciclo_no_acumulable', segmentos: {
+        general: { nombre: 'General', porPersona: true, planes: [{ sesiones: 4, precio: 55 }, { sesiones: 8, precio: 75 }, { sesiones: 12, precio: 95 }] },
+        empresa: { nombre: 'Empresa', porPersona: true, planes: [{ sesiones: 4, precio: 45 }, { sesiones: 8, precio: 65 }, { sesiones: 12, precio: 85 }] },
+        jubilados: { nombre: 'Jubilados', porPersona: true, planes: [{ sesiones: 4, precio: 45 }, { sesiones: 8, precio: 65 }, { sesiones: 12, precio: 85 }] }
+      }}
+    }
+  },
+  pilates_maquina: {
+    id: 'pilates_maquina', nombre: 'Pilates Máquina', centroId: 'alfa_prime', activo: true,
+    unidadCiclo: 'meses', duracionCiclo: 1,
+    reparto: { partes: [{ destino: 'entrenador', pct: 50 }, { destino: 'centro', pct: 35 }, { destino: 'besoul', pct: 15 }] },
+    modalidades: {
+      plan: { nombre: 'Plan mensual', tipo: 'ciclo_no_acumulable', segmentos: {
+        general: { nombre: 'General', porPersona: true, planes: [{ sesiones: 4, precio: 65 }, { sesiones: 8, precio: 95 }, { sesiones: 12, precio: 120 }] },
+        empresa: { nombre: 'Empresa', porPersona: true, planes: [{ sesiones: 4, precio: 55 }, { sesiones: 8, precio: 85 }, { sesiones: 12, precio: 110 }] },
+        jubilados: { nombre: 'Jubilados', porPersona: true, planes: [{ sesiones: 4, precio: 55 }, { sesiones: 8, precio: 85 }, { sesiones: 12, precio: 110 }] }
+      }},
+      bono10: { nombre: 'Bono 10 clases', tipo: 'bono_vigencia', segmentos: {
+        individual: { nombre: 'Individual', porPersona: false, planes: [{ sesiones: 10, precio: 450 }] },
+        pareja: { nombre: 'Pareja', porPersona: false, planes: [{ sesiones: 10, precio: 600 }] },
+        trio: { nombre: 'Trío', porPersona: false, planes: [{ sesiones: 10, precio: 800 }] }
+      }},
+      vip: { nombre: 'Sala VIP / Personalizado', tipo: 'ciclo_no_acumulable', segmentos: {
+        individual: { nombre: 'Individual', porPersona: true, planes: [{ sesiones: 4, precio: 180 }, { sesiones: 8, precio: 320 }, { sesiones: 12, precio: 420 }] },
+        pareja: { nombre: 'Pareja', porPersona: true, planes: [{ sesiones: 4, precio: 120 }, { sesiones: 8, precio: 210 }, { sesiones: 12, precio: 285 }] },
+        trio: { nombre: 'Trío', porPersona: true, planes: [{ sesiones: 4, precio: 100 }, { sesiones: 8, precio: 170 }, { sesiones: 12, precio: 225 }] }
+      }}
+    }
+  }
+};
+function catalogoActividadesVivo(){ return { ...DEFAULT_CATALOGO_ACTIVIDADES, ...(agendaData.catalogoActividades || {}) }; }
+function actividadEfectivaParaMes(actividadId, mesKey){
+  const live = catalogoActividadesVivo()[actividadId];
+  if (!live) return null;
+  const versiones = agendaData.tarifasActividadVersiones?.[actividadId];
+  const entrada = versiones && versiones.length ? entradaEfectivaTemporal(versiones, mesKey) : null;
+  return entrada ? { ...live, modalidades: entrada.modalidades } : live;
+}
+function repartoEfectivoActividad(actividadId, mesKey){
+  const versiones = agendaData.repartoActividadVersiones?.[actividadId];
+  const entrada = versiones && versiones.length ? entradaEfectivaTemporal(versiones, mesKey) : null;
+  if (entrada) return { partes: entrada.partes };
+  return catalogoActividadesVivo()[actividadId]?.reparto || { partes: [] };
+}
+function distribuirReparto(monto, partes){
+  const centavos = Math.round((Number(monto) || 0) * 100);
+  const pesos = (partes || []).map(p => ({ destino: p.destino, pct: Number(p.pct) || 0 }));
+  const totalPct = pesos.reduce((s, p) => s + p.pct, 0);
+  const resultado = {};
+  if (!pesos.length || totalPct <= 0 || centavos <= 0) { pesos.forEach(p => resultado[p.destino] = 0); return resultado; }
+  const brutos = pesos.map(p => (centavos * p.pct) / totalPct);
+  const floors = brutos.map(b => Math.floor(b));
+  const sobrante = centavos - floors.reduce((s, f) => s + f, 0);
+  const orden = brutos.map((b, i) => ({ i, resto: b - floors[i] })).sort((a, b) => b.resto - a.resto);
+  const finales = floors.slice();
+  for (let k = 0; k < sobrante; k++) finales[orden[k % orden.length].i] += 1;
+  pesos.forEach((p, i) => { resultado[p.destino] = finales[i] / 100; });
+  return resultado;
+}
+function calcularFacturacionActividadFicha(ficha, trainerKey, mesKey){
+  if (!ficha || !ficha.actividadEspecialId) return { total: 0, tipo: 'sin_actividad', sesionesAgendadas: 0 };
+  const cat = actividadEfectivaParaMes(ficha.actividadEspecialId, mesKey);
+  const modalidad = cat?.modalidades?.[ficha.modalidadId];
+  const segmento = modalidad?.segmentos?.[ficha.segmentoId];
+  const plan = segmento ? (segmento.planes || []).find(p => Number(p.sesiones) === Number(ficha.planSesiones)) : null;
+  if (!segmento || !plan) return { total: 0, tipo: 'actividad_sin_tarifa', sesionesAgendadas: 0 };
+  const numPersonas = Math.max(1, parseInt(ficha.numPersonas) || 1);
+  const precioTotal = segmento.porPersona ? plan.precio * numPersonas : plan.precio;
+  const sesionesAgendadas = sesionesAgendadasFacturablesFichaMes(ficha, trainerKey, mesKey);
+  if (modalidad.tipo === 'bono_vigencia') {
+    const valorSesion = plan.sesiones ? precioTotal / plan.sesiones : 0;
+    return { total: sesionesAgendadas * valorSesion, tipo: 'actividad_bono', sesionesAgendadas, sesionesContratadas: plan.sesiones, precioTotal, actividadId: ficha.actividadEspecialId };
+  }
+  return { total: precioTotal, tipo: 'actividad_mensual', sesionesAgendadas, sesionesContratadas: plan.sesiones, precioTotal, actividadId: ficha.actividadEspecialId };
+}
 function trainerKeyPerfil(p){ return String(p?.trainerKey || '').trim(); }
 function nombrePerfil(p){ return String(p?.nombre || p?.email || p?.trainerKey || '').trim(); }
 function trainerByKey(key){ return perfilesUsuarios.find(p => trainerKeyPerfil(p) === key); }
@@ -307,8 +422,8 @@ function esPerfilOperativo(p){
       const clientes = (agendaData.clientes && agendaData.clientes[key]) || [];
       return Array.isArray(clientes) && clientes.length > 0;
     }
-function centroTrainer(key, perfil){
-      const settings = dbFinanzas.trainerSettings?.[key] || {};
+function centroTrainer(key, perfil, mesKey){
+      const settings = mesKey ? settingsTrainerParaMes(key, mesKey) : (dbFinanzas.trainerSettings?.[key] || {});
       const nombre = nombrePerfil(perfil).toLowerCase();
       // Primero respetamos una asignación manual, siempre que apunte al maestro de centros.
       if (settings.centroId && centroValido(settings.centroId) && settings.centroId !== 'sin_centro') return settings.centroId;
@@ -640,17 +755,29 @@ function calcularCanonCentroYAsignar(c){
 function construirCalculoMes(mesKey = mesActualKey()){
       const centrosBase = { ...getCentros(), sin_centro: { id:'sin_centro', nombre:'Dirección / sin centro', canonFijo:0, canonPt:0, activo:true } };
       const centros = {};
-      Object.keys(centrosBase).forEach(id => centros[id] = { ...centrosBase[id], trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0 });
+      Object.keys(centrosBase).forEach(id => centros[id] = { ...centroParaMes(centrosBase[id], mesKey), trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0 });
       const trainers = [];
       perfilesUsuarios.filter(esPerfilOperativo).forEach(perfil => {
         const key = trainerKeyPerfil(perfil);
         const lista = Array.isArray(agendaData.clientes?.[key]) ? agendaData.clientes[key] : [];
         let facturacion = 0, clientes = 0, fichasActivas = 0, facturacionMensual = 0, facturacionVariable = 0, sesionesBonosSueltas = 0;
         let facturacionAgenda = 0, desviacionAgenda = 0, sesionesMensualesPrevistas = 0, sesionesMensualesAgendadas = 0;
+        let facturacionActividades = 0, clientesActividades = 0, actividadPtNeto = 0, actividadCentroShare = 0, actividadBesoulShare = 0;
         const motivosDesviacion = [];
         lista.forEach(f => {
           if (f?.vinculacion) return;
           if (normalizarEstado(f.estadoCliente || 'activo') !== 'activo') return;
+          if (f.actividadEspecialId) {
+            fichasActivas += 1;
+            clientesActividades += Math.max(1, parseInt(f.numPersonas) || 1);
+            const calcAct = calcularFacturacionActividadFicha(f, key, mesKey);
+            facturacionActividades += calcAct.total;
+            const reparto = distribuirReparto(calcAct.total, repartoEfectivoActividad(f.actividadEspecialId, mesKey).partes);
+            actividadPtNeto += reparto.entrenador || 0;
+            actividadCentroShare += reparto.centro || 0;
+            actividadBesoulShare += reparto.besoul || 0;
+            return;
+          }
           fichasActivas += 1;
           clientes += contarPersonasFicha(f);
           const calcFicha = calcularFacturacionFichaFinanzas(f, key, mesKey);
@@ -668,8 +795,8 @@ function construirCalculoMes(mesKey = mesActualKey()){
             }
           }
         });
-        const settings = dbFinanzas.trainerSettings?.[key] || {};
-        const centroId = centroTrainer(key, perfil);
+        const settings = settingsTrainerParaMes(key, mesKey);
+        const centroId = centroTrainer(key, perfil, mesKey);
         const pactoEspecial = !!settings.pactoEspecial;
         const soloImputacionGastos = TRAINERS_SOLO_IMPUTACION_GASTOS.includes(key);
         const clientesAgendaNoComputados = soloImputacionGastos ? clientes : 0;
@@ -684,24 +811,28 @@ function construirCalculoMes(mesKey = mesActualKey()){
           sesionesMensualesAgendadas = 0;
           motivosDesviacion.length = 0;
           clientes = 0;
+          facturacionActividades = 0; clientesActividades = 0; actividadPtNeto = 0; actividadCentroShare = 0; actividadBesoulShare = 0;
         }
         const aporteCliente = soloImputacionGastos ? 0 : parseNum(settings.aporteIndividualCliente ?? 0) * clientes;
         const reparto = soloImputacionGastos
           ? { pt:0, bs:0, bonus:0, coordinacionBonus:0, sistemaAplicado:'CEO · solo imputación gastos', repartoDetalle:'Bea/Soraya computan como coste de sede, pero sus carteras no generan ingresos BESOUL ni liquidación PT en Finanzas.', fechaAlta:settings.fechaAlta || '', antiguedad:yearsBetween(fechaAltaSettings(settings), fechaReferenciaMes(mesKey)), posteriores:0, elegibleRango2:false, elegibleRango3:false, elegibleCoordinador:false, coordinadorAutorizado:false, sistemaEfectivo:'solo_gastos', ptsActivosCentro:0 }
           : calcularComisionAvanzada(facturacion, settings, { key, centroId, aporteClientes: aporteCliente, fechaReferencia: fechaReferenciaMes(mesKey) });
-        const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, facturacion, facturacionAgenda, desviacionAgenda, sesionesMensualesPrevistas, sesionesMensualesAgendadas, desviacionSesiones: sesionesMensualesPrevistas - sesionesMensualesAgendadas, motivosDesviacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, fichasActivas, soloImputacionGastos, ptNeto:reparto.pt, bsBruto:reparto.bs, pactoEspecial, aporteCliente, aporteCentroCliente: aporteCliente, bonus:reparto.bonus || 0, coordinacionBonus:reparto.coordinacionBonus || 0, sistemaAplicado:reparto.sistemaAplicado, repartoDetalle:reparto.repartoDetalle || '', fechaAlta:reparto.fechaAlta, antiguedad:reparto.antiguedad, posteriores:reparto.posteriores, elegibleRango2:reparto.elegibleRango2, elegibleRango3:reparto.elegibleRango3, elegibleCoordinador:reparto.elegibleCoordinador, coordinadorAutorizado:reparto.coordinadorAutorizado, sistemaEfectivo:reparto.sistemaEfectivo, ptsActivosCentro:reparto.ptsActivosCentro || 0 };
+        const ptNetoTotal = reparto.pt + actividadPtNeto;
+        const bsBrutoTotal = reparto.bs + actividadBesoulShare;
+        const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, facturacion: facturacion + facturacionActividades, facturacionPt: facturacion, facturacionActividades, clientesActividades, actividadCentroShare, facturacionAgenda, desviacionAgenda, sesionesMensualesPrevistas, sesionesMensualesAgendadas, desviacionSesiones: sesionesMensualesPrevistas - sesionesMensualesAgendadas, motivosDesviacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, fichasActivas, soloImputacionGastos, ptNeto:ptNetoTotal, bsBruto:bsBrutoTotal, pactoEspecial, aporteCliente, aporteCentroCliente: aporteCliente, bonus:reparto.bonus || 0, coordinacionBonus:reparto.coordinacionBonus || 0, sistemaAplicado:reparto.sistemaAplicado, repartoDetalle:reparto.repartoDetalle || '', fechaAlta:reparto.fechaAlta, antiguedad:reparto.antiguedad, posteriores:reparto.posteriores, elegibleRango2:reparto.elegibleRango2, elegibleRango3:reparto.elegibleRango3, elegibleCoordinador:reparto.elegibleCoordinador, coordinadorAutorizado:reparto.coordinadorAutorizado, sistemaEfectivo:reparto.sistemaEfectivo, ptsActivosCentro:reparto.ptsActivosCentro || 0 };
         trainers.push(row);
-        if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0 };
+        if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0, ingresosActividades:0 };
         centros[centroId].trainers.push(row);
-        centros[centroId].facturacion += facturacion;
+        centros[centroId].facturacion += facturacion + facturacionActividades;
         centros[centroId].facturacionAgenda += facturacionAgenda;
         centros[centroId].desviacionAgenda += desviacionAgenda;
         centros[centroId].sesionesMensualesPrevistas += sesionesMensualesPrevistas;
         centros[centroId].sesionesMensualesAgendadas += sesionesMensualesAgendadas;
         centros[centroId].canonClientesTotal += aporteCliente;
-        centros[centroId].ptNeto += reparto.pt;
-        centros[centroId].bsBruto += reparto.bs;
-        centros[centroId].clientes += clientes;
+        centros[centroId].ptNeto += ptNetoTotal;
+        centros[centroId].bsBruto += bsBrutoTotal;
+        centros[centroId].clientes += clientes + clientesActividades;
+        centros[centroId].ingresosActividades = (centros[centroId].ingresosActividades || 0) + actividadCentroShare;
       });
       Object.values(centros).forEach(c => {
         // Coste de sede separado en dos capas:
@@ -712,7 +843,7 @@ function construirCalculoMes(mesKey = mesActualKey()){
       });
       const gastos = gastosMes(mesKey);
       const otrosIngresos = otrosIngresosMes(mesKey);
-      const total = Object.values(centros).reduce((acc,c)=>{ acc.facturacion+=c.facturacion; acc.facturacionAgenda+=c.facturacionAgenda||0; acc.desviacionAgenda+=c.desviacionAgenda||0; acc.sesionesMensualesPrevistas+=c.sesionesMensualesPrevistas||0; acc.sesionesMensualesAgendadas+=c.sesionesMensualesAgendadas||0; acc.ptNeto+=c.ptNeto; acc.bsBruto+=c.bsBruto; acc.canones+=c.canon; acc.canonClientesTotal+=c.canonClientesTotal||0; acc.clientes+=c.clientes; return acc; }, {facturacion:0,facturacionAgenda:0,desviacionAgenda:0,sesionesMensualesPrevistas:0,sesionesMensualesAgendadas:0,ptNeto:0,bsBruto:0,canones:0,canonClientesTotal:0,clientes:0});
+      const total = Object.values(centros).reduce((acc,c)=>{ acc.facturacion+=c.facturacion; acc.facturacionAgenda+=c.facturacionAgenda||0; acc.desviacionAgenda+=c.desviacionAgenda||0; acc.sesionesMensualesPrevistas+=c.sesionesMensualesPrevistas||0; acc.sesionesMensualesAgendadas+=c.sesionesMensualesAgendadas||0; acc.ptNeto+=c.ptNeto; acc.bsBruto+=c.bsBruto; acc.canones+=c.canon; acc.canonClientesTotal+=c.canonClientesTotal||0; acc.clientes+=c.clientes; acc.ingresosActividades+=c.ingresosActividades||0; return acc; }, {facturacion:0,facturacionAgenda:0,desviacionAgenda:0,sesionesMensualesPrevistas:0,sesionesMensualesAgendadas:0,ptNeto:0,bsBruto:0,canones:0,canonClientesTotal:0,clientes:0,ingresosActividades:0});
       total.gastos = gastos;
       total.otrosIngresos = otrosIngresos;
       total.ingresosBesoul = total.bsBruto + otrosIngresos;
