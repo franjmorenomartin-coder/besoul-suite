@@ -557,6 +557,42 @@ Revisado `sw.js`: estrategia network-first con fallback a caché (correcta, no s
 
 **Siguiente paso real para cerrar esto**: reproducir en el navegador con el token real que falla, abrir la consola de DevTools y leer la línea `[BESOUL Reservas] Fallo en "..."`. Si `code` es `permission-denied`, hay que comparar carácter a carácter las Rules realmente pegadas en Firebase Console contra `firestore.rules` de este repo (posible error de copiado/despliegue manual, no reproducible por lectura de código). Si `code` es otra cosa (`not-found`, `unavailable`, o ninguno — es decir, una excepción JS), la etapa indicada en el log señala exactamente dónde mirar a continuación.
 
+## HOTFIX-CLIENT-SAVE — edición de ficha de cliente no persistía (2026-09-02)
+
+✅ **Blocker real confirmado y corregido, post-merge a `main` (rama `HOTFIX-CLIENT-SAVE`, sin merge todavía).**
+
+**Síntoma**: editar un campo de ficha de cliente (p.ej. teléfono) parecía guardarse (la UI lo aceptaba, el modal se cerraba sin error) pero al reabrir la ficha o recargar la página, el valor anterior seguía ahí.
+
+**Causa raíz confirmada por código** (`agenda.html`): `guardarEstadoNubeAgenda()` — la función que hace el guardado real en Firestore (`.set(payload, {merge:true})` dirigido por trainerKey) — **resolvía como éxito en TODOS los casos, incluidos los de fallo**:
+- Si el guard `!window.bsAgendaCloudDocRef || window.bsAgendaAplicandoNube` bloqueaba el guardado, devolvía `Promise.resolve()` sin distinguir "omitido" de "guardado".
+- Si `.set()` fallaba de verdad (red, permisos, cuota...), el `.catch(err => console.error(...))` interno se limitaba a loguear y devolvía una promesa RESUELTA (nunca rechazada) — el error quedaba solo en consola, nunca llegaba al código que llamó a la función.
+
+Y `guardarCliente()` (el guardado de ficha desde el modal) llamaba a esto vía `programarGuardadoNubeAgenda()` (debounce de 350 ms, fire-and-forget, sin `await`) y cerraba el modal + mostraba la ficha como guardada de forma SÍNCRONA e INCONDICIONAL, sin esperar ni comprobar el resultado real del guardado en absoluto.
+
+**Corrección aplicada** (mínima, sin tocar el mecanismo de escritura dirigida por trainerKey):
+- `guardarEstadoNubeAgenda()` ahora resuelve `{ok:true}` en éxito real y `{ok:false, err|omitido}` en cualquier otro caso — sigue sin rechazar la promesa nunca, así que las demás llamadas fire-and-forget existentes (debounce, disponibilidad, aceptar/rechazar reservas...) siguen funcionando exactamente igual, no se tocó ningún otro flujo.
+- `guardarCliente()` ahora es `async`, llama directamente (sin pasar por el debounce) a `guardarEstadoNubeAgenda(entrenadorVisto)` y hace `await` del resultado real. Solo si `ok===true` cierra el modal y muestra la ficha como guardada. Si falla: deshace la mutación local (dbClientes + localStorage vuelven al valor anterior, buscando por id, no por índice capturado, para ser seguro incluso si llegó un snapshot de otro PT mientras se esperaba), mantiene el modal abierto, muestra un `alert` explícito de que NO se ha guardado, y hace `console.error` con la etapa/trainerKey/clientId/`error.code`/`error.message` reales (sin datos personales).
+- Añadido además un guard defensivo: si al guardar `idFichaEditando` ya no aparece en `dbClientes[entrenadorVisto]` (p.ej. el selector de admin cambió de PT con el modal abierto), avisa y no guarda nada, en vez de seguir silenciosamente sin tocar nada y cerrar como si hubiera ido bien.
+- Botón "Guardar Ficha" se deshabilita y muestra "Guardando..." durante el `await` (mismo patrón ya usado en `enviarSolicitud()` de `reservas.html`), para evitar doble envío.
+
+### ACTUALIZACIÓN CRÍTICA (mismo día): la causa real no era solo el falso-éxito — el write nunca tocaba el campo real
+
+✅ **Confirmado contra el código fuente del SDK de Firestore (`parseSetData`/`parseObject`/`parseUpdateData`), no por suposición.**
+
+`estadoLocalAgendaParaNube()` construye el payload dirigido con claves de punto (`clientes.<trainerKey>`, `agenda.<trainerKey>`, etc.) y `guardarEstadoNubeAgenda()` lo enviaba con `.set(payload, {merge:true})`. **`.set(..., {merge:true}) solo interpreta como ruta anidada las claves de punto que vienen en la opción `mergeFields` — las claves de punto DENTRO del propio objeto de datos se tratan como un nombre de campo LITERAL de nivel superior.** Es decir: esta escritura dirigida por trainerKey, construida en la FASE 2/commit `0505374`, **nunca ha actualizado el campo real anidado `clientes.<trainerKey>`** — escribía en un campo fantasma desconectado literalmente llamado `"clientes.<trainerKey>"`, sin que Firestore diera ningún error (la escritura en sí es válida). Esto explica el bug de edición de clientes de raíz (el fix anterior de esta misma sección era necesario pero no suficiente: `ok:true` se devolvía igualmente, porque el `.set()` sí "tenía éxito") y, además, el mismo patrón afecta a:
+- `finanzas.html` → `guardarCatalogoActividadesNube()` (checkbox de actividades autorizadas, catálogo de actividades, tarifas/reparto con vigencia) — **NO corregido en este hotfix, fuera de alcance hoy, confirmado pero no tocado.**
+- `crm.html` → `sincronizarPruebaAgendaDesdeLead()` (colocar la prueba de un lead en Agenda) — **NO corregido en este hotfix, fuera de alcance hoy, confirmado pero no tocado.**
+
+**Corrección aplicada** (commit `7a589c4`, mismo día): `guardarEstadoNubeAgenda()` cambia `.set(payload, {merge:true})` → `.update(payload)` — `.update()` sí divide las claves de punto del objeto en rutas anidadas reales (confirmado contra `parseUpdateData`, incluye soporte nativo para `FieldValue.delete()`/`FieldValue.serverTimestamp()`). Mismo payload, mismo trainerKey dirigido, sin cambiar forma ni arquitectura. Esto es lo que hace que el mecanismo de `guardarCliente()` descrito arriba funcione de verdad de extremo a extremo, no solo que reporte el resultado correctamente.
+
+**También corregido en el mismo commit**: `actualizarCitaGrupoAbiertoActual()` (añadir/quitar cliente de una sesión de grupo abierto) — antes usaba `programarGuardadoNubeAgenda()` (debounce fire-and-forget, mismo patrón de falso-éxito). Ahora es `async`, espera el resultado real de `guardarEstadoNubeAgenda()` y deshace la mutación local de `dbAgenda` si falla, con `alert` + `console.error` (sin datos personales) — mismo patrón que `guardarCliente()`.
+
+**Validación**: sin navegador/Firestore de producción disponibles en este entorno — validado por trazado de código: `git diff main --stat` confirma que en toda la rama `HOTFIX-CLIENT-SAVE` solo cambian `agenda.html` y este documento; ningún otro llamador de `guardarEstadoNubeAgenda()`/`programarGuardadoNubeAgenda()` (creación de cita individual, reprogramar, disponibilidad, aceptar/rechazar reserva) cambia su forma de llamada ni depende del valor resuelto, así que no hay regresión de contrato en ninguno de ellos. `reservas.html`, `crm.html`, `finanzas.html`, `dashboard.html`, `firestore.rules` sin tocar. **Pendiente de que el usuario confirme con una prueba real en producción** (editar teléfono de un cliente y añadir/quitar un asistente de un grupo abierto, cerrar/reabrir, recargar).
+
+**No tocado**: Finanzas, Reservas, WhatsApp, UI/diseño, Firestore Rules, el mecanismo de escritura dirigida por trainerKey (`estadoLocalAgendaParaNube`), ningún otro llamador de `guardarEstadoNubeAgenda()`.
+
+**Rama**: `HOTFIX-CLIENT-SAVE`, creada desde `main` (`7418fc7`). Sin merge todavía.
+
 ## Reservas — token malformado "?t=~?t=res_xxx" (confirmado y corregido, 2026-09-02)
 
 ✅ **Causa real localizada con evidencia de código, no supuesta.**
