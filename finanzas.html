@@ -490,13 +490,20 @@
     // que reconocen ingreso conforme se consumen sesiones dentro de su ventana de vigencia
     // (igual filosofía que el bono PT estándar: se reutiliza sesionesAgendadasFacturablesFichaMes,
     // que ya cuenta citas de esta ficha en agenda sin conocer nada de actividades especiales).
-    function calcularFacturacionActividadFicha(ficha, trainerKey, mesKey){
+    function calcularFacturacionActividadFicha(ficha, trainerKey, mesKey, centroId){
       if (!ficha || !ficha.actividadEspecialId) return { total: 0, tipo: 'sin_actividad', sesionesAgendadas: 0 };
       const cat = actividadEfectivaParaMes(ficha.actividadEspecialId, mesKey);
       const modalidad = cat?.modalidades?.[ficha.modalidadId];
       const segmento = modalidad?.segmentos?.[ficha.segmentoId];
       const plan = segmento ? (segmento.planes || []).find(p => Number(p.sesiones) === Number(ficha.planSesiones)) : null;
-      if (!segmento || !plan) return { total: 0, tipo: 'actividad_sin_tarifa', sesionesAgendadas: 0 };
+      if (!segmento || !plan) {
+        // Nunca devolver 0 en silencio: una ficha con actividad especial activa y configurada
+        // que no encuentra tarifa es un fallo real (catálogo/ficha desincronizados, id renombrado,
+        // versión temporal rota...), no un caso normal de "sin actividad". Sin PII -- solo claves
+        // técnicas, nunca nombre/email/teléfono del cliente.
+        console.error(`[FINANZAS][TARIFA_NO_ENCONTRADA] trainerKey=${trainerKey || '(?)'} centerKey=${centroId || '(?)'} activityKey=${ficha.actividadEspecialId || '(?)'} modalityKey=${ficha.modalidadId || '(?)'} segmentKey=${ficha.segmentoId || '(?)'} sessions=${ficha.planSesiones ?? '(?)'} mesKey=${mesKey || '(?)'} · fallo en: ${!cat ? 'actividad no existe en catálogo' : !modalidad ? 'modalidad no existe' : !segmento ? 'segmento no existe' : 'ningún plan coincide con las sesiones'}`);
+        return { total: 0, tipo: 'actividad_sin_tarifa', sesionesAgendadas: 0 };
+      }
       const numPersonas = Math.max(1, parseInt(ficha.numPersonas) || 1);
       const precioTotal = segmento.porPersona ? plan.precio * numPersonas : plan.precio;
       const sesionesAgendadas = sesionesAgendadasFacturablesFichaMes(ficha, trainerKey, mesKey);
@@ -913,6 +920,7 @@
       const trainers = [];
       perfilesUsuarios.filter(esPerfilOperativo).forEach(perfil => {
         const key = trainerKeyPerfil(perfil);
+        const centroIdParaActividades = centroTrainer(key, perfil, mesKey);
         const lista = Array.isArray(agendaData.clientes?.[key]) ? agendaData.clientes[key] : [];
         let facturacion = 0, clientes = 0, fichasActivas = 0, facturacionMensual = 0, facturacionVariable = 0, sesionesBonosSueltas = 0;
         let facturacionAgenda = 0, desviacionAgenda = 0, sesionesMensualesPrevistas = 0, sesionesMensualesAgendadas = 0;
@@ -928,7 +936,7 @@
           if (f.actividadEspecialId) {
             fichasActivas += 1;
             clientesActividades += Math.max(1, parseInt(f.numPersonas) || 1);
-            const calcAct = calcularFacturacionActividadFicha(f, key, mesKey);
+            const calcAct = calcularFacturacionActividadFicha(f, key, mesKey, centroIdParaActividades);
             facturacionActividades += calcAct.total;
             const reparto = distribuirReparto(calcAct.total, repartoEfectivoActividad(f.actividadEspecialId, mesKey).partes);
             actividadPtNeto += reparto.entrenador || 0;
@@ -954,7 +962,7 @@
           }
         });
         const settings = settingsTrainerParaMes(key, mesKey);
-        const centroId = centroTrainer(key, perfil, mesKey);
+        const centroId = centroIdParaActividades;
         const pactoEspecial = !!settings.pactoEspecial;
         const soloImputacionGastos = TRAINERS_SOLO_IMPUTACION_GASTOS.includes(key);
         const clientesAgendaNoComputados = soloImputacionGastos ? clientes : 0;
@@ -1346,7 +1354,17 @@
     function renderConfigCentros(){
       const cont=document.getElementById('centros-config');
       const centros=getCentros({incluirInactivos:true});
-      const items=Object.values(centros);
+      // Hallazgo real (auditoría Alfa Prime, 2026-09-03): el panel mostraba el valor VIVO de
+      // dbFinanzas.centros[id] tal cual, ignorando la vigencia temporal. Un campo temporal
+      // (canonPt, canonFijo...) editado con "Aceptar = SOLO este mes" (registrarVersionTemporal
+      // con soloEsteMes=true) deliberadamente NO toca el valor vivo -- solo crea una entrada de
+      // versión para ese mes concreto -- así que el panel seguía mostrando el valor antiguo y
+      // parecía que el guardado no había hecho nada, aunque sí se había guardado correctamente
+      // como excepción de ese mes. Resolver contra el mes de trabajo actual antes de renderizar
+      // hace que el panel muestre lo que realmente está vigente ahora mismo, sea cual sea la
+      // opción elegida en el diálogo -- sin tocar el modelo de escritura ni el de cálculo.
+      const mesPanel = mesTrabajoKey();
+      const items=Object.values(centros).map(c => centroParaMes(c, mesPanel));
       cont.innerHTML = items.map(c=>{
         const esBase = !!DEFAULT_CENTROS[c.id];
         const activo = c.activo !== false;
@@ -1464,8 +1482,14 @@
       const opcionesCentroBase = Object.values(centros).map(c=>`<option value="${c.id}">${escapeHTML(c.nombre)}</option>`).join('') + '<option value="sin_centro">Dirección / sin centro</option>';
       const opcionesSistema = Object.keys(SISTEMAS_PAGO).map(k=>`<option value="${k}">${SISTEMAS_PAGO[k]}</option>`).join('');
       const perfiles = perfilesUsuarios.filter(esPerfilOperativo).sort((a,b)=>nombrePerfil(a).localeCompare(nombrePerfil(b)));
+      // Mismo hallazgo que en renderConfigCentros: mostrar el valor vivo sin resolver la
+      // vigencia temporal hacía parecer que un cambio "solo este mes" (canonFijoIndependiente,
+      // sistemaPago, centroId...) no se había guardado. Se resuelve contra el mes de trabajo
+      // actual, igual que ya hace construirCalculoVivo() para el cálculo real -- coherencia
+      // entre lo que se ve y lo que realmente se está aplicando.
+      const mesPanel = mesTrabajoKey();
       cont.innerHTML = perfiles.map(p=>{
-        const key=trainerKeyPerfil(p); const settings=dbFinanzas.trainerSettings?.[key]||{}; const centro=centroTrainer(key,p);
+        const key=trainerKeyPerfil(p); const settings=settingsTrainerParaMes(key, mesPanel); const centro=centroTrainer(key,p,mesPanel);
         let opcionesCentro = opcionesCentroBase;
         if (centro && centro !== 'sin_centro' && !centros[centro]) opcionesCentro = `<option value="${centro}">${escapeHTML(nombreCentro(centro))} (inactivo)</option>` + opcionesCentroBase;
         const row=(calculoActual?.trainers||[]).find(t=>t.key===key) || {};

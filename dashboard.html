@@ -393,13 +393,18 @@ function distribuirReparto(monto, partes){
   pesos.forEach((p, i) => { resultado[p.destino] = finales[i] / 100; });
   return resultado;
 }
-function calcularFacturacionActividadFicha(ficha, trainerKey, mesKey){
+function calcularFacturacionActividadFicha(ficha, trainerKey, mesKey, centroId){
   if (!ficha || !ficha.actividadEspecialId) return { total: 0, tipo: 'sin_actividad', sesionesAgendadas: 0 };
   const cat = actividadEfectivaParaMes(ficha.actividadEspecialId, mesKey);
   const modalidad = cat?.modalidades?.[ficha.modalidadId];
   const segmento = modalidad?.segmentos?.[ficha.segmentoId];
   const plan = segmento ? (segmento.planes || []).find(p => Number(p.sesiones) === Number(ficha.planSesiones)) : null;
-  if (!segmento || !plan) return { total: 0, tipo: 'actividad_sin_tarifa', sesionesAgendadas: 0 };
+  if (!segmento || !plan) {
+    // Mismo hallazgo/paridad que finanzas.html: nunca devolver 0 en silencio para una ficha con
+    // actividad especial configurada. Sin PII, solo claves técnicas.
+    console.error(`[FINANZAS][TARIFA_NO_ENCONTRADA] trainerKey=${trainerKey || '(?)'} centerKey=${centroId || '(?)'} activityKey=${ficha.actividadEspecialId || '(?)'} modalityKey=${ficha.modalidadId || '(?)'} segmentKey=${ficha.segmentoId || '(?)'} sessions=${ficha.planSesiones ?? '(?)'} mesKey=${mesKey || '(?)'} · fallo en: ${!cat ? 'actividad no existe en catálogo' : !modalidad ? 'modalidad no existe' : !segmento ? 'segmento no existe' : 'ningún plan coincide con las sesiones'}`);
+    return { total: 0, tipo: 'actividad_sin_tarifa', sesionesAgendadas: 0 };
+  }
   const numPersonas = Math.max(1, parseInt(ficha.numPersonas) || 1);
   const precioTotal = segmento.porPersona ? plan.precio * numPersonas : plan.precio;
   const sesionesAgendadas = sesionesAgendadasFacturablesFichaMes(ficha, trainerKey, mesKey);
@@ -759,6 +764,7 @@ function construirCalculoMes(mesKey = mesActualKey()){
       const trainers = [];
       perfilesUsuarios.filter(esPerfilOperativo).forEach(perfil => {
         const key = trainerKeyPerfil(perfil);
+        const centroIdParaActividades = centroTrainer(key, perfil, mesKey);
         const lista = Array.isArray(agendaData.clientes?.[key]) ? agendaData.clientes[key] : [];
         let facturacion = 0, clientes = 0, fichasActivas = 0, facturacionMensual = 0, facturacionVariable = 0, sesionesBonosSueltas = 0;
         let facturacionAgenda = 0, desviacionAgenda = 0, sesionesMensualesPrevistas = 0, sesionesMensualesAgendadas = 0;
@@ -770,7 +776,7 @@ function construirCalculoMes(mesKey = mesActualKey()){
           if (f.actividadEspecialId) {
             fichasActivas += 1;
             clientesActividades += Math.max(1, parseInt(f.numPersonas) || 1);
-            const calcAct = calcularFacturacionActividadFicha(f, key, mesKey);
+            const calcAct = calcularFacturacionActividadFicha(f, key, mesKey, centroIdParaActividades);
             facturacionActividades += calcAct.total;
             const reparto = distribuirReparto(calcAct.total, repartoEfectivoActividad(f.actividadEspecialId, mesKey).partes);
             actividadPtNeto += reparto.entrenador || 0;
@@ -796,7 +802,7 @@ function construirCalculoMes(mesKey = mesActualKey()){
           }
         });
         const settings = settingsTrainerParaMes(key, mesKey);
-        const centroId = centroTrainer(key, perfil, mesKey);
+        const centroId = centroIdParaActividades;
         const pactoEspecial = !!settings.pactoEspecial;
         const soloImputacionGastos = TRAINERS_SOLO_IMPUTACION_GASTOS.includes(key);
         const clientesAgendaNoComputados = soloImputacionGastos ? clientes : 0;
