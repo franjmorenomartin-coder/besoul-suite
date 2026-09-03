@@ -200,11 +200,11 @@
                 padding:1rem !important;
                 margin:0 !important;
             }
-            #modal-disponibilidad-reservas, #modal-solicitudes-reservas, #modal-historico-cliente, #modal-solicitudes-eliminacion, #modal-avisos-manana {
+            #modal-disponibilidad-reservas, #modal-solicitudes-reservas, #modal-historico-cliente, #modal-solicitudes-eliminacion, #modal-avisos-manana, #modal-whatsapp-offer {
                 align-items:flex-end !important;
                 padding:0 !important;
             }
-            #modal-disponibilidad-reservas > div, #modal-solicitudes-reservas > div, #modal-historico-cliente > div, #modal-solicitudes-eliminacion > div, #modal-avisos-manana > div {
+            #modal-disponibilidad-reservas > div, #modal-solicitudes-reservas > div, #modal-historico-cliente > div, #modal-solicitudes-eliminacion > div, #modal-avisos-manana > div, #modal-whatsapp-offer > div {
                 width:100% !important;
                 max-width:none !important;
                 max-height:90dvh !important;
@@ -314,9 +314,11 @@
 
             <div class="flex items-center gap-2 flex-wrap justify-end">
 
+                <button onclick="abrirModalNotificaciones()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl" aria-label="Notificaciones">🔔<span id="badge-notificaciones" class="hidden ml-1 bg-amber-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
                 <button onclick="abrirModalDisponibilidadReservas()" class="bs-btn-primary px-4 py-2.5 text-sm rounded-xl transition">+ Disponibilidad</button>
                 <button onclick="abrirModalSolicitudesReservas()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Reservas <span id="badge-reservas-pendientes" class="hidden ml-1 bg-emerald-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
                 <button onclick="abrirModalAvisosManana()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Avisos mañana <span id="badge-avisos-manana" class="hidden ml-1 bg-cyan-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
+                <button onclick="abrirModalAvisoMultiple()" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Enviar aviso a clientes</button>
                 <button id="btn-admin-entrenadores" onclick="abrirModalEntrenadores()" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Entrenadores</button>
                 <button id="btn-admin-solicitudes-eliminacion" onclick="abrirModalSolicitudesEliminacion()" class="hidden relative bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Solicitudes <span id="badge-solicitudes-eliminacion" class="hidden ml-1 bg-red-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
 
@@ -531,7 +533,7 @@
 
     <!-- MODAL POPUP ALTA / EDICIÓN -->
 
-    <div id="modal-cliente" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+    <div id="modal-cliente" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 sm:overflow-y-auto">
 
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 w-full max-w-lg sm:max-w-md space-y-4 my-2 sm:my-8 max-h-[calc(100dvh-1rem)] sm:max-h-none overflow-y-auto sm:overflow-visible">
 
@@ -966,7 +968,7 @@ miércoles 07:00-09:00"></textarea>
                     </div>
                     <div class="flex flex-col sm:flex-row gap-2">
                         <select id="grupo-abierto-cliente-select" class="flex-1 bg-slate-950 border border-slate-800 rounded p-2 text-white text-xs"></select>
-                        <button type="button" onclick="agregarAsistenteGrupoAbierto()" class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-3 py-2 rounded font-bold text-[10px] hover:bg-emerald-500/20 transition">Añadir cliente</button>
+                        <button type="button" onclick="agregarAsistenteGrupoAbierto()" class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-4 py-3 rounded font-bold text-xs hover:bg-emerald-500/20 transition">Añadir cliente</button>
                     </div>
                     <div id="grupo-abierto-asistentes-lista" class="space-y-1"></div>
                     <p class="text-[9px] text-slate-500 leading-relaxed">Cada asistente sigue manteniendo su tarifa y plan individual. Finanzas contará la asistencia en bonos/sueltas y la rentabilidad será la suma de los clientes de ese día.</p>
@@ -1009,7 +1011,7 @@ miércoles 07:00-09:00"></textarea>
 
 
     <!-- MODAL DISPONIBILIDAD / RESERVAS -->
-    <div id="modal-disponibilidad-reservas" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+    <div id="modal-disponibilidad-reservas" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 w-full max-w-4xl space-y-4 my-2 sm:my-8 max-h-[calc(100dvh-1rem)] overflow-y-auto">
             <div class="flex items-start justify-between gap-4">
                 <div>
@@ -1047,7 +1049,7 @@ miércoles 07:00-09:00"></textarea>
         </div>
     </div>
 
-    <div id="modal-solicitudes-reservas" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+    <div id="modal-solicitudes-reservas" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 w-full max-w-5xl space-y-4 my-2 sm:my-8 max-h-[calc(100dvh-1rem)] overflow-y-auto">
             <div class="flex items-start justify-between gap-4">
                 <div>
@@ -1092,7 +1094,7 @@ miércoles 07:00-09:00"></textarea>
     </div>
 
     <!-- MODAL BANDEJA SOLICITUDES DE ELIMINACIÓN (ADMIN) -->
-    <div id="modal-solicitudes-eliminacion" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+    <div id="modal-solicitudes-eliminacion" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 w-full max-w-5xl space-y-4 my-2 sm:my-8 max-h-[calc(100dvh-1rem)] overflow-y-auto">
             <div class="flex items-start justify-between gap-4">
                 <div>
@@ -1106,7 +1108,7 @@ miércoles 07:00-09:00"></textarea>
     </div>
 
     <!-- MODAL AVISOS DE MAÑANA (WhatsApp click-to-chat) -->
-    <div id="modal-avisos-manana" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+    <div id="modal-avisos-manana" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 w-full max-w-lg space-y-4 my-2 sm:my-8 max-h-[calc(100dvh-1rem)] overflow-y-auto">
             <div class="flex items-start justify-between gap-4">
                 <div>
@@ -1116,6 +1118,57 @@ miércoles 07:00-09:00"></textarea>
                 <button onclick="cerrarModalAvisosManana()" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
             </div>
             <div id="lista-avisos-manana" class="space-y-2"></div>
+        </div>
+    </div>
+
+    <!-- MODAL BUZÓN / NOTIFICACIONES -->
+    <div id="modal-notificaciones" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+        <div class="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl p-4 w-full sm:max-w-lg space-y-3 max-h-[90dvh] overflow-y-auto">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-sm font-black text-amber-300 uppercase tracking-wider">Notificaciones</h3>
+                    <p class="text-[11px] text-slate-400 mt-1">Pulsa un aviso para marcarlo como leído.</p>
+                </div>
+                <button onclick="cerrarModalNotificaciones()" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
+            </div>
+            <button onclick="marcarTodasNotificacionesLeidas()" class="text-[11px] text-cyan-300 font-bold hover:underline">Marcar todas como leídas</button>
+            <div id="notificaciones-lista" class="space-y-2"></div>
+        </div>
+    </div>
+
+    <!-- MODAL AVISO A VARIOS CLIENTES (WhatsApp manual, uno por uno -- mismo motor único de arriba) -->
+    <div id="modal-aviso-multiple" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+        <div class="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl p-4 w-full sm:max-w-lg space-y-3 max-h-[90dvh] overflow-y-auto">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-sm font-black text-emerald-300 uppercase tracking-wider">Enviar aviso a clientes</h3>
+                    <p class="text-[11px] text-slate-400 mt-1">Selecciona a quién avisar y prepara el mensaje. WhatsApp se abre uno a uno; nunca se envía nada automáticamente.</p>
+                </div>
+                <button onclick="cerrarModalAvisoMultiple()" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
+            </div>
+
+            <div id="aviso-multiple-paso-seleccion" class="space-y-3">
+                <input id="aviso-multiple-buscar" oninput="renderListaAvisoMultiple()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white text-sm" placeholder="Buscar cliente...">
+                <div class="flex items-center justify-between gap-2 text-[11px] flex-wrap">
+                    <div class="flex gap-3">
+                        <button onclick="seleccionarTodosVisiblesAviso()" class="text-cyan-300 font-bold hover:underline">Seleccionar visibles</button>
+                        <button onclick="deseleccionarTodosAviso()" class="text-slate-400 font-bold hover:underline">Deseleccionar todos</button>
+                    </div>
+                    <span id="aviso-multiple-contador" class="text-slate-400 font-bold">0 seleccionados</span>
+                </div>
+                <div id="aviso-multiple-lista-clientes" class="space-y-1 max-h-[32dvh] overflow-y-auto border border-slate-800 rounded-xl p-2"></div>
+                <div class="space-y-1">
+                    <label class="text-[10px] text-slate-500 uppercase font-black">Mensaje</label>
+                    <textarea id="aviso-multiple-mensaje" rows="4" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white text-sm" placeholder="Ej.: Hola, hoy no podré realizar los entrenamientos por motivos de salud. Disculpad las molestias. Os contactaré para reorganizar la sesión."></textarea>
+                </div>
+                <button onclick="prepararEnvioAvisoMultiple()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black py-3 rounded-xl text-sm">Preparar WhatsApp</button>
+            </div>
+
+            <div id="aviso-multiple-paso-envio" class="hidden space-y-3">
+                <p class="text-[11px] text-slate-400">Pulsa "Abrir WhatsApp" para cada cliente. El mensaje ya está cargado, solo tienes que confirmar el envío dentro de WhatsApp.</p>
+                <div id="aviso-multiple-lista-envio" class="space-y-2"></div>
+                <button onclick="volverASeleccionAvisoMultiple()" class="w-full bg-slate-800 text-slate-300 font-bold py-2.5 rounded-xl text-xs">Volver a la selección</button>
+            </div>
         </div>
     </div>
 
@@ -1155,8 +1208,8 @@ miércoles 07:00-09:00"></textarea>
     </div>
 
         <!-- MODAL HISTÓRICO / ESTIMACIÓN CLIENTE -->
-    <div id="modal-historico-cliente" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-2xl space-y-4 my-8">
+    <div id="modal-historico-cliente" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-2xl space-y-4 my-8 max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <div class="flex items-start justify-between gap-4">
                 <div>
                     <h3 class="text-sm font-bold text-amber-400 uppercase tracking-wider" id="hist-title">Histórico del cliente</h3>
@@ -2089,6 +2142,100 @@ miércoles 07:00-09:00"></textarea>
             bsWhatsAppOfferPendiente = null;
         }
 
+        // === Aviso a varios clientes por WhatsApp (mismo motor único de arriba, sin lógica nueva
+        // de teléfono/URL) === WhatsApp no permite enviar a varios chats a la vez desde wa.me, así
+        // que esto NUNCA afirma "enviado": solo prepara un botón individual por cliente que abre
+        // WhatsApp con el mensaje ya cargado. "Preparado" es un estado puramente local de esta
+        // sesión (nunca se guarda en Firestore ni se llama "entregado"/"leído").
+        let avisoMultipleSeleccionados = new Set();
+        let avisoMultiplePreparados = new Set();
+
+        function clientesElegiblesAvisoMultiple() {
+            return (dbClientes[entrenadorVisto] || []).filter(c => c && c.tipo === 'individual' && !c.vinculacion && clienteActivoParaAgenda(c) && normalizarTelefonoWhatsApp(c.telefono));
+        }
+
+        function abrirModalAvisoMultiple() {
+            avisoMultipleSeleccionados = new Set();
+            avisoMultiplePreparados = new Set();
+            const buscar = document.getElementById('aviso-multiple-buscar');
+            const mensaje = document.getElementById('aviso-multiple-mensaje');
+            if (buscar) buscar.value = '';
+            if (mensaje) mensaje.value = '';
+            document.getElementById('aviso-multiple-paso-seleccion')?.classList.remove('hidden');
+            document.getElementById('aviso-multiple-paso-envio')?.classList.add('hidden');
+            renderListaAvisoMultiple();
+            document.getElementById('modal-aviso-multiple')?.classList.remove('hidden');
+        }
+        function cerrarModalAvisoMultiple() {
+            document.getElementById('modal-aviso-multiple')?.classList.add('hidden');
+        }
+
+        function renderListaAvisoMultiple() {
+            const cont = document.getElementById('aviso-multiple-lista-clientes');
+            const contador = document.getElementById('aviso-multiple-contador');
+            if (!cont) return;
+            const q = textoNormalizadoCRM(document.getElementById('aviso-multiple-buscar')?.value || '');
+            const visibles = clientesElegiblesAvisoMultiple().filter(c => !q || textoNormalizadoCRM(c.nombre).includes(q));
+            cont.innerHTML = visibles.length ? visibles.map(c => `
+                <label class="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-slate-800/60 cursor-pointer text-xs text-slate-200">
+                    <input type="checkbox" onchange="toggleSeleccionClienteAviso('${escapeHTML(c.id)}', this.checked)" ${avisoMultipleSeleccionados.has(c.id) ? 'checked' : ''} class="w-4 h-4 accent-emerald-500 flex-shrink-0">
+                    <span class="flex-1">${escapeHTML(c.nombre)}</span>
+                </label>`).join('') : '<div class="text-[11px] text-slate-500 text-center py-4">Sin clientes con teléfono válido que coincidan.</div>';
+            if (contador) contador.innerText = `${avisoMultipleSeleccionados.size} seleccionados`;
+        }
+
+        function toggleSeleccionClienteAviso(id, checked) {
+            if (checked) avisoMultipleSeleccionados.add(id); else avisoMultipleSeleccionados.delete(id);
+            const contador = document.getElementById('aviso-multiple-contador');
+            if (contador) contador.innerText = `${avisoMultipleSeleccionados.size} seleccionados`;
+        }
+        function seleccionarTodosVisiblesAviso() {
+            const q = textoNormalizadoCRM(document.getElementById('aviso-multiple-buscar')?.value || '');
+            clientesElegiblesAvisoMultiple().filter(c => !q || textoNormalizadoCRM(c.nombre).includes(q)).forEach(c => avisoMultipleSeleccionados.add(c.id));
+            renderListaAvisoMultiple();
+        }
+        function deseleccionarTodosAviso() {
+            avisoMultipleSeleccionados = new Set();
+            renderListaAvisoMultiple();
+        }
+
+        function prepararEnvioAvisoMultiple() {
+            const mensaje = document.getElementById('aviso-multiple-mensaje')?.value.trim() || '';
+            if (!avisoMultipleSeleccionados.size) { alert('Selecciona al menos un cliente.'); return; }
+            if (!mensaje) { alert('Escribe el mensaje que quieres enviar.'); return; }
+            avisoMultiplePreparados = new Set();
+            renderListaEnvioAvisoMultiple();
+            document.getElementById('aviso-multiple-paso-seleccion')?.classList.add('hidden');
+            document.getElementById('aviso-multiple-paso-envio')?.classList.remove('hidden');
+        }
+
+        function renderListaEnvioAvisoMultiple() {
+            const cont = document.getElementById('aviso-multiple-lista-envio');
+            if (!cont) return;
+            const clientes = (dbClientes[entrenadorVisto] || []).filter(c => c && avisoMultipleSeleccionados.has(c.id));
+            cont.innerHTML = clientes.map(c => {
+                const preparado = avisoMultiplePreparados.has(c.id);
+                return `<div class="flex items-center justify-between gap-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5">
+                    <span class="text-xs text-white font-bold">${escapeHTML(c.nombre)}</span>
+                    <button onclick="abrirWhatsAppAvisoCliente('${escapeHTML(c.id)}')" class="${preparado ? 'bg-slate-800 text-emerald-300 border border-emerald-500/40' : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950'} font-bold px-3 py-2 rounded-lg text-[11px] whitespace-nowrap">${preparado ? '✓ Preparado' : 'Abrir WhatsApp'}</button>
+                </div>`;
+            }).join('');
+        }
+
+        function abrirWhatsAppAvisoCliente(id) {
+            const ficha = buscarClientePorIdTrainer(entrenadorVisto, id);
+            if (!ficha) return;
+            const mensaje = document.getElementById('aviso-multiple-mensaje')?.value.trim() || '';
+            abrirWhatsApp(ficha.telefono, mensaje);
+            avisoMultiplePreparados.add(id);
+            renderListaEnvioAvisoMultiple();
+        }
+
+        function volverASeleccionAvisoMultiple() {
+            document.getElementById('aviso-multiple-paso-envio')?.classList.add('hidden');
+            document.getElementById('aviso-multiple-paso-seleccion')?.classList.remove('hidden');
+        }
+
         // === Avisos de mañana ===
         function fechaMananaISO() {
             const d = new Date();
@@ -2772,7 +2919,8 @@ function calcularRentabilidadFicha(ficha) {
                 iniciarSincronizacionLeadsCRMAgenda();
                 iniciarModuloReservasAgenda();
                 iniciarModuloSolicitudesEliminacion();
-                buildColorPicker(); 
+                iniciarModuloNotificaciones();
+                buildColorPicker();
                 asegurarEstadoMobileAgenda();
                 irSemanaActual();
 
@@ -5997,6 +6145,125 @@ Cancelar = no hacer nada`,
             alert(recurrente ? 'Disponibilidad recurrente guardada. Se generarán slots de 45 min todas las semanas.' : 'Disponibilidad guardada solo para la semana visible.');
         }
 
+        // === BESOUL NOTIFICACIONES · buzón por PT (v1) ===
+        // Colección independiente (besoulNotifications), nunca dentro del documento
+        // monolítico de agenda -- ver firestore.rules para el aislamiento real por
+        // trainerKey. Mismo patrón exacto que solicitudes de eliminación/reservas:
+        // onSnapshot con query ya filtrada por rol, contador -> badge, panel bajo
+        // demanda. "read"/"readAt" son los ÚNICOS campos que se pueden actualizar
+        // (whitelist en Rules) -- el contenido de un aviso nunca se reescribe.
+        const BS_NOTIFICATIONS_COLLECTION = 'besoulNotifications';
+        let dbNotificaciones = {};
+        window.bsNotificacionesUnsub = null;
+
+        async function crearNotificacion({ trainerKey, audience = 'trainer', type, title, message, relatedEntityId = '', relatedEntityType = '' }) {
+            try {
+                if (!window.firebase || !firebase.apps.length) return;
+                const fs = firebase.firestore();
+                await fs.collection(BS_NOTIFICATIONS_COLLECTION).add({
+                    trainerKey: audience === 'admin' ? '' : (trainerKey || ''),
+                    audience,
+                    type: type || 'aviso_interno',
+                    title: title || '',
+                    message: message || '',
+                    read: false,
+                    readAt: null,
+                    relatedEntityId,
+                    relatedEntityType,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    createdBy: usuarioLogeado || ''
+                });
+            } catch (err) {
+                // Una notificación es informativa, no crítica: si falla, se registra pero
+                // nunca debe bloquear ni mostrar error al usuario en la acción principal
+                // (p.ej. aprobar una solicitud) que la disparó.
+                console.error('No se pudo crear la notificación:', err);
+            }
+        }
+
+        function notificacionesOrdenadas() {
+            return Object.entries(dbNotificaciones || {}).map(([id, n]) => ({ id, ...n }))
+                .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        }
+        function notificacionesNoLeidas() {
+            return notificacionesOrdenadas().filter(n => n.read !== true);
+        }
+
+        function actualizarBadgeNotificaciones() {
+            const badge = document.getElementById('badge-notificaciones');
+            if (!badge) return;
+            const n = notificacionesNoLeidas().length;
+            badge.textContent = n;
+            badge.classList.toggle('hidden', n === 0);
+        }
+
+        function abrirModalNotificaciones() {
+            renderNotificaciones();
+            document.getElementById('modal-notificaciones')?.classList.remove('hidden');
+        }
+        function cerrarModalNotificaciones() {
+            document.getElementById('modal-notificaciones')?.classList.add('hidden');
+        }
+
+        function renderNotificaciones() {
+            const cont = document.getElementById('notificaciones-lista');
+            if (!cont) return;
+            const lista = notificacionesOrdenadas();
+            if (!lista.length) {
+                cont.innerHTML = '<div class="text-xs text-slate-500 text-center py-8 border border-dashed border-slate-800 rounded-xl">Sin notificaciones todavía.</div>';
+                actualizarBadgeNotificaciones();
+                return;
+            }
+            cont.innerHTML = lista.map(n => `
+                <div class="p-3 rounded-xl border ${n.read ? 'bg-slate-950/50 border-slate-800' : 'bg-cyan-500/5 border-cyan-500/30'} ${n.read ? '' : 'cursor-pointer'}" ${n.read ? '' : `onclick="marcarNotificacionLeida('${escapeHTML(n.id)}')"`}>
+                    <div class="flex items-start justify-between gap-2">
+                        <span class="text-xs font-bold ${n.read ? 'text-slate-300' : 'text-white'}">${escapeHTML(n.title)}</span>
+                        ${n.read ? '' : '<span class="w-2 h-2 rounded-full bg-cyan-400 flex-shrink-0 mt-1"></span>'}
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">${escapeHTML(n.message)}</p>
+                    <p class="text-[9px] text-slate-600 mt-1.5">${n.createdAt?.toDate ? n.createdAt.toDate().toLocaleString('es-ES') : ''}</p>
+                </div>`).join('');
+            actualizarBadgeNotificaciones();
+        }
+
+        async function marcarNotificacionLeida(id) {
+            try {
+                const fs = firebase.firestore();
+                await fs.collection(BS_NOTIFICATIONS_COLLECTION).doc(id).update({ read: true, readAt: firebase.firestore.FieldValue.serverTimestamp() });
+            } catch (err) { console.error('No se pudo marcar la notificación como leída:', err); }
+        }
+
+        async function marcarTodasNotificacionesLeidas() {
+            const pendientes = notificacionesNoLeidas();
+            if (!pendientes.length) return;
+            try {
+                const fs = firebase.firestore();
+                const batch = fs.batch();
+                pendientes.forEach(n => batch.update(fs.collection(BS_NOTIFICATIONS_COLLECTION).doc(n.id), { read: true, readAt: firebase.firestore.FieldValue.serverTimestamp() }));
+                await batch.commit();
+            } catch (err) { console.error('No se pudieron marcar todas las notificaciones como leídas:', err); }
+        }
+
+        function iniciarModuloNotificaciones() {
+            try {
+                if (!window.firebase || !firebase.apps.length) return;
+                const fs = firebase.firestore();
+                if (window.bsNotificacionesUnsub) { try { window.bsNotificacionesUnsub(); } catch (e) {} }
+                let query = fs.collection(BS_NOTIFICATIONS_COLLECTION);
+                query = rolActivo === 'admin'
+                    ? query.where('audience', '==', 'admin')
+                    : query.where('audience', '==', 'trainer').where('trainerKey', '==', usuarioLogeado);
+                window.bsNotificacionesUnsub = query.onSnapshot(snapshot => {
+                    const mapa = {};
+                    snapshot.forEach(doc => mapa[doc.id] = { id: doc.id, ...(doc.data() || {}) });
+                    dbNotificaciones = mapa;
+                    actualizarBadgeNotificaciones();
+                    const modal = document.getElementById('modal-notificaciones');
+                    if (modal && !modal.classList.contains('hidden')) renderNotificaciones();
+                }, err => console.error('Error leyendo notificaciones:', err));
+            } catch (err) { console.error('Error iniciando módulo de notificaciones:', err); }
+        }
+
         // === BESOUL SOLICITUDES DE ELIMINACIÓN DE CLIENTE (baja lógica con aprobación admin) ===
         const BS_SOLICITUDES_ELIMINACION_COLLECTION = 'besoulSolicitudesEliminacion';
         let dbSolicitudesEliminacion = {};
@@ -6206,6 +6473,7 @@ Cancelar = no hacer nada`,
 
         async function rechazarSolicitudEliminacion(id) {
             if (rolActivo !== 'admin') { alert('Solo un administrador puede rechazar solicitudes.'); return; }
+            const s = dbSolicitudesEliminacion[id];
             const notas = prompt('Notas para el entrenador (opcional):') || '';
             try {
                 const fs = firebase.firestore();
@@ -6215,6 +6483,17 @@ Cancelar = no hacer nada`,
                     revisadoEn: firebase.firestore.FieldValue.serverTimestamp(),
                     notasAdmin: notas
                 }, { merge: true });
+                if (s?.trainerKey) {
+                    const ficha = (dbClientes[s.trainerKey] || []).find(c => c.id === s.clienteId);
+                    crearNotificacion({
+                        trainerKey: s.trainerKey,
+                        type: 'solicitud_administrativa',
+                        title: 'Solicitud de baja rechazada',
+                        message: `Tu solicitud de baja de "${ficha?.nombre || 'un cliente'}" ha sido rechazada.${notas ? ` Nota del admin: ${notas}` : ''}`,
+                        relatedEntityId: id,
+                        relatedEntityType: 'solicitudEliminacion'
+                    });
+                }
             } catch (e) { console.error(e); alert('No se ha podido rechazar la solicitud.'); }
         }
 
@@ -6262,6 +6541,14 @@ Cancelar = no hacer nada`,
 
             guardarEstadoNubeAgenda(s.trainerKey);
             publicarReservasPublicas();
+            crearNotificacion({
+                trainerKey: s.trainerKey,
+                type: 'solicitud_administrativa',
+                title: 'Solicitud de baja aprobada',
+                message: `La baja de "${ficha.nombre}" ha sido aprobada.${notas ? ` Nota del admin: ${notas}` : ''}`,
+                relatedEntityId: id,
+                relatedEntityType: 'solicitudEliminacion'
+            });
             recalcularKPIs();
             renderClientes();
             renderAgenda();
@@ -6858,7 +7145,7 @@ Cancelar = no hacer nada`,
                 lista.innerHTML = asistentes.length ? asistentes.map(a => {
                     const ficha = buscarClientePorIdTrainer(entrenadorVisto, a.id || a.clientId);
                     const rentA = ficha ? calcularRentabilidadFicha(ficha) : 0;
-                    return `<div class="flex items-center justify-between gap-2 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[10px]"><span class="text-white font-bold">${escapeHTML(a.nombre || ficha?.nombre || 'Cliente')}</span><span class="text-emerald-300 font-mono">${rentA.toFixed(2)} €</span><button type="button" onclick="quitarAsistenteGrupoAbierto('${escapeHTML(a.id || a.clientId)}')" class="text-red-300 font-bold">Quitar</button></div>`;
+                    return `<div class="flex items-center justify-between gap-2 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[10px]"><span class="text-white font-bold">${escapeHTML(a.nombre || ficha?.nombre || 'Cliente')}</span><span class="text-emerald-300 font-mono">${rentA.toFixed(2)} €</span><button type="button" onclick="quitarAsistenteGrupoAbierto('${escapeHTML(a.id || a.clientId)}')" class="text-red-300 font-bold px-2 py-2 -my-2 rounded hover:bg-red-500/10 transition">Quitar</button></div>`;
                 }).join('') : '<div class="text-[10px] text-slate-500 border border-dashed border-slate-800 rounded p-2">Sin asistentes todavía.</div>';
             }
         }

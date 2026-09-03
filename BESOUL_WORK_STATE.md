@@ -619,3 +619,21 @@ Y `guardarCliente()` (el guardado de ficha desde el modal) llamaba a esto vía `
 **No se modificaron datos reales, no se regeneraron tokens masivamente, no se tocaron Firestore Rules.**
 
 Commit: ver `git log` (mensaje `fix: normalize/validate reservation token, stop re-wrapping malformed manual input`).
+
+## BESOUL-NEXT-UX-NOTIFICATIONS — buzón + WhatsApp múltiple + auditoría UX/mobile (2026-09-03)
+
+Rama `BESOUL-NEXT-UX-NOTIFICATIONS`, desde `main` (`4b0aeb9`). Checkpoint: tag `checkpoint-pre-ux-notifications-2026-09-03`. **Sin merge a `main` todavía.**
+
+**Auditoría UX/mobile** (fork de investigación, solo lectura, sin navegador/Firebase Auth real disponible en este entorno — evidencia por código, no clic-a-clic): encontró double-scroll (outer + inner `overflow-y-auto` simultáneos) en 6 modales de `agenda.html` (`modal-cliente`, `modal-disponibilidad-reservas`, `modal-solicitudes-reservas`, `modal-solicitudes-eliminacion`, `modal-avisos-manana`, y `modal-whatsapp-offer` sin tratamiento bottom-sheet en absoluto); dos botones de grupos abiertos bajo el mínimo táctil de ~44px; confirmó que el patrón de reprogramar-sin-drag y el resto de flujos táctiles ya funcionan; confirmó que Finanzas (heatmap/desglose por entrenador) y Dashboard mantienen scroll horizontal contenido correctamente (sin fuga a nivel de página); confirmó estado real de acceso — `agenda.html`/`crm.html` sin gate de rol (cualquier activo entra), `finanzas.html`/`dashboard.html` ya admin-only.
+
+**P1 — Mobile Agenda (commits `2a9bf58`, `edbda35`)**: eliminado el double-scroll en los 6 modales (cada uno queda con una única capa de scroll — la interna donde ya existía sin condicionar por breakpoint, y correctamente restaurado el scroll en desktop donde `modal-cliente`/`modal-historico-cliente` dependían del exterior). Botones "Añadir cliente"/"Quitar" del panel de grupo abierto agrandados a ~44px. Solo CSS/clases, cero lógica JS tocada.
+
+**P2 — WhatsApp a varios clientes (commit `768421e`)**: nuevo botón "Enviar aviso a clientes" en Agenda → modal con buscador, selección múltiple (seleccionar visibles/deseleccionar), mensaje libre, y un paso de envío con un botón "Abrir WhatsApp" por cliente que reutiliza `abrirWhatsApp()` sin duplicar lógica de teléfono/URL. "Preparado" es estado local de sesión, nunca persistido, nunca se afirma "enviado". Sin escrituras a Firestore, sin colección nueva.
+
+**P3 — Buzón/notificaciones (commits `0337c6f`, `cd7fd84`)**: colección nueva `besoulNotifications/{id}` (fuera del monolito de agenda a propósito), Rules propuestas (lectura por trainerKey propio o admin; create abierto a cualquier activo — deliberado, permite notificar a otro PT; update whitelisteado a `read`/`readAt`; sin delete) — **no desplegadas, mismo estado "propuesta" que el resto de Rules de esta sesión**. UI: campana + badge en el header de Agenda, panel bottom-sheet, marcar leída/todas leídas — mismo patrón `onSnapshot`→badge→render que solicitudes de eliminación/reservas. Dos disparadores reales conectados (aprobar/rechazar solicitud de baja → notifica al PT afectado); el resto de tipos de aviso listados por el usuario quedan como trabajo futuro sobre la misma arquitectura.
+
+**P4 — Bugs conocidos Finanzas/CRM (commits `2c61075`, `9f65df8`)**: mismo fix `set(...,{merge:true})`→`update()` que ya se aplicó y validó en producción para `agenda.html` (ver sección HOTFIX-CLIENT-SAVE arriba), aplicado ahora a `finanzas.html` (`guardarCatalogoActividadesNube` — arregla el checkbox de actividades autorizadas y las 5 llamadas más que pasan por esa función) y `crm.html` (`sincronizarPruebaAgendaDesdeLead` — arregla que la prueba de un lead se vea realmente en Agenda). Commits separados, sin mezclar con cambios de UX, tal como se pidió.
+
+**P5 — Mobile admin**: auditado, sin hallazgo que justifique un cambio de código (selector de "Auditar PT" algo apretado en 375px pero funcional; scroll horizontal contenido de Finanzas/Dashboard ya confirmado correcto). Sin commit.
+
+**Pendiente de decisión del usuario**: desplegar las Rules de `besoulNotifications` (sin esto el buzón fallará con `permission-denied`, capturado y silencioso — el badge se queda en 0); validar en producción los 4 bloques de esta rama; autorizar merge a `main`.
