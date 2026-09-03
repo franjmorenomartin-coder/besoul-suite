@@ -38,6 +38,15 @@ rules_version = '2';
 //      OPCIONAL/FASE 2 (aislamiento de escritura por trainerKey, ver más
 //      abajo) sigue SIN activar -- este cambio es independiente y no
 //      requiere que FASE 2 esté activa.
+//   6. NUEVO (buzón/notificaciones por PT, 2026-09-03): match
+//      /besoulNotifications/{notifId} — colección independiente, fuera del
+//      documento monolítico de agenda. Lectura solo por el propio trainerKey
+//      destinatario o admin; create permitido a cualquier usuario activo
+//      (necesario para que, p.ej., un admin resolviendo una solicitud pueda
+//      notificar a OTRO trainerKey; sin datos sensibles en el esquema);
+//      update restringido por whitelist a read/readAt únicamente; sin
+//      delete. Hoy esta colección cae en el catch-all deny-all si no se
+//      despliega esta propuesta.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -266,6 +275,40 @@ service cloud.firestore {
              .hasOnly(['estado', 'revisadoPor', 'revisadoEn', 'notasAdmin']);
 
       // Nunca se borran: se conservan como auditoría.
+      allow delete: if false;
+    }
+
+    // NUEVO — buzón/notificaciones por PT (2026-09-03). Documento independiente,
+    // NUNCA dentro de besoulSuite/agenda (evita ensuciar el monolito, y permite
+    // seguridad real por trainerKey sin la limitación de aislamiento de lectura
+    // que tiene ese documento compartido).
+    match /besoulNotifications/{notifId} {
+      // Cualquier usuario activo puede crear una notificación dirigida a OTRO
+      // trainerKey (p.ej. admin resolviendo una solicitud avisa al PT afectado,
+      // o un PT genera un aviso administrativo para sí mismo) -- no hay dato
+      // sensible en el esquema (solo texto informativo + referencias a otra
+      // entidad), así que permitir el create cross-trainerKey es una decisión
+      // deliberada, no un descuido. Se valida la FORMA del payload igualmente.
+      allow create: if isActiveUser()
+        && request.resource.data.audience in ['trainer', 'admin']
+        && (request.resource.data.audience == 'admin' || request.resource.data.trainerKey is string)
+        && request.resource.data.type is string
+        && request.resource.data.title is string
+        && request.resource.data.message is string
+        && request.resource.data.read == false;
+
+      // Admin ve todas (incluidas las de otros PT, para supervisión). Un PT
+      // solo ve las suyas propias (audience:'trainer' + su trainerKey).
+      allow read: if isAdmin()
+        || (isActiveUser() && resource.data.audience == 'trainer' && resource.data.trainerKey == myTrainerKey());
+
+      // Marcar leída/no leída: solo el destinatario real o admin, y solo puede
+      // tocar read/readAt -- whitelist estricta, igual que en solicitudes de
+      // eliminación, para que no se pueda reescribir el contenido del aviso.
+      allow update: if (isAdmin() || (isActiveUser() && resource.data.audience == 'trainer' && resource.data.trainerKey == myTrainerKey()))
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
+
+      // Nunca se borran: mismo criterio que solicitudes de eliminación.
       allow delete: if false;
     }
 
