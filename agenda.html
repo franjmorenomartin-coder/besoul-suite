@@ -317,6 +317,7 @@
                 <button onclick="abrirModalDisponibilidadReservas()" class="bs-btn-primary px-4 py-2.5 text-sm rounded-xl transition">+ Disponibilidad</button>
                 <button onclick="abrirModalSolicitudesReservas()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Reservas <span id="badge-reservas-pendientes" class="hidden ml-1 bg-emerald-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
                 <button onclick="abrirModalAvisosManana()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Avisos mañana <span id="badge-avisos-manana" class="hidden ml-1 bg-cyan-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
+                <button onclick="abrirModalAvisoMultiple()" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Enviar aviso a clientes</button>
                 <button id="btn-admin-entrenadores" onclick="abrirModalEntrenadores()" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Entrenadores</button>
                 <button id="btn-admin-solicitudes-eliminacion" onclick="abrirModalSolicitudesEliminacion()" class="hidden relative bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Solicitudes <span id="badge-solicitudes-eliminacion" class="hidden ml-1 bg-red-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
 
@@ -1116,6 +1117,42 @@ miércoles 07:00-09:00"></textarea>
                 <button onclick="cerrarModalAvisosManana()" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
             </div>
             <div id="lista-avisos-manana" class="space-y-2"></div>
+        </div>
+    </div>
+
+    <!-- MODAL AVISO A VARIOS CLIENTES (WhatsApp manual, uno por uno -- mismo motor único de arriba) -->
+    <div id="modal-aviso-multiple" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+        <div class="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl p-4 w-full sm:max-w-lg space-y-3 max-h-[90dvh] overflow-y-auto">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-sm font-black text-emerald-300 uppercase tracking-wider">Enviar aviso a clientes</h3>
+                    <p class="text-[11px] text-slate-400 mt-1">Selecciona a quién avisar y prepara el mensaje. WhatsApp se abre uno a uno; nunca se envía nada automáticamente.</p>
+                </div>
+                <button onclick="cerrarModalAvisoMultiple()" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
+            </div>
+
+            <div id="aviso-multiple-paso-seleccion" class="space-y-3">
+                <input id="aviso-multiple-buscar" oninput="renderListaAvisoMultiple()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white text-sm" placeholder="Buscar cliente...">
+                <div class="flex items-center justify-between gap-2 text-[11px] flex-wrap">
+                    <div class="flex gap-3">
+                        <button onclick="seleccionarTodosVisiblesAviso()" class="text-cyan-300 font-bold hover:underline">Seleccionar visibles</button>
+                        <button onclick="deseleccionarTodosAviso()" class="text-slate-400 font-bold hover:underline">Deseleccionar todos</button>
+                    </div>
+                    <span id="aviso-multiple-contador" class="text-slate-400 font-bold">0 seleccionados</span>
+                </div>
+                <div id="aviso-multiple-lista-clientes" class="space-y-1 max-h-[32dvh] overflow-y-auto border border-slate-800 rounded-xl p-2"></div>
+                <div class="space-y-1">
+                    <label class="text-[10px] text-slate-500 uppercase font-black">Mensaje</label>
+                    <textarea id="aviso-multiple-mensaje" rows="4" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white text-sm" placeholder="Ej.: Hola, hoy no podré realizar los entrenamientos por motivos de salud. Disculpad las molestias. Os contactaré para reorganizar la sesión."></textarea>
+                </div>
+                <button onclick="prepararEnvioAvisoMultiple()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black py-3 rounded-xl text-sm">Preparar WhatsApp</button>
+            </div>
+
+            <div id="aviso-multiple-paso-envio" class="hidden space-y-3">
+                <p class="text-[11px] text-slate-400">Pulsa "Abrir WhatsApp" para cada cliente. El mensaje ya está cargado, solo tienes que confirmar el envío dentro de WhatsApp.</p>
+                <div id="aviso-multiple-lista-envio" class="space-y-2"></div>
+                <button onclick="volverASeleccionAvisoMultiple()" class="w-full bg-slate-800 text-slate-300 font-bold py-2.5 rounded-xl text-xs">Volver a la selección</button>
+            </div>
         </div>
     </div>
 
@@ -2087,6 +2124,100 @@ miércoles 07:00-09:00"></textarea>
         function cerrarModalWhatsAppOffer() {
             document.getElementById('modal-whatsapp-offer')?.classList.add('hidden');
             bsWhatsAppOfferPendiente = null;
+        }
+
+        // === Aviso a varios clientes por WhatsApp (mismo motor único de arriba, sin lógica nueva
+        // de teléfono/URL) === WhatsApp no permite enviar a varios chats a la vez desde wa.me, así
+        // que esto NUNCA afirma "enviado": solo prepara un botón individual por cliente que abre
+        // WhatsApp con el mensaje ya cargado. "Preparado" es un estado puramente local de esta
+        // sesión (nunca se guarda en Firestore ni se llama "entregado"/"leído").
+        let avisoMultipleSeleccionados = new Set();
+        let avisoMultiplePreparados = new Set();
+
+        function clientesElegiblesAvisoMultiple() {
+            return (dbClientes[entrenadorVisto] || []).filter(c => c && c.tipo === 'individual' && !c.vinculacion && clienteActivoParaAgenda(c) && normalizarTelefonoWhatsApp(c.telefono));
+        }
+
+        function abrirModalAvisoMultiple() {
+            avisoMultipleSeleccionados = new Set();
+            avisoMultiplePreparados = new Set();
+            const buscar = document.getElementById('aviso-multiple-buscar');
+            const mensaje = document.getElementById('aviso-multiple-mensaje');
+            if (buscar) buscar.value = '';
+            if (mensaje) mensaje.value = '';
+            document.getElementById('aviso-multiple-paso-seleccion')?.classList.remove('hidden');
+            document.getElementById('aviso-multiple-paso-envio')?.classList.add('hidden');
+            renderListaAvisoMultiple();
+            document.getElementById('modal-aviso-multiple')?.classList.remove('hidden');
+        }
+        function cerrarModalAvisoMultiple() {
+            document.getElementById('modal-aviso-multiple')?.classList.add('hidden');
+        }
+
+        function renderListaAvisoMultiple() {
+            const cont = document.getElementById('aviso-multiple-lista-clientes');
+            const contador = document.getElementById('aviso-multiple-contador');
+            if (!cont) return;
+            const q = textoNormalizadoCRM(document.getElementById('aviso-multiple-buscar')?.value || '');
+            const visibles = clientesElegiblesAvisoMultiple().filter(c => !q || textoNormalizadoCRM(c.nombre).includes(q));
+            cont.innerHTML = visibles.length ? visibles.map(c => `
+                <label class="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-slate-800/60 cursor-pointer text-xs text-slate-200">
+                    <input type="checkbox" onchange="toggleSeleccionClienteAviso('${escapeHTML(c.id)}', this.checked)" ${avisoMultipleSeleccionados.has(c.id) ? 'checked' : ''} class="w-4 h-4 accent-emerald-500 flex-shrink-0">
+                    <span class="flex-1">${escapeHTML(c.nombre)}</span>
+                </label>`).join('') : '<div class="text-[11px] text-slate-500 text-center py-4">Sin clientes con teléfono válido que coincidan.</div>';
+            if (contador) contador.innerText = `${avisoMultipleSeleccionados.size} seleccionados`;
+        }
+
+        function toggleSeleccionClienteAviso(id, checked) {
+            if (checked) avisoMultipleSeleccionados.add(id); else avisoMultipleSeleccionados.delete(id);
+            const contador = document.getElementById('aviso-multiple-contador');
+            if (contador) contador.innerText = `${avisoMultipleSeleccionados.size} seleccionados`;
+        }
+        function seleccionarTodosVisiblesAviso() {
+            const q = textoNormalizadoCRM(document.getElementById('aviso-multiple-buscar')?.value || '');
+            clientesElegiblesAvisoMultiple().filter(c => !q || textoNormalizadoCRM(c.nombre).includes(q)).forEach(c => avisoMultipleSeleccionados.add(c.id));
+            renderListaAvisoMultiple();
+        }
+        function deseleccionarTodosAviso() {
+            avisoMultipleSeleccionados = new Set();
+            renderListaAvisoMultiple();
+        }
+
+        function prepararEnvioAvisoMultiple() {
+            const mensaje = document.getElementById('aviso-multiple-mensaje')?.value.trim() || '';
+            if (!avisoMultipleSeleccionados.size) { alert('Selecciona al menos un cliente.'); return; }
+            if (!mensaje) { alert('Escribe el mensaje que quieres enviar.'); return; }
+            avisoMultiplePreparados = new Set();
+            renderListaEnvioAvisoMultiple();
+            document.getElementById('aviso-multiple-paso-seleccion')?.classList.add('hidden');
+            document.getElementById('aviso-multiple-paso-envio')?.classList.remove('hidden');
+        }
+
+        function renderListaEnvioAvisoMultiple() {
+            const cont = document.getElementById('aviso-multiple-lista-envio');
+            if (!cont) return;
+            const clientes = (dbClientes[entrenadorVisto] || []).filter(c => c && avisoMultipleSeleccionados.has(c.id));
+            cont.innerHTML = clientes.map(c => {
+                const preparado = avisoMultiplePreparados.has(c.id);
+                return `<div class="flex items-center justify-between gap-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5">
+                    <span class="text-xs text-white font-bold">${escapeHTML(c.nombre)}</span>
+                    <button onclick="abrirWhatsAppAvisoCliente('${escapeHTML(c.id)}')" class="${preparado ? 'bg-slate-800 text-emerald-300 border border-emerald-500/40' : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950'} font-bold px-3 py-2 rounded-lg text-[11px] whitespace-nowrap">${preparado ? '✓ Preparado' : 'Abrir WhatsApp'}</button>
+                </div>`;
+            }).join('');
+        }
+
+        function abrirWhatsAppAvisoCliente(id) {
+            const ficha = buscarClientePorIdTrainer(entrenadorVisto, id);
+            if (!ficha) return;
+            const mensaje = document.getElementById('aviso-multiple-mensaje')?.value.trim() || '';
+            abrirWhatsApp(ficha.telefono, mensaje);
+            avisoMultiplePreparados.add(id);
+            renderListaEnvioAvisoMultiple();
+        }
+
+        function volverASeleccionAvisoMultiple() {
+            document.getElementById('aviso-multiple-paso-envio')?.classList.add('hidden');
+            document.getElementById('aviso-multiple-paso-seleccion')?.classList.remove('hidden');
         }
 
         // === Avisos de mañana ===
