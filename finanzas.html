@@ -496,6 +496,9 @@
       const modalidad = cat?.modalidades?.[ficha.modalidadId];
       const segmento = modalidad?.segmentos?.[ficha.segmentoId];
       const plan = segmento ? (segmento.planes || []).find(p => Number(p.sesiones) === Number(ficha.planSesiones)) : null;
+      // Logging temporal de diagnóstico (2026-09-03, quitar cuando quede confirmado en
+      // producción): paso a paso de la resolución, éxito o fallo, sin PII.
+      console.log(`[FINANZAS][ACTIVIDAD_CALCULO] trainerKey=${trainerKey || '(?)'} centerKey=${centroId || '(?)'} mesKey=${mesKey} actividadEspecialId=${ficha.actividadEspecialId} modalidadId=${ficha.modalidadId} segmentoId=${ficha.segmentoId} planSesiones=${ficha.planSesiones} numeroPersonas=${ficha.numPersonas} actividadEncontrada=${!!cat} modalidadEncontrada=${!!modalidad} segmentoEncontrado=${!!segmento} planEncontrado=${!!plan} precioPlan=${plan?.precio ?? '(?)'}`);
       if (!segmento || !plan) {
         // Nunca devolver 0 en silencio: una ficha con actividad especial activa y configurada
         // que no encuentra tarifa es un fallo real (catálogo/ficha desincronizados, id renombrado,
@@ -509,8 +512,11 @@
       const sesionesAgendadas = sesionesAgendadasFacturablesFichaMes(ficha, trainerKey, mesKey);
       if (modalidad.tipo === 'bono_vigencia') {
         const valorSesion = plan.sesiones ? precioTotal / plan.sesiones : 0;
-        return { total: sesionesAgendadas * valorSesion, tipo: 'actividad_bono', sesionesAgendadas, sesionesContratadas: plan.sesiones, precioTotal, actividadId: ficha.actividadEspecialId };
+        const totalBono = sesionesAgendadas * valorSesion;
+        console.log(`[FINANZAS][ACTIVIDAD_CALCULO] trainerKey=${trainerKey || '(?)'} centerKey=${centroId || '(?)'} tipo=actividad_bono facturacionFinal=${totalBono}`);
+        return { total: totalBono, tipo: 'actividad_bono', sesionesAgendadas, sesionesContratadas: plan.sesiones, precioTotal, actividadId: ficha.actividadEspecialId };
       }
+      console.log(`[FINANZAS][ACTIVIDAD_CALCULO] trainerKey=${trainerKey || '(?)'} centerKey=${centroId || '(?)'} tipo=actividad_mensual facturacionFinal=${precioTotal}`);
       return { total: precioTotal, tipo: 'actividad_mensual', sesionesAgendadas, sesionesContratadas: plan.sesiones, precioTotal, actividadId: ficha.actividadEspecialId };
     }
     function registrarAuditoriaCierre(mes, accion, detalle=''){
@@ -916,7 +922,14 @@
     function construirCalculoVivo(mesKey = mesTrabajoKey()){
       const centrosBase = { ...getCentros(), sin_centro: { id:'sin_centro', nombre:'Dirección / sin centro', canonFijo:0, canonPt:0, activo:true } };
       const centros = {};
-      Object.keys(centrosBase).forEach(id => centros[id] = { ...centroParaMes(centrosBase[id], mesKey), trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0 });
+      Object.keys(centrosBase).forEach(id => {
+        const resuelto = centroParaMes(centrosBase[id], mesKey);
+        // Logging temporal de diagnóstico (2026-09-03, quitar cuando quede confirmado en
+        // producción): valor base guardado vs valor realmente resuelto/usado por el motor para
+        // este mes, campo por campo. Sin PII.
+        console.log(`[FINANZAS][CENTRO_RESUELTO] centerKey=${id} mesKey=${mesKey} tieneVersionesTemporal=${!!(dbFinanzas.centrosVersiones?.[id]?.length)} canonFijo_base=${centrosBase[id].canonFijo} canonFijo_resuelto=${resuelto.canonFijo} ptsIncluidos_base=${centrosBase[id].ptsIncluidos} ptsIncluidos_resuelto=${resuelto.ptsIncluidos} canonPt_base=${centrosBase[id].canonPt} canonPt_resuelto=${resuelto.canonPt} canonPtReducidoDesde_base=${centrosBase[id].canonPtReducidoDesde} canonPtReducidoDesde_resuelto=${resuelto.canonPtReducidoDesde} canonPtReducido_base=${centrosBase[id].canonPtReducido} canonPtReducido_resuelto=${resuelto.canonPtReducido}`);
+        centros[id] = { ...resuelto, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0 };
+      });
       const trainers = [];
       perfilesUsuarios.filter(esPerfilOperativo).forEach(perfil => {
         const key = trainerKeyPerfil(perfil);
@@ -936,12 +949,18 @@
           if (f.actividadEspecialId) {
             fichasActivas += 1;
             clientesActividades += Math.max(1, parseInt(f.numPersonas) || 1);
+            // Logging temporal de diagnóstico (2026-09-03, quitar cuando quede confirmado en
+            // producción). Muestra el objeto REAL tal como lo consume el motor, no lo que
+            // muestra la UI. Sin PII -- solo claves técnicas.
+            console.log(`[FINANZAS][CLIENTE_REAL] trainerKey=${key} centerKey=${centroIdParaActividades} mesKey=${mesKey} actividadEspecialId=${f.actividadEspecialId} modalidadId=${f.modalidadId} segmentoId=${f.segmentoId} planSesiones=${f.planSesiones} (tipo=${typeof f.planSesiones}) numPersonas=${f.numPersonas} estadoCliente=${f.estadoCliente} fechaAlta=${f.fechaAlta} modalidadEstandar=${f.modalidad ? '(presente, legacy)' : '(vacío)'}`);
+            const facturacionActividadesAntes = facturacionActividades;
             const calcAct = calcularFacturacionActividadFicha(f, key, mesKey, centroIdParaActividades);
             facturacionActividades += calcAct.total;
             const reparto = distribuirReparto(calcAct.total, repartoEfectivoActividad(f.actividadEspecialId, mesKey).partes);
             actividadPtNeto += reparto.entrenador || 0;
             actividadCentroShare += reparto.centro || 0;
             actividadBesoulShare += reparto.besoul || 0;
+            console.log(`[FINANZAS][AGREGADO_CLIENTE] trainerKey=${key} centerKey=${centroIdParaActividades} calcAct.total=${calcAct.total} facturacionActividadesAntes=${facturacionActividadesAntes} facturacionActividadesDespues=${facturacionActividades} repartoEntrenador=${reparto.entrenador || 0} repartoCentro=${reparto.centro || 0} repartoBesoul=${reparto.besoul || 0}`);
             return;
           }
           fichasActivas += 1;
@@ -1011,7 +1030,12 @@
         // 1) Canon fijo de sede: se paga una vez y se prorratea entre los PT activos.
         // 2) Coste ligado al PT: puede tener tramos por posición dentro de la sede.
         //    Ejemplo Inacua: 1.200 € fijos incluyen 6 PT; del 7º al 11º son 200 €/PT; desde el 12º son 60 €/PT.
+        // Logging temporal de diagnóstico (2026-09-03, quitar cuando quede confirmado en
+        // producción): confirma que en el momento REAL de calcular el canon, c.canonPt/etc.
+        // siguen siendo los valores resueltos (no se han reseteado/sobrescrito entretanto).
+        console.log(`[FINANZAS][CENTRO_RESUELTO] centerKey=${c.id} mesKey=${mesKey} etapa=antes_de_calcularCanon numTrainers=${(c.trainers||[]).length} canonFijo=${c.canonFijo} ptsIncluidos=${c.ptsIncluidos} canonPt=${c.canonPt} canonPtReducidoDesde=${c.canonPtReducidoDesde} canonPtReducido=${c.canonPtReducido}`);
         calcularCanonCentroYAsignar(c);
+        console.log(`[FINANZAS][CENTRO_RESUELTO] centerKey=${c.id} mesKey=${mesKey} etapa=despues_de_calcularCanon canon=${c.canon} canonProrrateado=${c.canonProrrateado} canonClientesProrrateado=${c.canonClientesProrrateado}`);
       });
       const gastos = totalGastosMes(mesKey);
       const otrosIngresos = totalOtrosIngresosMes(mesKey);
