@@ -1183,7 +1183,15 @@ async function sincronizarPruebaAgendaDesdeLead(leadId, leadData, avisar = true)
         }
       }
 
-      tx.set(agendaRef, updatePayload, { merge:true });
+      // Hallazgo real (confirmado contra el código fuente del SDK de Firestore, mismo bug ya
+      // corregido en agenda.html/guardarEstadoNubeAgenda y finanzas.html/
+      // guardarCatalogoActividadesNube): tx.set(ref, payload, {merge:true}) trata una clave con
+      // punto DENTRO del payload (p.ej. "agenda.veronica.2026-09-05_10:00") como un nombre de
+      // campo literal, no como ruta anidada -- la prueba nunca llegaba a verse realmente en
+      // Agenda pese a no dar ningún error. tx.update() sí interpreta las claves con punto del
+      // payload como ruta anidada real (incluido con FieldValue.delete(), su caso de uso
+      // estándar). Mismo payload dirigido de siempre, solo cambia el método de escritura.
+      tx.update(agendaRef, updatePayload);
     });
 
     await db.collection('besoulLeads').doc(leadId).set({
