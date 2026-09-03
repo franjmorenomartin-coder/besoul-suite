@@ -3401,6 +3401,10 @@ function calcularRentabilidadFicha(ficha) {
                 const rentabilidadSesion = plan.sesiones > 0 ? total / plan.sesiones : 0;
                 lblRent.innerText = `${rentabilidadSesion.toFixed(2)} €`;
             }
+            // Logging temporal de diagnóstico (2026-09-03, quitar cuando quede confirmado en
+            // producción): confirma qué se escribió y si los elementos existían en el DOM en el
+            // momento de escribir. Sin PII -- solo claves técnicas e IDs de catálogo.
+            console.log(`[AGENDA][ACTIVIDAD_PREVIEW] activityId=${act?.id || '(?)'} modalidadId=${modId || '(?)'} segmentoId=${segId || '(?)'} planSesiones=${planSesiones} precioCalculado=${total.toFixed(2)} elementPrecioExiste=${!!lbl} elementTotalExiste=${!!lblTotal} elementRentExiste=${!!lblRent}`);
         }
 
         // MOTOR FINANCIERO CORREGIDO Y EXACTO
@@ -3752,7 +3756,20 @@ function calcularRentabilidadFicha(ficha) {
 
             document.getElementById('modal-cliente').classList.remove('hidden');
 
-            toggleBonoFields(); autoCalcularTarifa();
+            // Hallazgo real (instrumentación DOM, 2026-09-03): esta llamada era INCONDICIONAL --
+            // se ejecutaba SIEMPRE, incluso para una ficha de actividad especial (yaEsActividad),
+            // justo DESPUÉS de que el bloque de arriba (línea "if (yaEsActividad) {...
+            // actualizarPreviewPrecioActividad(); }") ya hubiera escrito correctamente 95€ en
+            // lbl-tarifa-calculada/lbl-rentabilidad-sesion. autoCalcularTarifa() lee cust-mod, que
+            // para una ficha de actividad especial contiene el texto descriptivo de la actividad
+            // (p.ej. "Actividad: Pilates Máquina · ..."), no una clave real de TARIFAS_2026 -- así
+            // que sobrescribía ambos labels a 0.00€ una línea después de haberlos dejado bien. Este
+            // es el "alguien vuelve a escribir 0" que se pedía demostrar: exactamente aquí, en
+            // editarFicha(), no en el flujo de selección interactiva (ese ya quedó cubierto por el
+            // guard añadido en toggleActividadEspecialFields()). Ahora solo se ejecuta para fichas
+            // que NO son de actividad especial, igual que ya se hace en el resto del archivo.
+            toggleBonoFields();
+            if (!yaEsActividad) autoCalcularTarifa();
 
         }
 
