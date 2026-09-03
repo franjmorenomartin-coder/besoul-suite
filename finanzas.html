@@ -643,22 +643,28 @@
       // a partes iguales entre todos los entrenadores activos del centro.
       // Ejemplo Inacua con 12 PT: 1.200 fijo + 5*200 + 1*60 = 2.260; imputación = 2.260/12.
       const fijoShare = numTrainers ? canonFijoCentro / numTrainers : 0;
-      let canonVariableTotal = 0;
+      let canonVariableTotal = 0, extrasRegulares = 0, extrasReducidos = 0;
       if (numTrainers > ptsIncluidos) {
         const primerExtra = ptsIncluidos + 1;
         const ultimoRegular = canonPtReducidoDesde > 0 ? Math.min(numTrainers, canonPtReducidoDesde - 1) : numTrainers;
-        const extrasRegulares = Math.max(0, ultimoRegular - primerExtra + 1);
-        const extrasReducidos = canonPtReducidoDesde > 0 ? Math.max(0, numTrainers - canonPtReducidoDesde + 1) : 0;
+        extrasRegulares = Math.max(0, ultimoRegular - primerExtra + 1);
+        extrasReducidos = canonPtReducidoDesde > 0 ? Math.max(0, numTrainers - canonPtReducidoDesde + 1) : 0;
         canonVariableTotal = (extrasRegulares * canonPtRegular) + (extrasReducidos * canonPtReducido);
       }
       const variableShare = numTrainers ? canonVariableTotal / numTrainers : 0;
-      const totalShare = fijoShare + variableShare;
-      const canonClientesTotal = trainersParaCanon.reduce((s,t)=>s+(parseNum(t.aporteCentroCliente)||0),0);
+      // Replanteamiento aprobado (2026-09-03): el canon ordinario es SOLO fijo de sede + coste
+      // por PT (con sus tramos). El 1€/cliente NO es canon -- lo paga el cliente, no BESOUL ni
+      // el PT, así que nunca debe restar de total.beneficio ni aparecer como "coste de centro"
+      // de un PT. Se calcula aparte, con el MISMO criterio de PTs computables (trainersParaCanon,
+      // sin bug detectado en ese criterio -- ver informe), y se expone como participación del
+      // centro, igual que ya se hacía con las actividades especiales (ingresosActividades).
+      const totalShare = fijoShare + variableShare; // canon ordinario por PT -- ya NO incluye clientes
+      const participacionClientesTotal = trainersParaCanon.reduce((s,t)=>s+(parseNum(t.aporteCentroCliente)||0),0);
       trainers.forEach((t) => {
         if (t.computaCanonCentro === false) {
           // NO debe recibir ninguna parte del canon ordinario del centro -- ni fijo, ni
-          // variable, ni el aporte por cliente. Su coste de centro es 0€ de forma explícita,
-          // nunca un resto de un cálculo que ya no le corresponde.
+          // variable. Su coste de centro es 0€ de forma explícita, nunca un resto de un
+          // cálculo que ya no le corresponde.
           t.canonPosicionCentro = 'exento';
           t.canonFijoShare = 0;
           t.canonPtShare = 0;
@@ -668,13 +674,13 @@
           t.bsNetoCentro = (t.bsBruto || 0);
           return;
         }
-        const clienteShare = parseNum(t.aporteCentroCliente) || 0;
         t.canonPosicionCentro = '';
         t.canonFijoShare = fijoShare;
         t.canonPtShare = variableShare;
-        t.canonClienteShare = clienteShare;
-        // El €/cliente extra NO es ingreso BESOUL: es canon/coste de centro asociado a la cartera del PT.
-        t.canonCentroShare = totalShare + clienteShare;
+        // Informativo -- cuánto generan los clientes de este PT en participación de centro. YA NO
+        // se suma a canonCentroShare: los 1€/cliente no salen del bolsillo del PT ni de BESOUL.
+        t.canonClienteShare = parseNum(t.aporteCentroCliente) || 0;
+        t.canonCentroShare = totalShare;
         t.canonRepartoIgualitario = true;
         t.bsNetoCentro = (t.bsBruto || 0) - t.canonCentroShare;
       });
@@ -685,27 +691,37 @@
       c.canonPorPtReducido = canonPtReducido;
       c.canonVariableTotal = canonVariableTotal;
       c.canonPorPtTotal = canonVariableTotal;
-      c.canonClientesTotal = canonClientesTotal;
+      c.canonExtrasRegulares = extrasRegulares;
+      c.canonExtrasReducidos = extrasReducidos;
       c.canonFijoProrrateado = fijoShare;
       c.canonVariableProrrateado = variableShare;
-      c.canonClientesProrrateado = canonClientesTotal;
       c.canonProrrateado = totalShare;
-      c.canon = canonFijoCentro + canonVariableTotal + canonClientesTotal;
+      // Canon ordinario = fijo + coste por PT. El 1€/cliente ya NO forma parte de esta cifra.
+      c.canon = canonFijoCentro + canonVariableTotal;
+      // Participación centro: acumula clientes + actividades especiales (ingresosActividades se
+      // suma aparte, en construirCalculoVivo, sobre este mismo objeto c -- ver más abajo).
+      // canonClientesTotal se conserva (alias) porque es un nombre ya leído por
+      // detectarCambiosPostCierre()/otros lugares informativos; participacionClientes es el
+      // nombre nuevo, conceptualmente correcto, que usa la UI.
+      c.canonClientesTotal = participacionClientesTotal;
+      c.participacionClientes = participacionClientesTotal;
+      // Participación centro: clientes (1€/cliente, ya calculado arriba) + actividades especiales
+      // (ingresosActividades, acumulado ANTES de llegar aquí en construirCalculoVivo -- ver ese
+      // bucle). Ninguno de los dos resta de total.beneficio: el 1€ lo paga el cliente, y de la
+      // actividad especial BESOUL ya se queda solo con su 15% en bsBruto.
+      c.participacionCentro = participacionClientesTotal + (parseNum(c.ingresosActividades) || 0);
       c.numTrainersComputanCanon = numTrainers;
       c.numTrainersExentos = trainers.length - numTrainers;
       return c;
     }
+    // Replanteamiento aprobado (2026-09-03): descripción SIEMPRE generada desde los valores
+    // efectivos del mes (c.canonFijoTotal/canonExtrasRegulares/canonPorPt/...), nunca texto fijo.
+    // El 1€/cliente ya NO aparece aquí -- ver "Participación centro".
     function descripcionCanonCentro(c){
       const partes = [`Fijo ${dinero(c.canonFijoTotal||0)}`];
-      if ((c.canonFijoProrrateado||0) && c.trainers?.length) partes.push(`${dinero(c.canonFijoProrrateado)}/PT fijo`);
+      if ((c.canonExtrasRegulares||0) > 0) partes.push(`PT ${numero(c.canonExtrasRegulares)}×${dinero(c.canonPorPt||0)} = ${dinero((c.canonExtrasRegulares||0)*(c.canonPorPt||0))}`);
+      if ((c.canonExtrasReducidos||0) > 0) partes.push(`PT reducido ${numero(c.canonExtrasReducidos)}×${dinero(c.canonPorPtReducido||0)} = ${dinero((c.canonExtrasReducidos||0)*(c.canonPorPtReducido||0))}`);
       if ((c.ptsIncluidos||0) > 0) partes.push(`incluye ${numero(c.ptsIncluidos)} PT`);
-      if ((c.canonPorPt||0) > 0) {
-        const desde = Math.max(1, (c.ptsIncluidos||0) + 1);
-        const hasta = (c.canonPorPtReducidoDesde||0) > 0 ? `-${(c.canonPorPtReducidoDesde||0)-1}` : '+';
-        partes.push(`${desde}${hasta}: ${dinero(c.canonPorPt)}/PT`);
-      }
-      if ((c.canonPorPtReducidoDesde||0) > 0 && (c.canonPorPtReducido||0) > 0) partes.push(`desde ${numero(c.canonPorPtReducidoDesde)}º: ${dinero(c.canonPorPtReducido)}/PT`);
-      if ((c.canonClientesTotal||0) > 0) partes.push(`clientes: ${dinero(c.canonClientesTotal)}`);
       return partes.join(' · ');
     }
 
@@ -952,7 +968,7 @@
         // producción): valor base guardado vs valor realmente resuelto/usado por el motor para
         // este mes, campo por campo. Sin PII.
         console.log(`[FINANZAS][CENTRO_RESUELTO] centerKey=${id} mesKey=${mesKey} tieneVersionesTemporal=${!!(dbFinanzas.centrosVersiones?.[id]?.length)} canonFijo_base=${centrosBase[id].canonFijo} canonFijo_resuelto=${resuelto.canonFijo} ptsIncluidos_base=${centrosBase[id].ptsIncluidos} ptsIncluidos_resuelto=${resuelto.ptsIncluidos} canonPt_base=${centrosBase[id].canonPt} canonPt_resuelto=${resuelto.canonPt} canonPtReducidoDesde_base=${centrosBase[id].canonPtReducidoDesde} canonPtReducidoDesde_resuelto=${resuelto.canonPtReducidoDesde} canonPtReducido_base=${centrosBase[id].canonPtReducido} canonPtReducido_resuelto=${resuelto.canonPtReducido}`);
-        centros[id] = { ...resuelto, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0 };
+        centros[id] = { ...resuelto, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0, participacionClientes:0, participacionCentro:0, ingresosActividades:0 };
       });
       const trainers = [];
       perfilesUsuarios.filter(esPerfilOperativo).forEach(perfil => {
@@ -1033,7 +1049,7 @@
         const bsBrutoTotal = reparto.bs + actividadBesoulShare;
         const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, computaCanonCentro: settings.computaCanonCentro !== false, facturacion: facturacion + facturacionActividades, facturacionPt: facturacion, facturacionActividades, clientesActividades, actividadCentroShare, facturacionAgenda, desviacionAgenda, sesionesMensualesPrevistas, sesionesMensualesAgendadas, desviacionSesiones: sesionesMensualesPrevistas - sesionesMensualesAgendadas, motivosDesviacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, fichasActivas, soloImputacionGastos, ptNeto:ptNetoTotal, bsBruto:bsBrutoTotal, pactoEspecial, aporteCliente, aporteCentroCliente: aporteCliente, bonus:reparto.bonus || 0, coordinacionBonus:reparto.coordinacionBonus || 0, sistemaAplicado:reparto.sistemaAplicado, repartoDetalle:reparto.repartoDetalle || '', fechaAlta:reparto.fechaAlta, antiguedad:reparto.antiguedad, posteriores:reparto.posteriores, elegibleRango2:reparto.elegibleRango2, elegibleRango3:reparto.elegibleRango3, elegibleCoordinador:reparto.elegibleCoordinador, coordinadorAutorizado:reparto.coordinadorAutorizado, sistemaEfectivo:reparto.sistemaEfectivo, ptsActivosCentro:reparto.ptsActivosCentro || 0 };
         trainers.push(row);
-        if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0, ingresosActividades:0 };
+        if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0, participacionClientes:0, participacionCentro:0, ingresosActividades:0 };
         centros[centroId].trainers.push(row);
         centros[centroId].facturacion += facturacion + facturacionActividades;
         centros[centroId].facturacionAgenda += facturacionAgenda;
@@ -1059,11 +1075,11 @@
         // siguen siendo los valores resueltos (no se han reseteado/sobrescrito entretanto).
         console.log(`[FINANZAS][CENTRO_RESUELTO] centerKey=${c.id} mesKey=${mesKey} etapa=antes_de_calcularCanon numTrainers=${(c.trainers||[]).length} canonFijo=${c.canonFijo} ptsIncluidos=${c.ptsIncluidos} canonPt=${c.canonPt} canonPtReducidoDesde=${c.canonPtReducidoDesde} canonPtReducido=${c.canonPtReducido}`);
         calcularCanonCentroYAsignar(c);
-        console.log(`[FINANZAS][CENTRO_RESUELTO] centerKey=${c.id} mesKey=${mesKey} etapa=despues_de_calcularCanon canon=${c.canon} canonProrrateado=${c.canonProrrateado} canonClientesProrrateado=${c.canonClientesProrrateado}`);
+        console.log(`[FINANZAS][CENTRO_RESUELTO] centerKey=${c.id} mesKey=${mesKey} etapa=despues_de_calcularCanon canon=${c.canon} canonProrrateado=${c.canonProrrateado} participacionClientes=${c.participacionClientes} participacionCentro=${c.participacionCentro}`);
       });
       const gastos = totalGastosMes(mesKey);
       const otrosIngresos = totalOtrosIngresosMes(mesKey);
-      const total = Object.values(centros).reduce((acc,c)=>{ acc.facturacion+=c.facturacion; acc.facturacionAgenda+=c.facturacionAgenda||0; acc.desviacionAgenda+=c.desviacionAgenda||0; acc.sesionesMensualesPrevistas+=c.sesionesMensualesPrevistas||0; acc.sesionesMensualesAgendadas+=c.sesionesMensualesAgendadas||0; acc.ptNeto+=c.ptNeto; acc.bsBruto+=c.bsBruto; acc.canones+=c.canon; acc.canonClientesTotal+=c.canonClientesTotal||0; acc.clientes+=c.clientes; acc.ingresosActividades+=c.ingresosActividades||0; return acc; }, {facturacion:0,facturacionAgenda:0,desviacionAgenda:0,sesionesMensualesPrevistas:0,sesionesMensualesAgendadas:0,ptNeto:0,bsBruto:0,canones:0,canonClientesTotal:0,clientes:0,ingresosActividades:0});
+      const total = Object.values(centros).reduce((acc,c)=>{ acc.facturacion+=c.facturacion; acc.facturacionAgenda+=c.facturacionAgenda||0; acc.desviacionAgenda+=c.desviacionAgenda||0; acc.sesionesMensualesPrevistas+=c.sesionesMensualesPrevistas||0; acc.sesionesMensualesAgendadas+=c.sesionesMensualesAgendadas||0; acc.ptNeto+=c.ptNeto; acc.bsBruto+=c.bsBruto; acc.canones+=c.canon; acc.canonClientesTotal+=c.canonClientesTotal||0; acc.participacionClientes+=c.participacionClientes||0; acc.participacionCentro+=c.participacionCentro||0; acc.clientes+=c.clientes; acc.ingresosActividades+=c.ingresosActividades||0; return acc; }, {facturacion:0,facturacionAgenda:0,desviacionAgenda:0,sesionesMensualesPrevistas:0,sesionesMensualesAgendadas:0,ptNeto:0,bsBruto:0,canones:0,canonClientesTotal:0,participacionClientes:0,participacionCentro:0,clientes:0,ingresosActividades:0});
       total.gastos = gastos;
       total.otrosIngresos = otrosIngresos;
       total.ingresosBesoul = total.bsBruto + otrosIngresos;
@@ -1183,13 +1199,13 @@
             <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">PT</span><b class="text-amber-400">${dinero(c.ptNeto)}</b></div>
             <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">BESOUL</span><b class="text-emerald-400">${dinero(c.bsBruto)}</b></div>
             <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">Canon ordinario</span><b class="text-red-400">-${dinero(c.canon)}</b><small class="block text-[9px] text-slate-500">${escapeHTML(descripcionCanonCentro(c))}${c.numTrainersExentos ? ` · ${numero(c.numTrainersExentos)} PT exento(s) de canon` : ''}</small></div>
-            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">Particip. actividades</span><b class="text-purple-300">${dinero(c.ingresosActividades||0)}</b><small class="block text-[9px] text-slate-500">No resta del beneficio BESOUL</small></div>
+            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">Participación centro</span><b class="text-purple-300">${dinero(c.participacionCentro||0)}</b><small class="block text-[9px] text-slate-500">Clientes ${dinero(c.participacionClientes||0)} · Activ. especiales ${dinero(c.ingresosActividades||0)}</small><small class="block text-[9px] text-slate-500">No resta del beneficio BESOUL</small></div>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-[11px] min-w-[1040px]"><thead class="text-slate-500 uppercase"><tr><th class="text-left py-2">Entrenador</th><th class="text-right">Clientes</th><th class="text-right">Fact. cartera</th><th class="text-right">Valor agenda</th><th class="text-right">Desviación</th><th class="text-right">Neto PT</th><th class="text-right">BESOUL bruto</th><th class="text-right">Coste sede</th><th class="text-right">BESOUL neto</th></tr></thead><tbody class="divide-y divide-slate-800/60">
               ${c.trainers.length ? c.trainers.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(t => {
                 const detalleDesv = (t.motivosDesviacion||[]).length ? `<div class="text-[9px] text-slate-500 max-w-[220px] ml-auto">${(t.motivosDesviacion||[]).map(escapeHTML).join('<br>')}</div>` : `<div class="text-[9px] text-slate-500">${(t.desviacionSesiones||0) === 0 ? 'Agenda alineada' : 'Ver sesiones contratadas vs agendadas'}</div>`;
-                return `<tr><td class="py-2 text-white font-semibold"><div>${escapeHTML(t.nombre)} <span class="text-[9px] text-slate-500">${escapeHTML(t.key)}</span></div><div class="text-[9px] text-cyan-400">${escapeHTML(t.sistemaAplicado || 'Base por tramos')}</div></td><td class="text-right">${numero(t.clientes)}</td><td class="text-right font-mono"><div>${dinero(t.facturacion)}</div><div class="text-[9px] text-slate-500">Mensual ${dinero(t.facturacionMensual||0)} · bonos/sueltas ${dinero(t.facturacionVariable||0)}${t.sesionesBonosSueltas ? ` · ${t.sesionesBonosSueltas} ses.` : ''}${t.coordinacionBonus ? ` · coord. ${dinero(t.coordinacionBonus)}` : ''}${t.soloImputacionGastos ? ` · solo imputación gastos${t.clientesAgendaNoComputados ? ` · cartera no computada: ${numero(t.clientesAgendaNoComputados)}` : ''}` : ''}</div></td><td class="text-right font-mono"><div>${dinero(t.facturacionAgenda||0)}</div><div class="text-[9px] text-slate-500">${numero(t.sesionesMensualesAgendadas||0)}/${numero(t.sesionesMensualesPrevistas||0)} ses. mensuales</div></td><td class="text-right font-mono ${claseDesviacion(t.desviacionAgenda||0)}"><div>${dinero(t.desviacionAgenda||0)}</div>${detalleDesv}</td><td class="text-right font-mono text-amber-400">${dinero(t.ptNeto)}</td><td class="text-right font-mono text-emerald-400">${dinero(t.bsBruto)}</td><td class="text-right font-mono text-red-300"><div>-${dinero(t.canonCentroShare||0)}</div><div class="text-[9px] text-slate-500">${t.computaCanonCentro === false ? 'Exento de canon ordinario' : `Fijo ${dinero(t.canonFijoShare||0)} · variable media ${dinero(t.canonPtShare||0)}${(t.canonClienteShare||0) ? ` · clientes ${dinero(t.canonClienteShare)}` : ''}`}</div></td><td class="text-right font-mono ${(t.bsNetoCentro||0) >= 0 ? 'text-cyan-400' : 'text-red-400'}">${dinero(t.bsNetoCentro||0)}</td></tr>`;
+                return `<tr><td class="py-2 text-white font-semibold"><div>${escapeHTML(t.nombre)} <span class="text-[9px] text-slate-500">${escapeHTML(t.key)}</span></div><div class="text-[9px] text-cyan-400">${escapeHTML(t.sistemaAplicado || 'Base por tramos')}</div></td><td class="text-right">${numero(t.clientes)}</td><td class="text-right font-mono"><div>${dinero(t.facturacion)}</div><div class="text-[9px] text-slate-500">Mensual ${dinero(t.facturacionMensual||0)} · bonos/sueltas ${dinero(t.facturacionVariable||0)}${t.sesionesBonosSueltas ? ` · ${t.sesionesBonosSueltas} ses.` : ''}${t.coordinacionBonus ? ` · coord. ${dinero(t.coordinacionBonus)}` : ''}${t.soloImputacionGastos ? ` · solo imputación gastos${t.clientesAgendaNoComputados ? ` · cartera no computada: ${numero(t.clientesAgendaNoComputados)}` : ''}` : ''}</div></td><td class="text-right font-mono"><div>${dinero(t.facturacionAgenda||0)}</div><div class="text-[9px] text-slate-500">${numero(t.sesionesMensualesAgendadas||0)}/${numero(t.sesionesMensualesPrevistas||0)} ses. mensuales</div></td><td class="text-right font-mono ${claseDesviacion(t.desviacionAgenda||0)}"><div>${dinero(t.desviacionAgenda||0)}</div>${detalleDesv}</td><td class="text-right font-mono text-amber-400">${dinero(t.ptNeto)}</td><td class="text-right font-mono text-emerald-400">${dinero(t.bsBruto)}</td><td class="text-right font-mono text-red-300"><div>-${dinero(t.canonCentroShare||0)}</div><div class="text-[9px] text-slate-500">${t.computaCanonCentro === false ? 'Exento de canon ordinario' : `Fijo ${dinero(t.canonFijoShare||0)} · variable media ${dinero(t.canonPtShare||0)}`}</div></td><td class="text-right font-mono ${(t.bsNetoCentro||0) >= 0 ? 'text-cyan-400' : 'text-red-400'}">${dinero(t.bsNetoCentro||0)}</td></tr>`;
               }).join('') : '<tr><td colspan="9" class="py-3 text-center text-slate-500">Sin entrenadores asignados.</td></tr>'}
             </tbody></table>
           </div>
@@ -1503,7 +1519,17 @@
       // condición es seguro.
       if (CAMPOS_TEMPORALES_CENTRO.includes(campo) && valorFinal !== valorAnterior) {
         const mes = mesTrabajoKey();
-        const soloEsteMes = confirm(`Cambio de "${campo}" en el centro ${c.nombre||id}.\n\nAceptar = aplicar SOLO a ${etiquetaMes(mes)} (no toca otros meses).\nCancelar = aplicar DESDE ${etiquetaMes(mes)} en adelante (nunca recalcula meses anteriores).`);
+        // Hallazgo real (hotfix canon/participación, 2026-09-03): el texto del diálogo no repetía
+        // el valor anterior/nuevo, solo el nombre técnico del campo -- un admin que pulsa
+        // "Aceptar" leyéndolo como "sí, confirmo el cambio" (en vez de leer la letra pequeña de
+        // "SOLO este mes") aplicaba el cambio con un alcance distinto al que creía, y al mirar
+        // otro mes de trabajo (o el mes siguiente) veía el valor antiguo -- percibido como "no se
+        // puede cambiar" aunque el motor de guardado es correcto (ver TEST C/C2 en el informe
+        // anterior). Fix: el diálogo ahora repite explícitamente valor anterior -> nuevo y el
+        // campo en texto legible, para que la elección sea imposible de malinterpretar.
+        const etiquetaCampo = { canonFijo:'Fijo sede', ptsIncluidos:'PT incluidos', canonPt:'€/PT extra', canonPtReducidoDesde:'Reducido desde PT nº', canonPtReducido:'€/PT reducido' }[campo] || campo;
+        const soloEsteMes = confirm(`${c.nombre||id} · ${etiquetaCampo}: ${valorAnterior} → ${valorFinal}\n\nAceptar = aplicar SOLO a ${etiquetaMes(mes)} (los demás meses seguirán en ${valorAnterior}).\nCancelar = aplicar DESDE ${etiquetaMes(mes)} EN ADELANTE de forma permanente (pasa a ${valorFinal} para siempre desde ahora; los meses anteriores a ${etiquetaMes(mes)} seguirán en ${valorAnterior}).`);
+        console.log(`[FINANZAS][EDITAR_CENTRO] centroId=${id} campo=${campo} valorAnterior=${valorAnterior} valorFinal=${valorFinal} mes=${mes} soloEsteMes=${soloEsteMes} => ${soloEsteMes ? `version puntual ${mes}=${valorFinal}, live sigue en ${valorAnterior}` : `live pasa a ${valorFinal} desde ${mes} en adelante`}`);
         if(!dbFinanzas.centrosVersiones) dbFinanzas.centrosVersiones = {};
         registrarVersionTemporal(dbFinanzas.centrosVersiones, id, campo, valorFinal, valorAnterior, mes, soloEsteMes);
         if (!soloEsteMes) c[campo] = valorFinal;
@@ -1762,7 +1788,11 @@
       // campo que ya tuviera valor definido.
       if (CAMPOS_TEMPORALES_TRAINER.includes(campo) && valorFinal !== valorAnterior) {
         const mes = mesTrabajoKey();
-        const soloEsteMes = confirm(`Cambio de "${campo}" para ${key}.\n\nAceptar = aplicar SOLO a ${etiquetaMes(mes)} (no toca otros meses).\nCancelar = aplicar DESDE ${etiquetaMes(mes)} en adelante (nunca recalcula meses anteriores).`);
+        // Mismo hallazgo/fix de claridad que editarCentro() (hotfix canon/participación,
+        // 2026-09-03): repetir valor anterior -> nuevo explícitamente para que Aceptar/Cancelar
+        // no se pueda malinterpretar como "confirmar/cancelar el cambio".
+        const soloEsteMes = confirm(`${key} · ${campo}: ${valorAnterior} → ${valorFinal}\n\nAceptar = aplicar SOLO a ${etiquetaMes(mes)} (los demás meses seguirán en ${valorAnterior}).\nCancelar = aplicar DESDE ${etiquetaMes(mes)} EN ADELANTE de forma permanente (pasa a ${valorFinal} para siempre desde ahora; los meses anteriores a ${etiquetaMes(mes)} seguirán en ${valorAnterior}).`);
+        console.log(`[FINANZAS][EDITAR_TRAINER] trainerKey=${key} campo=${campo} valorAnterior=${valorAnterior} valorFinal=${valorFinal} mes=${mes} soloEsteMes=${soloEsteMes} => ${soloEsteMes ? `version puntual ${mes}=${valorFinal}, live sigue en ${valorAnterior}` : `live pasa a ${valorFinal} desde ${mes} en adelante`}`);
         if(!dbFinanzas.trainerSettingsVersiones) dbFinanzas.trainerSettingsVersiones = {};
         registrarVersionTemporal(dbFinanzas.trainerSettingsVersiones, key, campo, valorFinal, valorAnterior, mes, soloEsteMes);
         if (!soloEsteMes) dbFinanzas.trainerSettings[key][campo] = valorFinal;

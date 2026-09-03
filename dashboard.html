@@ -486,15 +486,9 @@ function sesionesAgendadasFacturablesFichaMes(ficha, trainerKey, mesKey){
     }
 function descripcionCanonCentro(c){
       const partes = [`Fijo ${dinero(c.canonFijoTotal||0)}`];
-      if ((c.canonFijoProrrateado||0) && c.trainers?.length) partes.push(`${dinero(c.canonFijoProrrateado)}/PT fijo`);
+      if ((c.canonExtrasRegulares||0) > 0) partes.push(`PT ${numero(c.canonExtrasRegulares)}×${dinero(c.canonPorPt||0)} = ${dinero((c.canonExtrasRegulares||0)*(c.canonPorPt||0))}`);
+      if ((c.canonExtrasReducidos||0) > 0) partes.push(`PT reducido ${numero(c.canonExtrasReducidos)}×${dinero(c.canonPorPtReducido||0)} = ${dinero((c.canonExtrasReducidos||0)*(c.canonPorPtReducido||0))}`);
       if ((c.ptsIncluidos||0) > 0) partes.push(`incluye ${numero(c.ptsIncluidos)} PT`);
-      if ((c.canonPorPt||0) > 0) {
-        const desde = Math.max(1, (c.ptsIncluidos||0) + 1);
-        const hasta = (c.canonPorPtReducidoDesde||0) > 0 ? `-${(c.canonPorPtReducidoDesde||0)-1}` : '+';
-        partes.push(`${desde}${hasta}: ${dinero(c.canonPorPt)}/PT`);
-      }
-      if ((c.canonPorPtReducidoDesde||0) > 0 && (c.canonPorPtReducido||0) > 0) partes.push(`desde ${numero(c.canonPorPtReducidoDesde)}º: ${dinero(c.canonPorPtReducido)}/PT`);
-      if ((c.canonClientesTotal||0) > 0) partes.push(`clientes: ${dinero(c.canonClientesTotal)}`);
       return partes.join(' · ');
     }
 function sesionesPrevistasMensualesFicha(ficha){
@@ -733,22 +727,22 @@ function calcularCanonCentroYAsignar(c){
       // a partes iguales entre todos los entrenadores activos del centro.
       // Ejemplo Inacua con 12 PT: 1.200 fijo + 5*200 + 1*60 = 2.260; imputación = 2.260/12.
       const fijoShare = numTrainers ? canonFijoCentro / numTrainers : 0;
-      let canonVariableTotal = 0;
+      let canonVariableTotal = 0, extrasRegulares = 0, extrasReducidos = 0;
       if (numTrainers > ptsIncluidos) {
         const primerExtra = ptsIncluidos + 1;
         const ultimoRegular = canonPtReducidoDesde > 0 ? Math.min(numTrainers, canonPtReducidoDesde - 1) : numTrainers;
-        const extrasRegulares = Math.max(0, ultimoRegular - primerExtra + 1);
-        const extrasReducidos = canonPtReducidoDesde > 0 ? Math.max(0, numTrainers - canonPtReducidoDesde + 1) : 0;
+        extrasRegulares = Math.max(0, ultimoRegular - primerExtra + 1);
+        extrasReducidos = canonPtReducidoDesde > 0 ? Math.max(0, numTrainers - canonPtReducidoDesde + 1) : 0;
         canonVariableTotal = (extrasRegulares * canonPtRegular) + (extrasReducidos * canonPtReducido);
       }
       const variableShare = numTrainers ? canonVariableTotal / numTrainers : 0;
+      // Replanteamiento aprobado (2026-09-03, mismo cambio que finanzas.html): el canon ordinario
+      // es SOLO fijo de sede + coste por PT. El 1€/cliente NO es canon -- lo paga el cliente, no
+      // BESOUL ni el PT -- así que nunca resta de total.beneficio ni de canonCentroShare del PT.
       const totalShare = fijoShare + variableShare;
-      const canonClientesTotal = trainersParaCanon.reduce((s,t)=>s+(parseNum(t.aporteCentroCliente)||0),0);
+      const participacionClientesTotal = trainersParaCanon.reduce((s,t)=>s+(parseNum(t.aporteCentroCliente)||0),0);
       trainers.forEach((t) => {
         if (t.computaCanonCentro === false) {
-          // NO debe recibir ninguna parte del canon ordinario del centro -- ni fijo, ni
-          // variable, ni el aporte por cliente. Su coste de centro es 0€ de forma explícita,
-          // nunca un resto de un cálculo que ya no le corresponde.
           t.canonPosicionCentro = 'exento';
           t.canonFijoShare = 0;
           t.canonPtShare = 0;
@@ -758,13 +752,11 @@ function calcularCanonCentroYAsignar(c){
           t.bsNetoCentro = (t.bsBruto || 0);
           return;
         }
-        const clienteShare = parseNum(t.aporteCentroCliente) || 0;
         t.canonPosicionCentro = '';
         t.canonFijoShare = fijoShare;
         t.canonPtShare = variableShare;
-        t.canonClienteShare = clienteShare;
-        // El €/cliente extra NO es ingreso BESOUL: es canon/coste de centro asociado a la cartera del PT.
-        t.canonCentroShare = totalShare + clienteShare;
+        t.canonClienteShare = parseNum(t.aporteCentroCliente) || 0;
+        t.canonCentroShare = totalShare;
         t.canonRepartoIgualitario = true;
         t.bsNetoCentro = (t.bsBruto || 0) - t.canonCentroShare;
       });
@@ -775,12 +767,15 @@ function calcularCanonCentroYAsignar(c){
       c.canonPorPtReducido = canonPtReducido;
       c.canonVariableTotal = canonVariableTotal;
       c.canonPorPtTotal = canonVariableTotal;
-      c.canonClientesTotal = canonClientesTotal;
+      c.canonExtrasRegulares = extrasRegulares;
+      c.canonExtrasReducidos = extrasReducidos;
       c.canonFijoProrrateado = fijoShare;
       c.canonVariableProrrateado = variableShare;
-      c.canonClientesProrrateado = canonClientesTotal;
       c.canonProrrateado = totalShare;
-      c.canon = canonFijoCentro + canonVariableTotal + canonClientesTotal;
+      c.canon = canonFijoCentro + canonVariableTotal;
+      c.canonClientesTotal = participacionClientesTotal;
+      c.participacionClientes = participacionClientesTotal;
+      c.participacionCentro = participacionClientesTotal + (parseNum(c.ingresosActividades) || 0);
       c.numTrainersComputanCanon = numTrainers;
       c.numTrainersExentos = trainers.length - numTrainers;
       return c;
@@ -791,7 +786,7 @@ function construirCalculoMes(mesKey = mesActualKey()){
       Object.keys(centrosBase).forEach(id => {
         const resuelto = centroParaMes(centrosBase[id], mesKey);
         console.log(`[FINANZAS][CENTRO_RESUELTO] centerKey=${id} mesKey=${mesKey} tieneVersionesTemporal=${!!(dbFinanzas.centrosVersiones?.[id]?.length)} canonFijo_base=${centrosBase[id].canonFijo} canonFijo_resuelto=${resuelto.canonFijo} ptsIncluidos_base=${centrosBase[id].ptsIncluidos} ptsIncluidos_resuelto=${resuelto.ptsIncluidos} canonPt_base=${centrosBase[id].canonPt} canonPt_resuelto=${resuelto.canonPt} canonPtReducidoDesde_base=${centrosBase[id].canonPtReducidoDesde} canonPtReducidoDesde_resuelto=${resuelto.canonPtReducidoDesde} canonPtReducido_base=${centrosBase[id].canonPtReducido} canonPtReducido_resuelto=${resuelto.canonPtReducido}`);
-        centros[id] = { ...resuelto, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0 };
+        centros[id] = { ...resuelto, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0, participacionClientes:0, participacionCentro:0, ingresosActividades:0 };
       });
       const trainers = [];
       perfilesUsuarios.filter(esPerfilOperativo).forEach(perfil => {
@@ -862,7 +857,7 @@ function construirCalculoMes(mesKey = mesActualKey()){
         const bsBrutoTotal = reparto.bs + actividadBesoulShare;
         const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, computaCanonCentro: settings.computaCanonCentro !== false, facturacion: facturacion + facturacionActividades, facturacionPt: facturacion, facturacionActividades, clientesActividades, actividadCentroShare, facturacionAgenda, desviacionAgenda, sesionesMensualesPrevistas, sesionesMensualesAgendadas, desviacionSesiones: sesionesMensualesPrevistas - sesionesMensualesAgendadas, motivosDesviacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, fichasActivas, soloImputacionGastos, ptNeto:ptNetoTotal, bsBruto:bsBrutoTotal, pactoEspecial, aporteCliente, aporteCentroCliente: aporteCliente, bonus:reparto.bonus || 0, coordinacionBonus:reparto.coordinacionBonus || 0, sistemaAplicado:reparto.sistemaAplicado, repartoDetalle:reparto.repartoDetalle || '', fechaAlta:reparto.fechaAlta, antiguedad:reparto.antiguedad, posteriores:reparto.posteriores, elegibleRango2:reparto.elegibleRango2, elegibleRango3:reparto.elegibleRango3, elegibleCoordinador:reparto.elegibleCoordinador, coordinadorAutorizado:reparto.coordinadorAutorizado, sistemaEfectivo:reparto.sistemaEfectivo, ptsActivosCentro:reparto.ptsActivosCentro || 0 };
         trainers.push(row);
-        if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0, ingresosActividades:0 };
+        if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0, participacionClientes:0, participacionCentro:0, ingresosActividades:0 };
         centros[centroId].trainers.push(row);
         centros[centroId].facturacion += facturacion + facturacionActividades;
         centros[centroId].facturacionAgenda += facturacionAgenda;
@@ -882,11 +877,11 @@ function construirCalculoMes(mesKey = mesActualKey()){
         //    Ejemplo Inacua: 1.200 € fijos incluyen 6 PT; del 7º al 11º son 200 €/PT; desde el 12º son 60 €/PT.
         console.log(`[FINANZAS][CENTRO_RESUELTO] centerKey=${c.id} mesKey=${mesKey} etapa=antes_de_calcularCanon numTrainers=${(c.trainers||[]).length} canonFijo=${c.canonFijo} ptsIncluidos=${c.ptsIncluidos} canonPt=${c.canonPt} canonPtReducidoDesde=${c.canonPtReducidoDesde} canonPtReducido=${c.canonPtReducido}`);
         calcularCanonCentroYAsignar(c);
-        console.log(`[FINANZAS][CENTRO_RESUELTO] centerKey=${c.id} mesKey=${mesKey} etapa=despues_de_calcularCanon canon=${c.canon} canonProrrateado=${c.canonProrrateado} canonClientesProrrateado=${c.canonClientesProrrateado}`);
+        console.log(`[FINANZAS][CENTRO_RESUELTO] centerKey=${c.id} mesKey=${mesKey} etapa=despues_de_calcularCanon canon=${c.canon} canonProrrateado=${c.canonProrrateado} participacionClientes=${c.participacionClientes} participacionCentro=${c.participacionCentro}`);
       });
       const gastos = gastosMes(mesKey);
       const otrosIngresos = otrosIngresosMes(mesKey);
-      const total = Object.values(centros).reduce((acc,c)=>{ acc.facturacion+=c.facturacion; acc.facturacionAgenda+=c.facturacionAgenda||0; acc.desviacionAgenda+=c.desviacionAgenda||0; acc.sesionesMensualesPrevistas+=c.sesionesMensualesPrevistas||0; acc.sesionesMensualesAgendadas+=c.sesionesMensualesAgendadas||0; acc.ptNeto+=c.ptNeto; acc.bsBruto+=c.bsBruto; acc.canones+=c.canon; acc.canonClientesTotal+=c.canonClientesTotal||0; acc.clientes+=c.clientes; acc.ingresosActividades+=c.ingresosActividades||0; return acc; }, {facturacion:0,facturacionAgenda:0,desviacionAgenda:0,sesionesMensualesPrevistas:0,sesionesMensualesAgendadas:0,ptNeto:0,bsBruto:0,canones:0,canonClientesTotal:0,clientes:0,ingresosActividades:0});
+      const total = Object.values(centros).reduce((acc,c)=>{ acc.facturacion+=c.facturacion; acc.facturacionAgenda+=c.facturacionAgenda||0; acc.desviacionAgenda+=c.desviacionAgenda||0; acc.sesionesMensualesPrevistas+=c.sesionesMensualesPrevistas||0; acc.sesionesMensualesAgendadas+=c.sesionesMensualesAgendadas||0; acc.ptNeto+=c.ptNeto; acc.bsBruto+=c.bsBruto; acc.canones+=c.canon; acc.canonClientesTotal+=c.canonClientesTotal||0; acc.participacionClientes+=c.participacionClientes||0; acc.participacionCentro+=c.participacionCentro||0; acc.clientes+=c.clientes; acc.ingresosActividades+=c.ingresosActividades||0; return acc; }, {facturacion:0,facturacionAgenda:0,desviacionAgenda:0,sesionesMensualesPrevistas:0,sesionesMensualesAgendadas:0,ptNeto:0,bsBruto:0,canones:0,canonClientesTotal:0,participacionClientes:0,participacionCentro:0,clientes:0,ingresosActividades:0});
       total.gastos = gastos;
       total.otrosIngresos = otrosIngresos;
       total.ingresosBesoul = total.bsBruto + otrosIngresos;
