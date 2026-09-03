@@ -1308,6 +1308,73 @@ miércoles 07:00-09:00"></textarea>
         function catalogoActividadesVivo() { return { ...DEFAULT_CATALOGO_ACTIVIDADES, ...dbCatalogoActividades }; }
         function actividadesAutorizadasParaTrainer(trainerKey) { return (dbTrainerActividades && dbTrainerActividades[trainerKey]) || []; }
 
+        // Resolución temporal + facturación de actividades especiales, réplica exacta de la
+        // misma lógica ya usada por finanzas.html/dashboard.html (misma fuente de catálogo,
+        // mismo criterio de vigencia) -- sin esto, agenda.html nunca resolvía
+        // tarifasActividadVersiones/repartoActividadVersiones pese a tenerlos ya cargados
+        // desde Firestore (dbTarifasActividadVersiones/dbRepartoActividadVersiones).
+        function entradaEfectivaTemporalActividad(entradas, mesKey) {
+            const candidatas = (entradas || []).filter(e => e.desde <= mesKey && (!e.hasta || mesKey <= e.hasta));
+            if (!candidatas.length) return null;
+            candidatas.sort((a, b) => (a.desde < b.desde ? -1 : a.desde > b.desde ? 1 : (a.hasta ? 1 : 0) - (b.hasta ? 1 : 0)));
+            return candidatas[candidatas.length - 1];
+        }
+        function actividadEfectivaParaMes(actividadId, mesKey) {
+            const live = catalogoActividadesVivo()[actividadId] || null;
+            if (!live) return null;
+            const versiones = dbTarifasActividadVersiones?.[actividadId];
+            const entrada = versiones && versiones.length ? entradaEfectivaTemporalActividad(versiones, mesKey) : null;
+            return entrada ? { ...live, modalidades: entrada.modalidades } : live;
+        }
+        // Rango de fechas del mes y conteo de sesiones agendadas facturables dentro de él --
+        // necesarios solo para modalidades tipo 'bono_vigencia' (Bono 10), que reconocen ingreso
+        // por sesión agendada en vez de por plan completo. Misma lógica que
+        // sesionesAgendadasFacturablesFichaMes()/rangoMes() de finanzas.html, adaptada a dbAgenda
+        // (agenda.html no tiene agendaData, tiene su propio estado local ya sincronizado).
+        function rangoMesActividad(mesKey) {
+            const [y, m] = String(mesKey || claveMesVisible()).split('-').map(Number);
+            const inicio = new Date(y, (m || 1) - 1, 1);
+            const fin = new Date(y, (m || 1), 1);
+            const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            return { desde: fmt(inicio), hasta: fmt(fin) };
+        }
+        function sesionesAgendadasFacturablesFichaMesActividad(ficha, trainerKey, mesKey) {
+            if (!ficha || !trainerKey) return 0;
+            const agendaEntrenador = dbAgenda[trainerKey] || {};
+            const { desde, hasta } = rangoMesActividad(mesKey);
+            return Object.keys(agendaEntrenador).reduce((total, clave) => {
+                const fecha = clave.split('_')[0];
+                if (fecha < desde || fecha >= hasta) return total;
+                const cita = agendaEntrenador[clave];
+                if (!cita || cita.id !== ficha.id) return total;
+                if (esCitaPruebaCRM(cita) || esRecuperacionNoFacturable(cita)) return total;
+                return total + 1;
+            }, 0);
+        }
+        // Misma lógica exacta que calcularFacturacionActividadFicha() de finanzas.html/
+        // dashboard.html: el PLAN elegido determina el importe (nunca precio-por-sesión ×
+        // sesiones), salvo 'bono_vigencia' que reconoce ingreso por sesión agendada.
+        function calcularFacturacionActividadFicha(ficha, trainerKey, mesKey) {
+            if (!ficha || !ficha.actividadEspecialId) return { total: 0, tipo: 'sin_actividad', sesionesAgendadas: 0 };
+            const cat = actividadEfectivaParaMes(ficha.actividadEspecialId, mesKey);
+            const modalidad = cat?.modalidades?.[ficha.modalidadId];
+            const segmento = modalidad?.segmentos?.[ficha.segmentoId];
+            const plan = segmento ? (segmento.planes || []).find(p => Number(p.sesiones) === Number(ficha.planSesiones)) : null;
+            if (!segmento || !plan) {
+                // Nunca 0 en silencio: mismo criterio ya aplicado en finanzas.html/dashboard.html.
+                console.error(`[AGENDA][TARIFA_NO_ENCONTRADA] trainerKey=${trainerKey || '(?)'} activityKey=${ficha.actividadEspecialId || '(?)'} modalityKey=${ficha.modalidadId || '(?)'} segmentKey=${ficha.segmentoId || '(?)'} sessions=${ficha.planSesiones ?? '(?)'} mesKey=${mesKey || '(?)'} · fallo en: ${!cat ? 'actividad no existe en catálogo' : !modalidad ? 'modalidad no existe' : !segmento ? 'segmento no existe' : 'ningún plan coincide con las sesiones'}`);
+                return { total: 0, tipo: 'actividad_sin_tarifa', sesionesAgendadas: 0 };
+            }
+            const numPersonas = Math.max(1, parseInt(ficha.numPersonas) || 1);
+            const precioTotal = segmento.porPersona ? plan.precio * numPersonas : plan.precio;
+            if (modalidad.tipo === 'bono_vigencia') {
+                const sesionesAgendadas = sesionesAgendadasFacturablesFichaMesActividad(ficha, trainerKey, mesKey);
+                const valorSesion = plan.sesiones ? precioTotal / plan.sesiones : 0;
+                return { total: sesionesAgendadas * valorSesion, tipo: 'actividad_bono', sesionesAgendadas, sesionesContratadas: plan.sesiones, precioTotal, actividadId: ficha.actividadEspecialId };
+            }
+            return { total: precioTotal, tipo: 'actividad_mensual', sesionesAgendadas: 0, sesionesContratadas: plan.sesiones, precioTotal, actividadId: ficha.actividadEspecialId };
+        }
+
 
 
         // HEX MAP EXACTO PARA SINCRONIZACIÓN VISUAL DE BOLITAS Y CELDAS
@@ -2572,9 +2639,21 @@ miércoles 07:00-09:00"></textarea>
 
 
 
-        function calcularFacturacionFicha(ficha) {
+        function calcularFacturacionFicha(ficha, mesKey) {
 
             if (!ficha) return 0;
+
+            // Hallazgo real (2026-09-03): tarifaBaseFicha() solo entiende TARIFAS_2026[ficha.modalidad]
+            // -- para una ficha de actividad especial, ficha.modalidad es el texto descriptivo
+            // ("Actividad: Pilates Máquina · ..."), nunca una clave real, así que devolvía 0 de
+            // forma determinista para CUALQUIER cliente de actividad especial (tarjeta de Agenda,
+            // KPIs, rentabilidad/sesión -- todo lo que se construye sobre esta función). Misma
+            // fuente de catálogo que el preview del modal (catalogoActividadesVivo()) y misma
+            // lógica conceptual que finanzas.html/dashboard.html: la actividad especial NUNCA pasa
+            // por el motor estándar (tarifaBaseFicha), tiene su propia resolución.
+            if (ficha.actividadEspecialId) {
+                return calcularFacturacionActividadFicha(ficha, entrenadorVisto, mesKey || claveMesVisible()).total;
+            }
 
             if (ficha.modalidad === 'Miembro Subordinado') {
 
