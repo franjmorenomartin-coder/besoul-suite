@@ -396,7 +396,7 @@
     // Resolución: la entrada con 'desde' <= mesKey más reciente gana; si hay una
     // entrada puntual de un solo mes (desde==hasta==mesKey) para ese mes, esa gana
     // sobre cualquier entrada "desde ... en adelante" con el mismo 'desde'.
-    const CAMPOS_TEMPORALES_TRAINER = ['canonFijoIndependiente','aporteIndividualCliente','coordBonusPorPt','coordMaxPts','coordMaxBonus','pactoEspecial','sistemaPago','centroId'];
+    const CAMPOS_TEMPORALES_TRAINER = ['canonFijoIndependiente','aporteIndividualCliente','coordBonusPorPt','coordMaxPts','coordMaxBonus','pactoEspecial','sistemaPago','centroId','computaCanonCentro'];
     const CAMPOS_TEMPORALES_CENTRO = ['canonFijo','ptsIncluidos','canonPt','canonPtReducidoDesde','canonPtReducido'];
     function entradaEfectivaTemporal(entradas, mesKey){
       const candidatas = (entradas||[]).filter(e => e.desde <= mesKey && (!e.hasta || mesKey <= e.hasta));
@@ -623,7 +623,16 @@
     }
     function calcularCanonCentroYAsignar(c){
       const trainers = Array.isArray(c.trainers) ? c.trainers : [];
-      const numTrainers = trainers.length;
+      // Modelo aprobado (exención de canon por PT, 2026-09-03): un PT con
+      // computaCanonCentro:false (p.ej. Verónica en Alfa Prime -- genera ingreso vía el reparto
+      // de actividad especial 50/35/15, pero no ocupa "plaza de PT" a efectos del canon de sede)
+      // no cuenta para numTrainers ni para ningún tramo de PT extra/reducido, y no recibe
+      // ninguna parte del canon ordinario del centro (ni fijo, ni variable, ni el aporte por
+      // cliente). El canonFijo del propio centro (p.ej. los 200€ de Alfa Prime) NO desaparece --
+      // sigue aplicándose íntegro en c.canon; solo deja de prorratearse hacia, o contarse por,
+      // ese PT concreto. Default true: ningún PT existente cambia de comportamiento.
+      const trainersParaCanon = trainers.filter(t => t.computaCanonCentro !== false);
+      const numTrainers = trainersParaCanon.length;
       const canonFijoCentro = parseNum(c.canonFijo) || 0;
       const ptsIncluidos = Math.max(0, Math.floor(parseNum(c.ptsIncluidos) || 0));
       const canonPtRegular = parseNum(c.canonPt) || 0;
@@ -644,8 +653,21 @@
       }
       const variableShare = numTrainers ? canonVariableTotal / numTrainers : 0;
       const totalShare = fijoShare + variableShare;
-      const canonClientesTotal = trainers.reduce((s,t)=>s+(parseNum(t.aporteCentroCliente)||0),0);
+      const canonClientesTotal = trainersParaCanon.reduce((s,t)=>s+(parseNum(t.aporteCentroCliente)||0),0);
       trainers.forEach((t) => {
+        if (t.computaCanonCentro === false) {
+          // NO debe recibir ninguna parte del canon ordinario del centro -- ni fijo, ni
+          // variable, ni el aporte por cliente. Su coste de centro es 0€ de forma explícita,
+          // nunca un resto de un cálculo que ya no le corresponde.
+          t.canonPosicionCentro = 'exento';
+          t.canonFijoShare = 0;
+          t.canonPtShare = 0;
+          t.canonClienteShare = 0;
+          t.canonCentroShare = 0;
+          t.canonRepartoIgualitario = false;
+          t.bsNetoCentro = (t.bsBruto || 0);
+          return;
+        }
         const clienteShare = parseNum(t.aporteCentroCliente) || 0;
         t.canonPosicionCentro = '';
         t.canonFijoShare = fijoShare;
@@ -669,6 +691,8 @@
       c.canonClientesProrrateado = canonClientesTotal;
       c.canonProrrateado = totalShare;
       c.canon = canonFijoCentro + canonVariableTotal + canonClientesTotal;
+      c.numTrainersComputanCanon = numTrainers;
+      c.numTrainersExentos = trainers.length - numTrainers;
       return c;
     }
     function descripcionCanonCentro(c){
@@ -1007,7 +1031,7 @@
         // cada uno viene de una fuente de cálculo independiente (rango/canon vs. % de catálogo).
         const ptNetoTotal = reparto.pt + actividadPtNeto;
         const bsBrutoTotal = reparto.bs + actividadBesoulShare;
-        const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, facturacion: facturacion + facturacionActividades, facturacionPt: facturacion, facturacionActividades, clientesActividades, actividadCentroShare, facturacionAgenda, desviacionAgenda, sesionesMensualesPrevistas, sesionesMensualesAgendadas, desviacionSesiones: sesionesMensualesPrevistas - sesionesMensualesAgendadas, motivosDesviacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, fichasActivas, soloImputacionGastos, ptNeto:ptNetoTotal, bsBruto:bsBrutoTotal, pactoEspecial, aporteCliente, aporteCentroCliente: aporteCliente, bonus:reparto.bonus || 0, coordinacionBonus:reparto.coordinacionBonus || 0, sistemaAplicado:reparto.sistemaAplicado, repartoDetalle:reparto.repartoDetalle || '', fechaAlta:reparto.fechaAlta, antiguedad:reparto.antiguedad, posteriores:reparto.posteriores, elegibleRango2:reparto.elegibleRango2, elegibleRango3:reparto.elegibleRango3, elegibleCoordinador:reparto.elegibleCoordinador, coordinadorAutorizado:reparto.coordinadorAutorizado, sistemaEfectivo:reparto.sistemaEfectivo, ptsActivosCentro:reparto.ptsActivosCentro || 0 };
+        const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, computaCanonCentro: settings.computaCanonCentro !== false, facturacion: facturacion + facturacionActividades, facturacionPt: facturacion, facturacionActividades, clientesActividades, actividadCentroShare, facturacionAgenda, desviacionAgenda, sesionesMensualesPrevistas, sesionesMensualesAgendadas, desviacionSesiones: sesionesMensualesPrevistas - sesionesMensualesAgendadas, motivosDesviacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, fichasActivas, soloImputacionGastos, ptNeto:ptNetoTotal, bsBruto:bsBrutoTotal, pactoEspecial, aporteCliente, aporteCentroCliente: aporteCliente, bonus:reparto.bonus || 0, coordinacionBonus:reparto.coordinacionBonus || 0, sistemaAplicado:reparto.sistemaAplicado, repartoDetalle:reparto.repartoDetalle || '', fechaAlta:reparto.fechaAlta, antiguedad:reparto.antiguedad, posteriores:reparto.posteriores, elegibleRango2:reparto.elegibleRango2, elegibleRango3:reparto.elegibleRango3, elegibleCoordinador:reparto.elegibleCoordinador, coordinadorAutorizado:reparto.coordinadorAutorizado, sistemaEfectivo:reparto.sistemaEfectivo, ptsActivosCentro:reparto.ptsActivosCentro || 0 };
         trainers.push(row);
         if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0, ingresosActividades:0 };
         centros[centroId].trainers.push(row);
@@ -1152,19 +1176,20 @@
             <div><h3 class="text-sm font-black text-white">${escapeHTML(c.nombre)}</h3><p class="text-[10px] text-slate-500">${c.trainers.length} entrenador(es) · ${numero(c.clientes)} cliente(s)</p></div>
             <div class="text-right"><div class="text-[10px] text-slate-500 uppercase font-bold">Neto centro</div><div class="text-sm font-black text-cyan-400">${dinero(c.bsBruto - c.canon)}</div></div>
           </div>
-          <div class="grid grid-cols-2 md:grid-cols-6 gap-2 text-center text-[11px]">
+          <div class="grid grid-cols-2 md:grid-cols-7 gap-2 text-center text-[11px]">
             <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">Fact. cartera</span><b>${dinero(c.facturacion)}</b></div>
             <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">Valor agenda</span><b>${dinero(c.facturacionAgenda||0)}</b><small class="block text-[9px] text-slate-500">${numero(c.sesionesMensualesAgendadas||0)}/${numero(c.sesionesMensualesPrevistas||0)} ses. mensuales</small></div>
             <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">Desv.</span><b class="${claseDesviacion(c.desviacionAgenda||0)}">${dinero(c.desviacionAgenda||0)}</b></div>
             <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">PT</span><b class="text-amber-400">${dinero(c.ptNeto)}</b></div>
             <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">BESOUL</span><b class="text-emerald-400">${dinero(c.bsBruto)}</b></div>
-            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">Coste sede</span><b class="text-red-400">-${dinero(c.canon)}</b><small class="block text-[9px] text-slate-500">${escapeHTML(descripcionCanonCentro(c))}</small></div>
+            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">Canon ordinario</span><b class="text-red-400">-${dinero(c.canon)}</b><small class="block text-[9px] text-slate-500">${escapeHTML(descripcionCanonCentro(c))}${c.numTrainersExentos ? ` · ${numero(c.numTrainersExentos)} PT exento(s) de canon` : ''}</small></div>
+            <div class="bg-slate-900 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">Particip. actividades</span><b class="text-purple-300">${dinero(c.ingresosActividades||0)}</b><small class="block text-[9px] text-slate-500">No resta del beneficio BESOUL</small></div>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-[11px] min-w-[1040px]"><thead class="text-slate-500 uppercase"><tr><th class="text-left py-2">Entrenador</th><th class="text-right">Clientes</th><th class="text-right">Fact. cartera</th><th class="text-right">Valor agenda</th><th class="text-right">Desviación</th><th class="text-right">Neto PT</th><th class="text-right">BESOUL bruto</th><th class="text-right">Coste sede</th><th class="text-right">BESOUL neto</th></tr></thead><tbody class="divide-y divide-slate-800/60">
               ${c.trainers.length ? c.trainers.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(t => {
                 const detalleDesv = (t.motivosDesviacion||[]).length ? `<div class="text-[9px] text-slate-500 max-w-[220px] ml-auto">${(t.motivosDesviacion||[]).map(escapeHTML).join('<br>')}</div>` : `<div class="text-[9px] text-slate-500">${(t.desviacionSesiones||0) === 0 ? 'Agenda alineada' : 'Ver sesiones contratadas vs agendadas'}</div>`;
-                return `<tr><td class="py-2 text-white font-semibold"><div>${escapeHTML(t.nombre)} <span class="text-[9px] text-slate-500">${escapeHTML(t.key)}</span></div><div class="text-[9px] text-cyan-400">${escapeHTML(t.sistemaAplicado || 'Base por tramos')}</div></td><td class="text-right">${numero(t.clientes)}</td><td class="text-right font-mono"><div>${dinero(t.facturacion)}</div><div class="text-[9px] text-slate-500">Mensual ${dinero(t.facturacionMensual||0)} · bonos/sueltas ${dinero(t.facturacionVariable||0)}${t.sesionesBonosSueltas ? ` · ${t.sesionesBonosSueltas} ses.` : ''}${t.coordinacionBonus ? ` · coord. ${dinero(t.coordinacionBonus)}` : ''}${t.soloImputacionGastos ? ` · solo imputación gastos${t.clientesAgendaNoComputados ? ` · cartera no computada: ${numero(t.clientesAgendaNoComputados)}` : ''}` : ''}</div></td><td class="text-right font-mono"><div>${dinero(t.facturacionAgenda||0)}</div><div class="text-[9px] text-slate-500">${numero(t.sesionesMensualesAgendadas||0)}/${numero(t.sesionesMensualesPrevistas||0)} ses. mensuales</div></td><td class="text-right font-mono ${claseDesviacion(t.desviacionAgenda||0)}"><div>${dinero(t.desviacionAgenda||0)}</div>${detalleDesv}</td><td class="text-right font-mono text-amber-400">${dinero(t.ptNeto)}</td><td class="text-right font-mono text-emerald-400">${dinero(t.bsBruto)}</td><td class="text-right font-mono text-red-300"><div>-${dinero(t.canonCentroShare||0)}</div><div class="text-[9px] text-slate-500">Fijo ${dinero(t.canonFijoShare||0)} · variable media ${dinero(t.canonPtShare||0)}${(t.canonClienteShare||0) ? ` · clientes ${dinero(t.canonClienteShare)}` : ''}</div></td><td class="text-right font-mono ${(t.bsNetoCentro||0) >= 0 ? 'text-cyan-400' : 'text-red-400'}">${dinero(t.bsNetoCentro||0)}</td></tr>`;
+                return `<tr><td class="py-2 text-white font-semibold"><div>${escapeHTML(t.nombre)} <span class="text-[9px] text-slate-500">${escapeHTML(t.key)}</span></div><div class="text-[9px] text-cyan-400">${escapeHTML(t.sistemaAplicado || 'Base por tramos')}</div></td><td class="text-right">${numero(t.clientes)}</td><td class="text-right font-mono"><div>${dinero(t.facturacion)}</div><div class="text-[9px] text-slate-500">Mensual ${dinero(t.facturacionMensual||0)} · bonos/sueltas ${dinero(t.facturacionVariable||0)}${t.sesionesBonosSueltas ? ` · ${t.sesionesBonosSueltas} ses.` : ''}${t.coordinacionBonus ? ` · coord. ${dinero(t.coordinacionBonus)}` : ''}${t.soloImputacionGastos ? ` · solo imputación gastos${t.clientesAgendaNoComputados ? ` · cartera no computada: ${numero(t.clientesAgendaNoComputados)}` : ''}` : ''}</div></td><td class="text-right font-mono"><div>${dinero(t.facturacionAgenda||0)}</div><div class="text-[9px] text-slate-500">${numero(t.sesionesMensualesAgendadas||0)}/${numero(t.sesionesMensualesPrevistas||0)} ses. mensuales</div></td><td class="text-right font-mono ${claseDesviacion(t.desviacionAgenda||0)}"><div>${dinero(t.desviacionAgenda||0)}</div>${detalleDesv}</td><td class="text-right font-mono text-amber-400">${dinero(t.ptNeto)}</td><td class="text-right font-mono text-emerald-400">${dinero(t.bsBruto)}</td><td class="text-right font-mono text-red-300"><div>-${dinero(t.canonCentroShare||0)}</div><div class="text-[9px] text-slate-500">${t.computaCanonCentro === false ? 'Exento de canon ordinario' : `Fijo ${dinero(t.canonFijoShare||0)} · variable media ${dinero(t.canonPtShare||0)}${(t.canonClienteShare||0) ? ` · clientes ${dinero(t.canonClienteShare)}` : ''}`}</div></td><td class="text-right font-mono ${(t.bsNetoCentro||0) >= 0 ? 'text-cyan-400' : 'text-red-400'}">${dinero(t.bsNetoCentro||0)}</td></tr>`;
               }).join('') : '<tr><td colspan="9" class="py-3 text-center text-slate-500">Sin entrenadores asignados.</td></tr>'}
             </tbody></table>
           </div>
@@ -1534,9 +1559,10 @@
             <select onchange="editarTrainer('${key}','sistemaPago',this.value)" class="md:col-span-2 bg-slate-900 border border-slate-800 rounded p-2 text-white">${opcionesSistema.replace(`value=\"${settings.sistemaPago || 'auto'}\"`,`value=\"${settings.sistemaPago || 'auto'}\" selected`)}</select>
             <div class="md:col-span-2 text-right font-mono"><div class="text-slate-400">Fact. ${dinero(row.facturacion||0)}</div><div class="text-emerald-400">BS ${dinero(row.bsBruto||0)}</div></div>
           </div>
-          <div class="grid grid-cols-2 md:grid-cols-7 gap-2 items-end">
+          <div class="grid grid-cols-2 md:grid-cols-8 gap-2 items-end">
             <label class="flex items-center gap-2 text-slate-300 bg-slate-900 border border-slate-800 rounded p-2"><input type="checkbox" onchange="editarTrainer('${key}','pactoEspecial',this.checked)" ${settings.pactoEspecial?'checked':''} class="accent-amber-500"> Pacto especial</label>
             <label class="flex items-center gap-2 text-slate-300 bg-slate-900 border border-slate-800 rounded p-2"><input type="checkbox" onchange="editarTrainer('${key}','coordinadorAutorizado',this.checked)" ${settings.coordinadorAutorizado?'checked':''} class="accent-emerald-500"> Coord. autorizado</label>
+            <label class="flex items-center gap-2 text-slate-300 bg-slate-900 border border-slate-800 rounded p-2" title="Desactívalo solo si este PT no debe generar coste de canon de sede (fijo/variable/por cliente) en su centro -- p.ej. genera ingreso vía reparto de actividad especial, no ocupa 'plaza de PT' a efectos de canon."><input type="checkbox" onchange="editarTrainer('${key}','computaCanonCentro',this.checked)" ${settings.computaCanonCentro!==false?'checked':''} class="accent-cyan-500"> Computa canon de centro</label>
             <div><label class="text-[10px] text-slate-500 block mb-1">€/cliente al centro</label><input value="${escapeHTML(settings.aporteIndividualCliente ?? 0)}" onchange="editarTrainer('${key}','aporteIndividualCliente',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right"></div>
             <div><label class="text-[10px] text-slate-500 block mb-1">Canon Rango III</label><input value="${escapeHTML(settings.canonFijoIndependiente ?? 1000)}" onchange="editarTrainer('${key}','canonFijoIndependiente',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right"></div>
             <div><label class="text-[10px] text-slate-500 block mb-1">€/PT coord.</label><input value="${escapeHTML(settings.coordBonusPorPt ?? 50)}" onchange="editarTrainer('${key}','coordBonusPorPt',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right"></div>
