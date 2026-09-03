@@ -3317,6 +3317,11 @@ function calcularRentabilidadFicha(ficha) {
                         .map(a => `<option value="${a.id}">${escapeHTML(a.nombre)}</option>`).join('');
                 }
                 actualizarOpcionesModalidadActividad();
+            } else {
+                // Volver a modo estándar: el resumen (lbl-tarifa-calculada/lbl-rentabilidad-sesion)
+                // se había quedado con el importe de actividad especial si venías de ese modo --
+                // recalcula con los campos estándar para que nunca muestre un valor de otro modo.
+                autoCalcularTarifa();
             }
         }
         function nombreModalidadActividadParaFicha(actividadId, modalidadId, segmentoId) {
@@ -3368,11 +3373,34 @@ function calcularRentabilidadFicha(ficha) {
             const segmento = act?.modalidades?.[modId]?.segmentos?.[segId];
             const plan = segmento?.planes?.find(p => p.sesiones === planSesiones);
             const lbl = document.getElementById('lbl-precio-actividad');
+            // Hallazgo real (hotfix facturación actividad especial, 2026-09-03): el bloque resumen
+            // "Facturación Total Mensual"/"Rentabilidad X Sesión" (lbl-tarifa-calculada/
+            // lbl-rentabilidad-sesion) es SIEMPRE visible en la ficha, pero solo lo actualizaba
+            // autoCalcularTarifa() -- que lee cust-mod/cust-factor, los campos ESTÁNDAR, ocultos
+            // por completo en modo actividad especial. Al activar una actividad, esos campos
+            // nunca se tocan, así que ese resumen se quedaba en 0.00€ aunque "Facturación de este
+            // plan" (este mismo label, lbl-precio-actividad) ya mostrara el importe correcto --
+            // dos paneles de la MISMA ficha, uno correcto y otro sin actualizar. No es un fallo
+            // del motor de cálculo (ya verificado correcto), es que nadie escribía el resultado
+            // en el resumen cuando el modo activo es actividad especial. Ahora esta misma función
+            // -- la única fuente real del precio de actividad -- también rellena el resumen.
+            const lblTotal = document.getElementById('lbl-tarifa-calculada');
+            const lblRent = document.getElementById('lbl-rentabilidad-sesion');
             if (!lbl) return;
-            if (!plan) { lbl.innerText = '0.00 €'; return; }
+            if (!plan) {
+                lbl.innerText = '0.00 €';
+                if (lblTotal) lblTotal.innerText = '0.00 €';
+                if (lblRent) lblRent.innerText = '0.00 €';
+                return;
+            }
             const total = segmento.porPersona ? plan.precio * numPersonas : plan.precio;
             const modalidadTipo = act?.modalidades?.[modId]?.tipo;
             lbl.innerText = `${total.toFixed(2)} €` + (modalidadTipo === 'bono_vigencia' ? ' (bono, se reconoce por sesión agendada)' : ' (facturación del plan, no por sesión)');
+            if (lblTotal) lblTotal.innerText = `${total.toFixed(2)} €`;
+            if (lblRent) {
+                const rentabilidadSesion = plan.sesiones > 0 ? total / plan.sesiones : 0;
+                lblRent.innerText = `${rentabilidadSesion.toFixed(2)} €`;
+            }
         }
 
         // MOTOR FINANCIERO CORREGIDO Y EXACTO
