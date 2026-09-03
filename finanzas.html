@@ -1413,12 +1413,16 @@
       guardarConfigFinanzas();
       switchTab('config');
     }
-    function editarCentro(id,campo,valor){
+    async function editarCentro(id,campo,valor){
       const c = asegurarCentroEditable(id);
       const numericFields = ['canonFijo','ptsIncluidos','canonPt','canonPtReducidoDesde','canonPtReducido','orden'];
       const boolFields = ['activo','visibleCRM','visibleAgenda','visibleReservas','visibleQR'];
       const valorFinal = numericFields.includes(campo) ? parseNum(valor) : (boolFields.includes(campo) ? !!valor : valor);
       const valorAnterior = c[campo];
+      // Snapshot para deshacer si el guardado remoto falla de verdad -- incluye el propio centro
+      // y cualquier entrada de vigencia temporal que se registre a continuación.
+      const centroAntes = JSON.parse(JSON.stringify(c));
+      const versionesAntes = dbFinanzas.centrosVersiones?.[id] ? JSON.parse(JSON.stringify(dbFinanzas.centrosVersiones[id])) : null;
       if (CAMPOS_TEMPORALES_CENTRO.includes(campo) && valorAnterior !== undefined && valorFinal !== valorAnterior) {
         const mes = mesTrabajoKey();
         const soloEsteMes = confirm(`Cambio de "${campo}" en el centro ${c.nombre||id}.\n\nAceptar = aplicar SOLO a ${etiquetaMes(mes)} (no toca otros meses).\nCancelar = aplicar DESDE ${etiquetaMes(mes)} en adelante (nunca recalcula meses anteriores).`);
@@ -1428,7 +1432,15 @@
       } else {
         c[campo] = valorFinal;
       }
-      guardarConfigFinanzas();
+      const resultado = await guardarConfigFinanzas({ silencioso:true });
+      if (!resultado || resultado.ok !== true) {
+        dbFinanzas.centros[id] = centroAntes;
+        if (versionesAntes) dbFinanzas.centrosVersiones[id] = versionesAntes;
+        else if (dbFinanzas.centrosVersiones) delete dbFinanzas.centrosVersiones[id];
+        pintarTodo();
+        console.error(`[BESOUL Finanzas] editarCentro: fallo al guardar · centroId=${id} · campo=${campo} · code=${resultado?.err?.code || '(sin código)'} · message=${resultado?.err?.message || '(desconocido)'}`);
+        alert(`No se ha podido guardar el cambio de "${campo}" en el servidor. Revisa tu conexión e inténtalo de nuevo -- el cambio NO se ha guardado.`);
+      }
     }
     function desactivarCentro(id){
       const c = asegurarCentroEditable(id);
@@ -1642,12 +1654,16 @@
       }).join('') || '<div class="text-xs text-slate-500 text-center py-6">Sin actividades especiales configuradas.</div>';
     }
 
-    function editarTrainer(key,campo,valor){
+    async function editarTrainer(key,campo,valor){
       if(!dbFinanzas.trainerSettings) dbFinanzas.trainerSettings={};
       if(!dbFinanzas.trainerSettings[key]) dbFinanzas.trainerSettings[key]={};
       const numericFields = ['aporteIndividualCliente','canonFijoIndependiente','coordBonusPorPt','coordMaxPts','coordMaxBonus'];
       const valorFinal = numericFields.includes(campo) ? parseNum(valor) : valor;
       const valorAnterior = dbFinanzas.trainerSettings[key][campo];
+      // Snapshot para deshacer si el guardado remoto falla de verdad -- incluye el propio
+      // trainerSettings y cualquier entrada de vigencia temporal que se registre a continuación.
+      const settingsAntes = JSON.parse(JSON.stringify(dbFinanzas.trainerSettings[key]));
+      const versionesAntes = dbFinanzas.trainerSettingsVersiones?.[key] ? JSON.parse(JSON.stringify(dbFinanzas.trainerSettingsVersiones[key])) : null;
       if (CAMPOS_TEMPORALES_TRAINER.includes(campo) && valorAnterior !== undefined && valorFinal !== valorAnterior) {
         const mes = mesTrabajoKey();
         const soloEsteMes = confirm(`Cambio de "${campo}" para ${key}.\n\nAceptar = aplicar SOLO a ${etiquetaMes(mes)} (no toca otros meses).\nCancelar = aplicar DESDE ${etiquetaMes(mes)} en adelante (nunca recalcula meses anteriores).`);
@@ -1657,7 +1673,15 @@
       } else {
         dbFinanzas.trainerSettings[key][campo] = valorFinal;
       }
-      guardarConfigFinanzas();
+      const resultado = await guardarConfigFinanzas({ silencioso:true });
+      if (!resultado || resultado.ok !== true) {
+        dbFinanzas.trainerSettings[key] = settingsAntes;
+        if (versionesAntes) dbFinanzas.trainerSettingsVersiones[key] = versionesAntes;
+        else if (dbFinanzas.trainerSettingsVersiones) delete dbFinanzas.trainerSettingsVersiones[key];
+        pintarTodo();
+        console.error(`[BESOUL Finanzas] editarTrainer: fallo al guardar · trainerKey=${key} · campo=${campo} · code=${resultado?.err?.code || '(sin código)'} · message=${resultado?.err?.message || '(desconocido)'}`);
+        alert(`No se ha podido guardar el cambio de "${campo}" en el servidor. Revisa tu conexión e inténtalo de nuevo -- el cambio NO se ha guardado.`);
+      }
     }
 
     function switchTab(tab){
@@ -1682,13 +1706,36 @@
         actualizadoPor: usuarioFinanzasEmail
       }, { merge:true });
     }
-    function guardarConfigFinanzas(){
-      if(!finanzasRef) return;
-      const payload = { ...dbFinanzas, actualizadoEn: firebase.firestore.FieldValue.serverTimestamp(), actualizadoPor: usuarioFinanzasEmail };
-      finanzasRef.set(payload,{merge:true})
+    // Hallazgo real (auditoría PT/Centro, 2026-09-03) -- NO es el bug de .set()+claves de punto
+    // ya corregido en otros sitios: guardarConfigFinanzas() siempre envía el objeto COMPLETO
+    // (sin claves de punto), así que ese bug concreto no aplica aquí. La causa real es otra:
+    // cada llamada disparaba su propio finanzasRef.set(...) en paralelo, sin esperar a que el
+    // guardado anterior terminara ni encadenarse con él. Si el admin editaba dos campos seguidos
+    // (p.ej. tabulando entre inputs de la ficha de un PT o de un centro), salían dos escrituras
+    // independientes casi a la vez -- Firestore NO garantiza que lleguen al servidor en el mismo
+    // orden en que se llamó a set(), así que si la escritura del PRIMER campo llegaba DESPUÉS de
+    // la del segundo, esa segunda escritura (con el campo más reciente) quedaba pisada por la
+    // primera (que llevaba una copia de dbFinanzas más antigua, capturada ANTES de ese segundo
+    // cambio). Firestore nunca reportaba error -- el .set() en sí siempre "funcionaba", solo que
+    // en el orden equivocado. Corregido encadenando cada guardado al anterior (nunca en
+    // paralelo) y capturando el payload DENTRO de la cadena, no antes: así el último guardado en
+    // la cola es también el último en llegar al servidor, y siempre lleva el estado más reciente.
+    let bsGuardadoFinanzasEnCurso = Promise.resolve();
+    function guardarConfigFinanzas(opts){
+      const silencioso = !!(opts && opts.silencioso);
+      if(!finanzasRef) return Promise.resolve({ ok:false, omitido:true });
+      const p = bsGuardadoFinanzasEnCurso
+        .catch(() => {})
+        .then(() => {
+          const payload = { ...dbFinanzas, actualizadoEn: firebase.firestore.FieldValue.serverTimestamp(), actualizadoPor: usuarioFinanzasEmail };
+          return finanzasRef.set(payload, { merge:true });
+        })
         .then(() => sincronizarCentrosPublicos().catch(err => console.warn('No se pudieron sincronizar centros públicos. Revisa reglas besoulPublicConfig.', err)))
-        .catch(err=>{ console.error(err); alert('Error guardando Finanzas.'); });
+        .then(() => ({ ok:true }))
+        .catch(err => { console.error(err); if (!silencioso) alert('Error guardando Finanzas.'); return { ok:false, err }; });
+      bsGuardadoFinanzasEnCurso = p;
       pintarTodo();
+      return p;
     }
     async function refrescarTodoManual(){ await cargarInstantaneas(); pintarTodo(); }
 
