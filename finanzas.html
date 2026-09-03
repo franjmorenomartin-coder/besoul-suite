@@ -1490,7 +1490,18 @@
       // y cualquier entrada de vigencia temporal que se registre a continuación.
       const centroAntes = JSON.parse(JSON.stringify(c));
       const versionesAntes = dbFinanzas.centrosVersiones?.[id] ? JSON.parse(JSON.stringify(dbFinanzas.centrosVersiones[id])) : null;
-      if (CAMPOS_TEMPORALES_CENTRO.includes(campo) && valorAnterior !== undefined && valorFinal !== valorAnterior) {
+      // Hallazgo real (hotfix Alfa Prime, 2026-09-03, confirmado por simulación -- ver sim.js):
+      // exigir `valorAnterior !== undefined` aquí hacía que la PRIMERA edición de un campo
+      // temporal nunca antes versionado (valorAnterior=undefined) se saltara el diálogo
+      // "solo este mes / desde este mes" Y registrarVersionTemporal por completo -- se aplicaba
+      // directamente y para siempre sobre el valor vivo, sin versión ni confirmación. Para los
+      // campos de CAMPOS_TEMPORALES_CENTRO esto era inalcanzable en la práctica (siempre tienen
+      // un default explícito vía defaultsCentro()/DEFAULT_CENTROS, nunca undefined), pero se
+      // corrige aquí también por coherencia y para blindar cualquier campo de centro futuro que
+      // se añada sin default. registrarVersionTemporal ya maneja correctamente
+      // valorAnteriorLive===undefined (no congela un legado inexistente), así que quitar esta
+      // condición es seguro.
+      if (CAMPOS_TEMPORALES_CENTRO.includes(campo) && valorFinal !== valorAnterior) {
         const mes = mesTrabajoKey();
         const soloEsteMes = confirm(`Cambio de "${campo}" en el centro ${c.nombre||id}.\n\nAceptar = aplicar SOLO a ${etiquetaMes(mes)} (no toca otros meses).\nCancelar = aplicar DESDE ${etiquetaMes(mes)} en adelante (nunca recalcula meses anteriores).`);
         if(!dbFinanzas.centrosVersiones) dbFinanzas.centrosVersiones = {};
@@ -1738,7 +1749,18 @@
       // trainerSettings y cualquier entrada de vigencia temporal que se registre a continuación.
       const settingsAntes = JSON.parse(JSON.stringify(dbFinanzas.trainerSettings[key]));
       const versionesAntes = dbFinanzas.trainerSettingsVersiones?.[key] ? JSON.parse(JSON.stringify(dbFinanzas.trainerSettingsVersiones[key])) : null;
-      if (CAMPOS_TEMPORALES_TRAINER.includes(campo) && valorAnterior !== undefined && valorFinal !== valorAnterior) {
+      // Hallazgo real (hotfix Alfa Prime, 2026-09-03, confirmado por simulación -- ver sim.js):
+      // exigir `valorAnterior !== undefined` hacía que la PRIMERA edición de un campo temporal
+      // nunca antes versionado para ese trainer (valorAnterior=undefined, p.ej. computaCanonCentro
+      // -- campo nuevo, nadie lo ha tocado nunca) se aplicara directamente sobre el valor vivo,
+      // sin diálogo "solo este mes / desde este mes" y SIN registrar ninguna entrada en
+      // trainerSettingsVersiones. Reproducido en simulación: un admin que marca "computa canon
+      // de centro" en false esperando que sea "solo este mes" en realidad lo aplicaba para
+      // siempre, en todos los meses, sin ningún registro ni aviso. registrarVersionTemporal ya
+      // maneja correctamente valorAnteriorLive===undefined (no intenta congelar un legado que no
+      // existe), así que quitar esta condición es seguro y no cambia el comportamiento de ningún
+      // campo que ya tuviera valor definido.
+      if (CAMPOS_TEMPORALES_TRAINER.includes(campo) && valorFinal !== valorAnterior) {
         const mes = mesTrabajoKey();
         const soloEsteMes = confirm(`Cambio de "${campo}" para ${key}.\n\nAceptar = aplicar SOLO a ${etiquetaMes(mes)} (no toca otros meses).\nCancelar = aplicar DESDE ${etiquetaMes(mes)} en adelante (nunca recalcula meses anteriores).`);
         if(!dbFinanzas.trainerSettingsVersiones) dbFinanzas.trainerSettingsVersiones = {};
