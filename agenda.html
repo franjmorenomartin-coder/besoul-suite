@@ -200,11 +200,11 @@
                 padding:1rem !important;
                 margin:0 !important;
             }
-            #modal-disponibilidad-reservas, #modal-solicitudes-reservas, #modal-historico-cliente, #modal-solicitudes-eliminacion, #modal-avisos-manana {
+            #modal-disponibilidad-reservas, #modal-solicitudes-reservas, #modal-historico-cliente, #modal-solicitudes-eliminacion, #modal-avisos-manana, #modal-whatsapp-offer {
                 align-items:flex-end !important;
                 padding:0 !important;
             }
-            #modal-disponibilidad-reservas > div, #modal-solicitudes-reservas > div, #modal-historico-cliente > div, #modal-solicitudes-eliminacion > div, #modal-avisos-manana > div {
+            #modal-disponibilidad-reservas > div, #modal-solicitudes-reservas > div, #modal-historico-cliente > div, #modal-solicitudes-eliminacion > div, #modal-avisos-manana > div, #modal-whatsapp-offer > div {
                 width:100% !important;
                 max-width:none !important;
                 max-height:90dvh !important;
@@ -531,7 +531,7 @@
 
     <!-- MODAL POPUP ALTA / EDICIÓN -->
 
-    <div id="modal-cliente" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+    <div id="modal-cliente" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50">
 
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6 w-full max-w-lg sm:max-w-md space-y-4 my-2 sm:my-8 max-h-[calc(100dvh-1rem)] sm:max-h-none overflow-y-auto sm:overflow-visible">
 
@@ -966,7 +966,7 @@ miércoles 07:00-09:00"></textarea>
                     </div>
                     <div class="flex flex-col sm:flex-row gap-2">
                         <select id="grupo-abierto-cliente-select" class="flex-1 bg-slate-950 border border-slate-800 rounded p-2 text-white text-xs"></select>
-                        <button type="button" onclick="agregarAsistenteGrupoAbierto()" class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-3 py-2 rounded font-bold text-[10px] hover:bg-emerald-500/20 transition">Añadir cliente</button>
+                        <button type="button" onclick="agregarAsistenteGrupoAbierto()" class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-4 py-3 rounded font-bold text-xs hover:bg-emerald-500/20 transition">Añadir cliente</button>
                     </div>
                     <div id="grupo-abierto-asistentes-lista" class="space-y-1"></div>
                     <p class="text-[9px] text-slate-500 leading-relaxed">Cada asistente sigue manteniendo su tarifa y plan individual. Finanzas contará la asistencia en bonos/sueltas y la rentabilidad será la suma de los clientes de ese día.</p>
@@ -6858,7 +6858,7 @@ Cancelar = no hacer nada`,
                 lista.innerHTML = asistentes.length ? asistentes.map(a => {
                     const ficha = buscarClientePorIdTrainer(entrenadorVisto, a.id || a.clientId);
                     const rentA = ficha ? calcularRentabilidadFicha(ficha) : 0;
-                    return `<div class="flex items-center justify-between gap-2 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[10px]"><span class="text-white font-bold">${escapeHTML(a.nombre || ficha?.nombre || 'Cliente')}</span><span class="text-emerald-300 font-mono">${rentA.toFixed(2)} €</span><button type="button" onclick="quitarAsistenteGrupoAbierto('${escapeHTML(a.id || a.clientId)}')" class="text-red-300 font-bold">Quitar</button></div>`;
+                    return `<div class="flex items-center justify-between gap-2 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[10px]"><span class="text-white font-bold">${escapeHTML(a.nombre || ficha?.nombre || 'Cliente')}</span><span class="text-emerald-300 font-mono">${rentA.toFixed(2)} €</span><button type="button" onclick="quitarAsistenteGrupoAbierto('${escapeHTML(a.id || a.clientId)}')" class="text-red-300 font-bold px-2 py-2 -my-2 rounded hover:bg-red-500/10 transition">Quitar</button></div>`;
                 }).join('') : '<div class="text-[10px] text-slate-500 border border-dashed border-slate-800 rounded p-2">Sin asistentes todavía.</div>';
             }
         }
