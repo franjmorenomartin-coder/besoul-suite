@@ -1517,8 +1517,21 @@
       // se añada sin default. registrarVersionTemporal ya maneja correctamente
       // valorAnteriorLive===undefined (no congela un legado inexistente), así que quitar esta
       // condición es seguro.
-      if (CAMPOS_TEMPORALES_CENTRO.includes(campo) && valorFinal !== valorAnterior) {
-        const mes = mesTrabajoKey();
+      const esTemporal = CAMPOS_TEMPORALES_CENTRO.includes(campo) && valorFinal !== valorAnterior;
+      // Instrumentación ampliada (hotfix Fijo sede, 2026-09-04) -- pedida explícitamente porque
+      // tres harnesses distintos (memoria simple, con confirm() mockeado, y con semántica real de
+      // merge:true de Firestore + recarga completa simulada) confirmaron que esta cadena es
+      // correcta en todos los casos probados, y el fallo sigue reportándose en producción. Esto
+      // no demuestra ausencia de bug -- solo que no se ha podido reproducir con lo disponible
+      // aquí (sin navegador/Firestore reales). Esta traza captura TODO el ciclo real, incluida
+      // una relectura directa a Firestore tras guardar (bypass de cualquier caché local), para
+      // que la próxima vez que ocurra en producción haya evidencia dura del punto exacto en vez
+      // de otra hipótesis.
+      const mesLog = mesTrabajoKey();
+      const valorAnteriorEfectivo = (centroParaMes(c, mesLog) || {})[campo];
+      let modoTemporal = 'sin_cambio_temporal', versionRegistrada = null;
+      if (esTemporal) {
+        const mes = mesLog;
         // Hallazgo real (hotfix canon/participación, 2026-09-03): el texto del diálogo no repetía
         // el valor anterior/nuevo, solo el nombre técnico del campo -- un admin que pulsa
         // "Aceptar" leyéndolo como "sí, confirmo el cambio" (en vez de leer la letra pequeña de
@@ -1529,13 +1542,16 @@
         // campo en texto legible, para que la elección sea imposible de malinterpretar.
         const etiquetaCampo = { canonFijo:'Fijo sede', ptsIncluidos:'PT incluidos', canonPt:'€/PT extra', canonPtReducidoDesde:'Reducido desde PT nº', canonPtReducido:'€/PT reducido' }[campo] || campo;
         const soloEsteMes = confirm(`${c.nombre||id} · ${etiquetaCampo}: ${valorAnterior} → ${valorFinal}\n\nAceptar = aplicar SOLO a ${etiquetaMes(mes)} (los demás meses seguirán en ${valorAnterior}).\nCancelar = aplicar DESDE ${etiquetaMes(mes)} EN ADELANTE de forma permanente (pasa a ${valorFinal} para siempre desde ahora; los meses anteriores a ${etiquetaMes(mes)} seguirán en ${valorAnterior}).`);
-        console.log(`[FINANZAS][EDITAR_CENTRO] centroId=${id} campo=${campo} valorAnterior=${valorAnterior} valorFinal=${valorFinal} mes=${mes} soloEsteMes=${soloEsteMes} => ${soloEsteMes ? `version puntual ${mes}=${valorFinal}, live sigue en ${valorAnterior}` : `live pasa a ${valorFinal} desde ${mes} en adelante`}`);
+        modoTemporal = soloEsteMes ? 'solo_este_mes' : 'desde_adelante';
         if(!dbFinanzas.centrosVersiones) dbFinanzas.centrosVersiones = {};
         registrarVersionTemporal(dbFinanzas.centrosVersiones, id, campo, valorFinal, valorAnterior, mes, soloEsteMes);
+        versionRegistrada = dbFinanzas.centrosVersiones[id][dbFinanzas.centrosVersiones[id].length - 1];
         if (!soloEsteMes) c[campo] = valorFinal;
       } else {
         c[campo] = valorFinal;
       }
+      const payloadAntesGuardar = { centro: JSON.parse(JSON.stringify(dbFinanzas.centros[id])), versiones: dbFinanzas.centrosVersiones?.[id] ? JSON.parse(JSON.stringify(dbFinanzas.centrosVersiones[id])) : null };
+      console.log(`[FINANZAS][EDITAR_CENTRO] centerKey=${id} campo=${campo} mesKey=${mesLog} valorAnteriorBase=${valorAnterior} valorAnteriorEfectivo=${valorAnteriorEfectivo} valorFinal=${valorFinal} modoTemporal=${modoTemporal} versionRegistrada=${JSON.stringify(versionRegistrada)} payloadAntesGuardar=${JSON.stringify(payloadAntesGuardar)}`);
       const resultado = await guardarConfigFinanzas({ silencioso:true });
       if (!resultado || resultado.ok !== true) {
         dbFinanzas.centros[id] = centroAntes;
@@ -1544,6 +1560,23 @@
         pintarTodo();
         console.error(`[BESOUL Finanzas] editarCentro: fallo al guardar · centroId=${id} · campo=${campo} · code=${resultado?.err?.code || '(sin código)'} · message=${resultado?.err?.message || '(desconocido)'}`);
         alert(`No se ha podido guardar el cambio de "${campo}" en el servidor. Revisa tu conexión e inténtalo de nuevo -- el cambio NO se ha guardado.`);
+        return;
+      }
+      // Relectura DIRECTA a Firestore (get(), no el onSnapshot local) para descartar cualquier
+      // eco/caché local -- esto es lo que realmente quedó escrito en el servidor, no lo que la
+      // app cree que escribió.
+      try {
+        const snapRelectura = await finanzasRef.get();
+        const dataRelectura = snapRelectura.exists ? snapRelectura.data() : null;
+        const centroRelectura = dataRelectura?.centros?.[id] || null;
+        const versionesRelectura = dataRelectura?.centrosVersiones?.[id] || null;
+        // Resuelve con las versiones RECIÉN releídas del servidor, no con dbFinanzas.centrosVersiones
+        // (que podría no reflejar todavía lo que hay realmente en Firestore) -- esta es la prueba
+        // definitiva de qué va a calcular el motor la próxima vez que cargue esta página de cero.
+        const valorResueltoDespuesGuardar = centroRelectura ? valorEfectivoTemporal(versionesRelectura, campo, mesLog, centroRelectura[campo]) : '(centro no encontrado en relectura)';
+        console.log(`[FINANZAS][EDITAR_CENTRO] centerKey=${id} campo=${campo} mesKey=${mesLog} payloadDespuesGuardar=${JSON.stringify({ centro: centroRelectura, versiones: versionesRelectura })} valorResueltoDespuesGuardar=${valorResueltoDespuesGuardar}`);
+      } catch (errRelectura) {
+        console.error(`[FINANZAS][EDITAR_CENTRO] centerKey=${id} campo=${campo} fallo al releer de Firestore para verificar: ${errRelectura?.message || errRelectura}`);
       }
     }
     function desactivarCentro(id){
@@ -1786,19 +1819,28 @@
       // maneja correctamente valorAnteriorLive===undefined (no intenta congelar un legado que no
       // existe), así que quitar esta condición es seguro y no cambia el comportamiento de ningún
       // campo que ya tuviera valor definido.
-      if (CAMPOS_TEMPORALES_TRAINER.includes(campo) && valorFinal !== valorAnterior) {
-        const mes = mesTrabajoKey();
+      const esTemporal = CAMPOS_TEMPORALES_TRAINER.includes(campo) && valorFinal !== valorAnterior;
+      // Instrumentación ampliada (hotfix Fijo sede, 2026-09-04) -- genérica, mismo patrón que
+      // editarCentro(), por si el mismo tipo de causa afecta a algún campo temporal de trainer.
+      const mesLog = mesTrabajoKey();
+      const valorAnteriorEfectivo = (settingsTrainerParaMes(key, mesLog) || {})[campo];
+      let modoTemporal = 'sin_cambio_temporal', versionRegistrada = null;
+      if (esTemporal) {
+        const mes = mesLog;
         // Mismo hallazgo/fix de claridad que editarCentro() (hotfix canon/participación,
         // 2026-09-03): repetir valor anterior -> nuevo explícitamente para que Aceptar/Cancelar
         // no se pueda malinterpretar como "confirmar/cancelar el cambio".
         const soloEsteMes = confirm(`${key} · ${campo}: ${valorAnterior} → ${valorFinal}\n\nAceptar = aplicar SOLO a ${etiquetaMes(mes)} (los demás meses seguirán en ${valorAnterior}).\nCancelar = aplicar DESDE ${etiquetaMes(mes)} EN ADELANTE de forma permanente (pasa a ${valorFinal} para siempre desde ahora; los meses anteriores a ${etiquetaMes(mes)} seguirán en ${valorAnterior}).`);
-        console.log(`[FINANZAS][EDITAR_TRAINER] trainerKey=${key} campo=${campo} valorAnterior=${valorAnterior} valorFinal=${valorFinal} mes=${mes} soloEsteMes=${soloEsteMes} => ${soloEsteMes ? `version puntual ${mes}=${valorFinal}, live sigue en ${valorAnterior}` : `live pasa a ${valorFinal} desde ${mes} en adelante`}`);
+        modoTemporal = soloEsteMes ? 'solo_este_mes' : 'desde_adelante';
         if(!dbFinanzas.trainerSettingsVersiones) dbFinanzas.trainerSettingsVersiones = {};
         registrarVersionTemporal(dbFinanzas.trainerSettingsVersiones, key, campo, valorFinal, valorAnterior, mes, soloEsteMes);
+        versionRegistrada = dbFinanzas.trainerSettingsVersiones[key][dbFinanzas.trainerSettingsVersiones[key].length - 1];
         if (!soloEsteMes) dbFinanzas.trainerSettings[key][campo] = valorFinal;
       } else {
         dbFinanzas.trainerSettings[key][campo] = valorFinal;
       }
+      const payloadAntesGuardar = { settings: JSON.parse(JSON.stringify(dbFinanzas.trainerSettings[key])), versiones: dbFinanzas.trainerSettingsVersiones?.[key] ? JSON.parse(JSON.stringify(dbFinanzas.trainerSettingsVersiones[key])) : null };
+      console.log(`[FINANZAS][EDITAR_TRAINER] trainerKey=${key} campo=${campo} mesKey=${mesLog} valorAnteriorBase=${valorAnterior} valorAnteriorEfectivo=${valorAnteriorEfectivo} valorFinal=${valorFinal} modoTemporal=${modoTemporal} versionRegistrada=${JSON.stringify(versionRegistrada)} payloadAntesGuardar=${JSON.stringify(payloadAntesGuardar)}`);
       const resultado = await guardarConfigFinanzas({ silencioso:true });
       if (!resultado || resultado.ok !== true) {
         dbFinanzas.trainerSettings[key] = settingsAntes;
@@ -1807,6 +1849,17 @@
         pintarTodo();
         console.error(`[BESOUL Finanzas] editarTrainer: fallo al guardar · trainerKey=${key} · campo=${campo} · code=${resultado?.err?.code || '(sin código)'} · message=${resultado?.err?.message || '(desconocido)'}`);
         alert(`No se ha podido guardar el cambio de "${campo}" en el servidor. Revisa tu conexión e inténtalo de nuevo -- el cambio NO se ha guardado.`);
+        return;
+      }
+      try {
+        const snapRelectura = await finanzasRef.get();
+        const dataRelectura = snapRelectura.exists ? snapRelectura.data() : null;
+        const settingsRelectura = dataRelectura?.trainerSettings?.[key] || null;
+        const versionesRelectura = dataRelectura?.trainerSettingsVersiones?.[key] || null;
+        const valorResueltoDespuesGuardar = settingsRelectura ? valorEfectivoTemporal(versionesRelectura, campo, mesLog, settingsRelectura[campo]) : '(trainer no encontrado en relectura)';
+        console.log(`[FINANZAS][EDITAR_TRAINER] trainerKey=${key} campo=${campo} mesKey=${mesLog} payloadDespuesGuardar=${JSON.stringify({ settings: settingsRelectura, versiones: versionesRelectura })} valorResueltoDespuesGuardar=${valorResueltoDespuesGuardar}`);
+      } catch (errRelectura) {
+        console.error(`[FINANZAS][EDITAR_TRAINER] trainerKey=${key} campo=${campo} fallo al releer de Firestore para verificar: ${errRelectura?.message || errRelectura}`);
       }
     }
 
