@@ -94,14 +94,33 @@ Important statuses:
 
 ## `besoulPublicClients/{token}`
 
-Minimal public customer profile for reservation links.
+Minimal public customer profile for reservation links and the client portal (`portal-cliente.html`).
 
 This collection must never contain financial data, internal notes or sensitive information.
 
-Expected purpose:
+Purpose:
 
-- Allow `reservas.html` to identify a customer by private token.
-- Show only the customer name, trainer, center and booking options needed.
+- Allow `reservas.html` and `portal-cliente.html` to identify a customer by private token (capability URL, no separate login).
+- Show only the customer's own booking/session data needed for self-service.
+
+**SEC-06 (2026-09-04) — esquema público final**, auditado campo por campo contra el `batch.set(...)` real que escribe `agenda.html` (`publicarReservasPublicas()`), sin discrepancias entre lo documentado y lo que el código realmente escribe:
+
+| Campo | Contenido |
+|---|---|
+| `token` | El mismo token de la URL (own identity, not a secret shown to anyone else) |
+| `clientId`, `clientName` | Su propio id/nombre |
+| `trainerKey`, `trainerName` | Su entrenador asignado |
+| `centroId`, `centroNombre` | Su centro |
+| `email`, `telefono` | Sus propios datos de contacto |
+| `activo`, `reservasOnlineActivas` | Flags de si su acceso de autogestión está habilitado |
+| `restriccionesReservas`, `reservasBloqueadasTexto` | Bloqueos horarios de SU ficha únicamente |
+| `sesionesContratadas`, `sesionesUsadas`, `sesionesPendientes`, `periodoSesiones` | Su propio contador de sesiones |
+| `proximaSesion`, `proximasSesiones` (máx. 5), `sesionesRecientes` (máx. 3) | Sus propias citas (fecha/hora/clave) |
+| `cancelacionMinHoras` | Plazo de cancelación configurado en su ficha |
+| `avisos` (máx. 10) | `{id, fecha, contenido}` -- avisos enviados a este cliente concreto |
+| `updatedAt` | Timestamp de última sincronización |
+
+**Explícitamente ausente, confirmado leyendo el `batch.set` completo, no solo revisado a ojo** (exactamente los items que este ticket pedía excluir): rentabilidad, canon/reparto 50/35/15 ni ningún dato de Finanzas; datos de cualquier OTRO cliente del mismo entrenador (documento 1:1 por token, nunca una lista); contratos/PDFs firmados; notas internas del PT (`notaEntrenador`, notas de agenda). Detalle de por qué el aislamiento entre clientes es real (no solo "no debería pasar") en `SECURITY_AUDIT_PORTAL.md`.
 
 ## `besoulPublicSchedule/{trainerKey}`
 
