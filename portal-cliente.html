@@ -148,6 +148,16 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
+    // CLIENT-07 (2026-09-04): interruptor único para la cancelación desde el portal. En false
+    // mientras besoulCancelacionesCliente no tenga Rules desplegadas (ver
+    // CLIENT_PORTAL_ARCHITECTURE.md) -- el botón se sustituye por una versión deshabilitada
+    // ("Próximamente"), sin onclick, sin intento de escritura, sin permission-denied posible.
+    // solicitarCancelacion() y todo el resto del mecanismo (besoulCancelacionesCliente,
+    // agenda.html/procesarCancelacionCliente) quedan intactos y listos -- cambiar esta constante
+    // a true es el único paso de código necesario para reactivarlo cuando se despliegue el
+    // backend/Rules correspondiente.
+    const CANCELACION_PORTAL_HABILITADA = false;
+
     const TOKEN_RE = /^res_[a-z0-9_]{3,60}$/;
     function normalizarToken(raw) {
       let v = String(raw == null ? '' : raw).trim();
@@ -221,7 +231,9 @@
             <div class="text-white font-bold text-sm">${escapeHTML(labelFecha(s.fechaISO))} · ${escapeHTML(s.hora)}</div>
             <div class="text-[11px] text-slate-500">${escapeHTML(c.trainerName || '')}</div>
           </div>
-          <button onclick="solicitarCancelacion('${escapeHTML(s.clave)}','${escapeHTML(s.fechaISO)}','${escapeHTML(s.hora)}')" class="bs-focus-ring shrink-0 text-[11px] font-bold text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-2.5 py-1.5">Cancelar</button>
+          ${CANCELACION_PORTAL_HABILITADA
+            ? `<button onclick="solicitarCancelacion('${escapeHTML(s.clave)}','${escapeHTML(s.fechaISO)}','${escapeHTML(s.hora)}')" class="bs-focus-ring shrink-0 text-[11px] font-bold text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-2.5 py-1.5">Cancelar</button>`
+            : `<button type="button" disabled aria-disabled="true" title="La cancelación desde el portal todavía no está disponible. Contacta con tu entrenador." class="shrink-0 text-[11px] font-bold text-slate-500 bg-slate-800/50 border border-slate-700 rounded-lg px-2.5 py-1.5 cursor-not-allowed flex flex-col items-center leading-tight gap-0.5"><span>Cancelar reserva</span><span class="text-[9px] uppercase tracking-wide text-slate-600">Próximamente</span></button>`}
         </div>`).join('') : '<div class="text-xs text-slate-500 text-center py-4">Sin próximas sesiones.</div>';
 
       const recientes = Array.isArray(c.sesionesRecientes) ? c.sesionesRecientes : [];
