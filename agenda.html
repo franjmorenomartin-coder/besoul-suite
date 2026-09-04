@@ -6188,10 +6188,6 @@ Cancelar = no hacer nada`,
             pasadas.sort((a, b) => b.clave.localeCompare(a.clave));
             return { proximas: futuras.slice(0, 5), recientes: pasadas.slice(0, 3) };
         }
-        function proximaSesionClienteParaPortal(trainerKey, clientId) {
-            return sesionesClienteParaPortal(trainerKey, clientId).proximas[0] || null;
-        }
-
         function generarTokenReservaCliente() {
             const a = Math.random().toString(36).slice(2, 10);
             const b = Date.now().toString(36);
