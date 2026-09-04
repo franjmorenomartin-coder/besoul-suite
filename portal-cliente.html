@@ -187,7 +187,7 @@
     <div class="max-w-lg md:max-w-2xl mx-auto grid grid-cols-4 gap-1 px-2 pt-2">
     <button onclick="cambiarTabPortal('inicio')" data-tab="inicio" class="active rounded-xl px-1 py-2 text-[10px] font-black text-slate-400 border border-transparent">🏠<br>Inicio</button>
     <button onclick="cambiarTabPortal('agenda')" data-tab="agenda" class="rounded-xl px-1 py-2 text-[10px] font-black text-slate-400 border border-transparent">📋<br>Agenda</button>
-    <button onclick="cambiarTabPortal('avisos')" data-tab="avisos" class="rounded-xl px-1 py-2 text-[10px] font-black text-slate-400 border border-transparent">🔔<br>Avisos</button>
+    <button onclick="cambiarTabPortal('avisos')" data-tab="avisos" class="relative rounded-xl px-1 py-2 text-[10px] font-black text-slate-400 border border-transparent">🔔<br>Avisos<span id="badge-avisos-nav" class="hidden absolute top-1 right-2 bg-red-500 text-white text-[8px] font-black rounded-full min-w-[14px] h-[14px] px-1 flex items-center justify-center"></span></button>
     <button onclick="cambiarTabPortal('perfil')" data-tab="perfil" class="rounded-xl px-1 py-2 text-[10px] font-black text-slate-400 border border-transparent">👤<br>Perfil</button>
     </div>
   </nav>
@@ -452,6 +452,12 @@
     function pintarAvisos() {
       const avisos = Array.isArray(clientData.avisos) ? clientData.avisos : [];
       const leidos = new Set(leidosLocal());
+      // A4: badge "Avisos • N" en el nav inferior -- se actualiza siempre, incluso cuando la
+      // lista está vacía (bug evitado: la versión anterior de esta función salía antes de llegar
+      // aquí si no había avisos, dejando el badge sin tocar).
+      const noLeidos = avisos.filter(a => !leidos.has(a.id)).length;
+      const badge = document.getElementById('badge-avisos-nav');
+      if (badge) { badge.textContent = noLeidos > 9 ? '9+' : String(noLeidos); badge.classList.toggle('hidden', noLeidos === 0); }
       const cont = document.getElementById('lista-avisos');
       if (!avisos.length) { cont.innerHTML = '<div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center text-xs text-slate-500">No tienes avisos nuevos.</div>'; return; }
       cont.innerHTML = avisos.map(a => {

@@ -1221,14 +1221,35 @@ miércoles 07:00-09:00"></textarea>
                     <label class="text-[10px] text-slate-500 uppercase font-black">Mensaje</label>
                     <textarea id="aviso-multiple-mensaje" rows="4" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white text-sm" placeholder="Ej.: Hola, hoy no podré realizar los entrenamientos por motivos de salud. Disculpad las molestias. Os contactaré para reorganizar la sesión."></textarea>
                 </div>
-                <button onclick="prepararEnvioAvisoMultiple()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black py-3 rounded-xl text-sm">Preparar WhatsApp</button>
+                <div class="space-y-1">
+                    <label class="text-[10px] text-slate-500 uppercase font-black">Canales</label>
+                    <div class="flex gap-4">
+                        <label class="flex items-center gap-1.5 text-xs text-slate-200 cursor-pointer"><input id="aviso-canal-portal" type="checkbox" checked class="w-4 h-4 accent-amber-500">Portal Cliente</label>
+                        <label class="flex items-center gap-1.5 text-xs text-slate-200 cursor-pointer"><input id="aviso-canal-whatsapp" type="checkbox" checked class="w-4 h-4 accent-emerald-500">WhatsApp</label>
+                    </div>
+                </div>
+                <button onclick="prepararEnvioAvisoMultiple()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black py-3 rounded-xl text-sm">Preparar aviso</button>
             </div>
 
             <div id="aviso-multiple-paso-envio" class="hidden space-y-3">
-                <p class="text-[11px] text-slate-400">Pulsa "Abrir WhatsApp" para cada cliente. El mensaje ya está cargado, solo tienes que confirmar el envío dentro de WhatsApp.</p>
+                <p class="text-[11px] text-slate-400">Portal se publica al instante. WhatsApp se abre uno a uno -- confirmas el envío tú mismo dentro de WhatsApp, BESOUL nunca lo hace por ti.</p>
                 <div id="aviso-multiple-lista-envio" class="space-y-2"></div>
                 <button onclick="volverASeleccionAvisoMultiple()" class="w-full bg-slate-800 text-slate-300 font-bold py-2.5 rounded-xl text-xs">Volver a la selección</button>
             </div>
+        </div>
+    </div>
+
+    <!-- NOTICE-03: histórico de avisos de un cliente (fecha/hora/mensaje/canales/remitente) -->
+    <div id="modal-historico-avisos" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+        <div class="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl p-4 w-full sm:max-w-lg space-y-3 max-h-[85dvh] overflow-y-auto">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-sm font-black text-white uppercase tracking-wider">Avisos enviados</h3>
+                    <p id="historico-avisos-cliente" class="text-[11px] text-slate-400 mt-1">---</p>
+                </div>
+                <button onclick="document.getElementById('modal-historico-avisos').classList.add('hidden')" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
+            </div>
+            <div id="historico-avisos-lista" class="space-y-2"></div>
         </div>
     </div>
 
@@ -2298,15 +2319,25 @@ miércoles 07:00-09:00"></textarea>
         // WhatsApp con el mensaje ya cargado. "Preparado" es un estado puramente local de esta
         // sesión (nunca se guarda en Firestore ni se llama "entregado"/"leído").
         let avisoMultipleSeleccionados = new Set();
-        let avisoMultiplePreparados = new Set();
+        // NOTICE-01 (weekend build, 2026-09-05): antes era un Set de "preparados" (un solo canal
+        // implícito, WhatsApp, con publicación a Portal como efecto colateral SIEMPRE activo, sin
+        // elección). Ahora cada cliente tiene estado POR CANAL -- Map<clientId, {portal, whatsapp}>,
+        // cada valor 'pendiente' | 'ok' | 'error' | null (null = canal no seleccionado para este envío).
+        let avisoMultipleEstados = new Map();
+        let avisoCanalPortalActivo = true;
+        let avisoCanalWhatsAppActivo = true;
 
+        // NOTICE-01: ya no exige teléfono -- un cliente puede recibir un aviso SOLO por Portal
+        // (p.ej. no tiene WhatsApp, o el PT prefiere no usarlo esta vez). El botón de WhatsApp de
+        // cada fila se deshabilita individualmente si el cliente no tiene teléfono válido, en vez
+        // de excluirlo de la lista entera.
         function clientesElegiblesAvisoMultiple() {
-            return (dbClientes[entrenadorVisto] || []).filter(c => c && c.tipo === 'individual' && !c.vinculacion && clienteActivoParaAgenda(c) && normalizarTelefonoWhatsApp(c.telefono));
+            return (dbClientes[entrenadorVisto] || []).filter(c => c && c.tipo === 'individual' && !c.vinculacion && clienteActivoParaAgenda(c));
         }
 
         function abrirModalAvisoMultiple() {
             avisoMultipleSeleccionados = new Set();
-            avisoMultiplePreparados = new Set();
+            avisoMultipleEstados = new Map();
             const buscar = document.getElementById('aviso-multiple-buscar');
             const mensaje = document.getElementById('aviso-multiple-mensaje');
             if (buscar) buscar.value = '';
@@ -2351,48 +2382,131 @@ miércoles 07:00-09:00"></textarea>
 
         function prepararEnvioAvisoMultiple() {
             const mensaje = document.getElementById('aviso-multiple-mensaje')?.value.trim() || '';
+            avisoCanalPortalActivo = !!document.getElementById('aviso-canal-portal')?.checked;
+            avisoCanalWhatsAppActivo = !!document.getElementById('aviso-canal-whatsapp')?.checked;
             if (!avisoMultipleSeleccionados.size) { alert('Selecciona al menos un cliente.'); return; }
             if (!mensaje) { alert('Escribe el mensaje que quieres enviar.'); return; }
-            avisoMultiplePreparados = new Set();
+            if (!avisoCanalPortalActivo && !avisoCanalWhatsAppActivo) { alert('Elige al menos un canal (Portal Cliente y/o WhatsApp).'); return; }
+            avisoMultipleEstados = new Map();
+            avisoMultipleSeleccionados.forEach(id => avisoMultipleEstados.set(id, {
+                portal: avisoCanalPortalActivo ? 'pendiente' : null,
+                whatsapp: avisoCanalWhatsAppActivo ? 'pendiente' : null
+            }));
             renderListaEnvioAvisoMultiple();
             document.getElementById('aviso-multiple-paso-seleccion')?.classList.add('hidden');
             document.getElementById('aviso-multiple-paso-envio')?.classList.remove('hidden');
+            publicarAvisosPortalPendientes();
         }
 
+        // NOTICE-02: botones/estados por canal, nunca un único botón genérico "Enviar". Estados
+        // honestos -- Portal: Publicado/Error (BESOUL controla la escritura, puede confirmar el
+        // resultado real). WhatsApp: Preparado/Abrir WhatsApp (BESOUL solo abre wa.me con el texto
+        // ya cargado -- nunca "Enviado" ni "Entregado", porque wa.me no devuelve ninguna
+        // confirmación real de que el PT llegó a pulsar enviar dentro de WhatsApp).
         function renderListaEnvioAvisoMultiple() {
             const cont = document.getElementById('aviso-multiple-lista-envio');
             if (!cont) return;
             const clientes = (dbClientes[entrenadorVisto] || []).filter(c => c && avisoMultipleSeleccionados.has(c.id));
             cont.innerHTML = clientes.map(c => {
-                const preparado = avisoMultiplePreparados.has(c.id);
+                const estado = avisoMultipleEstados.get(c.id) || {};
+                const tieneTelefono = !!normalizarTelefonoWhatsApp(c.telefono);
+                let botonPortal = '';
+                if (estado.portal !== null && estado.portal !== undefined) {
+                    if (estado.portal === 'ok') botonPortal = `<span class="bg-slate-800 text-amber-300 border border-amber-500/40 font-bold px-2.5 py-2 rounded-lg text-[11px] whitespace-nowrap">✓ Publicado</span>`;
+                    else if (estado.portal === 'error') botonPortal = `<button onclick="reintentarAvisoPortal('${escapeHTML(c.id)}')" class="bg-red-500/20 text-red-300 border border-red-500/40 font-bold px-2.5 py-2 rounded-lg text-[11px] whitespace-nowrap">⚠ Error · reintentar</button>`;
+                    else botonPortal = `<span class="text-amber-400 text-[10px] font-bold uppercase">Portal: pendiente</span>`;
+                }
+                let botonWhatsapp = '';
+                if (estado.whatsapp !== null && estado.whatsapp !== undefined) {
+                    if (!tieneTelefono) botonWhatsapp = `<span class="text-[10px] text-slate-600 font-bold">Sin teléfono</span>`;
+                    else if (estado.whatsapp === 'ok') botonWhatsapp = `<span class="bg-slate-800 text-emerald-300 border border-emerald-500/40 font-bold px-2.5 py-2 rounded-lg text-[11px] whitespace-nowrap">✓ Preparado</span>`;
+                    else botonWhatsapp = `<button onclick="abrirWhatsAppAvisoCliente('${escapeHTML(c.id)}')" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-2.5 py-2 rounded-lg text-[11px] whitespace-nowrap">Abrir WhatsApp</button>`;
+                }
                 return `<div class="flex items-center justify-between gap-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5">
-                    <span class="text-xs text-white font-bold">${escapeHTML(c.nombre)}</span>
-                    <button onclick="abrirWhatsAppAvisoCliente('${escapeHTML(c.id)}')" class="${preparado ? 'bg-slate-800 text-emerald-300 border border-emerald-500/40' : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950'} font-bold px-3 py-2 rounded-lg text-[11px] whitespace-nowrap">${preparado ? '✓ Preparado' : 'Abrir WhatsApp'}</button>
+                    <span class="text-xs text-white font-bold truncate">${escapeHTML(c.nombre)}</span>
+                    <div class="flex items-center gap-1.5 shrink-0">${botonPortal}${botonWhatsapp}</div>
                 </div>`;
             }).join('');
         }
+
+        // Escritura del canal Portal -- separada de WhatsApp a propósito (NOTICE-01): antes vivía
+        // como efecto colateral SIEMPRE activo dentro de abrirWhatsAppAvisoCliente(); ahora es su
+        // propia función, invocable independientemente de si WhatsApp está seleccionado o no.
+        function publicarAvisoPortalCliente(id) {
+            const ficha = buscarClientePorIdTrainer(entrenadorVisto, id);
+            const mensaje = document.getElementById('aviso-multiple-mensaje')?.value.trim() || '';
+            const estado = avisoMultipleEstados.get(id) || {};
+            if (!ficha || !mensaje) { estado.portal = 'error'; avisoMultipleEstados.set(id, estado); renderListaEnvioAvisoMultiple(); return; }
+            try {
+                if (!Array.isArray(ficha.avisosPortal)) ficha.avisosPortal = [];
+                ficha.avisosPortal.unshift({
+                    id: `av_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,6)}`,
+                    fecha: new Date().toISOString(),
+                    contenido: mensaje,
+                    remitente: nombreEntrenador(entrenadorVisto),
+                    canales: { portal: true, whatsapp: avisoCanalWhatsAppActivo },
+                    // A6 (addendum): 'manual' siempre hoy -- campo preparado para que un futuro
+                    // generador automático (sesión mañana, bono a punto de agotarse/caducar,
+                    // reserva confirmada...) pueda marcar sus propios avisos como 'sistema' sin
+                    // cambiar el esquema. Ninguna automatización activa en esta fase.
+                    tipo: 'manual'
+                });
+                ficha.avisosPortal = ficha.avisosPortal.slice(0, 20);
+                localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
+                publicarReservasPublicasDebounced();
+                estado.portal = 'ok';
+            } catch (err) {
+                console.error('[NOTICE-01] Error publicando aviso en Portal:', err);
+                estado.portal = 'error';
+            }
+            avisoMultipleEstados.set(id, estado);
+            renderListaEnvioAvisoMultiple();
+        }
+        function reintentarAvisoPortal(id) { publicarAvisoPortalCliente(id); }
 
         function abrirWhatsAppAvisoCliente(id) {
             const ficha = buscarClientePorIdTrainer(entrenadorVisto, id);
             if (!ficha) return;
             const mensaje = document.getElementById('aviso-multiple-mensaje')?.value.trim() || '';
             abrirWhatsApp(ficha.telefono, mensaje);
-            avisoMultiplePreparados.add(id);
+            const estado = avisoMultipleEstados.get(id) || {};
+            estado.whatsapp = 'ok';
+            avisoMultipleEstados.set(id, estado);
             renderListaEnvioAvisoMultiple();
-            // CLIENT-06 (2026-09-04): reutiliza el flujo de WhatsApp ya existente (el PT no
-            // aprende una interfaz nueva) para además dejar el mismo aviso visible en el portal
-            // del cliente -- ver CLIENT_PORTAL_ARCHITECTURE.md sección "Notificaciones". Guardado
-            // en la propia ficha (no en besoulNotifications, que exige isActiveUser() y por tanto
-            // nunca sería legible por un cliente público sin cuenta) y sincronizado hacia
-            // besoulPublicClients/{token} por el MISMO batch-write ya trusted que ya escribe el
-            // resto de campos del portal -- sin Rules nuevas.
-            if (mensaje) {
-                if (!Array.isArray(ficha.avisosPortal)) ficha.avisosPortal = [];
-                ficha.avisosPortal.unshift({ id: `av_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,6)}`, fecha: new Date().toISOString(), contenido: mensaje });
-                ficha.avisosPortal = ficha.avisosPortal.slice(0, 10);
-                localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
-                publicarReservasPublicasDebounced();
-            }
+        }
+
+        // NOTICE-01: al entrar en el paso de envío, dispara automáticamente el canal Portal para
+        // todos los seleccionados que lo tengan activo (escritura instantánea, sin fricción --
+        // WhatsApp SIEMPRE requiere una pulsación manual por cliente, nunca se automatiza, porque
+        // abrir una pestaña de WhatsApp por cliente sin interacción del usuario la bloquearía el
+        // navegador como pop-up no solicitado).
+        function publicarAvisosPortalPendientes() {
+            avisoMultipleEstados.forEach((estado, id) => { if (estado.portal === 'pendiente') publicarAvisoPortalCliente(id); });
+        }
+
+        // NOTICE-03: histórico legible de avisos por cliente. Lee directamente ficha.avisosPortal
+        // (misma fuente que ya se publica al Portal, PORTAL-02/CLIENT-06) -- sin colección nueva,
+        // sin Rules nuevas, solo una vista sobre un dato que ya existía.
+        function abrirModalHistoricoAvisos(clienteId) {
+            const ficha = buscarClientePorIdTrainer(entrenadorVisto, clienteId);
+            if (!ficha) return;
+            document.getElementById('historico-avisos-cliente').textContent = ficha.nombre || '';
+            const avisos = Array.isArray(ficha.avisosPortal) ? ficha.avisosPortal : [];
+            const cont = document.getElementById('historico-avisos-lista');
+            cont.innerHTML = avisos.length ? avisos.map(a => {
+                const fecha = a.fecha ? new Date(a.fecha).toLocaleString('es-ES', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '---';
+                const canales = a.canales || {};
+                const badges = [
+                    canales.portal ? '<span class="text-amber-300">Portal ✓</span>' : '',
+                    canales.whatsapp ? '<span class="text-emerald-300">WhatsApp ↗</span>' : ''
+                ].filter(Boolean).join(' · ') || '<span class="text-slate-600">Canal no registrado (aviso anterior a NOTICE-01)</span>';
+                return `<div class="bg-slate-950 border border-slate-800 rounded-xl p-3">
+                    <div class="flex items-center justify-between text-[10px] text-slate-500"><span>${escapeHTML(fecha)}</span><span>${escapeHTML(a.remitente || nombreEntrenador(entrenadorVisto))}</span></div>
+                    <div class="text-sm text-white mt-1">${escapeHTML(a.contenido || '')}</div>
+                    <div class="text-[10px] font-bold mt-1.5">${badges}</div>
+                </div>`;
+            }).join('') : '<div class="text-xs text-slate-500 text-center py-6">Sin avisos enviados todavía.</div>';
+            document.getElementById('modal-historico-avisos').classList.remove('hidden');
         }
 
         function volverASeleccionAvisoMultiple() {
@@ -4571,6 +4685,7 @@ function calcularRentabilidadFicha(ficha) {
                         <div class="flex flex-wrap gap-3 mt-1.5">
                             <button onclick="event.stopPropagation(); editarFicha('${botonEditarId}')" class="text-cyan-400 text-xs font-bold hover:underline">${textoBoton}</button>
                             <button onclick="event.stopPropagation(); abrirModalHistoricoCliente('${botonEditarId}')" class="text-amber-400 text-xs font-bold hover:underline">Histórico</button>
+                            ${esVinculado ? '' : `<button onclick="event.stopPropagation(); abrirModalHistoricoAvisos('${c.id}')" class="text-slate-400 text-xs font-bold hover:underline">Avisos${Array.isArray(c.avisosPortal) && c.avisosPortal.length ? ` (${c.avisosPortal.length})` : ''}</button>`}
                             ${botonReservasHTML}
                             ${botonRegenerarTokenHTML}
                             ${botonSolicitarEliminacionHTML}
