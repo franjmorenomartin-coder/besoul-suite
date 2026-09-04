@@ -159,19 +159,26 @@ service cloud.firestore {
     }
 
     match /besoulLeads/{leadId} {
+      // SEC-04 (2026-09-04): CRM hardening real, no solo de UI. crm.html (ROLE-01, ya en main)
+      // bloquea el login de cualquier PT antes de revelar app-content -- un PT ya no tiene NINGÚN
+      // camino de código legítimo hacia crear/editar leads. Se auditó primero si algo real seguía
+      // dependiendo de que un PT escribiera aquí: NO -- el único escritor de create/update es
+      // crm.html (admin-only desde ROLE-01), más isPublicTrialLead() para el formulario público
+      // sin auth de valoracion.html/prueba.html. Por eso create/update pasan a isAdmin() puro,
+      // cerrando el hueco documentado en crm.html (línea ~511-521): antes, un PT con conocimientos
+      // técnicos podía seguir creando/editando SUS PROPIOS leads vía llamadas directas a Firestore
+      // aunque la UI ya no se lo permitiera.
+      //
+      // "read" SÍ se mantiene igual (isActiveUser() + trainerKey propio) -- agenda.html
+      // (consultaLeadsPermitidosAgenda(), ~línea 1897) SÍ depende de esta lectura en producción
+      // hoy: es como un PT ve sus "pruebas" (leads con sesión de valoración agendada) pintadas en
+      // su propia Agenda. Ese flujo es real, sigue en uso, y solo necesita leer, nunca escribir.
       allow read: if isAdmin()
         || (isActiveUser() && resource.data.trainerKey == myTrainerKey());
 
-      allow create: if isPublicTrialLead()
-        || isAdmin()
-        || (isActiveUser() && request.resource.data.trainerKey == myTrainerKey());
+      allow create: if isPublicTrialLead() || isAdmin();
 
-      allow update: if isAdmin()
-        || (
-          isActiveUser()
-          && resource.data.trainerKey == myTrainerKey()
-          && request.resource.data.trainerKey == myTrainerKey()
-        );
+      allow update: if isAdmin();
 
       allow delete: if isAdmin();
     }
