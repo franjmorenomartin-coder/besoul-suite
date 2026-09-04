@@ -78,6 +78,10 @@
 
         @media (max-width: 767px) {
             body { background:#050814; padding-bottom: calc(78px + env(safe-area-inset-bottom)); }
+            /* UX-03: la barra de "modo agenda táctil" debe quedar SIEMPRE encima del bottom nav
+               (misma referencia de 78px que el padding del body de arriba), nunca solapada --
+               en desktop no hay bottom nav, así que ahí se queda en bottom-3 (default Tailwind). */
+            #barra-seleccion-agenda-movil { bottom: calc(78px + env(safe-area-inset-bottom) + 0.5rem) !important; }
             #app-content > header {
                 padding: .75rem .9rem !important;
                 gap: .75rem !important;
@@ -89,10 +93,37 @@
             #app-content > header > div:last-child {
                 width: 100%;
                 display: grid !important;
-                grid-template-columns: 1fr 1fr;
+                grid-template-columns: 1fr auto;
                 gap: .45rem !important;
+                position: relative;
             }
-            #app-content > header > div:last-child button { width:100%; padding:.55rem .35rem !important; }
+            /* Solo los DOS botones de primer nivel (+ Disponibilidad / Más) ocupan la fila
+               compacta -- ver UX-04 arriba. Los botones dentro de #agenda-header-secondary
+               siguen siendo full-width, pero DENTRO del desplegable, no en esta fila. */
+            #app-content > header > div:last-child > .bs-btn-primary,
+            #btn-header-mas { width:100%; padding:.65rem .5rem !important; }
+            #agenda-header-secondary:not(.hidden) {
+                display: flex !important;
+                flex-direction: column;
+                position: absolute;
+                top: calc(100% + .5rem);
+                right: 0;
+                left: 0;
+                z-index: 45;
+                background: rgba(2,6,23,.98);
+                border: 1px solid rgba(255,255,255,.08);
+                border-radius: 1rem;
+                padding: .6rem;
+                max-height: 60dvh;
+                overflow-y: auto;
+                box-shadow: 0 20px 40px rgba(0,0,0,.5);
+            }
+            #agenda-header-secondary:not(.hidden) button,
+            #agenda-header-secondary:not(.hidden) a { width:100%; text-align:left; padding:.7rem .8rem !important; }
+            #agenda-header-secondary:not(.hidden) > span.w-px { display:none; }
+            #agenda-kpi-mobile-wrap summary::-webkit-details-marker { display:none; }
+            #agenda-kpi-mobile-wrap summary::before { content:'▸ '; }
+            #agenda-kpi-mobile-wrap[open] summary::before { content:'▾ '; }
 
             #app-content > .bg-slate-950 {
                 padding: .7rem .75rem !important;
@@ -105,6 +136,15 @@
             #app-content > .bg-slate-950 .grid.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap:.45rem !important; }
             #app-content > .bg-slate-950 .bs-kpi { padding:.6rem .7rem !important; }
             #app-content > .bg-slate-950 span[id^="kpi-"] { font-size:1.05rem !important; }
+            /* UX-02: en móvil el resumen de KPIs primarios ya no se muestra siempre abierto --
+               empieza colapsado (ver script de arranque) tras "Resumen ▸", igual que ya existe
+               para "Más métricas de la semana". Prioridad móvil: semana → calendario/clientes →
+               acciones, no estadísticas ocupando la primera pantalla. */
+            #agenda-kpi-primary-summary { display:block !important; }
+            #agenda-kpi-primary-wrap[open] #agenda-kpi-primary-summary { margin-bottom:.5rem; }
+            #agenda-kpi-primary-wrap summary::-webkit-details-marker { display:none; }
+            #agenda-kpi-primary-wrap summary::before { content:'▸ '; }
+            #agenda-kpi-primary-wrap[open] summary::before { content:'▾ '; }
             #admin-trainer-filter-block { width:100%; }
             #admin-trainer-filter-block select { flex:1; min-width:0; }
             #agenda-main {
@@ -312,22 +352,32 @@
 
             </div>
 
-            <div class="flex items-center gap-2 flex-wrap justify-end">
+            <div class="flex items-center gap-2 flex-wrap justify-end relative">
 
-                <button onclick="abrirModalNotificaciones()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl" aria-label="Notificaciones">🔔<span id="badge-notificaciones" class="hidden ml-1 bg-amber-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
                 <button onclick="abrirModalDisponibilidadReservas()" class="bs-btn-primary px-4 py-2.5 text-sm rounded-xl transition">+ Disponibilidad</button>
-                <button onclick="abrirModalSolicitudesReservas()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Reservas <span id="badge-reservas-pendientes" class="hidden ml-1 bg-emerald-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
-                <button onclick="abrirModalAvisosManana()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Avisos mañana <span id="badge-avisos-manana" class="hidden ml-1 bg-cyan-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
-                <button onclick="abrirModalAvisoMultiple()" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Enviar aviso a clientes</button>
-                <button id="btn-admin-entrenadores" onclick="abrirModalEntrenadores()" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Entrenadores</button>
-                <button id="btn-admin-solicitudes-eliminacion" onclick="abrirModalSolicitudesEliminacion()" class="hidden relative bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Solicitudes <span id="badge-solicitudes-eliminacion" class="hidden ml-1 bg-red-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
+                <!-- UX-04 (2026-09-04): "Más" solo existe <768px -- agrupa las acciones
+                     secundarias detrás de un toggle en vez de 5 filas de botones siempre
+                     visibles. Ningún botón se elimina ni se re-cablea: son los MISMOS elementos
+                     (mismos id, mismo onclick), solo se envuelven para colapsarlos por defecto en
+                     móvil. Desktop (md:flex) los sigue mostrando todos en línea, sin cambios. -->
+                <button id="btn-header-mas" onclick="toggleHeaderMasAgenda()" class="md:hidden relative bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl" aria-haspopup="true" aria-expanded="false">Más <span id="badge-header-mas" class="hidden ml-1 bg-red-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
 
-                <span class="w-px h-6 bg-white/10 mx-1 hidden sm:block"></span>
-                <a href="crm.html" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">CRM</a>
-                <a id="nav-dashboard" href="dashboard.html" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Dashboard</a>
-                <a id="nav-finanzas" href="finanzas.html" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Finanzas</a>
+                <div id="agenda-header-secondary" class="hidden md:flex items-center gap-2 flex-wrap justify-end">
+                    <button onclick="abrirAsistenteBesoul()" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl" aria-label="Asistente">✨ Asistente</button>
+                    <button onclick="abrirModalNotificaciones()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl" aria-label="Notificaciones">🔔<span id="badge-notificaciones" class="hidden ml-1 bg-amber-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
+                    <button onclick="abrirModalSolicitudesReservas()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Reservas <span id="badge-reservas-pendientes" class="hidden ml-1 bg-emerald-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
+                    <button onclick="abrirModalAvisosManana()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Avisos mañana <span id="badge-avisos-manana" class="hidden ml-1 bg-cyan-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
+                    <button onclick="abrirModalAvisoMultiple()" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Enviar aviso a clientes</button>
+                    <button id="btn-admin-entrenadores" onclick="abrirModalEntrenadores()" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Entrenadores</button>
+                    <button id="btn-admin-solicitudes-eliminacion" onclick="abrirModalSolicitudesEliminacion()" class="hidden relative bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Solicitudes <span id="badge-solicitudes-eliminacion" class="hidden ml-1 bg-red-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
 
-                <button onclick="logout()" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Salir</button>
+                    <span class="w-px h-6 bg-white/10 mx-1 hidden sm:block"></span>
+                    <a id="nav-crm" href="crm.html" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">CRM</a>
+                    <a id="nav-dashboard" href="dashboard.html" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Dashboard</a>
+                    <a id="nav-finanzas" href="finanzas.html" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Finanzas</a>
+
+                    <button onclick="logout()" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Salir</button>
+                </div>
 
             </div>
 
@@ -365,6 +415,8 @@
 
 
 
+            <details id="agenda-kpi-primary-wrap" open>
+                <summary id="agenda-kpi-primary-summary" class="hidden text-xs text-slate-400 font-bold cursor-pointer select-none py-1">Resumen</summary>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
 
                 <div class="bs-kpi">
@@ -400,6 +452,14 @@
                 </div>
 
             </div>
+            </details>
+            <script>
+              // UX-02: colapsado por defecto SOLO en móvil, una vez al cargar -- no se fuerza en
+              // cada render (si el usuario lo abre, se queda abierto hasta que recargue).
+              if (window.matchMedia && window.matchMedia('(max-width: 767px)').matches) {
+                document.getElementById('agenda-kpi-primary-wrap').removeAttribute('open');
+              }
+            </script>
 
         </div>
 
@@ -2011,15 +2071,23 @@ miércoles 07:00-09:00"></textarea>
             if (barra) return barra;
             barra = document.createElement('div');
             barra.id = 'barra-seleccion-agenda-movil';
-            barra.className = 'hidden fixed left-3 right-3 bottom-3 z-[80] bg-slate-950/95 border border-amber-500/40 rounded-2xl shadow-2xl p-3 text-xs backdrop-blur-md';
+            // UX-03 (2026-09-04): esta barra vivía en bottom-3/z-[80], exactamente encima del
+            // bottom nav (fixed bottom-0, ~78px alto, z-40, ver CSS @media max-width:767px arriba)
+            // -- z-80 > z-40 hacía que la barra tapara el nav mientras estaba en modo selección,
+            // bloqueando el acceso a las pestañas Agenda/Clientes/Grupos/Reservas justo cuando el
+            // usuario más las necesita. Reposicionada ENCIMA del nav (78px + safe-area + margen),
+            // nunca solapada con él -- compact action bar, no bottom sheet completo.
+            barra.className = 'hidden fixed left-2 right-2 bottom-3 z-[45] bg-slate-950/95 border border-amber-500/40 rounded-2xl shadow-2xl p-2.5 text-xs backdrop-blur-md';
             barra.innerHTML = `
-                <div class="flex items-center justify-between gap-3">
-                    <div class="min-w-0">
-                        <div class="text-[10px] uppercase tracking-wider text-amber-400 font-black">Modo agenda táctil</div>
-                        <div id="barra-seleccion-agenda-texto" class="text-white font-bold truncate">Ficha seleccionada</div>
-                        <div class="text-slate-400 text-[10px] mt-0.5">Toca una franja del calendario para agendar cliente o grupo y bloquear 45 min.</div>
+                <div class="flex items-center justify-between gap-2">
+                    <div class="min-w-0 flex items-center gap-2">
+                        <span class="shrink-0 w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                        <div class="min-w-0">
+                            <div id="barra-seleccion-agenda-texto" class="text-white font-bold text-[11px] truncate">Ficha seleccionada</div>
+                            <div class="text-slate-500 text-[9px] truncate">Toca una franja libre para agendar</div>
+                        </div>
                     </div>
-                    <button type="button" onclick="limpiarSeleccionFichaMovil()" class="shrink-0 bg-slate-800 text-slate-300 px-3 py-2 rounded-xl font-bold hover:text-white">Cancelar</button>
+                    <button type="button" onclick="limpiarSeleccionFichaMovil()" class="shrink-0 bg-slate-800 text-slate-300 px-2.5 py-1.5 rounded-lg font-bold hover:text-white text-[10px]">Cancelar</button>
                 </div>
             `;
             document.body.appendChild(barra);
@@ -2296,6 +2364,20 @@ miércoles 07:00-09:00"></textarea>
             abrirWhatsApp(ficha.telefono, mensaje);
             avisoMultiplePreparados.add(id);
             renderListaEnvioAvisoMultiple();
+            // CLIENT-06 (2026-09-04): reutiliza el flujo de WhatsApp ya existente (el PT no
+            // aprende una interfaz nueva) para además dejar el mismo aviso visible en el portal
+            // del cliente -- ver CLIENT_PORTAL_ARCHITECTURE.md sección "Notificaciones". Guardado
+            // en la propia ficha (no en besoulNotifications, que exige isActiveUser() y por tanto
+            // nunca sería legible por un cliente público sin cuenta) y sincronizado hacia
+            // besoulPublicClients/{token} por el MISMO batch-write ya trusted que ya escribe el
+            // resto de campos del portal -- sin Rules nuevas.
+            if (mensaje) {
+                if (!Array.isArray(ficha.avisosPortal)) ficha.avisosPortal = [];
+                ficha.avisosPortal.unshift({ id: `av_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,6)}`, fecha: new Date().toISOString(), contenido: mensaje });
+                ficha.avisosPortal = ficha.avisosPortal.slice(0, 10);
+                localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
+                publicarReservasPublicasDebounced();
+            }
         }
 
         function volverASeleccionAvisoMultiple() {
@@ -2342,6 +2424,7 @@ miércoles 07:00-09:00"></textarea>
             const n = listaAvisosManana().length;
             badge.innerText = n;
             badge.classList.toggle('hidden', n === 0);
+            if (typeof actualizarBadgeHeaderMas === 'function') actualizarBadgeHeaderMas();
         }
         let bsAvisosMananaCache = [];
         function abrirModalAvisosManana() {
@@ -2985,6 +3068,7 @@ function calcularRentabilidadFicha(ficha) {
                     document.getElementById('btn-admin-solicitudes-eliminacion').classList.remove('hidden');
                     document.getElementById('nav-dashboard').classList.remove('hidden');
                     document.getElementById('nav-finanzas').classList.remove('hidden');
+                    document.getElementById('nav-crm').classList.remove('hidden');
                     configurarSelectorAdmin();
                 } else {
                     document.getElementById('admin-trainer-filter-block').classList.add('hidden');
@@ -2992,11 +3076,18 @@ function calcularRentabilidadFicha(ficha) {
                     document.getElementById('btn-admin-solicitudes-eliminacion').classList.add('hidden');
                     document.getElementById('nav-dashboard').classList.add('hidden');
                     document.getElementById('nav-finanzas').classList.add('hidden');
+                    // ROLE-01 (2026-09-04): CRM pasa a ser admin-only (ver crm.html
+                    // iniciarSesionAutenticada) -- el enlace ya no se muestra a PT, igual que
+                    // Dashboard/Finanzas. No afecta a iniciarSincronizacionLeadsCRMAgenda(), que
+                    // sigue trayendo a Agenda las pruebas CRM del propio PT (dato legítimo dentro
+                    // de su ficha, no acceso a la página CRM).
+                    document.getElementById('nav-crm').classList.add('hidden');
                 }
 
                 iniciarSincronizacionNubeAgenda();
                 iniciarSincronizacionLeadsCRMAgenda();
                 iniciarModuloReservasAgenda();
+                iniciarModuloCancelacionesCliente();
                 iniciarModuloSolicitudesEliminacion();
                 iniciarModuloNotificaciones();
                 buildColorPicker();
@@ -4360,9 +4451,14 @@ function calcularRentabilidadFicha(ficha) {
 
                 if (puedeAgendar) {
 
-                    item.setAttribute('draggable', 'true');
-
-                    item.ondragstart = (e) => { e.dataTransfer.setData("text/plain", c.id); };
+                    // UX-03: draggable HTML5 nativo solo en desktop -- en móvil compite con el
+                    // tap (long-press dispara el "fantasma" de arrastre nativo en vez de un click
+                    // limpio), y el flujo táctil de seleccionar+tocar franja ya cubre el caso de
+                    // uso completo sin necesitar drag. Desktop conserva drag como antes.
+                    if (!isMobileAgenda()) {
+                        item.setAttribute('draggable', 'true');
+                        item.ondragstart = (e) => { e.dataTransfer.setData("text/plain", c.id); };
+                    }
                     item.onclick = (e) => {
                         if (e.target && e.target.closest('button')) return;
                         seleccionarFichaParaAgendaMovil(c.id);
@@ -5017,13 +5113,24 @@ Cancelar = no hacer nada`,
             set('kpi-ext-ocupacion', `${(resumen.ocupacionPct || 0).toFixed(0)}%`);
         }
 
+        // UX-04 (2026-09-04, hallazgo real): este bloque se renderiza SIEMPRE visible, antes
+        // incluso de los day-tabs -- es un segundo bloque de KPIs independiente del
+        // <details id="agenda-kpi-primary-wrap"> que ya se colapsó en el commit anterior (ese
+        // colapso NO llegaba aquí porque este HTML se genera e inyecta por completo en cada
+        // renderAgenda(), no vive en el <header> estático). Confirmado con captura real
+        // (CDP Emulation.setDeviceMetricsOverride a 390px, no --window-size que no funcionaba en
+        // este Chrome): con el header ya compacto, ESTE bloque seguía siendo lo primero que se
+        // veía antes de llegar a los días/citas. Mismo patrón <details> que el resto de la app.
         function resumenKPIsMobileHTML(resumen) {
-            return `<div class="agenda-mobile-kpis">
+            return `<details id="agenda-kpi-mobile-wrap" class="mb-2">
+                <summary class="text-xs text-slate-400 font-bold cursor-pointer select-none py-1.5 flex items-center gap-1"><span>Resumen de la semana</span></summary>
+                <div class="agenda-mobile-kpis mt-1">
                 <div class="kpi-card"><span class="kpi-label">Facturación prevista</span><span class="kpi-value text-emerald-400">${(resumen.facturacionPrevista || 0).toFixed(0)} €</span></div>
                 <div class="kpi-card"><span class="kpi-label">Valor agenda</span><span class="kpi-value text-cyan-300">${(resumen.valorAgenda || 0).toFixed(0)} €</span></div>
                 <div class="kpi-card"><span class="kpi-label">Ocupación</span><span class="kpi-value text-white">${(resumen.ocupacionPct || 0).toFixed(0)}%</span><span class="block text-xs text-slate-500 mt-0.5">${resumen.slotsOcupados}/${resumen.slotsHabilitados} slots</span></div>
                 <div class="kpi-card"><span class="kpi-label">Desviación</span><span class="kpi-value text-amber-300">${(resumen.desviacion || 0).toFixed(0)} €</span></div>
-            </div>`;
+                </div>
+            </details>`;
         }
 
         function abrirModalSlotAcciones(clave) {
@@ -6054,9 +6161,33 @@ Cancelar = no hacer nada`,
         const BS_RESERVAS_COLLECTION = 'besoulReservas';
         const BS_PUBLIC_CLIENTS_COLLECTION = 'besoulPublicClients';
         const BS_PUBLIC_SCHEDULE_COLLECTION = 'besoulPublicSchedule';
+        // CLIENT-01 (2026-09-04): plazo mínimo de cancelación para el portal cliente. Configurable
+        // por ficha (c.cancelacionMinHoras, editable a futuro desde la UI de la ficha) con este
+        // valor como default -- nunca hardcodeado de forma que sea imposible cambiarlo después.
+        const CANCELACION_MIN_HORAS_DEFAULT = 6;
+        const BS_CANCELACIONES_CLIENTE_COLLECTION = 'besoulCancelacionesCliente';
         window.bsReservasUnsub = null;
         window.bsReservasPublishTimer = null;
 
+        // Sesiones futuras/pasadas de un cliente concreto, para el portal -- reutiliza el mismo
+        // dbAgenda[trainerKey] ya cargado, sin lógica de disponibilidad nueva. Limitado (5/3) para
+        // no inflar el documento público -- es un resumen, no un histórico completo.
+        function sesionesClienteParaPortal(trainerKey, clientId) {
+            const hoyISO = formatoFechaLocal(new Date());
+            const ahoraHM = new Date().toTimeString().slice(0, 5);
+            const futuras = [], pasadas = [];
+            Object.keys(dbAgenda[trainerKey] || {}).forEach(clave => {
+                const obj = dbAgenda[trainerKey][clave];
+                if (!obj || obj.id !== clientId) return;
+                const [fechaISO, hora] = clave.split('_');
+                const item = { clave, fechaISO, hora, estadoCancelacion: obj.estadoCancelacion || '' };
+                if (fechaISO > hoyISO || (fechaISO === hoyISO && hora >= ahoraHM)) futuras.push(item);
+                else pasadas.push(item);
+            });
+            futuras.sort((a, b) => a.clave.localeCompare(b.clave));
+            pasadas.sort((a, b) => b.clave.localeCompare(a.clave));
+            return { proximas: futuras.slice(0, 5), recientes: pasadas.slice(0, 3) };
+        }
         function generarTokenReservaCliente() {
             const a = Math.random().toString(36).slice(2, 10);
             const b = Date.now().toString(36);
@@ -6313,12 +6444,191 @@ Cancelar = no hacer nada`,
             return notificacionesOrdenadas().filter(n => n.read !== true);
         }
 
+        // UX-04: menú "Más" del header móvil -- agrega en un único punto (sin duplicar datos)
+        // si alguno de los 4 badges reales (notificaciones/reservas/avisos mañana/solicitudes)
+        // tiene algo pendiente, para que cerrado siga siendo visible que hay algo que atender.
+        function toggleHeaderMasAgenda() {
+            const panel = document.getElementById('agenda-header-secondary');
+            const btn = document.getElementById('btn-header-mas');
+            if (!panel || !btn) return;
+            const abrir = panel.classList.contains('hidden');
+            panel.classList.toggle('hidden', !abrir);
+            btn.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+        }
+        document.addEventListener('click', (e) => {
+            const panel = document.getElementById('agenda-header-secondary');
+            const btn = document.getElementById('btn-header-mas');
+            if (!panel || panel.classList.contains('hidden')) return;
+            if (panel.contains(e.target) || btn.contains(e.target)) return;
+            panel.classList.add('hidden');
+            btn.setAttribute('aria-expanded', 'false');
+        });
+        function actualizarBadgeHeaderMas() {
+            const badge = document.getElementById('badge-header-mas');
+            if (!badge) return;
+            const ids = ['badge-notificaciones', 'badge-reservas-pendientes', 'badge-avisos-manana', 'badge-solicitudes-eliminacion'];
+            const total = ids.reduce((s, id) => {
+                const el = document.getElementById(id);
+                if (!el || el.classList.contains('hidden')) return s;
+                return s + (parseInt(el.textContent, 10) || 0);
+            }, 0);
+            badge.textContent = total;
+            badge.classList.toggle('hidden', total === 0);
+        }
+
         function actualizarBadgeNotificaciones() {
             const badge = document.getElementById('badge-notificaciones');
             if (!badge) return;
             const n = notificacionesNoLeidas().length;
             badge.textContent = n;
             badge.classList.toggle('hidden', n === 0);
+            actualizarBadgeHeaderMas();
+        }
+
+        // ============================================================
+        // AI-01 -- BESOUL Assistant (MVP advisory-only, 2026-09-04)
+        // ============================================================
+        // Diseño de seguridad explícito de esta fase (ver AI_ASSISTANT_ARCHITECTURE.md):
+        // - 100% local. Cero llamadas de red, cero API keys en el frontend, cero envío de datos
+        //   reales a servicios externos -- todas las respuestas se calculan aquí mismo, sobre
+        //   dbClientes[entrenadorVisto]/dbAgenda[entrenadorVisto] ya cargados en memoria.
+        // - ADVISORY ONLY: el asistente NUNCA escribe en dbAgenda/dbClientes ni llama a
+        //   guardarEstadoNubeAgenda(). Solo lee y responde texto. Cualquier acción real (mover,
+        //   agendar, borrar) la sigue haciendo el humano desde la UI normal ya existente.
+        // - No es un LLM: es un motor de reglas/patrones sobre las funciones de cálculo que ya
+        //   existen en este archivo (calcularContadorClases, dbAgenda...). Se declara así en la
+        //   propia UI -- "respuestas basadas en reglas locales", nunca se presenta como IA
+        //   conectada para no generar una falsa expectativa de capacidad.
+        function asegurarPanelAsistente() {
+            let panel = document.getElementById('panel-asistente-besoul');
+            if (panel) return panel;
+            panel = document.createElement('div');
+            panel.id = 'panel-asistente-besoul';
+            panel.className = 'hidden fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:justify-end';
+            panel.innerHTML = `
+                <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onclick="cerrarAsistenteBesoul()"></div>
+                <div class="relative w-full sm:w-[420px] sm:h-full sm:max-h-none max-h-[85dvh] bg-slate-950 border border-slate-800 sm:border-l sm:border-t-0 border-t rounded-t-2xl sm:rounded-none flex flex-col shadow-2xl" style="padding-bottom:env(safe-area-inset-bottom)">
+                    <div class="p-4 border-b border-slate-800 flex items-start justify-between gap-3">
+                        <div>
+                            <div class="text-sm font-black text-white flex items-center gap-1.5">✨ Asistente BESOUL <span class="text-[9px] uppercase tracking-wide bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded-full px-2 py-0.5 font-bold">Beta · solo lectura</span></div>
+                            <div class="text-[10px] text-slate-500 mt-0.5">Respuestas basadas en reglas locales sobre tu agenda. No modifica nada por sí solo.</div>
+                        </div>
+                        <button onclick="cerrarAsistenteBesoul()" class="shrink-0 text-slate-500 hover:text-white text-lg leading-none">✕</button>
+                    </div>
+                    <div id="asistente-mensajes" class="flex-1 overflow-y-auto p-4 space-y-3 text-xs"></div>
+                    <div class="p-3 border-t border-slate-800 space-y-2">
+                        <div class="flex flex-wrap gap-1.5">
+                            <button type="button" onclick="preguntarAsistente('Resume mi agenda de hoy')" class="text-[10px] bg-slate-900 border border-slate-800 text-slate-300 rounded-full px-2.5 py-1 hover:text-white">Resume hoy</button>
+                            <button type="button" onclick="preguntarAsistente('Resume mi agenda de mañana')" class="text-[10px] bg-slate-900 border border-slate-800 text-slate-300 rounded-full px-2.5 py-1 hover:text-white">Resume mañana</button>
+                            <button type="button" onclick="preguntarAsistente('¿Quién lleva más de 10 días sin venir?')" class="text-[10px] bg-slate-900 border border-slate-800 text-slate-300 rounded-full px-2.5 py-1 hover:text-white">Sin venir 10+ días</button>
+                            <button type="button" onclick="preguntarAsistente('¿Quién tiene sesiones pendientes?')" class="text-[10px] bg-slate-900 border border-slate-800 text-slate-300 rounded-full px-2.5 py-1 hover:text-white">Sesiones pendientes</button>
+                        </div>
+                        <form onsubmit="return enviarPreguntaAsistente(event)" class="flex gap-2">
+                            <input id="asistente-input" type="text" placeholder="Escribe una pregunta..." class="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white text-xs" autocomplete="off">
+                            <button type="submit" class="bs-btn-primary px-3.5 rounded-xl text-xs font-bold">Enviar</button>
+                        </form>
+                    </div>
+                </div>`;
+            document.body.appendChild(panel);
+            return panel;
+        }
+        function abrirAsistenteBesoul() {
+            const panel = asegurarPanelAsistente();
+            panel.classList.remove('hidden');
+            const cont = document.getElementById('asistente-mensajes');
+            if (!cont.dataset.iniciado) {
+                cont.dataset.iniciado = '1';
+                pintarMensajeAsistente('assistant', 'Hola. Puedo resumir tu agenda, detectar clientes sin sesiones recientes o con sesiones pendientes, y sugerir huecos libres. Prueba uno de los botones o escribe tu pregunta.');
+            }
+            const input = document.getElementById('asistente-input');
+            if (input) setTimeout(() => input.focus(), 50);
+        }
+        function cerrarAsistenteBesoul() {
+            const panel = document.getElementById('panel-asistente-besoul');
+            if (panel) panel.classList.add('hidden');
+        }
+        function pintarMensajeAsistente(rol, texto) {
+            const cont = document.getElementById('asistente-mensajes');
+            if (!cont) return;
+            const burbuja = document.createElement('div');
+            burbuja.className = rol === 'user'
+                ? 'ml-auto max-w-[85%] bg-amber-500/10 border border-amber-500/30 text-amber-100 rounded-2xl rounded-br-sm px-3 py-2 whitespace-pre-wrap'
+                : 'mr-auto max-w-[90%] bg-slate-900 border border-slate-800 text-slate-200 rounded-2xl rounded-bl-sm px-3 py-2 whitespace-pre-wrap';
+            burbuja.textContent = texto;
+            cont.appendChild(burbuja);
+            cont.scrollTop = cont.scrollHeight;
+        }
+        function enviarPreguntaAsistente(e) {
+            e.preventDefault();
+            const input = document.getElementById('asistente-input');
+            const texto = (input.value || '').trim();
+            if (!texto) return false;
+            input.value = '';
+            preguntarAsistente(texto);
+            return false;
+        }
+        function preguntarAsistente(texto) {
+            asegurarPanelAsistente().classList.remove('hidden');
+            pintarMensajeAsistente('user', texto);
+            let respuesta;
+            try { respuesta = motorAsistenteBesoul(texto); }
+            catch (err) { console.error('[AI-01][asistente] error calculando respuesta local', err); respuesta = 'No he podido calcular eso ahora mismo. Prueba a reformular la pregunta.'; }
+            pintarMensajeAsistente('assistant', respuesta);
+        }
+        // Motor de reglas: sin red, sin IA real todavía -- ver AI_ASSISTANT_ARCHITECTURE.md para
+        // el diseño de la futura integración de backend (Cloud Function + proveedor de LLM).
+        function motorAsistenteBesoul(preguntaOriginal) {
+            const q = preguntaOriginal.toLowerCase();
+            const lista = (dbClientes[entrenadorVisto] || []).filter(c => !c.vinculacion && clienteActivoParaAgenda(c));
+
+            if (/resum|hoy|mañana|manana/.test(q)) {
+                const esManana = /mañana|manana/.test(q);
+                const base = new Date();
+                if (esManana) base.setDate(base.getDate() + 1);
+                const fechaISO = formatoFechaLocal(base);
+                const citas = Object.keys(dbAgenda[entrenadorVisto] || {})
+                    .filter(clave => clave.startsWith(fechaISO + '_'))
+                    .map(clave => ({ clave, obj: dbAgenda[entrenadorVisto][clave] }))
+                    .filter(x => x.obj && x.obj.id)
+                    .sort((a, b) => a.clave.localeCompare(b.clave));
+                if (!citas.length) return `${esManana ? 'Mañana' : 'Hoy'} (${fechaISO}) no tienes sesiones agendadas.`;
+                const detalle = citas.map(x => `· ${x.clave.split('_')[1]} — ${x.obj.nombre || 'Cliente'}`).join('\n');
+                return `${esManana ? 'Mañana' : 'Hoy'} (${fechaISO}) tienes ${citas.length} sesión(es):\n${detalle}`;
+            }
+
+            const matchDias = q.match(/(\d+)\s*d[ií]as?/);
+            if (/sin venir|no viene|inactiv/.test(q) || matchDias) {
+                const umbralDias = matchDias ? parseInt(matchDias[1], 10) : 10;
+                const hoy = new Date();
+                const resultado = [];
+                lista.forEach(c => {
+                    const claves = Object.keys(dbAgenda[entrenadorVisto] || {}).filter(clave => {
+                        const obj = dbAgenda[entrenadorVisto][clave];
+                        return obj && obj.id === c.id && clave.split('_')[0] <= formatoFechaLocal(hoy);
+                    }).sort();
+                    const ultima = claves.length ? claves[claves.length - 1].split('_')[0] : null;
+                    const dias = ultima ? Math.round((hoy - new Date(ultima + 'T00:00:00')) / 86400000) : null;
+                    if (dias === null || dias >= umbralDias) resultado.push(`· ${c.nombre} — ${dias === null ? 'sin sesiones registradas' : `${dias} días sin venir (última: ${ultima})`}`);
+                });
+                if (!resultado.length) return `Ningún cliente activo lleva ${umbralDias}+ días sin venir.`;
+                return `Clientes con ${umbralDias}+ días sin venir (o sin histórico):\n${resultado.join('\n')}`;
+            }
+
+            if (/pendiente|restante|le quedan|debe recuperar/.test(q)) {
+                const resultado = [];
+                lista.forEach(c => {
+                    const contador = calcularContadorClases(c);
+                    if ((contador.restantes || 0) > 0) resultado.push(`· ${c.nombre} — ${contador.restantes} sesión(es) pendiente(s) de ${contador.contratadas} (periodo ${contador.periodo})`);
+                });
+                if (!resultado.length) return 'Ningún cliente activo tiene sesiones contratadas pendientes de agendar/usar ahora mismo.';
+                return `Clientes con sesiones pendientes:\n${resultado.join('\n')}`;
+            }
+
+            if (/hueco|disponib|libre/.test(q)) {
+                return 'Para buscar huecos libres concretos, usa el calendario semanal -- los slots "Disponible" en verde ya muestran exactamente eso. Esta versión del asistente todavía no cruza nombre de cliente + hueco automáticamente; está en la hoja de ruta (ver AI_ASSISTANT_ARCHITECTURE.md).';
+            }
+
+            return 'Todavía no sé responder eso en modo local. Puedo: resumir el día/mañana, listar clientes sin venir hace X días, y listar clientes con sesiones pendientes. Prueba con uno de los botones rápidos.';
         }
 
         function abrirModalNotificaciones() {
@@ -6537,6 +6847,7 @@ Cancelar = no hacer nada`,
             const n = solicitudesEliminacionPendientesVisibles().length;
             badge.textContent = n;
             badge.classList.toggle('hidden', n === 0);
+            actualizarBadgeHeaderMas();
         }
 
         function abrirModalSolicitudesEliminacion() {
@@ -6725,6 +7036,7 @@ Cancelar = no hacer nada`,
             const n = reservasPendientesVisibles().length;
             badge.textContent = n;
             badge.classList.toggle('hidden', n === 0);
+            actualizarBadgeHeaderMas();
         }
 
         function abrirModalSolicitudesReservas() {
@@ -6864,6 +7176,63 @@ Cancelar = no hacer nada`,
             } catch(err) { console.error('Error iniciando módulo de reservas:', err); }
         }
 
+        // CLIENT-03 (2026-09-04): procesa solicitudes de cancelación creadas desde
+        // portal-cliente.html. Mismo patrón que iniciarModuloReservasAgenda() -- el cliente
+        // público NUNCA escribe directamente en dbAgenda/besoulSuite/agenda (el documento es
+        // monolítico por trainer, sin Rules a nivel de celda -- dejar que un token público
+        // escribiera ahí sería un agujero real). En vez de eso crea un documento de EVENTO en
+        // besoulCancelacionesCliente (create-only, ver propuesta de Rules en
+        // CLIENT_PORTAL_ARCHITECTURE.md, NO desplegada) que esta función, ejecutándose en la
+        // sesión YA AUTENTICADA del PT/admin, valida y aplica con las mismas reglas de negocio
+        // que el resto de Agenda.
+        function iniciarModuloCancelacionesCliente() {
+            try {
+                if (!window.firebase || !firebase.apps.length) return;
+                const fs = firebase.firestore();
+                if (window.bsCancelacionesUnsub) { try { window.bsCancelacionesUnsub(); } catch(e) {} }
+                let q = fs.collection(BS_CANCELACIONES_CLIENTE_COLLECTION).where('estado', '==', 'pendiente');
+                if (rolActivo !== 'admin' && usuarioLogeado) q = q.where('trainerKey', '==', usuarioLogeado);
+                window.bsCancelacionesUnsub = q.onSnapshot(snapshot => {
+                    snapshot.forEach(doc => procesarCancelacionCliente(doc.id, doc.data() || {}));
+                }, err => console.error('Error leyendo cancelaciones de cliente:', err));
+            } catch(err) { console.error('Error iniciando módulo de cancelaciones de cliente:', err); }
+        }
+
+        async function procesarCancelacionCliente(id, data) {
+            try {
+                const fs = firebase.firestore();
+                const ref = fs.collection(BS_CANCELACIONES_CLIENTE_COLLECTION).doc(id);
+                const trainerKey = data.trainerKey;
+                const clave = data.clave;
+                if (!trainerKey || !clave || !dbAgenda[trainerKey] || !dbAgenda[trainerKey][clave]) {
+                    await ref.set({ estado: 'error', motivoError: 'Sesión no encontrada (ya movida/cancelada).', procesadaEn: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                    return;
+                }
+                const cita = dbAgenda[trainerKey][clave];
+                if (cita.id !== data.clientId) {
+                    await ref.set({ estado: 'error', motivoError: 'La sesión ya no corresponde a este cliente.', procesadaEn: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                    return;
+                }
+                const [fechaISO, hora] = clave.split('_');
+                const horasHastaSesion = (new Date(`${fechaISO}T${hora}:00`) - new Date()) / 3600000;
+                const dentroDePlazo = horasHastaSesion >= (parseInt(data.cancelacionMinHoras, 10) || CANCELACION_MIN_HORAS_DEFAULT);
+                if (dentroDePlazo) {
+                    // >= plazo mínimo: la sesión queda liberada, igual que cualquier borrado normal.
+                    delete dbAgenda[trainerKey][clave];
+                    fijarNotaAgenda(clave, '');
+                } else {
+                    // < plazo mínimo: NUNCA se borra -- se marca y sigue consumiendo la sesión.
+                    dbAgenda[trainerKey][clave] = { ...cita, estadoCancelacion: 'cancelada_fuera_plazo', canceladaEn: new Date().toISOString() };
+                }
+                localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
+                await guardarEstadoNubeAgenda();
+                await ref.set({ estado: 'procesada', dentroDePlazoAplicado: dentroDePlazo, procesadaEn: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                if (trainerKey === entrenadorVisto) { recalcularKPIs(); renderClientes(); renderAgenda(); }
+            } catch(err) {
+                console.error('Error procesando cancelación de cliente:', err);
+            }
+        }
+
         function publicarReservasPublicasDebounced() {
             clearTimeout(window.bsReservasPublishTimer);
             window.bsReservasPublishTimer = setTimeout(publicarReservasPublicas, 800);
@@ -6934,6 +7303,15 @@ Cancelar = no hacer nada`,
                         if (!c.email || !c.telefono) return;
                         if (!c.reservaToken) c.reservaToken = generarTokenReservaCliente();
                         const ref = fs.collection(BS_PUBLIC_CLIENTS_COLLECTION).doc(c.reservaToken);
+                        // CLIENT-01/02 (2026-09-04): campos añadidos para portal-cliente.html --
+                        // MISMO documento por token que reservas.html ya usa (besoulPublicClients
+                        // ya era, de facto, la proyección aislada por cliente que pedía el brief;
+                        // no se crea una colección paralela). contador/proximaSesion se calculan
+                        // aquí, en el lado PT ya autenticado, con las MISMAS funciones que usa el
+                        // resto de Agenda (calcularContadorClases, dbAgenda) -- el cliente nunca
+                        // lee el documento monolítico de agenda, solo este resumen ya calculado.
+                        const contador = calcularContadorClases(c);
+                        const sesionesPortal = sesionesClienteParaPortal(trainerKey, c.id);
                         batch.set(ref, {
                             token: c.reservaToken,
                             clientId: c.id,
@@ -6948,6 +7326,15 @@ Cancelar = no hacer nada`,
                             reservasOnlineActivas: c.reservasOnlineActivas !== false,
                             restriccionesReservas: c.restriccionesReservas || { modo:'bloquear', bloquesTexto: c.reservasBloqueadasTexto || '' },
                             reservasBloqueadasTexto: c.reservasBloqueadasTexto || c.restriccionesReservas?.bloquesTexto || '',
+                            sesionesContratadas: contador.contratadas || 0,
+                            sesionesUsadas: contador.usadas || 0,
+                            sesionesPendientes: contador.restantes || 0,
+                            periodoSesiones: contador.periodo || '',
+                            proximaSesion: sesionesPortal.proximas[0] || null,
+                            proximasSesiones: sesionesPortal.proximas,
+                            sesionesRecientes: sesionesPortal.recientes,
+                            cancelacionMinHoras: parseInt(c.cancelacionMinHoras, 10) || CANCELACION_MIN_HORAS_DEFAULT,
+                            avisos: Array.isArray(c.avisosPortal) ? c.avisosPortal.slice(0, 10).map(a => ({ id: a.id, fecha: a.fecha, contenido: a.contenido })) : [],
                             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                         }, { merge: true });
                     });

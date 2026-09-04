@@ -508,6 +508,18 @@ async function iniciarSesionAutenticada(user) {
   if (!perfilSnap.exists) throw new Error('Tu usuario no tiene perfil en besoulUsers.');
   perfil = { email, ...perfilSnap.data() };
   if (perfil.activo !== true) throw new Error('Tu usuario está inactivo.');
+  // ROLE-01 (2026-09-04): decisión de producto explícita -- PT deja de tener acceso a CRM
+  // (antes SÍ entraba, con vista acotada a sus propios leads vía esAdmin()/filtros ya existentes
+  // en este archivo). Mismo patrón de guard que dashboard.html/finanzas.html: nunca se revela
+  // app-content, se cierra sesión y se explica el motivo. IMPORTANTE -- esto es solo el guard de
+  // UI: las Firestore Rules de besoulLeads (firestore.rules) siguen permitiendo hoy que un PT
+  // activo lea/cree/edite leads propios (resource.data.trainerKey == myTrainerKey()), diseñado
+  // así deliberadamente cuando CRM sí era accesible para PT. Ese acceso de Rules NO se ha tocado
+  // ni desplegado ninguna restricción nueva -- ver informe final para la propuesta de Rules
+  // documentada (no desplegada) y el riesgo residual: un PT con conocimientos técnicos podría
+  // seguir leyendo/escribiendo sus propios leads vía llamadas directas a Firestore aunque la UI
+  // de CRM ya no se lo permita.
+  if (perfil.rol !== 'admin') throw new Error('CRM está reservado a administración.');
 
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('app-content').classList.remove('hidden');
