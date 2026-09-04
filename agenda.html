@@ -7322,6 +7322,18 @@ Cancelar = no hacer nada`,
                 const batch = fs.batch();
                 const hoy = new Date(); hoy.setHours(0,0,0,0);
                 const diasPublicar = 60;
+                // PORTAL-02 (2026-09-05): hallazgo real -- calcularContadorClases(ficha) usa por
+                // defecto claveMesVisible(), que es el MES QUE EL PT TIENE ABIERTO EN LA UI de
+                // Agenda (lunesActual), no el mes real de hoy. publicarReservasPublicas() se
+                // dispara automáticamente ante cualquier cambio (guardarEstadoNubeAgenda ->
+                // publicarReservasPublicas), así que si el PT (o un admin, cuyo dbCredenciales
+                // cubre a TODOS los trainers) había navegado a otro mes en el momento en que se
+                // disparó la publicación, el contador de sesiones publicado al Portal Cliente
+                // quedaba calculado para ESE mes, no el actual -- causa raíz confirmada del "0/0/0"
+                // reportado: un cliente con plan mensual normal, publicado mientras la Agenda
+                // estaba parada en un mes sin sesiones suyas, muestra sesionesUsadas/Pendientes
+                // incorrectos (0) hasta la siguiente publicación que SÍ coincida con el mes real.
+                const claveMesReal = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
                 Object.keys(dbCredenciales || {}).forEach(trainerKey => {
                     if (!dbClientes[trainerKey]) return;
                     const disp = dbDisponibilidadReservas[trainerKey] || disponibilidadReservasPorDefecto();
@@ -7383,7 +7395,7 @@ Cancelar = no hacer nada`,
                         // aquí, en el lado PT ya autenticado, con las MISMAS funciones que usa el
                         // resto de Agenda (calcularContadorClases, dbAgenda) -- el cliente nunca
                         // lee el documento monolítico de agenda, solo este resumen ya calculado.
-                        const contador = calcularContadorClases(c);
+                        const contador = calcularContadorClases(c, claveMesReal);
                         const sesionesPortal = sesionesClienteParaPortal(trainerKey, c.id);
                         batch.set(ref, {
                             token: c.reservaToken,
