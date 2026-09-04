@@ -210,10 +210,22 @@ service cloud.firestore {
       allow create: if isActiveUser() && request.resource.data.trainerKey == myTrainerKey();
 
       // Solo el dueño puede actualizar, y no puede reasignarlo a otro trainerKey.
+      // CLIENT-09 (2026-09-04, propuesta -- NO desplegada, sin código cliente que la use todavía):
+      // tercera rama para que el propio cliente (sin auth -- su identidad ES el token, que ya es
+      // el id del documento, mismo modelo de "capability URL" que ya usa "get") pueda sincronizar
+      // entre dispositivos qué avisos ha leído. Whitelist estricta a un único campo nuevo
+      // (avisosLeidos) -- no puede tocar sesiones, contacto, disponibilidad ni ningún otro dato de
+      // su propia ficha ni de nadie más. Ver CLIENT_PORTAL_ARCHITECTURE.md sección 7 para el
+      // diseño completo y por qué no se ha conectado portal-cliente.html a esto todavía (misma
+      // razón que CLIENT-07: no presentar como funcional algo que depende de una Rule no
+      // desplegada).
       allow update: if isAdmin()
         || (isActiveUser()
             && resource.data.trainerKey == myTrainerKey()
-            && request.resource.data.trainerKey == resource.data.trainerKey);
+            && request.resource.data.trainerKey == resource.data.trainerKey)
+        || (request.auth == null
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['avisosLeidos'])
+            && request.resource.data.avisosLeidos is list);
 
       allow delete: if isAdmin();
     }

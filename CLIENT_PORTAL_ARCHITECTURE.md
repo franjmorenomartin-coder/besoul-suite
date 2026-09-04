@@ -196,6 +196,21 @@ El tab "Reservar" del portal **no reimplementa disponibilidad ni transacciones**
 
 **Qué sigue sin existir**: un editor de avisos independiente del flujo de WhatsApp (hoy el aviso del portal siempre acompaña a un envío de WhatsApp, no se puede crear uno "solo para el portal"). Aceptado como alcance suficiente para esta fase -- añadirlo es un cambio pequeño y aislado sobre la misma función si se pide después.
 
+### 7bis. CLIENT-09 (2026-09-04) — leído sincronizado entre dispositivos (propuesta, NO conectada)
+
+El brief de esta fase pedía, como preferencia ("preferible"), que el estado leído/no-leído se sincronizara entre dispositivos del mismo cliente -- hoy vive solo en `localStorage` (sección 7 arriba), por diseño, para no requerir ninguna Rule nueva. Esta fase añade la Rule que lo permitiría, sin conectar el cliente todavía:
+
+```
+// firestore.rules, dentro de match /besoulPublicClients/{token}, tercera rama de "update":
+|| (request.auth == null
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['avisosLeidos'])
+    && request.resource.data.avisosLeidos is list);
+```
+
+- **Por qué es seguro dejar escribir a un caller sin autenticar**: su "identidad" ya es el propio token -- es exactamente el mismo modelo que ya permite `allow get: if true` (quien tiene el enlace, puede leer *ese* documento; aquí, quien tiene el enlace, puede tocar *un solo campo* de *ese* documento). La whitelist de `affectedKeys()` es la que hace el resto: cualquier intento de tocar `sesionesContratadas`, `email`, `activo`, etc. en la misma escritura hace que la regla entera falle -- no hay forma de colar un cambio a otro campo aprovechando este hueco.
+- **Campo nuevo, no reutiliza el array `avisos`**: `avisosLeidos` sería un array de ids de aviso (`string[]`), separado del array `avisos` (que solo escribe `agenda.html`, ownership de PT). Mantener dos campos distintos evita que la Rule de "el cliente puede tocar esto" y la Rule de "el PT puede tocar esto" compartan el mismo campo con distintas garantías.
+- **Por qué NO se conecta `portal-cliente.html` todavía**: la Rule de arriba es una propuesta, no está desplegada. Conectar el cliente a escribir contra ella hoy produciría el mismo patrón que motivó CLIENT-07 (una función que aparenta funcionar pero siempre falla con `permission-denied` contra producción) -- se prefiere, otra vez, no presentar como funcional algo que depende de infraestructura no desplegada. Cuando se autorice desplegar esta Rule, conectar `marcarAvisoLeido()` (ya existente, hoy solo local) a escribir también en Firestore es un cambio pequeño y aislado, no un rediseño.
+
 ## 8. Qué NO se ha hecho en esta fase
 
 - No se ha desplegado ninguna Rule nueva ni modificado ninguna existente.
