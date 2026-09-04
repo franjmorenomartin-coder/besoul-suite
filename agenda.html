@@ -93,10 +93,37 @@
             #app-content > header > div:last-child {
                 width: 100%;
                 display: grid !important;
-                grid-template-columns: 1fr 1fr;
+                grid-template-columns: 1fr auto;
                 gap: .45rem !important;
+                position: relative;
             }
-            #app-content > header > div:last-child button { width:100%; padding:.55rem .35rem !important; }
+            /* Solo los DOS botones de primer nivel (+ Disponibilidad / Más) ocupan la fila
+               compacta -- ver UX-04 arriba. Los botones dentro de #agenda-header-secondary
+               siguen siendo full-width, pero DENTRO del desplegable, no en esta fila. */
+            #app-content > header > div:last-child > .bs-btn-primary,
+            #btn-header-mas { width:100%; padding:.65rem .5rem !important; }
+            #agenda-header-secondary:not(.hidden) {
+                display: flex !important;
+                flex-direction: column;
+                position: absolute;
+                top: calc(100% + .5rem);
+                right: 0;
+                left: 0;
+                z-index: 45;
+                background: rgba(2,6,23,.98);
+                border: 1px solid rgba(255,255,255,.08);
+                border-radius: 1rem;
+                padding: .6rem;
+                max-height: 60dvh;
+                overflow-y: auto;
+                box-shadow: 0 20px 40px rgba(0,0,0,.5);
+            }
+            #agenda-header-secondary:not(.hidden) button,
+            #agenda-header-secondary:not(.hidden) a { width:100%; text-align:left; padding:.7rem .8rem !important; }
+            #agenda-header-secondary:not(.hidden) > span.w-px { display:none; }
+            #agenda-kpi-mobile-wrap summary::-webkit-details-marker { display:none; }
+            #agenda-kpi-mobile-wrap summary::before { content:'▸ '; }
+            #agenda-kpi-mobile-wrap[open] summary::before { content:'▾ '; }
 
             #app-content > .bg-slate-950 {
                 padding: .7rem .75rem !important;
@@ -325,23 +352,32 @@
 
             </div>
 
-            <div class="flex items-center gap-2 flex-wrap justify-end">
+            <div class="flex items-center gap-2 flex-wrap justify-end relative">
 
-                <button onclick="abrirAsistenteBesoul()" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl" aria-label="Asistente">✨ Asistente</button>
-                <button onclick="abrirModalNotificaciones()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl" aria-label="Notificaciones">🔔<span id="badge-notificaciones" class="hidden ml-1 bg-amber-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
                 <button onclick="abrirModalDisponibilidadReservas()" class="bs-btn-primary px-4 py-2.5 text-sm rounded-xl transition">+ Disponibilidad</button>
-                <button onclick="abrirModalSolicitudesReservas()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Reservas <span id="badge-reservas-pendientes" class="hidden ml-1 bg-emerald-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
-                <button onclick="abrirModalAvisosManana()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Avisos mañana <span id="badge-avisos-manana" class="hidden ml-1 bg-cyan-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
-                <button onclick="abrirModalAvisoMultiple()" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Enviar aviso a clientes</button>
-                <button id="btn-admin-entrenadores" onclick="abrirModalEntrenadores()" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Entrenadores</button>
-                <button id="btn-admin-solicitudes-eliminacion" onclick="abrirModalSolicitudesEliminacion()" class="hidden relative bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Solicitudes <span id="badge-solicitudes-eliminacion" class="hidden ml-1 bg-red-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
+                <!-- UX-04 (2026-09-04): "Más" solo existe <768px -- agrupa las acciones
+                     secundarias detrás de un toggle en vez de 5 filas de botones siempre
+                     visibles. Ningún botón se elimina ni se re-cablea: son los MISMOS elementos
+                     (mismos id, mismo onclick), solo se envuelven para colapsarlos por defecto en
+                     móvil. Desktop (md:flex) los sigue mostrando todos en línea, sin cambios. -->
+                <button id="btn-header-mas" onclick="toggleHeaderMasAgenda()" class="md:hidden relative bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl" aria-haspopup="true" aria-expanded="false">Más <span id="badge-header-mas" class="hidden ml-1 bg-red-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
 
-                <span class="w-px h-6 bg-white/10 mx-1 hidden sm:block"></span>
-                <a id="nav-crm" href="crm.html" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">CRM</a>
-                <a id="nav-dashboard" href="dashboard.html" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Dashboard</a>
-                <a id="nav-finanzas" href="finanzas.html" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Finanzas</a>
+                <div id="agenda-header-secondary" class="hidden md:flex items-center gap-2 flex-wrap justify-end">
+                    <button onclick="abrirAsistenteBesoul()" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl" aria-label="Asistente">✨ Asistente</button>
+                    <button onclick="abrirModalNotificaciones()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl" aria-label="Notificaciones">🔔<span id="badge-notificaciones" class="hidden ml-1 bg-amber-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
+                    <button onclick="abrirModalSolicitudesReservas()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Reservas <span id="badge-reservas-pendientes" class="hidden ml-1 bg-emerald-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
+                    <button onclick="abrirModalAvisosManana()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Avisos mañana <span id="badge-avisos-manana" class="hidden ml-1 bg-cyan-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
+                    <button onclick="abrirModalAvisoMultiple()" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Enviar aviso a clientes</button>
+                    <button id="btn-admin-entrenadores" onclick="abrirModalEntrenadores()" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Entrenadores</button>
+                    <button id="btn-admin-solicitudes-eliminacion" onclick="abrirModalSolicitudesEliminacion()" class="hidden relative bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Solicitudes <span id="badge-solicitudes-eliminacion" class="hidden ml-1 bg-red-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
 
-                <button onclick="logout()" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Salir</button>
+                    <span class="w-px h-6 bg-white/10 mx-1 hidden sm:block"></span>
+                    <a id="nav-crm" href="crm.html" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">CRM</a>
+                    <a id="nav-dashboard" href="dashboard.html" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Dashboard</a>
+                    <a id="nav-finanzas" href="finanzas.html" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Finanzas</a>
+
+                    <button onclick="logout()" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Salir</button>
+                </div>
 
             </div>
 
@@ -2374,6 +2410,7 @@ miércoles 07:00-09:00"></textarea>
             const n = listaAvisosManana().length;
             badge.innerText = n;
             badge.classList.toggle('hidden', n === 0);
+            if (typeof actualizarBadgeHeaderMas === 'function') actualizarBadgeHeaderMas();
         }
         let bsAvisosMananaCache = [];
         function abrirModalAvisosManana() {
@@ -5062,13 +5099,24 @@ Cancelar = no hacer nada`,
             set('kpi-ext-ocupacion', `${(resumen.ocupacionPct || 0).toFixed(0)}%`);
         }
 
+        // UX-04 (2026-09-04, hallazgo real): este bloque se renderiza SIEMPRE visible, antes
+        // incluso de los day-tabs -- es un segundo bloque de KPIs independiente del
+        // <details id="agenda-kpi-primary-wrap"> que ya se colapsó en el commit anterior (ese
+        // colapso NO llegaba aquí porque este HTML se genera e inyecta por completo en cada
+        // renderAgenda(), no vive en el <header> estático). Confirmado con captura real
+        // (CDP Emulation.setDeviceMetricsOverride a 390px, no --window-size que no funcionaba en
+        // este Chrome): con el header ya compacto, ESTE bloque seguía siendo lo primero que se
+        // veía antes de llegar a los días/citas. Mismo patrón <details> que el resto de la app.
         function resumenKPIsMobileHTML(resumen) {
-            return `<div class="agenda-mobile-kpis">
+            return `<details id="agenda-kpi-mobile-wrap" class="mb-2">
+                <summary class="text-xs text-slate-400 font-bold cursor-pointer select-none py-1.5 flex items-center gap-1"><span>Resumen de la semana</span></summary>
+                <div class="agenda-mobile-kpis mt-1">
                 <div class="kpi-card"><span class="kpi-label">Facturación prevista</span><span class="kpi-value text-emerald-400">${(resumen.facturacionPrevista || 0).toFixed(0)} €</span></div>
                 <div class="kpi-card"><span class="kpi-label">Valor agenda</span><span class="kpi-value text-cyan-300">${(resumen.valorAgenda || 0).toFixed(0)} €</span></div>
                 <div class="kpi-card"><span class="kpi-label">Ocupación</span><span class="kpi-value text-white">${(resumen.ocupacionPct || 0).toFixed(0)}%</span><span class="block text-xs text-slate-500 mt-0.5">${resumen.slotsOcupados}/${resumen.slotsHabilitados} slots</span></div>
                 <div class="kpi-card"><span class="kpi-label">Desviación</span><span class="kpi-value text-amber-300">${(resumen.desviacion || 0).toFixed(0)} €</span></div>
-            </div>`;
+                </div>
+            </details>`;
         }
 
         function abrirModalSlotAcciones(clave) {
@@ -6386,12 +6434,45 @@ Cancelar = no hacer nada`,
             return notificacionesOrdenadas().filter(n => n.read !== true);
         }
 
+        // UX-04: menú "Más" del header móvil -- agrega en un único punto (sin duplicar datos)
+        // si alguno de los 4 badges reales (notificaciones/reservas/avisos mañana/solicitudes)
+        // tiene algo pendiente, para que cerrado siga siendo visible que hay algo que atender.
+        function toggleHeaderMasAgenda() {
+            const panel = document.getElementById('agenda-header-secondary');
+            const btn = document.getElementById('btn-header-mas');
+            if (!panel || !btn) return;
+            const abrir = panel.classList.contains('hidden');
+            panel.classList.toggle('hidden', !abrir);
+            btn.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+        }
+        document.addEventListener('click', (e) => {
+            const panel = document.getElementById('agenda-header-secondary');
+            const btn = document.getElementById('btn-header-mas');
+            if (!panel || panel.classList.contains('hidden')) return;
+            if (panel.contains(e.target) || btn.contains(e.target)) return;
+            panel.classList.add('hidden');
+            btn.setAttribute('aria-expanded', 'false');
+        });
+        function actualizarBadgeHeaderMas() {
+            const badge = document.getElementById('badge-header-mas');
+            if (!badge) return;
+            const ids = ['badge-notificaciones', 'badge-reservas-pendientes', 'badge-avisos-manana', 'badge-solicitudes-eliminacion'];
+            const total = ids.reduce((s, id) => {
+                const el = document.getElementById(id);
+                if (!el || el.classList.contains('hidden')) return s;
+                return s + (parseInt(el.textContent, 10) || 0);
+            }, 0);
+            badge.textContent = total;
+            badge.classList.toggle('hidden', total === 0);
+        }
+
         function actualizarBadgeNotificaciones() {
             const badge = document.getElementById('badge-notificaciones');
             if (!badge) return;
             const n = notificacionesNoLeidas().length;
             badge.textContent = n;
             badge.classList.toggle('hidden', n === 0);
+            actualizarBadgeHeaderMas();
         }
 
         // ============================================================
@@ -6756,6 +6837,7 @@ Cancelar = no hacer nada`,
             const n = solicitudesEliminacionPendientesVisibles().length;
             badge.textContent = n;
             badge.classList.toggle('hidden', n === 0);
+            actualizarBadgeHeaderMas();
         }
 
         function abrirModalSolicitudesEliminacion() {
@@ -6944,6 +7026,7 @@ Cancelar = no hacer nada`,
             const n = reservasPendientesVisibles().length;
             badge.textContent = n;
             badge.classList.toggle('hidden', n === 0);
+            actualizarBadgeHeaderMas();
         }
 
         function abrirModalSolicitudesReservas() {
