@@ -964,10 +964,6 @@
       const centros = {};
       Object.keys(centrosBase).forEach(id => {
         const resuelto = centroParaMes(centrosBase[id], mesKey);
-        // Logging temporal de diagnóstico (2026-09-03, quitar cuando quede confirmado en
-        // producción): valor base guardado vs valor realmente resuelto/usado por el motor para
-        // este mes, campo por campo. Sin PII.
-        console.log(`[FINANZAS][CENTRO_RESUELTO] centerKey=${id} mesKey=${mesKey} tieneVersionesTemporal=${!!(dbFinanzas.centrosVersiones?.[id]?.length)} canonFijo_base=${centrosBase[id].canonFijo} canonFijo_resuelto=${resuelto.canonFijo} ptsIncluidos_base=${centrosBase[id].ptsIncluidos} ptsIncluidos_resuelto=${resuelto.ptsIncluidos} canonPt_base=${centrosBase[id].canonPt} canonPt_resuelto=${resuelto.canonPt} canonPtReducidoDesde_base=${centrosBase[id].canonPtReducidoDesde} canonPtReducidoDesde_resuelto=${resuelto.canonPtReducidoDesde} canonPtReducido_base=${centrosBase[id].canonPtReducido} canonPtReducido_resuelto=${resuelto.canonPtReducido}`);
         centros[id] = { ...resuelto, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0, participacionClientes:0, participacionCentro:0, ingresosActividades:0 };
       });
       const trainers = [];
@@ -1070,12 +1066,7 @@
         // 1) Canon fijo de sede: se paga una vez y se prorratea entre los PT activos.
         // 2) Coste ligado al PT: puede tener tramos por posición dentro de la sede.
         //    Ejemplo Inacua: 1.200 € fijos incluyen 6 PT; del 7º al 11º son 200 €/PT; desde el 12º son 60 €/PT.
-        // Logging temporal de diagnóstico (2026-09-03, quitar cuando quede confirmado en
-        // producción): confirma que en el momento REAL de calcular el canon, c.canonPt/etc.
-        // siguen siendo los valores resueltos (no se han reseteado/sobrescrito entretanto).
-        console.log(`[FINANZAS][CENTRO_RESUELTO] centerKey=${c.id} mesKey=${mesKey} etapa=antes_de_calcularCanon numTrainers=${(c.trainers||[]).length} canonFijo=${c.canonFijo} ptsIncluidos=${c.ptsIncluidos} canonPt=${c.canonPt} canonPtReducidoDesde=${c.canonPtReducidoDesde} canonPtReducido=${c.canonPtReducido}`);
         calcularCanonCentroYAsignar(c);
-        console.log(`[FINANZAS][CENTRO_RESUELTO] centerKey=${c.id} mesKey=${mesKey} etapa=despues_de_calcularCanon canon=${c.canon} canonProrrateado=${c.canonProrrateado} participacionClientes=${c.participacionClientes} participacionCentro=${c.participacionCentro}`);
       });
       const gastos = totalGastosMes(mesKey);
       const otrosIngresos = totalOtrosIngresosMes(mesKey);
@@ -1564,8 +1555,6 @@
       // Campo temporal sin cambio efectivo real (valorFinal === valorAnteriorEfectivo): no tocar
       // nada -- si tocáramos c[campo] aquí sobrescribiríamos el valor VIVO con el valor efectivo
       // de este mes, corrompiendo la base para el resto de meses sin que el admin lo pidiera.
-      const payloadAntesGuardar = { centro: JSON.parse(JSON.stringify(dbFinanzas.centros[id])), versiones: dbFinanzas.centrosVersiones?.[id] ? JSON.parse(JSON.stringify(dbFinanzas.centrosVersiones[id])) : null };
-      console.log(`[FINANZAS][EDITAR_CENTRO] centerKey=${id} campo=${campo} mesKey=${mesLog} valorAnteriorBase=${valorAnterior} valorAnteriorEfectivo=${valorAnteriorEfectivo} valorFinal=${valorFinal} modoTemporal=${modoTemporal} versionRegistrada=${JSON.stringify(versionRegistrada)} payloadAntesGuardar=${JSON.stringify(payloadAntesGuardar)}`);
       const resultado = await guardarConfigFinanzas({ silencioso:true });
       if (!resultado || resultado.ok !== true) {
         dbFinanzas.centros[id] = centroAntes;
@@ -1575,22 +1564,6 @@
         console.error(`[BESOUL Finanzas] editarCentro: fallo al guardar · centroId=${id} · campo=${campo} · code=${resultado?.err?.code || '(sin código)'} · message=${resultado?.err?.message || '(desconocido)'}`);
         alert(`No se ha podido guardar el cambio de "${campo}" en el servidor. Revisa tu conexión e inténtalo de nuevo -- el cambio NO se ha guardado.`);
         return;
-      }
-      // Relectura DIRECTA a Firestore (get(), no el onSnapshot local) para descartar cualquier
-      // eco/caché local -- esto es lo que realmente quedó escrito en el servidor, no lo que la
-      // app cree que escribió.
-      try {
-        const snapRelectura = await finanzasRef.get();
-        const dataRelectura = snapRelectura.exists ? snapRelectura.data() : null;
-        const centroRelectura = dataRelectura?.centros?.[id] || null;
-        const versionesRelectura = dataRelectura?.centrosVersiones?.[id] || null;
-        // Resuelve con las versiones RECIÉN releídas del servidor, no con dbFinanzas.centrosVersiones
-        // (que podría no reflejar todavía lo que hay realmente en Firestore) -- esta es la prueba
-        // definitiva de qué va a calcular el motor la próxima vez que cargue esta página de cero.
-        const valorResueltoDespuesGuardar = centroRelectura ? valorEfectivoTemporal(versionesRelectura, campo, mesLog, centroRelectura[campo]) : '(centro no encontrado en relectura)';
-        console.log(`[FINANZAS][EDITAR_CENTRO] centerKey=${id} campo=${campo} mesKey=${mesLog} payloadDespuesGuardar=${JSON.stringify({ centro: centroRelectura, versiones: versionesRelectura })} valorResueltoDespuesGuardar=${valorResueltoDespuesGuardar}`);
-      } catch (errRelectura) {
-        console.error(`[FINANZAS][EDITAR_CENTRO] centerKey=${id} campo=${campo} fallo al releer de Firestore para verificar: ${errRelectura?.message || errRelectura}`);
       }
     }
     function desactivarCentro(id){
@@ -1863,8 +1836,6 @@
       }
       // Campo temporal sin cambio efectivo real: no tocar dbFinanzas.trainerSettings[key][campo]
       // -- evita corromper el valor vivo con el valor efectivo de este mes.
-      const payloadAntesGuardar = { settings: JSON.parse(JSON.stringify(dbFinanzas.trainerSettings[key])), versiones: dbFinanzas.trainerSettingsVersiones?.[key] ? JSON.parse(JSON.stringify(dbFinanzas.trainerSettingsVersiones[key])) : null };
-      console.log(`[FINANZAS][EDITAR_TRAINER] trainerKey=${key} campo=${campo} mesKey=${mesLog} valorAnteriorBase=${valorAnterior} valorAnteriorEfectivo=${valorAnteriorEfectivo} valorFinal=${valorFinal} modoTemporal=${modoTemporal} versionRegistrada=${JSON.stringify(versionRegistrada)} payloadAntesGuardar=${JSON.stringify(payloadAntesGuardar)}`);
       const resultado = await guardarConfigFinanzas({ silencioso:true });
       if (!resultado || resultado.ok !== true) {
         dbFinanzas.trainerSettings[key] = settingsAntes;
@@ -1874,16 +1845,6 @@
         console.error(`[BESOUL Finanzas] editarTrainer: fallo al guardar · trainerKey=${key} · campo=${campo} · code=${resultado?.err?.code || '(sin código)'} · message=${resultado?.err?.message || '(desconocido)'}`);
         alert(`No se ha podido guardar el cambio de "${campo}" en el servidor. Revisa tu conexión e inténtalo de nuevo -- el cambio NO se ha guardado.`);
         return;
-      }
-      try {
-        const snapRelectura = await finanzasRef.get();
-        const dataRelectura = snapRelectura.exists ? snapRelectura.data() : null;
-        const settingsRelectura = dataRelectura?.trainerSettings?.[key] || null;
-        const versionesRelectura = dataRelectura?.trainerSettingsVersiones?.[key] || null;
-        const valorResueltoDespuesGuardar = settingsRelectura ? valorEfectivoTemporal(versionesRelectura, campo, mesLog, settingsRelectura[campo]) : '(trainer no encontrado en relectura)';
-        console.log(`[FINANZAS][EDITAR_TRAINER] trainerKey=${key} campo=${campo} mesKey=${mesLog} payloadDespuesGuardar=${JSON.stringify({ settings: settingsRelectura, versiones: versionesRelectura })} valorResueltoDespuesGuardar=${valorResueltoDespuesGuardar}`);
-      } catch (errRelectura) {
-        console.error(`[FINANZAS][EDITAR_TRAINER] trainerKey=${key} campo=${campo} fallo al releer de Firestore para verificar: ${errRelectura?.message || errRelectura}`);
       }
     }
 

@@ -785,7 +785,6 @@ function construirCalculoMes(mesKey = mesActualKey()){
       const centros = {};
       Object.keys(centrosBase).forEach(id => {
         const resuelto = centroParaMes(centrosBase[id], mesKey);
-        console.log(`[FINANZAS][CENTRO_RESUELTO] centerKey=${id} mesKey=${mesKey} tieneVersionesTemporal=${!!(dbFinanzas.centrosVersiones?.[id]?.length)} canonFijo_base=${centrosBase[id].canonFijo} canonFijo_resuelto=${resuelto.canonFijo} ptsIncluidos_base=${centrosBase[id].ptsIncluidos} ptsIncluidos_resuelto=${resuelto.ptsIncluidos} canonPt_base=${centrosBase[id].canonPt} canonPt_resuelto=${resuelto.canonPt} canonPtReducidoDesde_base=${centrosBase[id].canonPtReducidoDesde} canonPtReducidoDesde_resuelto=${resuelto.canonPtReducidoDesde} canonPtReducido_base=${centrosBase[id].canonPtReducido} canonPtReducido_resuelto=${resuelto.canonPtReducido}`);
         centros[id] = { ...resuelto, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0, participacionClientes:0, participacionCentro:0, ingresosActividades:0 };
       });
       const trainers = [];
@@ -875,9 +874,7 @@ function construirCalculoMes(mesKey = mesActualKey()){
         // 1) Canon fijo de sede: se paga una vez y se prorratea entre los PT activos.
         // 2) Coste ligado al PT: puede tener tramos por posición dentro de la sede.
         //    Ejemplo Inacua: 1.200 € fijos incluyen 6 PT; del 7º al 11º son 200 €/PT; desde el 12º son 60 €/PT.
-        console.log(`[FINANZAS][CENTRO_RESUELTO] centerKey=${c.id} mesKey=${mesKey} etapa=antes_de_calcularCanon numTrainers=${(c.trainers||[]).length} canonFijo=${c.canonFijo} ptsIncluidos=${c.ptsIncluidos} canonPt=${c.canonPt} canonPtReducidoDesde=${c.canonPtReducidoDesde} canonPtReducido=${c.canonPtReducido}`);
         calcularCanonCentroYAsignar(c);
-        console.log(`[FINANZAS][CENTRO_RESUELTO] centerKey=${c.id} mesKey=${mesKey} etapa=despues_de_calcularCanon canon=${c.canon} canonProrrateado=${c.canonProrrateado} participacionClientes=${c.participacionClientes} participacionCentro=${c.participacionCentro}`);
       });
       const gastos = gastosMes(mesKey);
       const otrosIngresos = otrosIngresosMes(mesKey);
