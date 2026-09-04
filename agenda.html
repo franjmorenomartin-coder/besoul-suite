@@ -327,6 +327,7 @@
 
             <div class="flex items-center gap-2 flex-wrap justify-end">
 
+                <button onclick="abrirAsistenteBesoul()" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl" aria-label="Asistente">✨ Asistente</button>
                 <button onclick="abrirModalNotificaciones()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl" aria-label="Notificaciones">🔔<span id="badge-notificaciones" class="hidden ml-1 bg-amber-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
                 <button onclick="abrirModalDisponibilidadReservas()" class="bs-btn-primary px-4 py-2.5 text-sm rounded-xl transition">+ Disponibilidad</button>
                 <button onclick="abrirModalSolicitudesReservas()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Reservas <span id="badge-reservas-pendientes" class="hidden ml-1 bg-emerald-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
@@ -6362,6 +6363,152 @@ Cancelar = no hacer nada`,
             const n = notificacionesNoLeidas().length;
             badge.textContent = n;
             badge.classList.toggle('hidden', n === 0);
+        }
+
+        // ============================================================
+        // AI-01 -- BESOUL Assistant (MVP advisory-only, 2026-09-04)
+        // ============================================================
+        // Diseño de seguridad explícito de esta fase (ver AI_ASSISTANT_ARCHITECTURE.md):
+        // - 100% local. Cero llamadas de red, cero API keys en el frontend, cero envío de datos
+        //   reales a servicios externos -- todas las respuestas se calculan aquí mismo, sobre
+        //   dbClientes[entrenadorVisto]/dbAgenda[entrenadorVisto] ya cargados en memoria.
+        // - ADVISORY ONLY: el asistente NUNCA escribe en dbAgenda/dbClientes ni llama a
+        //   guardarEstadoNubeAgenda(). Solo lee y responde texto. Cualquier acción real (mover,
+        //   agendar, borrar) la sigue haciendo el humano desde la UI normal ya existente.
+        // - No es un LLM: es un motor de reglas/patrones sobre las funciones de cálculo que ya
+        //   existen en este archivo (calcularContadorClases, dbAgenda...). Se declara así en la
+        //   propia UI -- "respuestas basadas en reglas locales", nunca se presenta como IA
+        //   conectada para no generar una falsa expectativa de capacidad.
+        function asegurarPanelAsistente() {
+            let panel = document.getElementById('panel-asistente-besoul');
+            if (panel) return panel;
+            panel = document.createElement('div');
+            panel.id = 'panel-asistente-besoul';
+            panel.className = 'hidden fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:justify-end';
+            panel.innerHTML = `
+                <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onclick="cerrarAsistenteBesoul()"></div>
+                <div class="relative w-full sm:w-[420px] sm:h-full sm:max-h-none max-h-[85dvh] bg-slate-950 border border-slate-800 sm:border-l sm:border-t-0 border-t rounded-t-2xl sm:rounded-none flex flex-col shadow-2xl" style="padding-bottom:env(safe-area-inset-bottom)">
+                    <div class="p-4 border-b border-slate-800 flex items-start justify-between gap-3">
+                        <div>
+                            <div class="text-sm font-black text-white flex items-center gap-1.5">✨ Asistente BESOUL <span class="text-[9px] uppercase tracking-wide bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded-full px-2 py-0.5 font-bold">Beta · solo lectura</span></div>
+                            <div class="text-[10px] text-slate-500 mt-0.5">Respuestas basadas en reglas locales sobre tu agenda. No modifica nada por sí solo.</div>
+                        </div>
+                        <button onclick="cerrarAsistenteBesoul()" class="shrink-0 text-slate-500 hover:text-white text-lg leading-none">✕</button>
+                    </div>
+                    <div id="asistente-mensajes" class="flex-1 overflow-y-auto p-4 space-y-3 text-xs"></div>
+                    <div class="p-3 border-t border-slate-800 space-y-2">
+                        <div class="flex flex-wrap gap-1.5">
+                            <button type="button" onclick="preguntarAsistente('Resume mi agenda de hoy')" class="text-[10px] bg-slate-900 border border-slate-800 text-slate-300 rounded-full px-2.5 py-1 hover:text-white">Resume hoy</button>
+                            <button type="button" onclick="preguntarAsistente('Resume mi agenda de mañana')" class="text-[10px] bg-slate-900 border border-slate-800 text-slate-300 rounded-full px-2.5 py-1 hover:text-white">Resume mañana</button>
+                            <button type="button" onclick="preguntarAsistente('¿Quién lleva más de 10 días sin venir?')" class="text-[10px] bg-slate-900 border border-slate-800 text-slate-300 rounded-full px-2.5 py-1 hover:text-white">Sin venir 10+ días</button>
+                            <button type="button" onclick="preguntarAsistente('¿Quién tiene sesiones pendientes?')" class="text-[10px] bg-slate-900 border border-slate-800 text-slate-300 rounded-full px-2.5 py-1 hover:text-white">Sesiones pendientes</button>
+                        </div>
+                        <form onsubmit="return enviarPreguntaAsistente(event)" class="flex gap-2">
+                            <input id="asistente-input" type="text" placeholder="Escribe una pregunta..." class="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white text-xs" autocomplete="off">
+                            <button type="submit" class="bs-btn-primary px-3.5 rounded-xl text-xs font-bold">Enviar</button>
+                        </form>
+                    </div>
+                </div>`;
+            document.body.appendChild(panel);
+            return panel;
+        }
+        function abrirAsistenteBesoul() {
+            const panel = asegurarPanelAsistente();
+            panel.classList.remove('hidden');
+            const cont = document.getElementById('asistente-mensajes');
+            if (!cont.dataset.iniciado) {
+                cont.dataset.iniciado = '1';
+                pintarMensajeAsistente('assistant', 'Hola. Puedo resumir tu agenda, detectar clientes sin sesiones recientes o con sesiones pendientes, y sugerir huecos libres. Prueba uno de los botones o escribe tu pregunta.');
+            }
+            const input = document.getElementById('asistente-input');
+            if (input) setTimeout(() => input.focus(), 50);
+        }
+        function cerrarAsistenteBesoul() {
+            const panel = document.getElementById('panel-asistente-besoul');
+            if (panel) panel.classList.add('hidden');
+        }
+        function pintarMensajeAsistente(rol, texto) {
+            const cont = document.getElementById('asistente-mensajes');
+            if (!cont) return;
+            const burbuja = document.createElement('div');
+            burbuja.className = rol === 'user'
+                ? 'ml-auto max-w-[85%] bg-amber-500/10 border border-amber-500/30 text-amber-100 rounded-2xl rounded-br-sm px-3 py-2 whitespace-pre-wrap'
+                : 'mr-auto max-w-[90%] bg-slate-900 border border-slate-800 text-slate-200 rounded-2xl rounded-bl-sm px-3 py-2 whitespace-pre-wrap';
+            burbuja.textContent = texto;
+            cont.appendChild(burbuja);
+            cont.scrollTop = cont.scrollHeight;
+        }
+        function enviarPreguntaAsistente(e) {
+            e.preventDefault();
+            const input = document.getElementById('asistente-input');
+            const texto = (input.value || '').trim();
+            if (!texto) return false;
+            input.value = '';
+            preguntarAsistente(texto);
+            return false;
+        }
+        function preguntarAsistente(texto) {
+            asegurarPanelAsistente().classList.remove('hidden');
+            pintarMensajeAsistente('user', texto);
+            let respuesta;
+            try { respuesta = motorAsistenteBesoul(texto); }
+            catch (err) { console.error('[AI-01][asistente] error calculando respuesta local', err); respuesta = 'No he podido calcular eso ahora mismo. Prueba a reformular la pregunta.'; }
+            pintarMensajeAsistente('assistant', respuesta);
+        }
+        // Motor de reglas: sin red, sin IA real todavía -- ver AI_ASSISTANT_ARCHITECTURE.md para
+        // el diseño de la futura integración de backend (Cloud Function + proveedor de LLM).
+        function motorAsistenteBesoul(preguntaOriginal) {
+            const q = preguntaOriginal.toLowerCase();
+            const lista = (dbClientes[entrenadorVisto] || []).filter(c => !c.vinculacion && clienteActivoParaAgenda(c));
+
+            if (/resum|hoy|mañana|manana/.test(q)) {
+                const esManana = /mañana|manana/.test(q);
+                const base = new Date();
+                if (esManana) base.setDate(base.getDate() + 1);
+                const fechaISO = formatoFechaLocal(base);
+                const citas = Object.keys(dbAgenda[entrenadorVisto] || {})
+                    .filter(clave => clave.startsWith(fechaISO + '_'))
+                    .map(clave => ({ clave, obj: dbAgenda[entrenadorVisto][clave] }))
+                    .filter(x => x.obj && x.obj.id)
+                    .sort((a, b) => a.clave.localeCompare(b.clave));
+                if (!citas.length) return `${esManana ? 'Mañana' : 'Hoy'} (${fechaISO}) no tienes sesiones agendadas.`;
+                const detalle = citas.map(x => `· ${x.clave.split('_')[1]} — ${x.obj.nombre || 'Cliente'}`).join('\n');
+                return `${esManana ? 'Mañana' : 'Hoy'} (${fechaISO}) tienes ${citas.length} sesión(es):\n${detalle}`;
+            }
+
+            const matchDias = q.match(/(\d+)\s*d[ií]as?/);
+            if (/sin venir|no viene|inactiv/.test(q) || matchDias) {
+                const umbralDias = matchDias ? parseInt(matchDias[1], 10) : 10;
+                const hoy = new Date();
+                const resultado = [];
+                lista.forEach(c => {
+                    const claves = Object.keys(dbAgenda[entrenadorVisto] || {}).filter(clave => {
+                        const obj = dbAgenda[entrenadorVisto][clave];
+                        return obj && obj.id === c.id && clave.split('_')[0] <= formatoFechaLocal(hoy);
+                    }).sort();
+                    const ultima = claves.length ? claves[claves.length - 1].split('_')[0] : null;
+                    const dias = ultima ? Math.round((hoy - new Date(ultima + 'T00:00:00')) / 86400000) : null;
+                    if (dias === null || dias >= umbralDias) resultado.push(`· ${c.nombre} — ${dias === null ? 'sin sesiones registradas' : `${dias} días sin venir (última: ${ultima})`}`);
+                });
+                if (!resultado.length) return `Ningún cliente activo lleva ${umbralDias}+ días sin venir.`;
+                return `Clientes con ${umbralDias}+ días sin venir (o sin histórico):\n${resultado.join('\n')}`;
+            }
+
+            if (/pendiente|restante|le quedan|debe recuperar/.test(q)) {
+                const resultado = [];
+                lista.forEach(c => {
+                    const contador = calcularContadorClases(c);
+                    if ((contador.restantes || 0) > 0) resultado.push(`· ${c.nombre} — ${contador.restantes} sesión(es) pendiente(s) de ${contador.contratadas} (periodo ${contador.periodo})`);
+                });
+                if (!resultado.length) return 'Ningún cliente activo tiene sesiones contratadas pendientes de agendar/usar ahora mismo.';
+                return `Clientes con sesiones pendientes:\n${resultado.join('\n')}`;
+            }
+
+            if (/hueco|disponib|libre/.test(q)) {
+                return 'Para buscar huecos libres concretos, usa el calendario semanal -- los slots "Disponible" en verde ya muestran exactamente eso. Esta versión del asistente todavía no cruza nombre de cliente + hueco automáticamente; está en la hoja de ruta (ver AI_ASSISTANT_ARCHITECTURE.md).';
+            }
+
+            return 'Todavía no sé responder eso en modo local. Puedo: resumir el día/mañana, listar clientes sin venir hace X días, y listar clientes con sesiones pendientes. Prueba con uno de los botones rápidos.';
         }
 
         function abrirModalNotificaciones() {
