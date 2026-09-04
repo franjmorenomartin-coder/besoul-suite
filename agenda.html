@@ -4508,6 +4508,11 @@ function calcularRentabilidadFicha(ficha) {
                 const botonReservasHTML = (!esVinculado && c.tipo === 'individual' && clienteActivoParaAgenda(c))
                     ? `<button onclick="event.stopPropagation(); copiarLinkReservaCliente('${c.id}')" class="text-cyan-300 text-xs font-bold hover:underline">Link reservas${c.reservasOnlineActivas === false ? ' (off)' : ''}</button>`
                     : '';
+                // SEC-05 (2026-09-04): solo tiene sentido regenerar un token que ya existe --
+                // si todavía no se ha generado ninguno, "Link reservas" ya lo crea (seguro, CSPRNG).
+                const botonRegenerarTokenHTML = (!esVinculado && c.tipo === 'individual' && clienteActivoParaAgenda(c) && c.reservaToken)
+                    ? `<button onclick="event.stopPropagation(); regenerarTokenReservaCliente('${c.id}')" class="text-slate-500 text-[10px] hover:text-cyan-300 hover:underline" title="Genera un enlace nuevo y desactiva el anterior de inmediato. Útil si el enlace se ha compartido por error.">Regenerar enlace</button>`
+                    : '';
 
                 const contadorHTML = renderContadorHTML(c);
 
@@ -4549,6 +4554,7 @@ function calcularRentabilidadFicha(ficha) {
                             <button onclick="event.stopPropagation(); editarFicha('${botonEditarId}')" class="text-cyan-400 text-xs font-bold hover:underline">${textoBoton}</button>
                             <button onclick="event.stopPropagation(); abrirModalHistoricoCliente('${botonEditarId}')" class="text-amber-400 text-xs font-bold hover:underline">Histórico</button>
                             ${botonReservasHTML}
+                            ${botonRegenerarTokenHTML}
                             ${botonSolicitarEliminacionHTML}
                         </div>
                         ${botonBorrarHTML ? `<div class="mt-1.5">${botonBorrarHTML}</div>` : ''}
@@ -6189,9 +6195,55 @@ Cancelar = no hacer nada`,
             return { proximas: futuras.slice(0, 5), recientes: pasadas.slice(0, 3) };
         }
         function generarTokenReservaCliente() {
-            const a = Math.random().toString(36).slice(2, 10);
+            // SEC-05 (2026-09-04): Math.random() no es un CSPRNG -- con suficientes muestras del
+            // mismo generador (p.ej. observando varios tokens emitidos seguidos) su estado interno
+            // es, en teoría, reconstruible, lo que reduce la entropía real del token por debajo de
+            // lo que aparenta (documentado en SECURITY_AUDIT_PORTAL.md). crypto.getRandomValues()
+            // es un CSPRNG real, nativo en todo navegador evergreen, sin dependencias nuevas.
+            // Mismo formato de salida (prefijo res_, resto en minúsculas/dígitos/guion bajo) --
+            // sigue encajando en /^res_[a-z0-9_]{3,60}$/, el mismo validador que ya usan
+            // reservas.html y portal-cliente.html. Los tokens YA EMITIDOS con Math.random() NO se
+            // invalidan por este cambio: el formato nunca cambió, solo la fuente de aleatoriedad de
+            // los tokens NUEVOS a partir de ahora. Migración de los ya emitidos: progresiva, bajo
+            // demanda, vía regenerarTokenReservaCliente() (revoca el antiguo, emite uno nuevo con
+            // este generador), nunca forzada en bloque.
+            let hex;
+            if (window.crypto && typeof crypto.getRandomValues === 'function') {
+                const bytes = new Uint8Array(16); // 128 bits de entropía real
+                crypto.getRandomValues(bytes);
+                hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+            } else {
+                // Fallback defensivo solo para un navegador sin Web Crypto (no debería ocurrir en
+                // ningún entorno moderno) -- mismo comportamiento que había antes, no una regresión.
+                hex = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+            }
             const b = Date.now().toString(36);
-            return `res_${a}_${b}`;
+            return `res_${hex}_${b}`;
+        }
+
+        // SEC-05 (2026-09-04): revocación + regeneración bajo demanda. No invalida nada en bloque --
+        // solo actúa sobre el cliente concreto que el PT/admin decide regenerar (p.ej. tras compartir
+        // el enlace por error). El token ANTERIOR queda con activo:false en su propio documento
+        // besoulPublicClients (ya interpretado como "enlace no activo" tanto por reservas.html como
+        // por portal-cliente.html -- comportamiento ya desplegado, no un mecanismo nuevo), así que
+        // deja de servir de inmediato aunque alguien lo conserve.
+        async function regenerarTokenReservaCliente(idCliente) {
+            const c = (dbClientes[entrenadorVisto] || []).find(x => x.id === idCliente);
+            if (!c) return;
+            if (!c.reservaToken) { alert('Este cliente todavía no tiene un enlace de reservas generado. Usa "Link reservas" para crear el primero.'); return; }
+            if (!confirm(`¿Regenerar el enlace de reservas de "${c.nombre}"?\n\nEl enlace ANTERIOR dejará de funcionar de inmediato (tanto para reservar como en su Portal Cliente). Tendrás que reenviarle el nuevo enlace.`)) return;
+            const tokenAnterior = c.reservaToken;
+            c.reservaToken = generarTokenReservaCliente();
+            localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
+            try {
+                const fs = firebase.firestore();
+                await fs.collection(BS_PUBLIC_CLIENTS_COLLECTION).doc(tokenAnterior).set({ activo: false }, { merge: true });
+            } catch (e) {
+                console.error('No se pudo revocar el token anterior de forma explícita (el nuevo token igualmente reemplaza al anterior en la ficha):', e);
+            }
+            await publicarReservasPublicas();
+            renderClientes();
+            copiarLinkReservaCliente(idCliente);
         }
 
         function urlBaseBesoul() {
@@ -7215,7 +7267,28 @@ Cancelar = no hacer nada`,
                 }
                 const [fechaISO, hora] = clave.split('_');
                 const horasHastaSesion = (new Date(`${fechaISO}T${hora}:00`) - new Date()) / 3600000;
-                const dentroDePlazo = horasHastaSesion >= (parseInt(data.cancelacionMinHoras, 10) || CANCELACION_MIN_HORAS_DEFAULT);
+                // CLIENT-08 (2026-09-04): cancelacionMinHoras se relee de besoulPublicClients/{token}
+                // (fuente autoritativa, escrita solo por agenda.html del lado del PT) en vez de
+                // confiar en data.cancelacionMinHoras -- ese campo viaja en el payload que crea el
+                // propio cliente en besoulCancelacionesCliente.create, y las Rules propuestas para
+                // esa colección no validan su valor. Un caller que llamara a Firestore directamente
+                // (saltándose portal-cliente.html) podría, en teoría, forjar un cancelacionMinHoras
+                // distinto en el payload para intentar que su cancelación tardía pareciera dentro de
+                // plazo. Mismo endurecimiento que ya aplica el contrato de la Cloud Function
+                // preparada (functions/cancelacionCliente.js) -- se traslada aquí para que el camino
+                // que SÍ está activo hoy (el listener de agenda.html, mientras no exista backend) no
+                // se quede con el punto débil que la función nueva ya corrige.
+                let cancelacionMinHorasReal = parseInt(data.cancelacionMinHoras, 10) || CANCELACION_MIN_HORAS_DEFAULT;
+                try {
+                    const publicSnap = await fs.collection(BS_PUBLIC_CLIENTS_COLLECTION).doc(data.token).get();
+                    if (publicSnap.exists) {
+                        const publicData = publicSnap.data() || {};
+                        cancelacionMinHorasReal = parseInt(publicData.cancelacionMinHoras, 10) || CANCELACION_MIN_HORAS_DEFAULT;
+                    }
+                } catch (errLecturaPublica) {
+                    console.error('No se pudo releer cancelacionMinHoras de besoulPublicClients, se usa el valor del payload como fallback:', errLecturaPublica);
+                }
+                const dentroDePlazo = horasHastaSesion >= cancelacionMinHorasReal;
                 if (dentroDePlazo) {
                     // >= plazo mínimo: la sesión queda liberada, igual que cualquier borrado normal.
                     delete dbAgenda[trainerKey][clave];
