@@ -1,0 +1,33 @@
+PASS -- PT A puede leer Agenda (monolítica, sin migrar)
+PASS -- PT A puede modificar clientes.ptA
+PASS -- PT A puede modificar agenda.ptA
+PASS -- PT A puede modificar disponibilidadReservas.ptA
+PASS -- PT A puede modificar historicoClientes.ptA
+PASS -- PT A puede modificar pruebasCRM.ptA
+PASS -- PT A NO puede modificar clientes.ptB (de PT B)
+PASS -- PT A NO puede modificar agenda.ptB (de PT B)
+PASS -- PT A NO puede modificar disponibilidadReservas.ptB (de PT B)
+PASS -- PT A NO puede modificar historicoClientes.ptB (de PT B)
+PASS -- PT A NO puede modificar pruebasCRM.ptB (de PT B)
+PASS -- PT A puede escribir varios campos propios a la vez (guardarEstadoNubeAgenda real)
+PASS -- Update mixto (propio + ajeno) falla ENTERO, no parcialmente
+PASS -- notas: PT A SÍ puede escribir una clave de notas de OTRO trainer (riesgo residual confirmado, no mitigado por FASE 2)
+PASS -- Usuario Auth sin perfil besoulUsers: lectura DENEGADA
+PASS -- Usuario Auth sin perfil besoulUsers: escritura DENEGADA
+PASS -- Usuario activo:false: lectura DENEGADA
+PASS -- Usuario activo:false: escritura DENEGADA
+PASS -- No autenticado: lectura DENEGADA
+PASS -- ADMIN puede leer Agenda
+PASS -- ADMIN puede escribir cruzando varios trainerKeys en un mismo update (crm.html real)
+PASS -- ADMIN puede escribir catalogoActividades.* (finanzas.html real, campo fuera de la whitelist de FASE 2)
+PASS -- PT A NO puede escribir catalogoActividades.* (fuera de la whitelist de FASE 2 para no-admin)
+PASS -- besoulLeads: PT A NO puede crear un lead propio (SEC-04)
+PASS -- besoulLeads: ADMIN puede crear un lead
+PASS -- besoulLeads: formulario público (sin auth) SÍ puede crear un lead de prueba
+PASS -- besoulLeads: PT A NO puede editar un lead existente (ni siquiera de su propio trainerKey)
+PASS -- besoulPublicClients: PT A puede revocar (activo:false) el token de SU PROPIO cliente
+PASS -- besoulPublicClients: PT B NO puede tocar el token de un cliente de PT A
+PASS -- besoulPublicClients: ADMIN puede tocar el token de cualquier cliente
+PASS -- besoulReservas: reserva con token/clientId/trainerKey COINCIDENTES se acepta
+PASS -- besoulReservas: clientId que NO coincide con el token real -> DENEGADO (suplantación)
+32/32 pruebas OK.

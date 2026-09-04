@@ -1,0 +1,88 @@
+rules_version = '2';
+
+// SEC-AGENDA-WRITE-ISOLATION -- ruleset candidato COMPLETO para el primer deployment (FASE 9).
+// Incluye los 5 puntos evaluados: isActiveUser() en Agenda, FASE 2 (aislamiento de escritura por
+// trainerKey), CRM admin-only write (SEC-04, ya en main), ownership besoulPublicClients (SEC-04/
+// ya en main), cross-check besoulReservas.create (auditoría 2026-09-02, ya en main). Excluye
+// deliberadamente besoulSolicitudesEliminacion, besoulNotifications (fuera del mínimo pedido) y
+// besoulCancelacionesCliente (sin backend desplegado -- cae en el catch-all deny-all a propósito).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+    function getProfile() {
+      return get(/databases/$(database)/documents/besoulUsers/$(request.auth.token.email));
+    }
+    function userProfileExists() {
+      return signedIn() && exists(/databases/$(database)/documents/besoulUsers/$(request.auth.token.email));
+    }
+    function isActiveUser() { return userProfileExists() && getProfile().data.activo == true; }
+    function isAdmin() { return isActiveUser() && getProfile().data.rol == 'admin'; }
+    function myTrainerKey() { return getProfile().data.trainerKey; }
+    function isPublicTrialLead() {
+      return request.auth == null
+        && request.resource.data.trainerKey == ''
+        && request.resource.data.estado == 'Prueba solicitada'
+        && request.resource.data.fuente == 'QR valoración';
+    }
+
+    match /besoulUsers/{email} {
+      allow get: if signedIn() && email == request.auth.token.email;
+      allow get, list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /besoulSuite/{docId} {
+      allow read: if isActiveUser() && docId == 'agenda';
+      allow write: if docId == 'agenda' && (
+        isAdmin()
+        || (isActiveUser()
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['clientes','agenda','disponibilidadReservas','historicoClientes','pruebasCRM','notas','actualizadoEn','ultimaActualizacionLocal'])
+            && request.resource.data.clientes.diff(resource.data.clientes).affectedKeys().hasOnly([myTrainerKey()])
+            && request.resource.data.agenda.diff(resource.data.agenda).affectedKeys().hasOnly([myTrainerKey()])
+            && request.resource.data.disponibilidadReservas.diff(resource.data.disponibilidadReservas).affectedKeys().hasOnly([myTrainerKey()])
+            && request.resource.data.historicoClientes.diff(resource.data.historicoClientes).affectedKeys().hasOnly([myTrainerKey()])
+            && request.resource.data.pruebasCRM.diff(resource.data.pruebasCRM).affectedKeys().hasOnly([myTrainerKey()])
+           )
+      );
+      allow read, write: if isAdmin() && docId == 'finanzas';
+    }
+
+    match /besoulLeads/{leadId} {
+      allow read: if isAdmin() || (isActiveUser() && resource.data.trainerKey == myTrainerKey());
+      allow create: if isPublicTrialLead() || isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /besoulPublicClients/{token} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if isActiveUser() && request.resource.data.trainerKey == myTrainerKey();
+      allow update: if isAdmin()
+        || (isActiveUser() && resource.data.trainerKey == myTrainerKey() && request.resource.data.trainerKey == resource.data.trainerKey);
+      allow delete: if isAdmin();
+    }
+
+    match /besoulReservas/{reservaId} {
+      allow create: if request.resource.data.estado == 'pendiente'
+        && request.resource.data.token is string
+        && request.resource.data.clientId is string
+        && request.resource.data.trainerKey is string
+        && request.resource.data.duracionMin == 45
+        && exists(/databases/$(database)/documents/besoulPublicClients/$(request.resource.data.token))
+        && get(/databases/$(database)/documents/besoulPublicClients/$(request.resource.data.token)).data.clientId == request.resource.data.clientId
+        && get(/databases/$(database)/documents/besoulPublicClients/$(request.resource.data.token)).data.trainerKey == request.resource.data.trainerKey;
+      allow read: if isAdmin() || (isActiveUser() && resource.data.trainerKey == myTrainerKey());
+      allow update, delete: if isAdmin() || (isActiveUser() && resource.data.trainerKey == myTrainerKey());
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
