@@ -336,7 +336,7 @@
                 <button id="btn-admin-solicitudes-eliminacion" onclick="abrirModalSolicitudesEliminacion()" class="hidden relative bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Solicitudes <span id="badge-solicitudes-eliminacion" class="hidden ml-1 bg-red-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
 
                 <span class="w-px h-6 bg-white/10 mx-1 hidden sm:block"></span>
-                <a href="crm.html" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">CRM</a>
+                <a id="nav-crm" href="crm.html" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">CRM</a>
                 <a id="nav-dashboard" href="dashboard.html" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Dashboard</a>
                 <a id="nav-finanzas" href="finanzas.html" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Finanzas</a>
 
@@ -3016,6 +3016,7 @@ function calcularRentabilidadFicha(ficha) {
                     document.getElementById('btn-admin-solicitudes-eliminacion').classList.remove('hidden');
                     document.getElementById('nav-dashboard').classList.remove('hidden');
                     document.getElementById('nav-finanzas').classList.remove('hidden');
+                    document.getElementById('nav-crm').classList.remove('hidden');
                     configurarSelectorAdmin();
                 } else {
                     document.getElementById('admin-trainer-filter-block').classList.add('hidden');
@@ -3023,6 +3024,12 @@ function calcularRentabilidadFicha(ficha) {
                     document.getElementById('btn-admin-solicitudes-eliminacion').classList.add('hidden');
                     document.getElementById('nav-dashboard').classList.add('hidden');
                     document.getElementById('nav-finanzas').classList.add('hidden');
+                    // ROLE-01 (2026-09-04): CRM pasa a ser admin-only (ver crm.html
+                    // iniciarSesionAutenticada) -- el enlace ya no se muestra a PT, igual que
+                    // Dashboard/Finanzas. No afecta a iniciarSincronizacionLeadsCRMAgenda(), que
+                    // sigue trayendo a Agenda las pruebas CRM del propio PT (dato legítimo dentro
+                    // de su ficha, no acceso a la página CRM).
+                    document.getElementById('nav-crm').classList.add('hidden');
                 }
 
                 iniciarSincronizacionNubeAgenda();
