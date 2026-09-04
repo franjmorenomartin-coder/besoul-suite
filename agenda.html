@@ -78,6 +78,10 @@
 
         @media (max-width: 767px) {
             body { background:#050814; padding-bottom: calc(78px + env(safe-area-inset-bottom)); }
+            /* UX-03: la barra de "modo agenda táctil" debe quedar SIEMPRE encima del bottom nav
+               (misma referencia de 78px que el padding del body de arriba), nunca solapada --
+               en desktop no hay bottom nav, así que ahí se queda en bottom-3 (default Tailwind). */
+            #barra-seleccion-agenda-movil { bottom: calc(78px + env(safe-area-inset-bottom) + 0.5rem) !important; }
             #app-content > header {
                 padding: .75rem .9rem !important;
                 gap: .75rem !important;
@@ -105,6 +109,15 @@
             #app-content > .bg-slate-950 .grid.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap:.45rem !important; }
             #app-content > .bg-slate-950 .bs-kpi { padding:.6rem .7rem !important; }
             #app-content > .bg-slate-950 span[id^="kpi-"] { font-size:1.05rem !important; }
+            /* UX-02: en móvil el resumen de KPIs primarios ya no se muestra siempre abierto --
+               empieza colapsado (ver script de arranque) tras "Resumen ▸", igual que ya existe
+               para "Más métricas de la semana". Prioridad móvil: semana → calendario/clientes →
+               acciones, no estadísticas ocupando la primera pantalla. */
+            #agenda-kpi-primary-summary { display:block !important; }
+            #agenda-kpi-primary-wrap[open] #agenda-kpi-primary-summary { margin-bottom:.5rem; }
+            #agenda-kpi-primary-wrap summary::-webkit-details-marker { display:none; }
+            #agenda-kpi-primary-wrap summary::before { content:'▸ '; }
+            #agenda-kpi-primary-wrap[open] summary::before { content:'▾ '; }
             #admin-trainer-filter-block { width:100%; }
             #admin-trainer-filter-block select { flex:1; min-width:0; }
             #agenda-main {
@@ -365,6 +378,8 @@
 
 
 
+            <details id="agenda-kpi-primary-wrap" open>
+                <summary id="agenda-kpi-primary-summary" class="hidden text-xs text-slate-400 font-bold cursor-pointer select-none py-1">Resumen</summary>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
 
                 <div class="bs-kpi">
@@ -400,6 +415,14 @@
                 </div>
 
             </div>
+            </details>
+            <script>
+              // UX-02: colapsado por defecto SOLO en móvil, una vez al cargar -- no se fuerza en
+              // cada render (si el usuario lo abre, se queda abierto hasta que recargue).
+              if (window.matchMedia && window.matchMedia('(max-width: 767px)').matches) {
+                document.getElementById('agenda-kpi-primary-wrap').removeAttribute('open');
+              }
+            </script>
 
         </div>
 
@@ -2011,15 +2034,23 @@ miércoles 07:00-09:00"></textarea>
             if (barra) return barra;
             barra = document.createElement('div');
             barra.id = 'barra-seleccion-agenda-movil';
-            barra.className = 'hidden fixed left-3 right-3 bottom-3 z-[80] bg-slate-950/95 border border-amber-500/40 rounded-2xl shadow-2xl p-3 text-xs backdrop-blur-md';
+            // UX-03 (2026-09-04): esta barra vivía en bottom-3/z-[80], exactamente encima del
+            // bottom nav (fixed bottom-0, ~78px alto, z-40, ver CSS @media max-width:767px arriba)
+            // -- z-80 > z-40 hacía que la barra tapara el nav mientras estaba en modo selección,
+            // bloqueando el acceso a las pestañas Agenda/Clientes/Grupos/Reservas justo cuando el
+            // usuario más las necesita. Reposicionada ENCIMA del nav (78px + safe-area + margen),
+            // nunca solapada con él -- compact action bar, no bottom sheet completo.
+            barra.className = 'hidden fixed left-2 right-2 bottom-3 z-[45] bg-slate-950/95 border border-amber-500/40 rounded-2xl shadow-2xl p-2.5 text-xs backdrop-blur-md';
             barra.innerHTML = `
-                <div class="flex items-center justify-between gap-3">
-                    <div class="min-w-0">
-                        <div class="text-[10px] uppercase tracking-wider text-amber-400 font-black">Modo agenda táctil</div>
-                        <div id="barra-seleccion-agenda-texto" class="text-white font-bold truncate">Ficha seleccionada</div>
-                        <div class="text-slate-400 text-[10px] mt-0.5">Toca una franja del calendario para agendar cliente o grupo y bloquear 45 min.</div>
+                <div class="flex items-center justify-between gap-2">
+                    <div class="min-w-0 flex items-center gap-2">
+                        <span class="shrink-0 w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                        <div class="min-w-0">
+                            <div id="barra-seleccion-agenda-texto" class="text-white font-bold text-[11px] truncate">Ficha seleccionada</div>
+                            <div class="text-slate-500 text-[9px] truncate">Toca una franja libre para agendar</div>
+                        </div>
                     </div>
-                    <button type="button" onclick="limpiarSeleccionFichaMovil()" class="shrink-0 bg-slate-800 text-slate-300 px-3 py-2 rounded-xl font-bold hover:text-white">Cancelar</button>
+                    <button type="button" onclick="limpiarSeleccionFichaMovil()" class="shrink-0 bg-slate-800 text-slate-300 px-2.5 py-1.5 rounded-lg font-bold hover:text-white text-[10px]">Cancelar</button>
                 </div>
             `;
             document.body.appendChild(barra);
@@ -4360,9 +4391,14 @@ function calcularRentabilidadFicha(ficha) {
 
                 if (puedeAgendar) {
 
-                    item.setAttribute('draggable', 'true');
-
-                    item.ondragstart = (e) => { e.dataTransfer.setData("text/plain", c.id); };
+                    // UX-03: draggable HTML5 nativo solo en desktop -- en móvil compite con el
+                    // tap (long-press dispara el "fantasma" de arrastre nativo en vez de un click
+                    // limpio), y el flujo táctil de seleccionar+tocar franja ya cubre el caso de
+                    // uso completo sin necesitar drag. Desktop conserva drag como antes.
+                    if (!isMobileAgenda()) {
+                        item.setAttribute('draggable', 'true');
+                        item.ondragstart = (e) => { e.dataTransfer.setData("text/plain", c.id); };
+                    }
                     item.onclick = (e) => {
                         if (e.target && e.target.closest('button')) return;
                         seleccionarFichaParaAgendaMovil(c.id);
