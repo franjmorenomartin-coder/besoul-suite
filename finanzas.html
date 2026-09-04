@@ -1517,18 +1517,27 @@
       // se añada sin default. registrarVersionTemporal ya maneja correctamente
       // valorAnteriorLive===undefined (no congela un legado inexistente), así que quitar esta
       // condición es seguro.
-      const esTemporal = CAMPOS_TEMPORALES_CENTRO.includes(campo) && valorFinal !== valorAnterior;
-      // Instrumentación ampliada (hotfix Fijo sede, 2026-09-04) -- pedida explícitamente porque
-      // tres harnesses distintos (memoria simple, con confirm() mockeado, y con semántica real de
-      // merge:true de Firestore + recarga completa simulada) confirmaron que esta cadena es
-      // correcta en todos los casos probados, y el fallo sigue reportándose en producción. Esto
-      // no demuestra ausencia de bug -- solo que no se ha podido reproducir con lo disponible
-      // aquí (sin navegador/Firestore reales). Esta traza captura TODO el ciclo real, incluida
-      // una relectura directa a Firestore tras guardar (bypass de cualquier caché local), para
-      // que la próxima vez que ocurra en producción haya evidencia dura del punto exacto en vez
-      // de otra hipótesis.
+      // CAUSA RAÍZ REAL (hotfix Fijo sede, 2026-09-04 -- confirmada con logs reales de
+      // producción, no simulación): esta comparación usaba `valorAnterior` (el valor VIVO/base
+      // del centro, c[campo]) para decidir si algo había cambiado. Pero el input que el admin
+      // edita muestra el valor EFECTIVO del mes de trabajo (centroParaMes-resuelto) -- que puede
+      // ser distinto del vivo si ya existe una entrada temporal puntual ("solo este mes") de un
+      // cambio anterior. Caso real detectado: Alfa Prime tenía canonFijo vivo=300 pero una
+      // entrada puntual de un intento anterior fijaba septiembre 2026 a 200; el admin veía "200"
+      // en el campo (el valor efectivo, correcto), escribía "300" -- y como valorFinal(300)
+      // coincidía por pura casualidad con el valor VIVO (300, no lo que el admin veía ni
+      // pretendía cambiar), la condición `valorFinal !== valorAnterior` daba false: se saltaba
+      // el diálogo, no se registraba ninguna versión, y la entrada puntual obsoleta de 200
+      // seguía ganando la resolución de septiembre para siempre, en silencio, sin error. Fix:
+      // comparar contra el valor EFECTIVO del mes (lo que el admin realmente ve y compara), no
+      // contra el vivo. `valorAnterior` (vivo) se seguía necesitando tal cual para congelar el
+      // legado de `registrarVersionTemporal` -- eso no cambia: coincide con el efectivo en la
+      // primera edición de un campo (única vez que ese parámetro se usa), así que no hay
+      // divergencia posible ahí.
       const mesLog = mesTrabajoKey();
       const valorAnteriorEfectivo = (centroParaMes(c, mesLog) || {})[campo];
+      const esCampoTemporal = CAMPOS_TEMPORALES_CENTRO.includes(campo);
+      const esTemporal = esCampoTemporal && valorFinal !== valorAnteriorEfectivo;
       let modoTemporal = 'sin_cambio_temporal', versionRegistrada = null;
       if (esTemporal) {
         const mes = mesLog;
@@ -1539,17 +1548,22 @@
         // otro mes de trabajo (o el mes siguiente) veía el valor antiguo -- percibido como "no se
         // puede cambiar" aunque el motor de guardado es correcto (ver TEST C/C2 en el informe
         // anterior). Fix: el diálogo ahora repite explícitamente valor anterior -> nuevo y el
-        // campo en texto legible, para que la elección sea imposible de malinterpretar.
+        // campo en texto legible, para que la elección sea imposible de malinterpretar. Usa el
+        // valor EFECTIVO (lo que el admin ve), no el vivo -- ver hallazgo de causa raíz arriba.
         const etiquetaCampo = { canonFijo:'Fijo sede', ptsIncluidos:'PT incluidos', canonPt:'€/PT extra', canonPtReducidoDesde:'Reducido desde PT nº', canonPtReducido:'€/PT reducido' }[campo] || campo;
-        const soloEsteMes = confirm(`${c.nombre||id} · ${etiquetaCampo}: ${valorAnterior} → ${valorFinal}\n\nAceptar = aplicar SOLO a ${etiquetaMes(mes)} (los demás meses seguirán en ${valorAnterior}).\nCancelar = aplicar DESDE ${etiquetaMes(mes)} EN ADELANTE de forma permanente (pasa a ${valorFinal} para siempre desde ahora; los meses anteriores a ${etiquetaMes(mes)} seguirán en ${valorAnterior}).`);
+        const soloEsteMes = confirm(`${c.nombre||id} · ${etiquetaCampo}: ${valorAnteriorEfectivo} → ${valorFinal}\n\nAceptar = aplicar SOLO a ${etiquetaMes(mes)} (los demás meses seguirán en ${valorAnteriorEfectivo}).\nCancelar = aplicar DESDE ${etiquetaMes(mes)} EN ADELANTE de forma permanente (pasa a ${valorFinal} para siempre desde ahora; los meses anteriores a ${etiquetaMes(mes)} seguirán en ${valorAnteriorEfectivo}).`);
         modoTemporal = soloEsteMes ? 'solo_este_mes' : 'desde_adelante';
         if(!dbFinanzas.centrosVersiones) dbFinanzas.centrosVersiones = {};
         registrarVersionTemporal(dbFinanzas.centrosVersiones, id, campo, valorFinal, valorAnterior, mes, soloEsteMes);
         versionRegistrada = dbFinanzas.centrosVersiones[id][dbFinanzas.centrosVersiones[id].length - 1];
         if (!soloEsteMes) c[campo] = valorFinal;
-      } else {
+      } else if (!esCampoTemporal) {
+        // Campo no temporal (nombre, orden, activo, visibleX...): comportamiento sin cambios.
         c[campo] = valorFinal;
       }
+      // Campo temporal sin cambio efectivo real (valorFinal === valorAnteriorEfectivo): no tocar
+      // nada -- si tocáramos c[campo] aquí sobrescribiríamos el valor VIVO con el valor efectivo
+      // de este mes, corrompiendo la base para el resto de meses sin que el admin lo pidiera.
       const payloadAntesGuardar = { centro: JSON.parse(JSON.stringify(dbFinanzas.centros[id])), versiones: dbFinanzas.centrosVersiones?.[id] ? JSON.parse(JSON.stringify(dbFinanzas.centrosVersiones[id])) : null };
       console.log(`[FINANZAS][EDITAR_CENTRO] centerKey=${id} campo=${campo} mesKey=${mesLog} valorAnteriorBase=${valorAnterior} valorAnteriorEfectivo=${valorAnteriorEfectivo} valorFinal=${valorFinal} modoTemporal=${modoTemporal} versionRegistrada=${JSON.stringify(versionRegistrada)} payloadAntesGuardar=${JSON.stringify(payloadAntesGuardar)}`);
       const resultado = await guardarConfigFinanzas({ silencioso:true });
@@ -1819,26 +1833,36 @@
       // maneja correctamente valorAnteriorLive===undefined (no intenta congelar un legado que no
       // existe), así que quitar esta condición es seguro y no cambia el comportamiento de ningún
       // campo que ya tuviera valor definido.
-      const esTemporal = CAMPOS_TEMPORALES_TRAINER.includes(campo) && valorFinal !== valorAnterior;
-      // Instrumentación ampliada (hotfix Fijo sede, 2026-09-04) -- genérica, mismo patrón que
-      // editarCentro(), por si el mismo tipo de causa afecta a algún campo temporal de trainer.
+      // CAUSA RAÍZ REAL (hotfix Fijo sede, 2026-09-04 -- ver editarCentro() para el detalle
+      // completo confirmado con logs reales de producción): comparar contra el valor VIVO
+      // (`valorAnterior`) en vez del valor EFECTIVO del mes de trabajo hacía que, si ya existía
+      // una entrada temporal puntual previa para este mes, un valor nuevo que coincidiera por
+      // casualidad con el vivo (no con lo que el admin veía) se tratara como "sin cambios" --
+      // saltando el diálogo y dejando la entrada puntual obsoleta ganando la resolución para
+      // siempre, en silencio. Aplicado aquí igual, genérico para cualquier campo de
+      // CAMPOS_TEMPORALES_TRAINER.
       const mesLog = mesTrabajoKey();
       const valorAnteriorEfectivo = (settingsTrainerParaMes(key, mesLog) || {})[campo];
+      const esCampoTemporal = CAMPOS_TEMPORALES_TRAINER.includes(campo);
+      const esTemporal = esCampoTemporal && valorFinal !== valorAnteriorEfectivo;
       let modoTemporal = 'sin_cambio_temporal', versionRegistrada = null;
       if (esTemporal) {
         const mes = mesLog;
         // Mismo hallazgo/fix de claridad que editarCentro() (hotfix canon/participación,
         // 2026-09-03): repetir valor anterior -> nuevo explícitamente para que Aceptar/Cancelar
-        // no se pueda malinterpretar como "confirmar/cancelar el cambio".
-        const soloEsteMes = confirm(`${key} · ${campo}: ${valorAnterior} → ${valorFinal}\n\nAceptar = aplicar SOLO a ${etiquetaMes(mes)} (los demás meses seguirán en ${valorAnterior}).\nCancelar = aplicar DESDE ${etiquetaMes(mes)} EN ADELANTE de forma permanente (pasa a ${valorFinal} para siempre desde ahora; los meses anteriores a ${etiquetaMes(mes)} seguirán en ${valorAnterior}).`);
+        // no se pueda malinterpretar como "confirmar/cancelar el cambio". Usa el valor EFECTIVO
+        // (lo que el admin ve), no el vivo -- ver hallazgo de causa raíz arriba.
+        const soloEsteMes = confirm(`${key} · ${campo}: ${valorAnteriorEfectivo} → ${valorFinal}\n\nAceptar = aplicar SOLO a ${etiquetaMes(mes)} (los demás meses seguirán en ${valorAnteriorEfectivo}).\nCancelar = aplicar DESDE ${etiquetaMes(mes)} EN ADELANTE de forma permanente (pasa a ${valorFinal} para siempre desde ahora; los meses anteriores a ${etiquetaMes(mes)} seguirán en ${valorAnteriorEfectivo}).`);
         modoTemporal = soloEsteMes ? 'solo_este_mes' : 'desde_adelante';
         if(!dbFinanzas.trainerSettingsVersiones) dbFinanzas.trainerSettingsVersiones = {};
         registrarVersionTemporal(dbFinanzas.trainerSettingsVersiones, key, campo, valorFinal, valorAnterior, mes, soloEsteMes);
         versionRegistrada = dbFinanzas.trainerSettingsVersiones[key][dbFinanzas.trainerSettingsVersiones[key].length - 1];
         if (!soloEsteMes) dbFinanzas.trainerSettings[key][campo] = valorFinal;
-      } else {
+      } else if (!esCampoTemporal) {
         dbFinanzas.trainerSettings[key][campo] = valorFinal;
       }
+      // Campo temporal sin cambio efectivo real: no tocar dbFinanzas.trainerSettings[key][campo]
+      // -- evita corromper el valor vivo con el valor efectivo de este mes.
       const payloadAntesGuardar = { settings: JSON.parse(JSON.stringify(dbFinanzas.trainerSettings[key])), versiones: dbFinanzas.trainerSettingsVersiones?.[key] ? JSON.parse(JSON.stringify(dbFinanzas.trainerSettingsVersiones[key])) : null };
       console.log(`[FINANZAS][EDITAR_TRAINER] trainerKey=${key} campo=${campo} mesKey=${mesLog} valorAnteriorBase=${valorAnterior} valorAnteriorEfectivo=${valorAnteriorEfectivo} valorFinal=${valorFinal} modoTemporal=${modoTemporal} versionRegistrada=${JSON.stringify(versionRegistrada)} payloadAntesGuardar=${JSON.stringify(payloadAntesGuardar)}`);
       const resultado = await guardarConfigFinanzas({ silencioso:true });
