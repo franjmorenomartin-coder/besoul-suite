@@ -3036,6 +3036,7 @@ function calcularRentabilidadFicha(ficha) {
                 iniciarSincronizacionNubeAgenda();
                 iniciarSincronizacionLeadsCRMAgenda();
                 iniciarModuloReservasAgenda();
+                iniciarModuloCancelacionesCliente();
                 iniciarModuloSolicitudesEliminacion();
                 iniciarModuloNotificaciones();
                 buildColorPicker();
@@ -6098,8 +6099,36 @@ Cancelar = no hacer nada`,
         const BS_RESERVAS_COLLECTION = 'besoulReservas';
         const BS_PUBLIC_CLIENTS_COLLECTION = 'besoulPublicClients';
         const BS_PUBLIC_SCHEDULE_COLLECTION = 'besoulPublicSchedule';
+        // CLIENT-01 (2026-09-04): plazo mínimo de cancelación para el portal cliente. Configurable
+        // por ficha (c.cancelacionMinHoras, editable a futuro desde la UI de la ficha) con este
+        // valor como default -- nunca hardcodeado de forma que sea imposible cambiarlo después.
+        const CANCELACION_MIN_HORAS_DEFAULT = 6;
+        const BS_CANCELACIONES_CLIENTE_COLLECTION = 'besoulCancelacionesCliente';
         window.bsReservasUnsub = null;
         window.bsReservasPublishTimer = null;
+
+        // Sesiones futuras/pasadas de un cliente concreto, para el portal -- reutiliza el mismo
+        // dbAgenda[trainerKey] ya cargado, sin lógica de disponibilidad nueva. Limitado (5/3) para
+        // no inflar el documento público -- es un resumen, no un histórico completo.
+        function sesionesClienteParaPortal(trainerKey, clientId) {
+            const hoyISO = formatoFechaLocal(new Date());
+            const ahoraHM = new Date().toTimeString().slice(0, 5);
+            const futuras = [], pasadas = [];
+            Object.keys(dbAgenda[trainerKey] || {}).forEach(clave => {
+                const obj = dbAgenda[trainerKey][clave];
+                if (!obj || obj.id !== clientId) return;
+                const [fechaISO, hora] = clave.split('_');
+                const item = { clave, fechaISO, hora, estadoCancelacion: obj.estadoCancelacion || '' };
+                if (fechaISO > hoyISO || (fechaISO === hoyISO && hora >= ahoraHM)) futuras.push(item);
+                else pasadas.push(item);
+            });
+            futuras.sort((a, b) => a.clave.localeCompare(b.clave));
+            pasadas.sort((a, b) => b.clave.localeCompare(a.clave));
+            return { proximas: futuras.slice(0, 5), recientes: pasadas.slice(0, 3) };
+        }
+        function proximaSesionClienteParaPortal(trainerKey, clientId) {
+            return sesionesClienteParaPortal(trainerKey, clientId).proximas[0] || null;
+        }
 
         function generarTokenReservaCliente() {
             const a = Math.random().toString(36).slice(2, 10);
@@ -7054,6 +7083,63 @@ Cancelar = no hacer nada`,
             } catch(err) { console.error('Error iniciando módulo de reservas:', err); }
         }
 
+        // CLIENT-03 (2026-09-04): procesa solicitudes de cancelación creadas desde
+        // portal-cliente.html. Mismo patrón que iniciarModuloReservasAgenda() -- el cliente
+        // público NUNCA escribe directamente en dbAgenda/besoulSuite/agenda (el documento es
+        // monolítico por trainer, sin Rules a nivel de celda -- dejar que un token público
+        // escribiera ahí sería un agujero real). En vez de eso crea un documento de EVENTO en
+        // besoulCancelacionesCliente (create-only, ver propuesta de Rules en
+        // CLIENT_PORTAL_ARCHITECTURE.md, NO desplegada) que esta función, ejecutándose en la
+        // sesión YA AUTENTICADA del PT/admin, valida y aplica con las mismas reglas de negocio
+        // que el resto de Agenda.
+        function iniciarModuloCancelacionesCliente() {
+            try {
+                if (!window.firebase || !firebase.apps.length) return;
+                const fs = firebase.firestore();
+                if (window.bsCancelacionesUnsub) { try { window.bsCancelacionesUnsub(); } catch(e) {} }
+                let q = fs.collection(BS_CANCELACIONES_CLIENTE_COLLECTION).where('estado', '==', 'pendiente');
+                if (rolActivo !== 'admin' && usuarioLogeado) q = q.where('trainerKey', '==', usuarioLogeado);
+                window.bsCancelacionesUnsub = q.onSnapshot(snapshot => {
+                    snapshot.forEach(doc => procesarCancelacionCliente(doc.id, doc.data() || {}));
+                }, err => console.error('Error leyendo cancelaciones de cliente:', err));
+            } catch(err) { console.error('Error iniciando módulo de cancelaciones de cliente:', err); }
+        }
+
+        async function procesarCancelacionCliente(id, data) {
+            try {
+                const fs = firebase.firestore();
+                const ref = fs.collection(BS_CANCELACIONES_CLIENTE_COLLECTION).doc(id);
+                const trainerKey = data.trainerKey;
+                const clave = data.clave;
+                if (!trainerKey || !clave || !dbAgenda[trainerKey] || !dbAgenda[trainerKey][clave]) {
+                    await ref.set({ estado: 'error', motivoError: 'Sesión no encontrada (ya movida/cancelada).', procesadaEn: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                    return;
+                }
+                const cita = dbAgenda[trainerKey][clave];
+                if (cita.id !== data.clientId) {
+                    await ref.set({ estado: 'error', motivoError: 'La sesión ya no corresponde a este cliente.', procesadaEn: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                    return;
+                }
+                const [fechaISO, hora] = clave.split('_');
+                const horasHastaSesion = (new Date(`${fechaISO}T${hora}:00`) - new Date()) / 3600000;
+                const dentroDePlazo = horasHastaSesion >= (parseInt(data.cancelacionMinHoras, 10) || CANCELACION_MIN_HORAS_DEFAULT);
+                if (dentroDePlazo) {
+                    // >= plazo mínimo: la sesión queda liberada, igual que cualquier borrado normal.
+                    delete dbAgenda[trainerKey][clave];
+                    fijarNotaAgenda(clave, '');
+                } else {
+                    // < plazo mínimo: NUNCA se borra -- se marca y sigue consumiendo la sesión.
+                    dbAgenda[trainerKey][clave] = { ...cita, estadoCancelacion: 'cancelada_fuera_plazo', canceladaEn: new Date().toISOString() };
+                }
+                localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
+                await guardarEstadoNubeAgenda();
+                await ref.set({ estado: 'procesada', dentroDePlazoAplicado: dentroDePlazo, procesadaEn: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                if (trainerKey === entrenadorVisto) { recalcularKPIs(); renderClientes(); renderAgenda(); }
+            } catch(err) {
+                console.error('Error procesando cancelación de cliente:', err);
+            }
+        }
+
         function publicarReservasPublicasDebounced() {
             clearTimeout(window.bsReservasPublishTimer);
             window.bsReservasPublishTimer = setTimeout(publicarReservasPublicas, 800);
@@ -7124,6 +7210,15 @@ Cancelar = no hacer nada`,
                         if (!c.email || !c.telefono) return;
                         if (!c.reservaToken) c.reservaToken = generarTokenReservaCliente();
                         const ref = fs.collection(BS_PUBLIC_CLIENTS_COLLECTION).doc(c.reservaToken);
+                        // CLIENT-01/02 (2026-09-04): campos añadidos para portal-cliente.html --
+                        // MISMO documento por token que reservas.html ya usa (besoulPublicClients
+                        // ya era, de facto, la proyección aislada por cliente que pedía el brief;
+                        // no se crea una colección paralela). contador/proximaSesion se calculan
+                        // aquí, en el lado PT ya autenticado, con las MISMAS funciones que usa el
+                        // resto de Agenda (calcularContadorClases, dbAgenda) -- el cliente nunca
+                        // lee el documento monolítico de agenda, solo este resumen ya calculado.
+                        const contador = calcularContadorClases(c);
+                        const sesionesPortal = sesionesClienteParaPortal(trainerKey, c.id);
                         batch.set(ref, {
                             token: c.reservaToken,
                             clientId: c.id,
@@ -7138,6 +7233,14 @@ Cancelar = no hacer nada`,
                             reservasOnlineActivas: c.reservasOnlineActivas !== false,
                             restriccionesReservas: c.restriccionesReservas || { modo:'bloquear', bloquesTexto: c.reservasBloqueadasTexto || '' },
                             reservasBloqueadasTexto: c.reservasBloqueadasTexto || c.restriccionesReservas?.bloquesTexto || '',
+                            sesionesContratadas: contador.contratadas || 0,
+                            sesionesUsadas: contador.usadas || 0,
+                            sesionesPendientes: contador.restantes || 0,
+                            periodoSesiones: contador.periodo || '',
+                            proximaSesion: sesionesPortal.proximas[0] || null,
+                            proximasSesiones: sesionesPortal.proximas,
+                            sesionesRecientes: sesionesPortal.recientes,
+                            cancelacionMinHoras: parseInt(c.cancelacionMinHoras, 10) || CANCELACION_MIN_HORAS_DEFAULT,
                             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                         }, { merge: true });
                     });

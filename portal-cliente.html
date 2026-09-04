@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BESOUL — Mi cuenta</title>
+  <link rel="manifest" href="./manifest.json?v=pwa-logo2">
+  <meta name="theme-color" content="#0B0F17">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="BESOUL">
+  <link rel="icon" type="image/png" sizes="192x192" href="./besoul-icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="./besoul-icon-512.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <style>
+    :root{ --bs-bg:#0B0F17; --bs-focus:#f59e0b; }
+    html{ overflow-x:hidden; }
+    body { font-family: 'Inter', sans-serif; background-color: var(--bs-bg); overflow-x:hidden; padding-bottom: calc(74px + env(safe-area-inset-bottom)); }
+    input, select, textarea, button { font-size:16px; }
+    .bs-focus-ring:focus-visible{ outline:2px solid var(--bs-focus); outline-offset:2px; }
+    .bs-tab-panel{ display:none; }
+    .bs-tab-panel.active{ display:block; }
+    #portal-nav { padding-bottom: calc(.5rem + env(safe-area-inset-bottom)); }
+    #portal-nav button.active { color:#fbbf24; background:rgba(245,158,11,.1); border-color:rgba(245,158,11,.3); }
+  </style>
+</head>
+<body class="min-h-screen text-slate-100">
+
+  <div id="loading" class="min-h-screen flex items-center justify-center text-slate-400 text-sm">
+    <svg class="animate-spin w-6 h-6 mr-3 text-amber-500" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/><path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+    Cargando tu cuenta...
+  </div>
+
+  <div id="error-screen" class="hidden min-h-screen flex items-center justify-center p-6">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-sm w-full text-center space-y-3">
+      <div class="text-3xl">⚠️</div>
+      <h1 class="text-sm font-black text-white">No se ha podido abrir tu cuenta</h1>
+      <p id="error-msg" class="text-xs text-slate-400">Enlace no válido o caducado. Pide a tu entrenador que te reenvíe el enlace de acceso.</p>
+    </div>
+  </div>
+
+  <div id="app" class="hidden max-w-lg mx-auto">
+    <header class="p-4 flex items-center gap-3 border-b border-slate-800">
+      <div class="bg-white rounded-lg p-1.5 border border-slate-700 shrink-0">
+        <div class="text-amber-500 font-extrabold text-sm tracking-tighter italic font-serif leading-none">besoul</div>
+      </div>
+      <div class="min-w-0">
+        <div class="text-sm font-black text-white truncate" id="lbl-cliente-nombre">---</div>
+        <div class="text-[11px] text-slate-500 truncate" id="lbl-cliente-centro">---</div>
+      </div>
+    </header>
+
+    <!-- INICIO -->
+    <section id="tab-inicio" class="bs-tab-panel active p-4 space-y-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+        <div class="text-[10px] uppercase tracking-wide text-slate-500 font-bold mb-3" id="lbl-mes-actual">---</div>
+        <div class="grid grid-cols-3 gap-2 text-center">
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+            <div class="text-lg font-black text-white font-mono" id="kpi-contratadas">0</div>
+            <div class="text-[9px] text-slate-500 uppercase font-bold">Contratadas</div>
+          </div>
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+            <div class="text-lg font-black text-emerald-400 font-mono" id="kpi-realizadas">0</div>
+            <div class="text-[9px] text-slate-500 uppercase font-bold">Realizadas</div>
+          </div>
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-2.5">
+            <div class="text-lg font-black text-amber-400 font-mono" id="kpi-pendientes">0</div>
+            <div class="text-[9px] text-slate-500 uppercase font-bold">Pendientes</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+        <div class="text-[10px] uppercase tracking-wide text-slate-500 font-bold mb-2">Próxima sesión</div>
+        <div id="proxima-sesion-inicio" class="text-sm text-slate-400">No tienes ninguna sesión próxima agendada.</div>
+      </div>
+
+      <button onclick="cambiarTabPortal('reservar')" class="bs-focus-ring w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-3 rounded-xl transition">Reservar sesión</button>
+    </section>
+
+    <!-- MI AGENDA -->
+    <section id="tab-agenda" class="bs-tab-panel p-4 space-y-4">
+      <div>
+        <div class="text-[10px] uppercase tracking-wide text-slate-500 font-bold mb-2">Próximas sesiones</div>
+        <div id="lista-proximas" class="space-y-2"></div>
+      </div>
+      <div>
+        <div class="text-[10px] uppercase tracking-wide text-slate-500 font-bold mb-2">Últimas sesiones</div>
+        <div id="lista-recientes" class="space-y-2"></div>
+      </div>
+    </section>
+
+    <!-- RESERVAR -->
+    <section id="tab-reservar" class="bs-tab-panel p-4 space-y-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 text-center space-y-3">
+        <div class="text-3xl">📅</div>
+        <h2 class="text-sm font-black text-white">Reservar una sesión</h2>
+        <p class="text-xs text-slate-400">Te llevamos al calendario de huecos disponibles de tu entrenador. Tu solicitud queda pendiente de confirmación, igual que siempre.</p>
+        <a id="link-reservar" href="#" class="bs-focus-ring inline-block w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-3 rounded-xl transition">Ver huecos disponibles</a>
+      </div>
+    </section>
+
+    <!-- AVISOS -->
+    <section id="tab-avisos" class="bs-tab-panel p-4">
+      <div class="text-[10px] uppercase tracking-wide text-slate-500 font-bold mb-2">Avisos de tu entrenador</div>
+      <div id="lista-avisos" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center text-xs text-slate-500">No tienes avisos nuevos.</div>
+    </section>
+
+    <!-- PERFIL -->
+    <section id="tab-perfil" class="bs-tab-panel p-4 space-y-3">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2 text-xs">
+        <div class="flex justify-between"><span class="text-slate-500">Nombre</span><span class="text-white font-bold" id="perfil-nombre">---</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Entrenador</span><span class="text-white font-bold" id="perfil-entrenador">---</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Centro</span><span class="text-white font-bold" id="perfil-centro">---</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Email</span><span class="text-white font-bold" id="perfil-email">---</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Teléfono</span><span class="text-white font-bold" id="perfil-telefono">---</span></div>
+      </div>
+      <p class="text-[10px] text-slate-600 text-center">Este enlace es personal e intransferible. No lo compartas.</p>
+    </section>
+  </div>
+
+  <nav id="portal-nav" class="hidden fixed bottom-0 inset-x-0 z-40 grid grid-cols-5 gap-1 bg-slate-950/95 border-t border-slate-800 px-2 pt-2 backdrop-blur-xl">
+    <button onclick="cambiarTabPortal('inicio')" data-tab="inicio" class="active rounded-xl px-1 py-2 text-[10px] font-black text-slate-400 border border-transparent">🏠<br>Inicio</button>
+    <button onclick="cambiarTabPortal('agenda')" data-tab="agenda" class="rounded-xl px-1 py-2 text-[10px] font-black text-slate-400 border border-transparent">📋<br>Agenda</button>
+    <button onclick="cambiarTabPortal('reservar')" data-tab="reservar" class="rounded-xl px-1 py-2 text-[10px] font-black text-slate-400 border border-transparent">➕<br>Reservar</button>
+    <button onclick="cambiarTabPortal('avisos')" data-tab="avisos" class="rounded-xl px-1 py-2 text-[10px] font-black text-slate-400 border border-transparent">🔔<br>Avisos</button>
+    <button onclick="cambiarTabPortal('perfil')" data-tab="perfil" class="rounded-xl px-1 py-2 text-[10px] font-black text-slate-400 border border-transparent">👤<br>Perfil</button>
+  </nav>
+
+  <script>
+    // CLIENT-01/02/03 (2026-09-04): portal cliente, mobile-first, token-based (mismo patrón y
+    // MISMO token que reservas.html -- capability URL: identidad = posesión del enlace, no login
+    // usuario/contraseña, coherente con cómo BESOUL ya comparte acceso de reservas con clientes).
+    // Lee EXCLUSIVAMENTE besoulPublicClients/{token} -- nunca el documento monolítico de agenda.
+    // Ver CLIENT_PORTAL_ARCHITECTURE.md para el detalle de aislamiento y la propuesta de Rules.
+    const firebaseConfig = {
+      apiKey: "AIzaSyAHp7l39BYkgHTVNNwPaaa21tTksBQ94Zo",
+      authDomain: "besoul-suite.firebaseapp.com",
+      projectId: "besoul-suite",
+      storageBucket: "besoul-suite.firebasestorage.app",
+      messagingSenderId: "215142605598",
+      appId: "1:215142605598:web:943629a7a9c50c034a1f0f"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const TOKEN_RE = /^res_[a-z0-9_]{3,60}$/;
+    function normalizarToken(raw) {
+      let v = String(raw == null ? '' : raw).trim();
+      if (!v) return null;
+      const idx = v.lastIndexOf('t=');
+      if (idx !== -1) v = v.slice(idx + 2).trim();
+      v = v.split('&')[0].split('#')[0].trim();
+      return TOKEN_RE.test(v) ? v : null;
+    }
+    const token = normalizarToken(new URLSearchParams(location.search).get('t') || new URLSearchParams(location.search).get('token') || '');
+    let clientData = null;
+
+    function escapeHTML(str) { return String(str || '').replace(/[&<>'"]/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[s])); }
+    function labelFecha(iso) { const d = new Date(`${iso}T00:00:00`); return d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }); }
+    function nombreMesActual() { return new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }); }
+
+    function showError(msg) {
+      document.getElementById('loading').classList.add('hidden');
+      if (msg) document.getElementById('error-msg').textContent = msg;
+      document.getElementById('error-screen').classList.remove('hidden');
+    }
+
+    async function init() {
+      if (!token) { showError(); return; }
+      try {
+        const snap = await db.collection('besoulPublicClients').doc(token).get();
+        if (!snap.exists || snap.data().activo === false) { showError(); return; }
+        clientData = snap.data();
+        pintarPortal();
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+        document.getElementById('portal-nav').classList.remove('hidden');
+      } catch (err) {
+        console.error(err);
+        showError('No se ha podido cargar tu cuenta. Comprueba tu conexión e inténtalo de nuevo.');
+      }
+    }
+
+    function cambiarTabPortal(tab) {
+      document.querySelectorAll('.bs-tab-panel').forEach(el => el.classList.remove('active'));
+      document.getElementById(`tab-${tab}`).classList.add('active');
+      document.querySelectorAll('#portal-nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      window.scrollTo(0, 0);
+    }
+
+    function pintarPortal() {
+      const c = clientData;
+      document.getElementById('lbl-cliente-nombre').textContent = c.clientName || 'Cliente';
+      document.getElementById('lbl-cliente-centro').textContent = c.centroNombre || c.trainerName || '';
+      document.getElementById('lbl-mes-actual').textContent = nombreMesActual();
+      document.getElementById('kpi-contratadas').textContent = c.sesionesContratadas || 0;
+      document.getElementById('kpi-realizadas').textContent = c.sesionesUsadas || 0;
+      document.getElementById('kpi-pendientes').textContent = c.sesionesPendientes || 0;
+      document.getElementById('perfil-nombre').textContent = c.clientName || '---';
+      document.getElementById('perfil-entrenador').textContent = c.trainerName || '---';
+      document.getElementById('perfil-centro').textContent = c.centroNombre || '---';
+      document.getElementById('perfil-email').textContent = c.email || '---';
+      document.getElementById('perfil-telefono').textContent = c.telefono || '---';
+      document.getElementById('link-reservar').href = `reservas.html?token=${encodeURIComponent(token)}`;
+
+      const proxima = c.proximaSesion;
+      document.getElementById('proxima-sesion-inicio').innerHTML = proxima
+        ? `<div class="text-white font-bold">${escapeHTML(labelFecha(proxima.fechaISO))} — ${escapeHTML(proxima.hora)}</div><div class="text-slate-500 text-xs mt-0.5">${escapeHTML(c.trainerName || '')}</div>`
+        : 'No tienes ninguna sesión próxima agendada.';
+
+      const proximas = Array.isArray(c.proximasSesiones) ? c.proximasSesiones : (proxima ? [proxima] : []);
+      const contProx = document.getElementById('lista-proximas');
+      contProx.innerHTML = proximas.length ? proximas.map(s => `
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-3">
+          <div>
+            <div class="text-white font-bold text-sm">${escapeHTML(labelFecha(s.fechaISO))} · ${escapeHTML(s.hora)}</div>
+            <div class="text-[11px] text-slate-500">${escapeHTML(c.trainerName || '')}</div>
+          </div>
+          <button onclick="solicitarCancelacion('${escapeHTML(s.clave)}','${escapeHTML(s.fechaISO)}','${escapeHTML(s.hora)}')" class="bs-focus-ring shrink-0 text-[11px] font-bold text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-2.5 py-1.5">Cancelar</button>
+        </div>`).join('') : '<div class="text-xs text-slate-500 text-center py-4">Sin próximas sesiones.</div>';
+
+      const recientes = Array.isArray(c.sesionesRecientes) ? c.sesionesRecientes : [];
+      const contRec = document.getElementById('lista-recientes');
+      contRec.innerHTML = recientes.length ? recientes.map(s => `
+        <div class="bg-slate-900/50 border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-3">
+          <div>
+            <div class="text-slate-300 font-semibold text-sm">${escapeHTML(labelFecha(s.fechaISO))} · ${escapeHTML(s.hora)}</div>
+            ${s.estadoCancelacion === 'cancelada_fuera_plazo' ? '<div class="text-[10px] text-red-300 font-bold">Cancelada fuera de plazo · contabilizada</div>' : '<div class="text-[10px] text-emerald-400 font-bold">Realizada</div>'}
+          </div>
+        </div>`).join('') : '<div class="text-xs text-slate-500 text-center py-4">Sin sesiones recientes.</div>';
+    }
+
+    // CANCELACIÓN (Parte "Cancelación" del brief): nunca escribe directamente en dbAgenda -- crea
+    // un documento de solicitud que agenda.html procesa del lado del PT ya autenticado
+    // (iniciarModuloCancelacionesCliente/procesarCancelacionCliente). El plazo (por defecto 6h)
+    // viene del propio documento del cliente (cancelacionMinHoras), nunca hardcodeado aquí.
+    async function solicitarCancelacion(clave, fechaISO, hora) {
+      const minHoras = clientData.cancelacionMinHoras || 6;
+      const horas = (new Date(`${fechaISO}T${hora}:00`) - new Date()) / 3600000;
+      const dentroDePlazo = horas >= minHoras;
+      let confirmado;
+      if (dentroDePlazo) {
+        confirmado = confirm(`¿Cancelar tu sesión del ${labelFecha(fechaISO)} a las ${hora}? Quedará liberada.`);
+      } else {
+        confirmado = confirm(`La cancelación se realiza con menos de ${minHoras} horas de antelación.\n\nEsta sesión se contabilizará como realizada y perderás la clase.\n\n¿Confirmas la cancelación de todos modos?`);
+      }
+      if (!confirmado) return;
+      try {
+        const id = `${clientData.trainerKey}__${clave}__cancel`;
+        const ref = db.collection('besoulCancelacionesCliente').doc(id);
+        const existente = await ref.get();
+        if (existente.exists) { alert('Ya hay una solicitud de cancelación en curso para esta sesión.'); return; }
+        await ref.set({
+          token,
+          clientId: clientData.clientId,
+          clientName: clientData.clientName,
+          trainerKey: clientData.trainerKey,
+          clave,
+          fechaISO,
+          hora,
+          cancelacionMinHoras: minHoras,
+          estado: 'pendiente',
+          creadaEn: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        alert('Solicitud de cancelación enviada. Se aplicará en unos instantes.');
+      } catch (err) {
+        console.error(err);
+        alert('No se ha podido enviar la cancelación. Inténtalo de nuevo.');
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
