@@ -7415,6 +7415,18 @@ Cancelar = no hacer nada`,
                             sesionesUsadas: contador.usadas || 0,
                             sesionesPendientes: contador.restantes || 0,
                             periodoSesiones: contador.periodo || '',
+                            // PORTAL-02 (2026-09-05): campos nuevos, aditivos -- necesarios para que el
+                            // Portal V2 pueda mostrar tipo de plan/vigencia real en vez de inventar una
+                            // etiqueta genérica. tipoPlan viene de calcularContadorClases() (misma fuente
+                            // que el resto de contadores); modalidad y avatar vienen directos de la ficha,
+                            // sin transformar. avatarUrl/avatarPath quedan vacíos hasta que exista una
+                            // subida real (ver AVATAR_STORAGE_ARCHITECTURE.md) -- se publican ya para no
+                            // tener que tocar este batch otra vez cuando se active.
+                            tipoPlan: contador.tipo || '',
+                            caducidadPlan: contador.caducidad || '',
+                            modalidad: c.modalidad || '',
+                            avatarUrl: c.avatarUrl || '',
+                            avatarPath: c.avatarPath || '',
                             proximaSesion: sesionesPortal.proximas[0] || null,
                             proximasSesiones: sesionesPortal.proximas,
                             sesionesRecientes: sesionesPortal.recientes,
