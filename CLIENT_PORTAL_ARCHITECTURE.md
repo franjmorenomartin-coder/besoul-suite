@@ -127,13 +127,14 @@ Diseño listo para implementar cuando se autorice infraestructura de backend. Pu
 3. Recalcular horas restantes EN EL SERVIDOR (Date.now() del propio backend,
    nunca un valor recibido del cliente):
    horas = (fechaHoraSesion - ahoraServidor) / 3600000
-   dentroDePlazo = horas >= cancelacionMinHoras (el valor guardado en el
-   documento de besoulPublicClients en el momento de la creación de la
-   solicitud, no un valor que el cliente pudiera manipular en el payload
-   -- o, más estricto aun: releer cancelacionMinHoras del propio
-   besoulPublicClients/{token} en este mismo paso, ignorando el campo que
-   viaja en la solicitud, exactamente igual de estricto que ya hace
-   procesarCancelacionCliente() hoy).
+   dentroDePlazo = horas >= cancelacionMinHoras, releído del propio
+   besoulPublicClients/{token} en este mismo paso, ignorando el campo
+   cancelacionMinHoras que viaja en la solicitud (CLIENT-08, 2026-09-04:
+   corrección de esta misma nota -- procesarCancelacionCliente() NO hacía
+   esto todavía cuando se escribió esta sección por primera vez, confiaba
+   directamente en data.cancelacionMinHoras del payload; se verificó el
+   código real antes de asumirlo y se corrigió tanto ahí como en el
+   contrato de la función de abajo, que ya nace con el re-read estricto).
 
 4. Si dentroDePlazo:
    - Firestore transaction: delete dbAgenda[trainerKey][clave] dentro de
@@ -176,6 +177,8 @@ Diseño listo para implementar cuando se autorice infraestructura de backend. Pu
 **Qué NO cambia si se despliega esto en el futuro**: el cliente (`portal-cliente.html`) no necesita ningún cambio -- ya crea el documento con la forma correcta. `agenda.html` puede seguir teniendo su listener (`iniciarModuloCancelacionesCliente`) como mecanismo de refuerzo/fallback visual (para que el PT vea el cambio reflejado sin recargar), pero deja de ser el ÚNICO camino de procesamiento -- la Cloud Function se convierte en la vía primaria y determinista, y el listener del PT pasa a ser redundante-mas-no-crítico.
 
 **Por qué no se implementa ahora**: requiere (a) un proyecto de Cloud Functions activo con facturación habilitada (Firestore triggers de 2ª generación requieren Cloud Run/Eventarc), (b) despliegue con credenciales de servicio que este entorno no tiene, (c) autorización explícita para tocar infraestructura de producción -- ninguna de las tres existe en esta sesión. El contrato queda listo para que, cuando exista, la implementación sea una traducción directa de `procesarCancelacionCliente()` a Cloud Function, no un diseño nuevo desde cero.
+
+**CLIENT-08 (2026-09-04) — el contrato ya se tradujo a código real**: `functions/cancelacionCliente.js` (+ `functions/package.json`) implementa exactamente los 7 pasos de arriba, con `onDocumentCreated` de `firebase-functions/v2/firestore`. NO se ha ejecutado `firebase init functions`, no existe `firebase.json` en el repo, no se ha instalado ninguna dependencia, y no se ha desplegado nada -- las tres condiciones de más arriba siguen sin cumplirse. El archivo es código listo para revisar/desplegar el día que se autorice, no una especificación en prosa.
 
 ## 6. Reservar — cero lógica duplicada
 

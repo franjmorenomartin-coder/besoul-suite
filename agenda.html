@@ -7267,7 +7267,28 @@ Cancelar = no hacer nada`,
                 }
                 const [fechaISO, hora] = clave.split('_');
                 const horasHastaSesion = (new Date(`${fechaISO}T${hora}:00`) - new Date()) / 3600000;
-                const dentroDePlazo = horasHastaSesion >= (parseInt(data.cancelacionMinHoras, 10) || CANCELACION_MIN_HORAS_DEFAULT);
+                // CLIENT-08 (2026-09-04): cancelacionMinHoras se relee de besoulPublicClients/{token}
+                // (fuente autoritativa, escrita solo por agenda.html del lado del PT) en vez de
+                // confiar en data.cancelacionMinHoras -- ese campo viaja en el payload que crea el
+                // propio cliente en besoulCancelacionesCliente.create, y las Rules propuestas para
+                // esa colección no validan su valor. Un caller que llamara a Firestore directamente
+                // (saltándose portal-cliente.html) podría, en teoría, forjar un cancelacionMinHoras
+                // distinto en el payload para intentar que su cancelación tardía pareciera dentro de
+                // plazo. Mismo endurecimiento que ya aplica el contrato de la Cloud Function
+                // preparada (functions/cancelacionCliente.js) -- se traslada aquí para que el camino
+                // que SÍ está activo hoy (el listener de agenda.html, mientras no exista backend) no
+                // se quede con el punto débil que la función nueva ya corrige.
+                let cancelacionMinHorasReal = parseInt(data.cancelacionMinHoras, 10) || CANCELACION_MIN_HORAS_DEFAULT;
+                try {
+                    const publicSnap = await fs.collection(BS_PUBLIC_CLIENTS_COLLECTION).doc(data.token).get();
+                    if (publicSnap.exists) {
+                        const publicData = publicSnap.data() || {};
+                        cancelacionMinHorasReal = parseInt(publicData.cancelacionMinHoras, 10) || CANCELACION_MIN_HORAS_DEFAULT;
+                    }
+                } catch (errLecturaPublica) {
+                    console.error('No se pudo releer cancelacionMinHoras de besoulPublicClients, se usa el valor del payload como fallback:', errLecturaPublica);
+                }
+                const dentroDePlazo = horasHastaSesion >= cancelacionMinHorasReal;
                 if (dentroDePlazo) {
                     // >= plazo mínimo: la sesión queda liberada, igual que cualquier borrado normal.
                     delete dbAgenda[trainerKey][clave];
