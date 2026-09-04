@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>BESOUL — Mi cuenta</title>
   <link rel="manifest" href="./manifest.json?v=pwa-logo2">
   <meta name="theme-color" content="#0B0F17">
@@ -24,8 +24,15 @@
     .bs-focus-ring:focus-visible{ outline:2px solid var(--bs-focus); outline-offset:2px; }
     .bs-tab-panel{ display:none; }
     .bs-tab-panel.active{ display:block; }
+    .bs-sub-panel{ display:none; }
+    .bs-sub-panel.active{ display:block; }
     #portal-nav { padding-bottom: calc(.5rem + env(safe-area-inset-bottom)); }
     #portal-nav button.active { color:#fbbf24; background:rgba(245,158,11,.1); border-color:rgba(245,158,11,.3); }
+    #agenda-subnav button.active { background:#f59e0b; color:#0f172a; }
+    .bs-day-cell.has-session::after{ content:''; position:absolute; bottom:4px; left:50%; transform:translateX(-50%); width:5px; height:5px; border-radius:999px; background:#f59e0b; }
+    .bs-day-cell.today{ box-shadow:inset 0 0 0 1.5px #f59e0b; }
+    .slot-btn[disabled] { opacity:.4; cursor:not-allowed; }
+    .bs-avatar-fallback{ display:flex; align-items:center; justify-content:center; font-weight:800; color:#0f172a; background:linear-gradient(135deg,#fbbf24,#f59e0b); }
   </style>
 </head>
 <body class="min-h-screen text-slate-100">
@@ -43,21 +50,22 @@
     </div>
   </div>
 
-  <div id="app" class="hidden max-w-lg mx-auto">
+  <div id="app" class="hidden max-w-lg md:max-w-2xl mx-auto">
     <header class="p-4 flex items-center gap-3 border-b border-slate-800">
-      <div class="bg-white rounded-lg p-1.5 border border-slate-700 shrink-0">
-        <div class="text-amber-500 font-extrabold text-sm tracking-tighter italic font-serif leading-none">besoul</div>
-      </div>
-      <div class="min-w-0">
+      <div id="header-avatar" class="w-10 h-10 rounded-full shrink-0 overflow-hidden text-sm"></div>
+      <div class="min-w-0 flex-1">
         <div class="text-sm font-black text-white truncate" id="lbl-cliente-nombre">---</div>
-        <div class="text-[11px] text-slate-500 truncate" id="lbl-cliente-centro">---</div>
+        <div class="text-[11px] text-slate-500 truncate"><span id="lbl-cliente-entrenador">---</span> · <span id="lbl-cliente-centro">---</span></div>
       </div>
     </header>
 
     <!-- INICIO -->
     <section id="tab-inicio" class="bs-tab-panel active p-4 space-y-4">
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-        <div class="text-[10px] uppercase tracking-wide text-slate-500 font-bold mb-3" id="lbl-mes-actual">---</div>
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-[10px] uppercase tracking-wide text-slate-500 font-bold" id="lbl-periodo-plan">---</div>
+          <span id="badge-tipo-plan" class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-800 text-slate-400"></span>
+        </div>
         <div class="grid grid-cols-3 gap-2 text-center">
           <div class="bg-slate-950 border border-slate-800 rounded-xl p-2.5">
             <div class="text-lg font-black text-white font-mono" id="kpi-contratadas">0</div>
@@ -72,35 +80,78 @@
             <div class="text-[9px] text-slate-500 uppercase font-bold">Pendientes</div>
           </div>
         </div>
+        <div id="lbl-modalidad-plan" class="text-[11px] text-slate-500 mt-3 hidden"></div>
       </div>
 
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-        <div class="text-[10px] uppercase tracking-wide text-slate-500 font-bold mb-2">Próxima sesión</div>
+      <div class="bg-gradient-to-br from-amber-500/10 to-transparent border border-amber-500/25 rounded-2xl p-4">
+        <div class="text-[10px] uppercase tracking-wide text-amber-400/80 font-bold mb-2">Próxima sesión</div>
         <div id="proxima-sesion-inicio" class="text-sm text-slate-400">No tienes ninguna sesión próxima agendada.</div>
       </div>
 
-      <button onclick="cambiarTabPortal('reservar')" class="bs-focus-ring w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-3 rounded-xl transition">Reservar sesión</button>
+      <button onclick="irAgendaTab()" class="bs-focus-ring w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-3 rounded-xl transition">Ver mi agenda</button>
     </section>
 
-    <!-- MI AGENDA -->
+    <!-- AGENDA (corazón del portal) -->
     <section id="tab-agenda" class="bs-tab-panel p-4 space-y-4">
-      <div>
-        <div class="text-[10px] uppercase tracking-wide text-slate-500 font-bold mb-2">Próximas sesiones</div>
-        <div id="lista-proximas" class="space-y-2"></div>
+      <div id="agenda-subnav" class="grid grid-cols-2 gap-2 bg-slate-900 border border-slate-800 rounded-xl p-1">
+        <button onclick="cambiarSubTabAgenda('mis-sesiones')" data-subtab="mis-sesiones" class="active rounded-lg py-2 text-xs font-black text-slate-300 transition">Mis sesiones</button>
+        <button onclick="cambiarSubTabAgenda('reservar')" data-subtab="reservar" class="rounded-lg py-2 text-xs font-black text-slate-300 transition">Reservar</button>
       </div>
-      <div>
-        <div class="text-[10px] uppercase tracking-wide text-slate-500 font-bold mb-2">Últimas sesiones</div>
-        <div id="lista-recientes" class="space-y-2"></div>
-      </div>
-    </section>
 
-    <!-- RESERVAR -->
-    <section id="tab-reservar" class="bs-tab-panel p-4 space-y-4">
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 text-center space-y-3">
-        <div class="text-3xl">📅</div>
-        <h2 class="text-sm font-black text-white">Reservar una sesión</h2>
-        <p class="text-xs text-slate-400">Te llevamos al calendario de huecos disponibles de tu entrenador. Tu solicitud queda pendiente de confirmación, igual que siempre.</p>
-        <a id="link-reservar" href="#" class="bs-focus-ring inline-block w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-3 rounded-xl transition">Ver huecos disponibles</a>
+      <!-- MIS SESIONES -->
+      <div id="sub-mis-sesiones" class="bs-sub-panel active space-y-4">
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-[10px] uppercase tracking-wide text-slate-500 font-bold">Esta semana</div>
+            <div id="lbl-dia-seleccionado" class="text-[10px] text-slate-600"></div>
+          </div>
+          <div id="calendario-semana" class="grid grid-cols-7 gap-1"></div>
+          <div id="lista-dia-seleccionado" class="mt-2"></div>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase tracking-wide text-slate-500 font-bold mb-2">Próximas sesiones</div>
+          <div id="lista-proximas" class="space-y-2"></div>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase tracking-wide text-slate-500 font-bold mb-2">Sesiones recientes</div>
+          <div id="lista-recientes" class="space-y-2"></div>
+        </div>
+      </div>
+
+      <!-- RESERVAR (motor de reservas.html, integrado) -->
+      <div id="sub-reservar" class="bs-sub-panel space-y-4">
+        <div id="reservar-loading" class="text-center text-slate-400 text-xs py-10">
+          <svg class="animate-spin w-5 h-5 mx-auto mb-2 text-amber-500" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/><path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+          Cargando disponibilidad...
+        </div>
+        <div id="reservar-error" class="hidden bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-center text-red-200 text-xs"></div>
+        <div id="reservar-app" class="hidden space-y-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-3">
+            <h2 class="text-xs font-black text-white uppercase">1. Elige un hueco</h2>
+            <div id="slots" class="mt-3 space-y-3"></div>
+          </div>
+          <div class="bg-slate-900 border border-emerald-500/20 rounded-xl p-3">
+            <h2 class="text-xs font-black text-white uppercase">Grupos abiertos con plazas</h2>
+            <div id="group-slots" class="mt-3 space-y-3"></div>
+          </div>
+          <div id="selected-panel" class="hidden bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-4">
+            <h2 class="text-xs font-black text-cyan-300 uppercase">2. Confirmar solicitud</h2>
+            <p class="text-xs text-slate-300 mt-1">Hueco: <span id="selected-slot" class="font-black text-white">---</span></p>
+            <textarea id="comments" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white h-20 mt-3 text-xs focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="Comentario para tu entrenador (opcional)"></textarea>
+            <div class="flex gap-2 mt-3">
+              <button onclick="cancelarSeleccionReserva()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl px-4 py-2.5 text-xs transition">Cambiar hora</button>
+              <button onclick="enviarSolicitudReserva()" id="send-btn" class="flex-1 bg-cyan-400 hover:bg-cyan-500 text-slate-950 font-black rounded-xl px-4 py-2.5 text-xs transition">Enviar solicitud</button>
+            </div>
+          </div>
+        </div>
+        <div id="reservar-success" class="hidden text-center p-8 space-y-3">
+          <div class="w-14 h-14 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto">
+            <svg viewBox="0 0 24 24" class="w-7 h-7 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          </div>
+          <h2 class="text-sm font-black text-white">Solicitud enviada</h2>
+          <p class="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">Tu entrenador revisará la solicitud. La verás como "Pendiente de confirmación" en Mis sesiones.</p>
+          <button onclick="cambiarSubTabAgenda('mis-sesiones')" class="bs-focus-ring text-xs font-bold text-amber-400">Ver Mis sesiones →</button>
+        </div>
       </div>
     </section>
 
@@ -111,32 +162,43 @@
     </section>
 
     <!-- PERFIL -->
-    <section id="tab-perfil" class="bs-tab-panel p-4 space-y-3">
+    <section id="tab-perfil" class="bs-tab-panel p-4 space-y-4">
+      <div class="flex flex-col items-center py-2">
+        <div id="perfil-avatar" class="w-20 h-20 rounded-full overflow-hidden text-2xl mb-2"></div>
+        <div class="text-white font-black text-base" id="perfil-nombre-grande">---</div>
+        <button type="button" disabled aria-disabled="true" title="La edición de foto todavía no está disponible." class="mt-2 text-[10px] font-bold text-slate-600 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 cursor-not-allowed">Cambiar foto · Próximamente</button>
+      </div>
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2 text-xs">
-        <div class="flex justify-between"><span class="text-slate-500">Nombre</span><span class="text-white font-bold" id="perfil-nombre">---</span></div>
         <div class="flex justify-between"><span class="text-slate-500">Entrenador</span><span class="text-white font-bold" id="perfil-entrenador">---</span></div>
         <div class="flex justify-between"><span class="text-slate-500">Centro</span><span class="text-white font-bold" id="perfil-centro">---</span></div>
-        <div class="flex justify-between"><span class="text-slate-500">Email</span><span class="text-white font-bold" id="perfil-email">---</span></div>
-        <div class="flex justify-between"><span class="text-slate-500">Teléfono</span><span class="text-white font-bold" id="perfil-telefono">---</span></div>
+        <div class="flex justify-between items-center"><span class="text-slate-500">Email</span><span class="text-white font-bold" id="perfil-email">---</span></div>
+        <div class="flex justify-between items-center"><span class="text-slate-500">Teléfono</span>
+          <span class="flex items-center gap-2">
+            <span class="text-white font-bold" id="perfil-telefono">---</span>
+            <button type="button" disabled aria-disabled="true" title="La edición de teléfono todavía no está disponible." class="text-[9px] font-bold text-slate-600 bg-slate-950 border border-slate-800 rounded px-1.5 py-0.5 cursor-not-allowed">Editar</button>
+          </span>
+        </div>
       </div>
-      <p class="text-[10px] text-slate-600 text-center">Este enlace es personal e intransferible. No lo compartas.</p>
+      <p class="text-[10px] text-slate-600 text-center">Este enlace es personal e intransferible. No lo compartas. Entrenador, centro, modalidad y condiciones económicas los gestiona tu entrenador.</p>
     </section>
   </div>
 
-  <nav id="portal-nav" class="hidden fixed bottom-0 inset-x-0 z-40 grid grid-cols-5 gap-1 bg-slate-950/95 border-t border-slate-800 px-2 pt-2 backdrop-blur-xl">
+  <nav id="portal-nav" class="hidden fixed bottom-0 inset-x-0 z-40 bg-slate-950/95 border-t border-slate-800 backdrop-blur-xl">
+    <div class="max-w-lg md:max-w-2xl mx-auto grid grid-cols-4 gap-1 px-2 pt-2">
     <button onclick="cambiarTabPortal('inicio')" data-tab="inicio" class="active rounded-xl px-1 py-2 text-[10px] font-black text-slate-400 border border-transparent">🏠<br>Inicio</button>
     <button onclick="cambiarTabPortal('agenda')" data-tab="agenda" class="rounded-xl px-1 py-2 text-[10px] font-black text-slate-400 border border-transparent">📋<br>Agenda</button>
-    <button onclick="cambiarTabPortal('reservar')" data-tab="reservar" class="rounded-xl px-1 py-2 text-[10px] font-black text-slate-400 border border-transparent">➕<br>Reservar</button>
     <button onclick="cambiarTabPortal('avisos')" data-tab="avisos" class="rounded-xl px-1 py-2 text-[10px] font-black text-slate-400 border border-transparent">🔔<br>Avisos</button>
     <button onclick="cambiarTabPortal('perfil')" data-tab="perfil" class="rounded-xl px-1 py-2 text-[10px] font-black text-slate-400 border border-transparent">👤<br>Perfil</button>
+    </div>
   </nav>
 
   <script>
-    // CLIENT-01/02/03 (2026-09-04): portal cliente, mobile-first, token-based (mismo patrón y
-    // MISMO token que reservas.html -- capability URL: identidad = posesión del enlace, no login
-    // usuario/contraseña, coherente con cómo BESOUL ya comparte acceso de reservas con clientes).
-    // Lee EXCLUSIVAMENTE besoulPublicClients/{token} -- nunca el documento monolítico de agenda.
-    // Ver CLIENT_PORTAL_ARCHITECTURE.md para el detalle de aislamiento y la propuesta de Rules.
+    // PORTAL-03..09 (2026-09-05, weekend build): Portal Cliente V2. Sigue el mismo modelo de
+    // identidad de V1 (capability URL por token, lectura exclusiva de besoulPublicClients/{token},
+    // nunca besoulSuite/agenda -- ver PORTAL_V2_SECURITY_AUDIT.md) y el mismo motor de contadores
+    // (calcularContadorClases/sesionesClienteParaPortal en agenda.html, ver
+    // PORTAL_V2_ROOT_CAUSE_ANALYSIS.md) -- ningún dato nuevo se inventa aquí, solo se muestra mejor
+    // lo que ya se publicaba (más 3 campos aditivos nuevos: tipoPlan/caducidadPlan/modalidad).
     const firebaseConfig = {
       apiKey: "AIzaSyAHp7l39BYkgHTVNNwPaaa21tTksBQ94Zo",
       authDomain: "besoul-suite.firebaseapp.com",
@@ -148,14 +210,6 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // CLIENT-07 (2026-09-04): interruptor único para la cancelación desde el portal. En false
-    // mientras besoulCancelacionesCliente no tenga Rules desplegadas (ver
-    // CLIENT_PORTAL_ARCHITECTURE.md) -- el botón se sustituye por una versión deshabilitada
-    // ("Próximamente"), sin onclick, sin intento de escritura, sin permission-denied posible.
-    // solicitarCancelacion() y todo el resto del mecanismo (besoulCancelacionesCliente,
-    // agenda.html/procesarCancelacionCliente) quedan intactos y listos -- cambiar esta constante
-    // a true es el único paso de código necesario para reactivarlo cuando se despliegue el
-    // backend/Rules correspondiente.
     const CANCELACION_PORTAL_HABILITADA = false;
 
     const TOKEN_RE = /^res_[a-z0-9_]{3,60}$/;
@@ -167,12 +221,32 @@
       v = v.split('&')[0].split('#')[0].trim();
       return TOKEN_RE.test(v) ? v : null;
     }
-    const token = normalizarToken(new URLSearchParams(location.search).get('t') || new URLSearchParams(location.search).get('token') || '');
+    const qs = new URLSearchParams(location.search);
+    const token = normalizarToken(qs.get('t') || qs.get('token') || '');
+    const vistaInicial = qs.get('view') === 'reservar' ? 'reservar' : null;
+    // DEMO local (B19): solo activo en localhost/127.0.0.1 con ?demo=1 -- nunca lee ni escribe
+    // Firestore, nunca puede activarse en producción (comprobación de host, no solo de query
+    // param). Ver PORTAL_V2_DEMO.md.
+    const DEMO_MODE = qs.get('demo') === '1' && ['localhost', '127.0.0.1'].includes(location.hostname);
+
     let clientData = null;
+    let scheduleData = null;
+    let selectedReserva = null;
+    let diaSeleccionadoCalendario = null;
 
     function escapeHTML(str) { return String(str || '').replace(/[&<>'"]/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[s])); }
     function labelFecha(iso) { const d = new Date(`${iso}T00:00:00`); return d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }); }
+    function labelFechaLarga(iso) { const d = new Date(`${iso}T00:00:00`); return d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }); }
     function nombreMesActual() { return new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }); }
+    function inicialesDe(nombre) {
+      const partes = String(nombre || '').trim().split(/\s+/).filter(Boolean);
+      if (!partes.length) return '?';
+      return (partes[0][0] + (partes[1]?.[0] || '')).toUpperCase();
+    }
+    function avatarHTML(nombre, avatarUrl, sizeClass) {
+      if (avatarUrl) return `<img src="${escapeHTML(avatarUrl)}" alt="" class="w-full h-full object-cover">`;
+      return `<div class="bs-avatar-fallback w-full h-full ${sizeClass || ''}">${escapeHTML(inicialesDe(nombre))}</div>`;
+    }
 
     function showError(msg) {
       document.getElementById('loading').classList.add('hidden');
@@ -181,19 +255,25 @@
     }
 
     async function init() {
+      if (DEMO_MODE) { clientData = datosDemoSinteticos(); arrancarApp(); return; }
       if (!token) { showError(); return; }
       try {
         const snap = await db.collection('besoulPublicClients').doc(token).get();
         if (!snap.exists || snap.data().activo === false) { showError(); return; }
         clientData = snap.data();
-        pintarPortal();
-        document.getElementById('loading').classList.add('hidden');
-        document.getElementById('app').classList.remove('hidden');
-        document.getElementById('portal-nav').classList.remove('hidden');
+        arrancarApp();
       } catch (err) {
         console.error(err);
         showError('No se ha podido cargar tu cuenta. Comprueba tu conexión e inténtalo de nuevo.');
       }
+    }
+
+    function arrancarApp() {
+      pintarPortal();
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      document.getElementById('portal-nav').classList.remove('hidden');
+      if (vistaInicial === 'reservar') { cambiarTabPortal('agenda'); cambiarSubTabAgenda('reservar'); }
     }
 
     function cambiarTabPortal(tab) {
@@ -202,30 +282,143 @@
       document.querySelectorAll('#portal-nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
       window.scrollTo(0, 0);
     }
+    function irAgendaTab() { cambiarTabPortal('agenda'); cambiarSubTabAgenda('mis-sesiones'); }
+
+    function cambiarSubTabAgenda(sub) {
+      document.querySelectorAll('.bs-sub-panel').forEach(el => el.classList.remove('active'));
+      document.getElementById(`sub-${sub}`).classList.add('active');
+      document.querySelectorAll('#agenda-subnav button').forEach(b => b.classList.toggle('active', b.dataset.subtab === sub));
+      if (sub === 'reservar' && !scheduleData) cargarDisponibilidadReserva();
+    }
+
+    const ETIQUETA_TIPO_PLAN = { bono: 'Bono', mensual: 'Plan mensual', sin_datos: '' };
 
     function pintarPortal() {
       const c = clientData;
+      document.getElementById('header-avatar').innerHTML = avatarHTML(c.clientName, c.avatarUrl);
+      document.getElementById('perfil-avatar').innerHTML = avatarHTML(c.clientName, c.avatarUrl, 'text-2xl');
       document.getElementById('lbl-cliente-nombre').textContent = c.clientName || 'Cliente';
-      document.getElementById('lbl-cliente-centro').textContent = c.centroNombre || c.trainerName || '';
-      document.getElementById('lbl-mes-actual').textContent = nombreMesActual();
-      document.getElementById('kpi-contratadas').textContent = c.sesionesContratadas || 0;
-      document.getElementById('kpi-realizadas').textContent = c.sesionesUsadas || 0;
-      document.getElementById('kpi-pendientes').textContent = c.sesionesPendientes || 0;
-      document.getElementById('perfil-nombre').textContent = c.clientName || '---';
+      document.getElementById('lbl-cliente-entrenador').textContent = c.trainerName || '---';
+      document.getElementById('lbl-cliente-centro').textContent = c.centroNombre || '---';
+      document.getElementById('perfil-nombre-grande').textContent = c.clientName || 'Cliente';
       document.getElementById('perfil-entrenador').textContent = c.trainerName || '---';
       document.getElementById('perfil-centro').textContent = c.centroNombre || '---';
       document.getElementById('perfil-email').textContent = c.email || '---';
       document.getElementById('perfil-telefono').textContent = c.telefono || '---';
-      document.getElementById('link-reservar').href = `reservas.html?token=${encodeURIComponent(token)}`;
+
+      document.getElementById('kpi-contratadas').textContent = c.sesionesContratadas || 0;
+      document.getElementById('kpi-realizadas').textContent = c.sesionesUsadas || 0;
+      document.getElementById('kpi-pendientes').textContent = c.sesionesPendientes || 0;
+      document.getElementById('lbl-periodo-plan').textContent = c.periodoSesiones || nombreMesActual();
+      const badgeTipo = document.getElementById('badge-tipo-plan');
+      const etiquetaTipo = ETIQUETA_TIPO_PLAN[c.tipoPlan] || '';
+      badgeTipo.textContent = etiquetaTipo;
+      badgeTipo.classList.toggle('hidden', !etiquetaTipo);
+      const lblModalidad = document.getElementById('lbl-modalidad-plan');
+      const partesModalidad = [];
+      if (c.modalidad) partesModalidad.push(c.modalidad);
+      if (c.tipoPlan === 'bono' && c.caducidadPlan) partesModalidad.push(`Caduca ${c.caducidadPlan}`);
+      lblModalidad.textContent = partesModalidad.join(' · ');
+      lblModalidad.classList.toggle('hidden', !partesModalidad.length);
 
       const proxima = c.proximaSesion;
       document.getElementById('proxima-sesion-inicio').innerHTML = proxima
-        ? `<div class="text-white font-bold">${escapeHTML(labelFecha(proxima.fechaISO))} — ${escapeHTML(proxima.hora)}</div><div class="text-slate-500 text-xs mt-0.5">${escapeHTML(c.trainerName || '')}</div>`
+        ? `<div class="text-white font-black text-base">${escapeHTML(labelFechaLarga(proxima.fechaISO))}</div><div class="text-amber-300 font-mono font-bold text-sm mt-0.5">${escapeHTML(proxima.hora)}</div><div class="text-slate-500 text-xs mt-1">${escapeHTML(c.trainerName || '')}</div>`
         : 'No tienes ninguna sesión próxima agendada.';
 
-      const proximas = Array.isArray(c.proximasSesiones) ? c.proximasSesiones : (proxima ? [proxima] : []);
+      pintarCalendarioSemana();
+      pintarListasSesiones();
+      pintarAvisos();
+    }
+
+    // ================== B5 CALENDARIO ==================
+    // Franja horizontal de 7 días (semana actual) construida a partir de los mismos datos ya
+    // publicados (proximasSesiones/sesionesRecientes) -- el Portal solo recibe un resumen (máx.
+    // 5 futuras + 3 pasadas, ver CLIENT_PORTAL_ARCHITECTURE.md), así que esta franja es
+    // deliberadamente semanal/compacta y no un mes completo: pintar un mes entero exigiría
+    // publicar más datos de los que hoy se envían, y no se ha hecho -- documentado como
+    // limitación conocida, no simulado con datos inventados.
+    function sesionesPorFecha() {
+      const mapa = {};
+      const todas = [...(clientData.proximasSesiones || []), ...(clientData.sesionesRecientes || [])];
+      todas.forEach(s => { if (!s || !s.fechaISO) return; (mapa[s.fechaISO] = mapa[s.fechaISO] || []).push(s); });
+      return mapa;
+    }
+    function pintarCalendarioSemana() {
+      const cont = document.getElementById('calendario-semana');
+      const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+      const diaSemana = hoy.getDay() === 0 ? 7 : hoy.getDay();
+      const lunes = new Date(hoy); lunes.setDate(hoy.getDate() - (diaSemana - 1));
+      const mapa = sesionesPorFecha();
+      const diasLbl = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+      let html = '';
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(lunes); d.setDate(lunes.getDate() + i);
+        const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const esHoy = d.getTime() === hoy.getTime();
+        const tieneSesion = !!mapa[iso];
+        html += `<button onclick="seleccionarDiaCalendario('${iso}')" class="bs-day-cell relative flex flex-col items-center py-2 rounded-lg ${tieneSesion ? 'has-session' : ''} ${esHoy ? 'today' : ''} bg-slate-900 border border-slate-800 hover:border-slate-700">
+          <span class="text-[9px] text-slate-500 font-bold">${diasLbl[i]}</span>
+          <span class="text-xs font-black ${esHoy ? 'text-amber-400' : 'text-white'}">${d.getDate()}</span>
+        </button>`;
+      }
+      cont.innerHTML = html;
+      if (diaSeleccionadoCalendario) pintarListaDiaSeleccionado();
+    }
+    function seleccionarDiaCalendario(iso) {
+      diaSeleccionadoCalendario = diaSeleccionadoCalendario === iso ? null : iso;
+      pintarListaDiaSeleccionado();
+    }
+    function pintarListaDiaSeleccionado() {
+      const lblDia = document.getElementById('lbl-dia-seleccionado');
+      const cont = document.getElementById('lista-dia-seleccionado');
+      if (!diaSeleccionadoCalendario) { lblDia.textContent = ''; cont.innerHTML = ''; return; }
+      lblDia.textContent = labelFecha(diaSeleccionadoCalendario);
+      const sesiones = sesionesPorFecha()[diaSeleccionadoCalendario] || [];
+      cont.innerHTML = sesiones.length
+        ? sesiones.map(s => `<div class="bg-slate-900/70 border border-slate-800 rounded-lg p-2 mt-1 text-xs flex items-center justify-between"><span class="text-white font-bold">${escapeHTML(s.hora)}</span>${badgeEstadoSesion(s)}</div>`).join('')
+        : '<div class="text-[11px] text-slate-600 mt-1">Sin sesiones este día.</div>';
+    }
+
+    // ================== B4 ESTADOS + LISTAS ==================
+    function badgeEstadoSesion(s) {
+      if (s.estadoCancelacion === 'cancelada_fuera_plazo') return '<span class="text-[9px] font-black uppercase text-red-300 bg-red-500/10 border border-red-500/30 rounded-full px-2 py-0.5">Cancelada fuera de plazo</span>';
+      const hoyISO = new Date().toISOString().slice(0, 10);
+      if (s.fechaISO >= hoyISO) return '<span class="text-[9px] font-black uppercase text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-full px-2 py-0.5">Próxima</span>';
+      return '<span class="text-[9px] font-black uppercase text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-2 py-0.5">Realizada</span>';
+    }
+
+    // PORTAL-05: "Pendiente de confirmación" -- localStorage únicamente. besoulReservas.read no
+    // permite a un caller sin auth leer sus propias solicitudes (Rules actuales y candidato:
+    // solo isAdmin()/PT dueño), así que no hay forma de consultarlo en vivo desde el Portal sin
+    // una Rule nueva no evaluada en esta fase. Limitación conocida y documentada, no oculta: no
+    // sincroniza entre dispositivos, y no detecta un rechazo explícito (expira sola a las 72h).
+    function solicitudesPendientesLocal() {
+      try {
+        const lista = JSON.parse(localStorage.getItem(`bs_portal_pendientes_${token}`) || '[]');
+        const ahora = Date.now();
+        return lista.filter(s => (ahora - (s.creadaEn || 0)) < 72 * 3600 * 1000);
+      } catch (e) { return []; }
+    }
+    function registrarSolicitudPendienteLocal(s) {
+      const lista = solicitudesPendientesLocal();
+      lista.push({ ...s, creadaEn: Date.now() });
+      localStorage.setItem(`bs_portal_pendientes_${token}`, JSON.stringify(lista));
+    }
+
+    function pintarListasSesiones() {
+      const c = clientData;
+      const pendientesLocal = solicitudesPendientesLocal();
+      const proximas = Array.isArray(c.proximasSesiones) ? c.proximasSesiones : (c.proximaSesion ? [c.proximaSesion] : []);
       const contProx = document.getElementById('lista-proximas');
-      contProx.innerHTML = proximas.length ? proximas.map(s => `
+      const filasPendientes = pendientesLocal.map(s => `
+        <div class="bg-slate-900/50 border border-dashed border-slate-700 rounded-xl p-3 flex items-center justify-between gap-3">
+          <div>
+            <div class="text-slate-300 font-bold text-sm">${escapeHTML(labelFecha(s.fechaISO))} · ${escapeHTML(s.hora)}</div>
+            <div class="text-[9px] font-black uppercase text-slate-500">Pendiente de confirmación</div>
+          </div>
+        </div>`).join('');
+      const filasProximas = proximas.map(s => `
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-3">
           <div>
             <div class="text-white font-bold text-sm">${escapeHTML(labelFecha(s.fechaISO))} · ${escapeHTML(s.hora)}</div>
@@ -234,25 +427,19 @@
           ${CANCELACION_PORTAL_HABILITADA
             ? `<button onclick="solicitarCancelacion('${escapeHTML(s.clave)}','${escapeHTML(s.fechaISO)}','${escapeHTML(s.hora)}')" class="bs-focus-ring shrink-0 text-[11px] font-bold text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-2.5 py-1.5">Cancelar</button>`
             : `<button type="button" disabled aria-disabled="true" title="La cancelación desde el portal todavía no está disponible. Contacta con tu entrenador." class="shrink-0 text-[11px] font-bold text-slate-500 bg-slate-800/50 border border-slate-700 rounded-lg px-2.5 py-1.5 cursor-not-allowed flex flex-col items-center leading-tight gap-0.5"><span>Cancelar reserva</span><span class="text-[9px] uppercase tracking-wide text-slate-600">Próximamente</span></button>`}
-        </div>`).join('') : '<div class="text-xs text-slate-500 text-center py-4">Sin próximas sesiones.</div>';
+        </div>`).join('');
+      contProx.innerHTML = (filasPendientes + filasProximas) || '<div class="text-xs text-slate-500 text-center py-4">Sin próximas sesiones.</div>';
 
       const recientes = Array.isArray(c.sesionesRecientes) ? c.sesionesRecientes : [];
       const contRec = document.getElementById('lista-recientes');
       contRec.innerHTML = recientes.length ? recientes.map(s => `
         <div class="bg-slate-900/50 border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-3">
-          <div>
-            <div class="text-slate-300 font-semibold text-sm">${escapeHTML(labelFecha(s.fechaISO))} · ${escapeHTML(s.hora)}</div>
-            ${s.estadoCancelacion === 'cancelada_fuera_plazo' ? '<div class="text-[10px] text-red-300 font-bold">Cancelada fuera de plazo · contabilizada</div>' : '<div class="text-[10px] text-emerald-400 font-bold">Realizada</div>'}
-          </div>
+          <div class="text-slate-300 font-semibold text-sm">${escapeHTML(labelFecha(s.fechaISO))} · ${escapeHTML(s.hora)}</div>
+          ${badgeEstadoSesion(s)}
         </div>`).join('') : '<div class="text-xs text-slate-500 text-center py-4">Sin sesiones recientes.</div>';
-
-      pintarAvisos();
     }
 
-    // CLIENT-06: avisos vienen de besoulPublicClients/{token}.avisos -- MISMO documento aislado
-    // de siempre, escrito solo por agenda.html (trusted, trainerKey-scoped), sin Rules nuevas. El
-    // estado leído/no-leído es SOLO local (localStorage por token) -- evita necesitar que un
-    // cliente sin cuenta tenga permiso de escritura en Firestore solo para marcar como leído.
+    // ================== B11 AVISOS ==================
     function leidosLocal() {
       try { return JSON.parse(localStorage.getItem(`bs_portal_leidos_${token}`) || '[]'); } catch (e) { return []; }
     }
@@ -269,7 +456,7 @@
       if (!avisos.length) { cont.innerHTML = '<div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center text-xs text-slate-500">No tienes avisos nuevos.</div>'; return; }
       cont.innerHTML = avisos.map(a => {
         const leido = leidos.has(a.id);
-        const fecha = a.fecha ? new Date(a.fecha).toLocaleDateString('es-ES', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+        const fecha = a.fecha ? new Date(a.fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
         return `<div class="bg-slate-900 border ${leido ? 'border-slate-800' : 'border-amber-500/40'} rounded-xl p-3 mb-2 flex items-start gap-2">
           ${leido ? '' : '<span class="shrink-0 w-2 h-2 rounded-full bg-amber-400 mt-1.5"></span>'}
           <div class="flex-1 min-w-0">
@@ -281,19 +468,11 @@
       }).join('');
     }
 
-    // CANCELACIÓN (Parte "Cancelación" del brief): nunca escribe directamente en dbAgenda -- crea
-    // un documento de solicitud que agenda.html procesa del lado del PT ya autenticado
-    // (iniciarModuloCancelacionesCliente/procesarCancelacionCliente). El plazo (por defecto 6h)
-    // viene del propio documento del cliente (cancelacionMinHoras), nunca hardcodeado aquí.
+    // ================== B8 CANCELACIÓN (sin cambios de contrato respecto a V1) ==================
     async function solicitarCancelacion(clave, fechaISO, hora) {
       const minHoras = clientData.cancelacionMinHoras || 6;
       const horas = (new Date(`${fechaISO}T${hora}:00`) - new Date()) / 3600000;
       const dentroDePlazo = horas >= minHoras;
-      // CLIENT-05: honestidad de expectativas -- el procesamiento hoy depende de que tu
-      // entrenador tenga Agenda abierta (ver CLIENT_PORTAL_ARCHITECTURE.md, sección
-      // "Cancelación inmediata"). Normalmente son segundos/minutos en horario de trabajo, pero
-      // NO es instantáneo garantizado todavía (eso requiere una función de servidor que aún no
-      // está desplegada) -- se dice así en vez de aparentar una cancelación inmediata que no es.
       let confirmado;
       if (dentroDePlazo) {
         confirmado = confirm(`¿Cancelar tu sesión del ${labelFecha(fechaISO)} a las ${hora}?\n\nQuedará liberada. Se aplicará en cuanto tu entrenador la reciba (normalmente en pocos minutos en horario de trabajo, no es instantáneo garantizado).`);
@@ -307,15 +486,8 @@
         const existente = await ref.get();
         if (existente.exists) { alert('Ya hay una solicitud de cancelación en curso para esta sesión.'); return; }
         await ref.set({
-          token,
-          clientId: clientData.clientId,
-          clientName: clientData.clientName,
-          trainerKey: clientData.trainerKey,
-          clave,
-          fechaISO,
-          hora,
-          cancelacionMinHoras: minHoras,
-          estado: 'pendiente',
+          token, clientId: clientData.clientId, clientName: clientData.clientName, trainerKey: clientData.trainerKey,
+          clave, fechaISO, hora, cancelacionMinHoras: minHoras, estado: 'pendiente',
           creadaEn: firebase.firestore.FieldValue.serverTimestamp()
         });
         alert('Solicitud de cancelación enviada. Se aplicará en cuanto tu entrenador la reciba.');
@@ -323,6 +495,265 @@
         console.error(err);
         alert('No se ha podido enviar la cancelación. Inténtalo de nuevo.');
       }
+    }
+
+    // ================== B6 RESERVA INTEGRADA ==================
+    // Motor portado de reservas.html (huecos/grupos/transacción con ID determinista), NO
+    // reescrito desde cero -- mismas colecciones (besoulPublicSchedule, besoulReservas), misma
+    // lógica de huecos libres, misma protección de doble reserva. Adaptado para vivir dentro de
+    // Portal → Agenda → Reservar en vez de una página aparte.
+    function dateISO(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+    function timeToMin(t) { const [h, m] = String(t || '0:0').split(':').map(Number); return h * 60 + m; }
+    function minToTime(min) { return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`; }
+    function dayIndexMonSun(d) { const x = d.getDay(); return x === 0 ? 7 : x; }
+    function normalizarDiaTexto(v) { return String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+    function parseBloqueosCliente() {
+      const texto = clientData?.reservasBloqueadasTexto || clientData?.restriccionesReservas?.bloquesTexto || '';
+      return String(texto || '').split('\n').map(l => l.trim()).filter(Boolean).map(linea => {
+        const l = normalizarDiaTexto(linea);
+        const m = l.match(/(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo|[1-7])\s+([0-2]?\d:[0-5]\d)\s*-\s*([0-2]?\d:[0-5]\d)/i);
+        if (!m) return null;
+        const dias = { lunes: 1, martes: 2, miercoles: 3, miércoles: 3, jueves: 4, viernes: 5, sabado: 6, sábado: 6, domingo: 7 };
+        const dia = dias[m[1]] || Number(m[1]);
+        return { dia, inicio: m[2].padStart(5, '0'), fin: m[3].padStart(5, '0') };
+      }).filter(Boolean);
+    }
+    function bloqueadoPorCliente(iso, min) {
+      const d = new Date(`${iso}T00:00:00`);
+      const dia = dayIndexMonSun(d);
+      return parseBloqueosCliente().some(b => b.dia === dia && min < timeToMin(b.fin) && (min + 45) > timeToMin(b.inicio));
+    }
+    function normalizarBloques(bloques) {
+      return (Array.isArray(bloques) ? bloques : []).map(b => ({ inicio: String(b?.inicio || '').slice(0, 5), fin: String(b?.fin || '').slice(0, 5) })).filter(b => b.inicio && b.fin && b.inicio < b.fin).sort((a, b) => a.inicio.localeCompare(b.inicio));
+    }
+    function fusionarBloques(bloques) {
+      const lista = normalizarBloques(bloques);
+      if (!lista.length) return [];
+      const out = [{ ...lista[0] }];
+      for (let i = 1; i < lista.length; i++) {
+        const ultimo = out[out.length - 1], actual = lista[i];
+        if (actual.inicio <= ultimo.fin) { if (actual.fin > ultimo.fin) ultimo.fin = actual.fin; } else out.push({ ...actual });
+      }
+      return out;
+    }
+    function bloquesDisponibilidadFechaCliente(fechaISO) {
+      const disp = scheduleData?.disponibilidad || {};
+      const d = new Date(`${fechaISO}T00:00:00`);
+      const dia = dayIndexMonSun(d);
+      const semanal = disp.semanal?.[dia];
+      const excepcion = disp.excepciones?.[fechaISO];
+      if (excepcion) {
+        if (excepcion.activo === false) return [];
+        if (excepcion.override === true) return excepcion.activo ? normalizarBloques(excepcion.bloques) : [];
+      }
+      let bloques = [];
+      if (semanal?.activo) bloques = bloques.concat(normalizarBloques(semanal.bloques));
+      if (excepcion?.activo !== false) bloques = bloques.concat(normalizarBloques(excepcion?.bloques));
+      return fusionarBloques(bloques);
+    }
+    function slotBloqueadoPorPT(iso, min) {
+      const lista = scheduleData?.disponibilidad?.bloqueos?.[iso] || [];
+      return new Set((Array.isArray(lista) ? lista : []).map(x => String(x || '').slice(0, 5))).has(minToTime(min));
+    }
+    function slotOcupado(clave) { return !!(scheduleData.ocupados && scheduleData.ocupados[clave]); }
+    function bloqueLibre(iso, min) {
+      return !slotOcupado(`${iso}_${minToTime(min)}`) && !slotOcupado(`${iso}_${minToTime(min + 15)}`) && !slotOcupado(`${iso}_${minToTime(min + 30)}`);
+    }
+    function intervalosOcupadosDentroBloque(iso, start, end) {
+      const ocupados = []; let abierto = null;
+      for (let m = start; m < end; m += 15) {
+        const ocupado = slotOcupado(`${iso}_${minToTime(m)}`) || slotBloqueadoPorPT(iso, m) || bloqueadoPorCliente(iso, m);
+        if (ocupado && abierto === null) abierto = m;
+        if (!ocupado && abierto !== null) { ocupados.push({ inicio: abierto, fin: m }); abierto = null; }
+      }
+      if (abierto !== null) ocupados.push({ inicio: abierto, fin: end });
+      return ocupados;
+    }
+    function huecosLibresFecha(iso) {
+      const huecos = [];
+      bloquesDisponibilidadFechaCliente(iso).forEach(b => {
+        const start = timeToMin(b.inicio), end = timeToMin(b.fin);
+        if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return;
+        const ocupados = intervalosOcupadosDentroBloque(iso, start, end);
+        let cursor = start;
+        ocupados.forEach(o => {
+          if (o.inicio > cursor) huecos.push({ inicio: cursor, fin: o.inicio, tieneAnterior: cursor > start, tieneSiguiente: true });
+          cursor = Math.max(cursor, o.fin);
+        });
+        if (cursor < end) huecos.push({ inicio: cursor, fin: end, tieneAnterior: cursor > start, tieneSiguiente: false });
+      });
+      return huecos.map(h => ({ ...h, duracion: h.fin - h.inicio })).filter(h => h.duracion >= 45);
+    }
+    function iniciosEficientesHueco(h) {
+      const out = [];
+      if (h.tieneAnterior) { for (let m = h.inicio; m + 45 <= h.fin; m += 45) out.push(m); return out; }
+      if (h.tieneSiguiente) { const tmp = []; for (let fin = h.fin; fin - 45 >= h.inicio; fin -= 45) tmp.push(fin - 45); return tmp.reverse(); }
+      for (let m = h.inicio; m + 45 <= h.fin; m += 45) out.push(m);
+      return out;
+    }
+    function generarSlotsReserva() {
+      const out = []; const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+      const now = new Date(); const minNow = now.getHours() * 60 + now.getMinutes();
+      const vistos = new Set();
+      for (let i = 0; i < 30; i++) {
+        const d = new Date(hoy); d.setDate(hoy.getDate() + i);
+        const iso = dateISO(d);
+        huecosLibresFecha(iso).forEach(h => {
+          iniciosEficientesHueco(h).forEach(m => {
+            if (i === 0 && m <= minNow + 120) return;
+            if (!bloqueLibre(iso, m)) return;
+            const clave = `${iso}_${minToTime(m)}`;
+            if (vistos.has(clave)) return;
+            vistos.add(clave);
+            out.push({ iso, hora: minToTime(m), label: `${labelFecha(iso)} · ${minToTime(m)}` });
+          });
+        });
+      }
+      return out.sort((a, b) => a.iso.localeCompare(b.iso) || a.hora.localeCompare(b.hora));
+    }
+    function renderSlotsReserva() {
+      const cont = document.getElementById('slots'); const slots = generarSlotsReserva();
+      if (!slots.length) { cont.innerHTML = '<div class="text-xs text-slate-500 text-center py-6 border border-dashed border-slate-800 rounded-xl">No hay huecos disponibles publicados ahora mismo.</div>'; return; }
+      const grupos = {}; slots.forEach(s => { (grupos[s.iso] = grupos[s.iso] || []).push(s); });
+      cont.innerHTML = Object.keys(grupos).slice(0, 10).map(iso => `
+        <div><h3 class="text-[11px] font-black text-amber-400 uppercase mb-1.5">${escapeHTML(labelFecha(iso))}</h3>
+        <div class="grid grid-cols-4 gap-1.5">${grupos[iso].map(s => `<button class="slot-btn bg-slate-950 hover:bg-cyan-500/20 border border-slate-800 hover:border-cyan-500/40 rounded-lg py-2 text-[11px] font-black text-white" onclick="seleccionarSlotReserva('${s.iso}','${s.hora}','individual','','')">${s.hora}</button>`).join('')}</div></div>
+      `).join('');
+    }
+    function gruposAbiertosDisponiblesReserva() {
+      const grupos = Array.isArray(scheduleData.gruposAbiertos) ? scheduleData.gruposAbiertos : [];
+      const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+      const now = new Date(); const minNow = now.getHours() * 60 + now.getMinutes();
+      return grupos.filter(g => {
+        if (!g || !g.fechaISO || !g.hora || (g.plazasLibres || 0) <= 0) return false;
+        if (Array.isArray(g.asistentesIds) && g.asistentesIds.includes(clientData?.clientId)) return false;
+        const d = new Date(`${g.fechaISO}T00:00:00`);
+        const diff = Math.round((d - hoy) / 86400000);
+        const m = timeToMin(g.hora);
+        if (diff < 0 || diff > 30) return false;
+        if (diff === 0 && m <= minNow + 120) return false;
+        if (bloqueadoPorCliente(g.fechaISO, m)) return false;
+        return true;
+      }).sort((a, b) => String(a.fechaISO).localeCompare(String(b.fechaISO)) || String(a.hora).localeCompare(String(b.hora)));
+    }
+    function renderGroupSlotsReserva() {
+      const cont = document.getElementById('group-slots');
+      const grupos = gruposAbiertosDisponiblesReserva();
+      if (!grupos.length) { cont.innerHTML = '<div class="text-xs text-slate-500 text-center py-6 border border-dashed border-slate-800 rounded-xl">Sin grupos abiertos con plazas ahora mismo.</div>'; return; }
+      const byDate = {}; grupos.forEach(g => { (byDate[g.fechaISO] = byDate[g.fechaISO] || []).push(g); });
+      cont.innerHTML = Object.keys(byDate).slice(0, 10).map(iso => `
+        <div><h3 class="text-[11px] font-black text-emerald-400 uppercase mb-1.5">${escapeHTML(labelFecha(iso))}</h3>
+        <div class="space-y-1.5">${byDate[iso].map(g => `<button class="w-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 rounded-lg p-2.5 text-left" onclick="seleccionarSlotReserva('${g.fechaISO}','${g.hora}','grupo_abierto','${escapeHTML(g.grupoId || '')}','${escapeHTML(g.grupoNombre || 'Grupo abierto')}')"><div class="flex justify-between items-center"><span class="text-white font-black text-xs">${escapeHTML(g.grupoNombre || 'Grupo abierto')} · ${escapeHTML(g.hora)}</span><span class="text-[10px] text-emerald-300 font-bold">${Number(g.plazasLibres || 0)} libre(s)</span></div></button>`).join('')}</div></div>
+      `).join('');
+    }
+    function seleccionarSlotReserva(iso, hora, tipoReserva, grupoId, grupoNombre) {
+      selectedReserva = { iso, hora, clave: `${iso}_${hora}`, tipoReserva, grupoId, grupoNombre };
+      document.getElementById('selected-slot').textContent = tipoReserva === 'grupo_abierto' ? `${labelFecha(iso)} a las ${hora} · ${grupoNombre}` : `${labelFecha(iso)} · ${hora}`;
+      document.getElementById('selected-panel').classList.remove('hidden');
+      document.getElementById('selected-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    function cancelarSeleccionReserva() { selectedReserva = null; document.getElementById('selected-panel').classList.add('hidden'); }
+
+    async function cargarDisponibilidadReserva() {
+      document.getElementById('reservar-loading').classList.remove('hidden');
+      document.getElementById('reservar-error').classList.add('hidden');
+      document.getElementById('reservar-app').classList.add('hidden');
+      try {
+        if (DEMO_MODE) { scheduleData = datosDemoSchedule(); }
+        else {
+          const snap = await db.collection('besoulPublicSchedule').doc(clientData.trainerKey).get();
+          if (!snap.exists) throw new Error('SIN_DISPONIBILIDAD');
+          scheduleData = snap.data();
+        }
+        renderSlotsReserva();
+        renderGroupSlotsReserva();
+        document.getElementById('reservar-loading').classList.add('hidden');
+        document.getElementById('reservar-app').classList.remove('hidden');
+      } catch (err) {
+        console.error(err);
+        document.getElementById('reservar-loading').classList.add('hidden');
+        const errEl = document.getElementById('reservar-error');
+        errEl.textContent = err.message === 'SIN_DISPONIBILIDAD' ? 'Tu entrenador todavía no tiene disponibilidad publicada.' : 'No se ha podido cargar la disponibilidad. Inténtalo más tarde.';
+        errEl.classList.remove('hidden');
+      }
+    }
+
+    async function enviarSolicitudReserva() {
+      if (!selectedReserva) return;
+      if (DEMO_MODE) {
+        alert('Modo demo: no se envía ninguna solicitud real.');
+        document.getElementById('reservar-app').classList.add('hidden');
+        document.getElementById('reservar-success').classList.remove('hidden');
+        return;
+      }
+      if (selectedReserva.tipoReserva !== 'grupo_abierto' && !bloqueLibre(selectedReserva.iso, timeToMin(selectedReserva.hora))) { alert('Ese hueco acaba de dejar de estar disponible. Elige otro.'); await cargarDisponibilidadReserva(); return; }
+      if (selectedReserva.tipoReserva === 'grupo_abierto') {
+        const ok = gruposAbiertosDisponiblesReserva().some(g => g.clave === selectedReserva.clave && (g.grupoId || '') === (selectedReserva.grupoId || '') && (g.plazasLibres || 0) > 0);
+        if (!ok) { alert('Ese grupo ya no tiene plazas. Elige otra opción.'); await cargarDisponibilidadReserva(); return; }
+      }
+      const btn = document.getElementById('send-btn'); btn.disabled = true; btn.textContent = 'Enviando...';
+      try {
+        const esGrupo = selectedReserva.tipoReserva === 'grupo_abierto';
+        const id = esGrupo ? `${clientData.trainerKey}__${selectedReserva.clave}__${clientData.clientId}` : `${clientData.trainerKey}__${selectedReserva.clave}`;
+        const reservaRef = db.collection('besoulReservas').doc(id);
+        const payload = {
+          token, clientId: clientData.clientId, clientName: clientData.clientName, email: clientData.email || '', telefono: clientData.telefono || '',
+          trainerKey: clientData.trainerKey, trainerName: clientData.trainerName || '', centroId: clientData.centroId || '', centroNombre: clientData.centroNombre || '',
+          fechaISO: selectedReserva.iso, hora: selectedReserva.hora, clave: selectedReserva.clave, duracionMin: 45,
+          tipoReserva: selectedReserva.tipoReserva || 'individual', grupoId: selectedReserva.grupoId || '', grupoNombre: selectedReserva.grupoNombre || '',
+          comentarios: document.getElementById('comments').value.trim(), estado: 'pendiente', source: 'portalClienteV2',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        await db.runTransaction(async tx => {
+          const snap = await tx.get(reservaRef);
+          if (snap.exists) throw new Error('SLOT_OCUPADO');
+          tx.set(reservaRef, payload);
+        });
+        registrarSolicitudPendienteLocal({ fechaISO: selectedReserva.iso, hora: selectedReserva.hora, clave: selectedReserva.clave });
+        document.getElementById('reservar-app').classList.add('hidden');
+        document.getElementById('reservar-success').classList.remove('hidden');
+      } catch (err) {
+        console.error(err);
+        if (err && err.message === 'SLOT_OCUPADO') { alert('Justo acaban de solicitar esa misma franja. Elige otra hora.'); await cargarDisponibilidadReserva(); }
+        else alert('No se ha podido enviar la solicitud. Inténtalo de nuevo.');
+        btn.disabled = false; btn.textContent = 'Enviar solicitud';
+      }
+    }
+
+    // ================== B19 DATOS SINTÉTICOS DE DEMO (nunca toca Firestore) ==================
+    function datosDemoSinteticos() {
+      const hoy = new Date();
+      const iso = (offsetDias) => { const d = new Date(hoy); d.setDate(d.getDate() + offsetDias); return dateISO(d); };
+      return {
+        clientName: 'Marta Sintética (DEMO)', trainerName: 'Carmen', centroNombre: 'Alfa Prime', centroId: 'alfa_prime',
+        email: 'marta.demo@example.com', telefono: '600 111 222', trainerKey: 'carmen', clientId: 'demo-c1',
+        avatarUrl: '', sesionesContratadas: 12, sesionesUsadas: 7, sesionesPendientes: 5, periodoSesiones: nombreMesActual(),
+        tipoPlan: 'mensual', modalidad: 'Individual 3x/semana', caducidadPlan: '',
+        proximaSesion: { fechaISO: iso(1), hora: '10:00', clave: `${iso(1)}_10:00` },
+        proximasSesiones: [
+          { fechaISO: iso(1), hora: '10:00', clave: `${iso(1)}_10:00` },
+          { fechaISO: iso(3), hora: '18:00', clave: `${iso(3)}_18:00` },
+          { fechaISO: iso(5), hora: '10:00', clave: `${iso(5)}_10:00` },
+        ],
+        sesionesRecientes: [
+          { fechaISO: iso(-1), hora: '10:00' },
+          { fechaISO: iso(-3), hora: '18:00' },
+          { fechaISO: iso(-6), hora: '10:00', estadoCancelacion: 'cancelada_fuera_plazo' },
+        ],
+        avisos: [
+          { id: 'av1', fecha: new Date(hoy - 2 * 3600000).toISOString(), contenido: 'Recuerda traer una toalla para la sesión de mañana.' },
+          { id: 'av2', fecha: new Date(hoy - 30 * 3600000).toISOString(), contenido: 'Esta semana cambiamos el foco a tren inferior.' },
+        ],
+        cancelacionMinHoras: 6,
+      };
+    }
+    function datosDemoSchedule() {
+      return {
+        trainerName: 'Carmen', centroNombre: 'Alfa Prime',
+        disponibilidad: { semanal: { 1: { activo: true, bloques: [{ inicio: '09:00', fin: '13:00' }, { inicio: '16:00', fin: '20:00' }] }, 3: { activo: true, bloques: [{ inicio: '09:00', fin: '13:00' }] }, 5: { activo: true, bloques: [{ inicio: '09:00', fin: '13:00' }] } } },
+        ocupados: {},
+        gruposAbiertos: [{ fechaISO: dateISO(new Date(Date.now() + 2 * 86400000)), hora: '19:00', grupoId: 'g1', grupoNombre: 'HIIT grupal (DEMO)', capacidad: 8, plazasLibres: 3, asistentesIds: [] }],
+      };
     }
 
     init();
