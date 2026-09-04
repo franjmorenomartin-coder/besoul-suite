@@ -233,6 +233,40 @@
             ${s.estadoCancelacion === 'cancelada_fuera_plazo' ? '<div class="text-[10px] text-red-300 font-bold">Cancelada fuera de plazo · contabilizada</div>' : '<div class="text-[10px] text-emerald-400 font-bold">Realizada</div>'}
           </div>
         </div>`).join('') : '<div class="text-xs text-slate-500 text-center py-4">Sin sesiones recientes.</div>';
+
+      pintarAvisos();
+    }
+
+    // CLIENT-06: avisos vienen de besoulPublicClients/{token}.avisos -- MISMO documento aislado
+    // de siempre, escrito solo por agenda.html (trusted, trainerKey-scoped), sin Rules nuevas. El
+    // estado leído/no-leído es SOLO local (localStorage por token) -- evita necesitar que un
+    // cliente sin cuenta tenga permiso de escritura en Firestore solo para marcar como leído.
+    function leidosLocal() {
+      try { return JSON.parse(localStorage.getItem(`bs_portal_leidos_${token}`) || '[]'); } catch (e) { return []; }
+    }
+    function marcarAvisoLeido(id) {
+      const set = new Set(leidosLocal());
+      set.add(id);
+      localStorage.setItem(`bs_portal_leidos_${token}`, JSON.stringify([...set]));
+      pintarAvisos();
+    }
+    function pintarAvisos() {
+      const avisos = Array.isArray(clientData.avisos) ? clientData.avisos : [];
+      const leidos = new Set(leidosLocal());
+      const cont = document.getElementById('lista-avisos');
+      if (!avisos.length) { cont.innerHTML = '<div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center text-xs text-slate-500">No tienes avisos nuevos.</div>'; return; }
+      cont.innerHTML = avisos.map(a => {
+        const leido = leidos.has(a.id);
+        const fecha = a.fecha ? new Date(a.fecha).toLocaleDateString('es-ES', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+        return `<div class="bg-slate-900 border ${leido ? 'border-slate-800' : 'border-amber-500/40'} rounded-xl p-3 mb-2 flex items-start gap-2">
+          ${leido ? '' : '<span class="shrink-0 w-2 h-2 rounded-full bg-amber-400 mt-1.5"></span>'}
+          <div class="flex-1 min-w-0">
+            <div class="text-[10px] text-slate-500">${escapeHTML(fecha)} · ${escapeHTML(clientData.trainerName || '')}</div>
+            <div class="text-sm ${leido ? 'text-slate-400' : 'text-white font-semibold'} mt-0.5">${escapeHTML(a.contenido || '')}</div>
+          </div>
+          ${leido ? '' : `<button onclick="marcarAvisoLeido('${escapeHTML(a.id)}')" class="bs-focus-ring shrink-0 text-[10px] text-slate-500 hover:text-white">Marcar leído</button>`}
+        </div>`;
+      }).join('');
     }
 
     // CANCELACIÓN (Parte "Cancelación" del brief): nunca escribe directamente en dbAgenda -- crea
@@ -243,11 +277,16 @@
       const minHoras = clientData.cancelacionMinHoras || 6;
       const horas = (new Date(`${fechaISO}T${hora}:00`) - new Date()) / 3600000;
       const dentroDePlazo = horas >= minHoras;
+      // CLIENT-05: honestidad de expectativas -- el procesamiento hoy depende de que tu
+      // entrenador tenga Agenda abierta (ver CLIENT_PORTAL_ARCHITECTURE.md, sección
+      // "Cancelación inmediata"). Normalmente son segundos/minutos en horario de trabajo, pero
+      // NO es instantáneo garantizado todavía (eso requiere una función de servidor que aún no
+      // está desplegada) -- se dice así en vez de aparentar una cancelación inmediata que no es.
       let confirmado;
       if (dentroDePlazo) {
-        confirmado = confirm(`¿Cancelar tu sesión del ${labelFecha(fechaISO)} a las ${hora}? Quedará liberada.`);
+        confirmado = confirm(`¿Cancelar tu sesión del ${labelFecha(fechaISO)} a las ${hora}?\n\nQuedará liberada. Se aplicará en cuanto tu entrenador la reciba (normalmente en pocos minutos en horario de trabajo, no es instantáneo garantizado).`);
       } else {
-        confirmado = confirm(`La cancelación se realiza con menos de ${minHoras} horas de antelación.\n\nEsta sesión se contabilizará como realizada y perderás la clase.\n\n¿Confirmas la cancelación de todos modos?`);
+        confirmado = confirm(`La cancelación se realiza con menos de ${minHoras} horas de antelación.\n\nEsta sesión se contabilizará como realizada y perderás la clase.\n\nSe aplicará en cuanto tu entrenador la reciba (no instantáneo garantizado).\n\n¿Confirmas la cancelación de todos modos?`);
       }
       if (!confirmado) return;
       try {
@@ -267,7 +306,7 @@
           estado: 'pendiente',
           creadaEn: firebase.firestore.FieldValue.serverTimestamp()
         });
-        alert('Solicitud de cancelación enviada. Se aplicará en unos instantes.');
+        alert('Solicitud de cancelación enviada. Se aplicará en cuanto tu entrenador la reciba.');
       } catch (err) {
         console.error(err);
         alert('No se ha podido enviar la cancelación. Inténtalo de nuevo.');

@@ -2364,6 +2364,20 @@ miércoles 07:00-09:00"></textarea>
             abrirWhatsApp(ficha.telefono, mensaje);
             avisoMultiplePreparados.add(id);
             renderListaEnvioAvisoMultiple();
+            // CLIENT-06 (2026-09-04): reutiliza el flujo de WhatsApp ya existente (el PT no
+            // aprende una interfaz nueva) para además dejar el mismo aviso visible en el portal
+            // del cliente -- ver CLIENT_PORTAL_ARCHITECTURE.md sección "Notificaciones". Guardado
+            // en la propia ficha (no en besoulNotifications, que exige isActiveUser() y por tanto
+            // nunca sería legible por un cliente público sin cuenta) y sincronizado hacia
+            // besoulPublicClients/{token} por el MISMO batch-write ya trusted que ya escribe el
+            // resto de campos del portal -- sin Rules nuevas.
+            if (mensaje) {
+                if (!Array.isArray(ficha.avisosPortal)) ficha.avisosPortal = [];
+                ficha.avisosPortal.unshift({ id: `av_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,6)}`, fecha: new Date().toISOString(), contenido: mensaje });
+                ficha.avisosPortal = ficha.avisosPortal.slice(0, 10);
+                localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
+                publicarReservasPublicasDebounced();
+            }
         }
 
         function volverASeleccionAvisoMultiple() {
@@ -7324,6 +7338,7 @@ Cancelar = no hacer nada`,
                             proximasSesiones: sesionesPortal.proximas,
                             sesionesRecientes: sesionesPortal.recientes,
                             cancelacionMinHoras: parseInt(c.cancelacionMinHoras, 10) || CANCELACION_MIN_HORAS_DEFAULT,
+                            avisos: Array.isArray(c.avisosPortal) ? c.avisosPortal.slice(0, 10).map(a => ({ id: a.id, fecha: a.fecha, contenido: a.contenido })) : [],
                             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                         }, { merge: true });
                     });
