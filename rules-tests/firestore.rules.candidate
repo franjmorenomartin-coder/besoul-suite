@@ -76,7 +76,13 @@ service cloud.firestore {
         && request.resource.data.duracionMin == 45
         && exists(/databases/$(database)/documents/besoulPublicClients/$(request.resource.data.token))
         && get(/databases/$(database)/documents/besoulPublicClients/$(request.resource.data.token)).data.clientId == request.resource.data.clientId
-        && get(/databases/$(database)/documents/besoulPublicClients/$(request.resource.data.token)).data.trainerKey == request.resource.data.trainerKey;
+        && get(/databases/$(database)/documents/besoulPublicClients/$(request.resource.data.token)).data.trainerKey == request.resource.data.trainerKey
+        // BLOQUE A (weekend build, 2026-09-05): hallazgo real de las pruebas de emulador -- la
+        // Rule original nunca comprobaba `activo`, así que un token YA REVOCADO (p.ej. tras
+        // "Regenerar enlace", SEC-05) seguía pudiendo crear una reserva por Firestore directo; el
+        // único bloqueo real era la UI de reservas.html. Cerrado aquí en el candidato (todavía sin
+        // desplegar) -- ver rules-tests/README.md para la prueba que lo reproduce.
+        && get(/databases/$(database)/documents/besoulPublicClients/$(request.resource.data.token)).data.activo != false;
       allow read: if isAdmin() || (isActiveUser() && resource.data.trainerKey == myTrainerKey());
       allow update, delete: if isAdmin() || (isActiveUser() && resource.data.trainerKey == myTrainerKey());
     }

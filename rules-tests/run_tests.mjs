@@ -218,6 +218,13 @@ async function run() {
   } catch (e) { record('besoulPublicClients: ADMIN puede tocar el token de cualquier cliente', false, e.message); }
 
   // ---- besoulReservas.create (auditoría 2026-09-02): cross-check real token/clientId/trainerKey ----
+  // Re-sembrar res_tokenA como activo:true -- los tests de besoulPublicClients de arriba lo
+  // revocaron a propósito (activo:false) para probar la revocación; sin este reseed, los tests de
+  // "token válido" de aquí abajo estarían probando, sin querer, un token ya revocado (aislamiento
+  // de test, no de Rules -- el mismo tipo de trampa que el caso de disponibilidadReservas.ptB).
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'besoulPublicClients', 'res_tokenA'), { token: 'res_tokenA', trainerKey: 'ptA', clientId: 'c1', activo: true });
+  });
   try {
     await assertSucceeds(setDoc(doc(anon, 'besoulReservas', 'res1'), {
       estado: 'pendiente', token: 'res_tokenA', clientId: 'c1', trainerKey: 'ptA', duracionMin: 45,
@@ -230,6 +237,33 @@ async function run() {
     }));
     record('besoulReservas: clientId que NO coincide con el token real -> DENEGADO (suplantación)', true);
   } catch (e) { record('besoulReservas: clientId que NO coincide con el token real -> DENEGADO (suplantación)', false, e.message); }
+  try {
+    await assertFails(setDoc(doc(anon, 'besoulReservas', 'res3'), {
+      estado: 'pendiente', token: 'res_tokenA', clientId: 'c1', trainerKey: 'ptB', duracionMin: 45,
+    }));
+    record('besoulReservas: trainerKey que NO coincide con el token real -> DENEGADO', true);
+  } catch (e) { record('besoulReservas: trainerKey que NO coincide con el token real -> DENEGADO', false, e.message); }
+
+  // ---- BLOQUE A (weekend build): token revocado (activo:false) -- HALLAZGO ya corregido en el
+  // candidato: la Rule original no comprobaba `activo` en absoluto (una vez detectado con la
+  // primera ejecución de este mismo test, se añadió `data.activo != false` a besoulReservas.create
+  // -- ver comentario en firestore.rules.candidate). Este caso ahora prueba el comportamiento
+  // CORREGIDO: debe fallar.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'besoulPublicClients', 'res_tokenRevocado'), { token: 'res_tokenRevocado', trainerKey: 'ptA', clientId: 'c1', activo: false });
+  });
+  try {
+    await assertFails(setDoc(doc(anon, 'besoulReservas', 'res4'), {
+      estado: 'pendiente', token: 'res_tokenRevocado', clientId: 'c1', trainerKey: 'ptA', duracionMin: 45,
+    }));
+    record('besoulReservas: token REVOCADO (activo:false) YA NO puede crear una reserva (fix añadido en esta misma sesión tras encontrar el hueco)', true);
+  } catch (e) { record('besoulReservas: token REVOCADO (activo:false) YA NO puede crear una reserva (fix añadido en esta misma sesión tras encontrar el hueco)', false, e.message); }
+
+  // ---- PT inactivo intentando escribir besoulPublicClients (más allá de solo Agenda) ----
+  try {
+    await assertFails(updateDoc(doc(inactivo, 'besoulPublicClients', 'res_tokenA'), { activo: false }));
+    record('besoulPublicClients: PT con activo:false NO puede revocar ningún token', true);
+  } catch (e) { record('besoulPublicClients: PT con activo:false NO puede revocar ningún token', false, e.message); }
 
   await testEnv.cleanup();
 

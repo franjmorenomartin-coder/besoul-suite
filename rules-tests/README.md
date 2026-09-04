@@ -6,7 +6,7 @@ Pruebas reproducibles reales (Firebase Rules Unit Testing, contra el emulador de
 
 - `firestore.rules.candidate` — el ruleset candidato EXACTO evaluado (los 5 puntos de FASE 9: `isActiveUser()` en Agenda, FASE 2 write isolation, CRM admin-only, ownership `besoulPublicClients`, cross-check `besoulReservas.create`). Deliberadamente NO incluye `besoulSolicitudesEliminacion`/`besoulNotifications`/la rama `avisosLeidos` — ver `RULES_DEPLOYMENT_MATRIX.md` en la raíz del repo para por qué se excluyeron de este primer deployment.
 - `run_tests.mjs` — el script de pruebas (32 casos).
-- `LAST_RUN_RESULTS.txt` — salida real de la última ejecución (32/32, 2026-09-04).
+- `LAST_RUN_RESULTS.txt` — salida real de la última ejecución (35/35, 2026-09-05, BLOQUE A del weekend build).
 
 ## Cómo reproducir
 
@@ -39,3 +39,9 @@ JAVA_HOME=<ruta a un JDK 21+> PATH="$JAVA_HOME/bin:$PATH" \
 ## Hallazgo del propio proceso de pruebas (no del ruleset)
 
 La primera ejecución reportó un falso positivo en "PT A NO puede modificar `disponibilidadReservas.ptB`": el payload de prueba usaba el mismo valor ya sembrado (`{lunes:[]}`), así que Firestore no detectó ningún cambio real en esa clave y `affectedKeys()` quedó vacío -- vacuamente `hasOnly(...)` es verdadero sobre un conjunto vacío. No era un fallo de la Rule, era un fallo del dato de prueba (mismo valor antes/después). Corregido usando un valor realmente distinto; la re-ejecución confirmó el comportamiento correcto. Se documenta aquí porque es el tipo de error que la inspección visual nunca habría detectado en ningún sentido -- ni el error del test, ni si hubiera sido real.
+
+Un segundo caso similar apareció en BLOQUE A: los tests de revocación de `besoulPublicClients` (que revocan `res_tokenA` a propósito) se ejecutan ANTES que los de `besoulReservas`, y sin re-sembrar el token como activo entre bloques, los tests de "token válido" de `besoulReservas` estaban probando, sin querer, un token ya revocado por el bloque anterior. Se corrigió re-sembrando `res_tokenA` (`activo:true`) justo antes del bloque de `besoulReservas`. Ambos casos son el mismo tipo de error -- falta de aislamiento entre casos de prueba que comparten estado del emulador -- y ambos se detectaron y corrigieron por la propia ejecución real, nunca hipotéticamente.
+
+## Hallazgo real del RULESET (BLOQUE A, 2026-09-05) -- corregido en el candidato
+
+`besoulReservas.create` nunca comprobaba el campo `activo` de `besoulPublicClients/{token}` -- solo cruzaba que `clientId`/`trainerKey` correspondieran al token. Un token YA REVOCADO (p.ej. tras pulsar "Regenerar enlace", SEC-05, o tras una baja de cliente) podía seguir creando una reserva real por Firestore directo -- el único bloqueo existente era la comprobación de UI en `reservas.html` (`clientData.activo === false`). Añadido `&& get(...).data.activo != false` a la Rule del candidato. Confirmado con una prueba real: antes del fix, "token revocado sigue reservando" pasaba (mal); después del fix, falla (correcto). **Este cambio vive únicamente en `firestore.rules.candidate`, no desplegado.**

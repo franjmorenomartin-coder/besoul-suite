@@ -30,4 +30,7 @@ PASS -- besoulPublicClients: PT B NO puede tocar el token de un cliente de PT A
 PASS -- besoulPublicClients: ADMIN puede tocar el token de cualquier cliente
 PASS -- besoulReservas: reserva con token/clientId/trainerKey COINCIDENTES se acepta
 PASS -- besoulReservas: clientId que NO coincide con el token real -> DENEGADO (suplantación)
-32/32 pruebas OK.
+PASS -- besoulReservas: trainerKey que NO coincide con el token real -> DENEGADO
+PASS -- besoulReservas: token REVOCADO (activo:false) YA NO puede crear una reserva (fix añadido en esta misma sesión tras encontrar el hueco)
+PASS -- besoulPublicClients: PT con activo:false NO puede revocar ningún token
+35/35 pruebas OK.
