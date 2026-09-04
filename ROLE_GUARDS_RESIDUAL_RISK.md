@@ -25,20 +25,71 @@ allow delete: if isAdmin();
 
 Esto significa que un PT con conocimientos técnicos podría seguir leyendo/creando/editando sus propios leads llamando directamente al SDK de Firestore o a la API REST, sin pasar por `crm.html` — la Rule nunca se ha modificado, porque este documento no está autorizado a desplegar cambios de Rules.
 
-## 3. Propuesta de Rules (NO desplegada) si el bloqueo debe ser real y no solo de UI
+## 3. Propuesta de Rules (SEC-02, NO desplegada) si el bloqueo debe ser real y no solo de UI
 
-Si la decisión de "PT no accede a CRM" es definitiva también a nivel de dato (no solo de pantalla), la regla debería quedar así — **requiere autorización explícita y despliegue manual, fuera de esta rama**:
+Diff exacto contra `firestore.rules` líneas 161-177 actuales. **Requiere autorización explícita y despliegue manual, fuera de esta rama.** Verificado contra `isPublicTrialLead()` (línea 81) para confirmar que el alta pública de leads desde `valoracion.html` (`request.auth == null`, condición totalmente independiente del branch de PT) no se ve afectada por ninguna de las dos opciones.
 
+### Opción A — bloqueo completo (PT deja de poder leer/crear/editar SUS PROPIOS leads también vía API)
+
+```diff
+ match /besoulLeads/{leadId} {
+-  allow read: if isAdmin()
+-    || (isActiveUser() && resource.data.trainerKey == myTrainerKey());
++  allow read: if isAdmin();
+
+   allow create: if isPublicTrialLead()
+-    || isAdmin()
+-    || (isActiveUser() && request.resource.data.trainerKey == myTrainerKey());
++    || isAdmin();
+
+-  allow update: if isAdmin()
+-    || (
+-      isActiveUser()
+-      && resource.data.trainerKey == myTrainerKey()
+-      && request.resource.data.trainerKey == myTrainerKey()
+-    );
++  allow update: if isAdmin();
+
+   allow delete: if isAdmin();
+ }
 ```
-match /besoulLeads/{leadId} {
-  allow read: if isAdmin();
-  allow create: if isPublicTrialLead() || isAdmin();
-  allow update: if isAdmin();
-  allow delete: if isAdmin();
-}
+
+**Efecto real si se despliega**: coincide exactamente con "PT no accede a CRM" a nivel de dato, no solo de pantalla. **Rompe** `iniciarSincronizacionLeadsCRMAgenda()` en `agenda.html` (lee `besoulLeads` filtrando por `trainerKey` para mostrar las pruebas CRM del propio PT como tarjetas "Valoración" en su calendario) -- esa lectura dejaría de tener permiso y las pruebas CRM desaparecerían de la Agenda del PT. Esto contradice la parte del brief que exige que la ficha de Agenda conserve "origen CRM" -- por eso esta opción NO se recomienda sin decidir antes qué hacer con esa sincronización.
+
+### Opción B — recomendada: lectura scoped conservada, escritura bloqueada
+
+```diff
+ match /besoulLeads/{leadId} {
+   allow read: if isAdmin()
+-    || (isActiveUser() && resource.data.trainerKey == myTrainerKey());
++    || (isActiveUser() && resource.data.trainerKey == myTrainerKey());
++    // NOTA: el read se mantiene igual a propósito -- es lo que necesita
++    // iniciarSincronizacionLeadsCRMAgenda() en agenda.html para seguir
++    // mostrando las pruebas CRM del propio PT en su ficha/calendario.
++    // "Acceso a CRM" en la práctica es poder CREAR/EDITAR leads (gestionar
++    // el embudo comercial), no poder leer los propios -- eso ya lo hacía
++    // Agenda antes de que existiera crm.html como página independiente.
+
+   allow create: if isPublicTrialLead()
+-    || isAdmin()
+-    || (isActiveUser() && request.resource.data.trainerKey == myTrainerKey());
++    || isAdmin();
+
+-  allow update: if isAdmin()
+-    || (
+-      isActiveUser()
+-      && resource.data.trainerKey == myTrainerKey()
+-      && request.resource.data.trainerKey == myTrainerKey()
+-    );
++  allow update: if isAdmin();
+
+   allow delete: if isAdmin();
+ }
 ```
 
-**Efecto colateral a evaluar antes de desplegar esto**: `iniciarSincronizacionLeadsCRMAgenda()` en `agenda.html` lee `besoulLeads` filtrando por `trainerKey` para mostrar las pruebas CRM del propio PT dentro de Agenda (tarjetas de "Valoración" en el calendario). Si se restringe `read` a solo `isAdmin()`, esa sincronización dejaría de funcionar para PT y las pruebas CRM desaparecerían de su Agenda — habría que decidir explícitamente si eso es aceptable o si esa lectura concreta necesita quedar exceptuada (p. ej. permitiendo `read` solo cuando `resource.data.trainerKey == myTrainerKey()` pero sin permitir `create`/`update`, que es lo que de verdad da "acceso a CRM" en la práctica). Esta decisión no se ha tomado — queda documentada, no resuelta.
+**Efecto real si se despliega**: un PT (o cualquiera con sus credenciales) ya NO puede crear ni editar leads vía API directa, aunque técnicamente siga pudiendo LEER los suyos (igual que hoy) -- que es exactamente lo que ya necesita `agenda.html` para las tarjetas de Valoración, así que **no rompe nada existente**. Cierra el riesgo residual de "un PT gestiona su embudo comercial sin pasar por crm.html" (crear/convertir/editar leads), que es la capacidad real de "CRM" que se quiere retirar, sin tocar la sincronización de Agenda.
+
+**Recomendación de este documento**: Opción B, precisamente porque no genera un efecto colateral no deseado sobre una función que el propio brief pide conservar. Ninguna de las dos se ha desplegado.
 
 ## 4. Qué NO se ha tocado en esta rama
 
