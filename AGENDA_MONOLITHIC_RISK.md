@@ -14,8 +14,17 @@ Al hacer login como PT no-admin, `ejecutarLogin()` fija `dbCredenciales = { [tra
 
 ## 3. Aislamiento actual — solo de aplicación, no de Firestore
 
-- **Lectura**: `isActiveUser() && docId=='agenda'` -- cualquier usuario activo lee el documento COMPLETO. Sin aislamiento de Firestore.
-- **Escritura**: misma regla -- cualquier usuario activo puede, en teoría, enviar un `.update()` con una ruta punteada apuntando a `clientes.<CUALQUIER-otro-trainerKey>`. Firestore lo aceptaría: la Rule no distingue QUÉ trainerKey se está tocando, solo que el usuario esté activo.
+**SEC-07 (2026-09-04) — corrección importante**: esta sección describía antes la Rule del fichero de PROPUESTA (`isActiveUser()`). Esa NO es la Rule real en producción. Según `SECURITY_RULES.md` (única fuente que documenta el estado desplegado real, 2026-09-01), la Rule desplegada hoy es:
+
+```
+allow read, write: if signedIn() && docId == 'agenda';
+```
+
+- **Lectura -- PRODUCCIÓN HOY**: `signedIn()` -- cualquier cuenta de Firebase Auth con email (ni siquiera hace falta perfil en `besoulUsers`, ni `activo:true`) lee el documento COMPLETO. Sin aislamiento de Firestore. Superficie MAYOR que "cualquier usuario activo".
+- **Lectura -- SI SE DESPLEGARA LA PROPUESTA** (`isActiveUser()`): se reduce la población a usuarios con perfil `activo:true` en `besoulUsers`, pero el documento sigue siendo COMPLETO -- sigue sin existir aislamiento de Firestore por trainerKey en lectura, con o sin este cambio.
+- **Escritura -- PRODUCCIÓN HOY**: misma regla débil (`signedIn()`) -- cualquier cuenta Auth válida puede, en teoría, enviar un `.update()` con una ruta punteada apuntando a `clientes.<CUALQUIER-otro-trainerKey>`. Firestore lo aceptaría: la Rule no distingue QUÉ trainerKey se está tocando, ni siquiera exige perfil activo.
+- **Escritura -- SI SE DESPLEGARA LA PROPUESTA SIN FASE 2**: igual que arriba, solo que restringido a usuarios `activo:true`.
+- **Escritura -- SI SE DESPLEGARA LA PROPUESTA CON FASE 2 activa**: aquí sí habría aislamiento real por trainerKey para los 5 campos anidados (`clientes`, `agenda`, `disponibilidadReservas`, `historicoClientes`, `pruebasCRM`) -- ver auditoría completa de escritores y tests en la rama `SEC-AGENDA-WRITE-ISOLATION`. `notas` queda fuera (mapa plano, no anidado por trainerKey -- ver análisis de esa rama).
 - Existe una propuesta ya escrita, comentada, NO activa (`firestore.rules`, bloque "OPCIONAL / FASE 2") que restringiría la escritura a que `request.resource.data.<campo>.diff(resource.data.<campo>).affectedKeys().hasOnly([myTrainerKey()])` para cada uno de los 5 campos anidados por trainer -- es decir, "solo puedes tocar TU porción de cada campo, dentro del mismo documento". No se activa en esta fase (instrucción explícita: no migrar Agenda todavía).
 
 ## 4. Limitaciones reales de Firestore Rules dentro de un documento monolítico
