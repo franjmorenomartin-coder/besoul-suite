@@ -781,6 +781,8 @@ miércoles 07:00-09:00"></textarea>
 
                 <div id="field-modalidad-estandar" class="grid grid-cols-2 gap-3">
 
+                    <p id="nota-ficha-miembro-grupo" class="hidden col-span-2 text-[10px] text-cyan-300 bg-cyan-500/5 border border-cyan-500/20 rounded p-2 leading-relaxed">Modalidad, frecuencia, tipo de compra y color son compartidos por todo el grupo -- se cambian editando el grupo ("Ver grupo"), nunca desde un solo integrante. Nombre, teléfono, email y descuento sí son propios de este integrante.</p>
+
                     <div>
 
                         <label class="text-slate-400 block mb-1">Modalidad de Sesión</label>
@@ -791,6 +793,8 @@ miércoles 07:00-09:00"></textarea>
 
                             <option value="Individual Suelta">Individual (Sesión Suelta)</option>
 
+                            <option value="Individual Bono 8">Bono 8 (Individual)</option>
+
                             <option value="Individual Bono">Bono 10 (Individual)</option>
 
                             <option value="Pareja">Pareja (Plan Mensual)</option>
@@ -800,6 +804,8 @@ miércoles 07:00-09:00"></textarea>
                             <option value="Grupo Reducido Plan">Grupo Reducido (Plan Mensual)</option>
 
                             <option value="Grupo Reducido Suelta">Grupo Reducido (Suelta)</option>
+
+                            <option value="Grupo Reducido Bono 8">Bono 8 (G. Reducido)</option>
 
                             <option value="Grupo Reducido Bono">Bono 10 (G. Reducido)</option>
 
@@ -1346,6 +1352,14 @@ miércoles 07:00-09:00"></textarea>
             "Miembro Subordinado": { 1: 0 } // Para los autogenerados
 
         };
+
+        // PLAN-01: Bono 8 -- NUNCA un precio nuevo escrito a mano. Por regla de negocio explícita
+        // (misma tarifa TOTAL que el Bono 10 equivalente, solo cambia el número de sesiones), su
+        // precio se deriva del Bono 10 ya existente en TARIFAS_2026 en el momento de cargar este
+        // archivo. Si el precio de Bono 10 cambia aquí arriba, Bono 8 lo hereda automáticamente --
+        // no hay un segundo número que pueda desincronizarse.
+        TARIFAS_2026["Individual Bono 8"] = { 8: TARIFAS_2026["Individual Bono"][10] };
+        TARIFAS_2026["Grupo Reducido Bono 8"] = { 8: TARIFAS_2026["Grupo Reducido Bono"][10] };
 
         // Espejo exacto de la misma constante en finanzas.html (ver esa copia para el
         // comentario completo). El valor por defecto se combina con dbCatalogoActividades
@@ -2661,6 +2675,10 @@ miércoles 07:00-09:00"></textarea>
 
             if (ficha.actividadEspecialId) return parseInt(ficha.planSesiones) || 0;
 
+            // PLAN-01: Bono 8 comprobado antes que el genérico "Bono" (mismo motivo que en
+            // actualizarOpcionesFrecuencia -- "Bono 8" también contiene la subcadena "Bono").
+            if (ficha.modalidad && ficha.modalidad.includes('Bono 8')) return 8;
+
             if ((ficha.tipoCompra === 'Bono') || (ficha.modalidad && ficha.modalidad.includes('Bono'))) return 10;
 
             if (ficha.modalidad && ficha.modalidad.includes('Suelta')) return 1;
@@ -2757,6 +2775,12 @@ miércoles 07:00-09:00"></textarea>
         function estadoClienteFicha(ficha) { return normalizarEstadoCliente(ficha?.estadoCliente || 'activo'); }
         function clienteActivoParaAgenda(ficha) { return estadoClienteFicha(ficha) === 'activo'; }
         function esGrupoAbierto(ficha) { return !!(ficha && (ficha.grupoAbierto === true || ficha.tipoCita === 'grupo_abierto')); }
+        // CLIENT-08: ficha de integrante de un grupo vinculado (auto-generada por
+        // sincronizarIntegrantesGrupo). Es una ficha individual real y editable -- nombre,
+        // teléfono, email, descuento -- pero modalidad/factor/tipoCompra/fecha de compra/color
+        // son compartidos por todo el grupo y se quedan de solo lectura aquí (se cambian editando
+        // el grupo, nunca a un solo integrante, o dejarían de compartir plan con el resto).
+        function esFichaMiembroGrupo(ficha) { return !!(ficha && ficha.modalidad === 'Miembro Subordinado' && ficha.vinculacion); }
         function capacidadGrupoAbierto(ficha) { return Math.max(1, parseInt(ficha?.capacidadGrupoAbierto || ficha?.capacidad || 1, 10) || 1); }
         function asistentesGrupoAbierto(ficha) { return Array.isArray(ficha?.asistentesGrupoAbierto) ? ficha.asistentesGrupoAbierto : []; }
         function buscarClientePorIdTrainer(trainerKey, id) {
@@ -2823,12 +2847,52 @@ miércoles 07:00-09:00"></textarea>
             renderClientes();
         }
 
+        // FIN-GRUPO-01: fuente de verdad única para "cuánto paga realmente este cliente en el
+        // periodo actual" -- misma función para un cliente individual y para un integrante de
+        // grupo (B3: nunca dos motores distintos). Un integrante usa la tarifa POR PERSONA del
+        // grupo (modalidad+factor son compartidos: todo el grupo entrena en la misma franja bajo
+        // el mismo plan) pero SU PROPIO descuento individual (obtenerDescuentoFicha(ficha), nunca
+        // el del grupo) -- así "aplicar descuento a A" nunca cambia lo que pagan B o C.
+        function importeEfectivoCliente(ficha) {
+            if (!ficha) return 0;
+            if (ficha.modalidad === 'Miembro Subordinado' && ficha.vinculacion) {
+                const fichaGrupo = buscarFichaPorId(ficha.vinculacion);
+                if (!fichaGrupo) return 0;
+                return aplicarDescuentoImporte(tarifaBaseFicha(fichaGrupo), obtenerDescuentoFicha(ficha));
+            }
+            const base = tarifaBaseFicha(ficha) * multiplicadorFacturacionFicha(ficha);
+            return aplicarDescuentoImporte(base, obtenerDescuentoFicha(ficha));
+        }
+
+        // Fichas de integrante (tipo:'individual', vinculacion=fichaGrupo.id) que existen hoy
+        // para este grupo, en el mismo orden que el roster (integrantesObj).
+        function fichasMiembrosGrupo(fichaGrupo) {
+            if (!fichaGrupo || !Array.isArray(fichaGrupo.integrantesObj)) return [];
+            const lista = dbClientes[entrenadorVisto] || [];
+            return fichaGrupo.integrantesObj
+                .map(m => lista.find(c => c.tipo === 'individual' && c.vinculacion === fichaGrupo.id && c.memberId === m.id))
+                .filter(Boolean);
+        }
+
+        // B: TOTAL_GRUPO = SUMA de lo que paga realmente cada integrante (importeEfectivoCliente),
+        // NUNCA tarifa × número de integrantes con un único descuento de grupo -- esa era la
+        // fórmula anterior (ver historial de esta función) y no reflejaba un descuento individual.
         function calcularFacturacionGrupoTotal(fichaGrupo) {
 
             if (!fichaGrupo) return 0;
+            if (esGrupoAbierto(fichaGrupo)) return 0;
 
-            const base = tarifaBaseFicha(fichaGrupo) * multiplicadorFacturacionFicha(fichaGrupo);
-            return aplicarDescuentoImporte(base, obtenerDescuentoFicha(fichaGrupo));
+            const miembros = fichasMiembrosGrupo(fichaGrupo);
+
+            if (!miembros.length) {
+                // Todavía sin fichas de integrante sincronizadas (p.ej. justo al crear el grupo,
+                // antes del primer guardado) -- aproximación con la tarifa base del propio grupo.
+                // En cuanto existan integrantesObj con ficha, se usa siempre la suma real de abajo.
+                const numPersonas = Math.max(1, fichaGrupo.integrantesObj?.length || 1);
+                return aplicarDescuentoImporte(tarifaBaseFicha(fichaGrupo) * numPersonas, obtenerDescuentoFicha(fichaGrupo));
+            }
+
+            return miembros.reduce((total, miembro) => total + importeEfectivoCliente(miembro), 0);
 
         }
 
@@ -2839,9 +2903,14 @@ miércoles 07:00-09:00"></textarea>
 
 
 
-        function calcularFacturacionEstadisticaMiembro(fichaGrupo) {
+        // fichaMiembro opcional: si se conoce la ficha concreta del integrante, se usa su importe
+        // efectivo real (con su propio descuento). Sin ella, reparto igual como aproximación --
+        // solo para compatibilidad con llamadas antiguas que no tengan esa ficha a mano.
+        function calcularFacturacionEstadisticaMiembro(fichaGrupo, fichaMiembro) {
 
             if (!fichaGrupo) return 0;
+
+            if (fichaMiembro) return importeEfectivoCliente(fichaMiembro);
 
             const miembros = fichaGrupo.integrantesObj && fichaGrupo.integrantesObj.length ? fichaGrupo.integrantesObj.length : 1;
 
@@ -2871,7 +2940,7 @@ miércoles 07:00-09:00"></textarea>
 
                 const grupoPadre = buscarFichaPorId(ficha.vinculacion);
 
-                if (grupoPadre) return calcularFacturacionEstadisticaMiembro(grupoPadre);
+                if (grupoPadre) return calcularFacturacionEstadisticaMiembro(grupoPadre, ficha);
 
                 return parseFloat(ficha.facturacionEstadistica || 0);
 
@@ -3562,6 +3631,10 @@ function calcularRentabilidadFicha(ficha) {
 
             if(mod.includes("Suelta")) { opciones = [{v:1, t:"1 Sesión Suelta"}]; }
 
+            // PLAN-01: "Bono 8" se comprueba ANTES que el genérico "Bono" -- ambos strings
+            // contienen "Bono", y el genérico debe seguir cubriendo el Bono 10 real sin tocarlo.
+            else if(mod.includes("Bono 8")) { opciones = [{v:8, t:"Bono 8 Sesiones"}]; }
+
             else if(mod.includes("Bono")) { opciones = [{v:10, t:"Bono 10 Sesiones"}]; }
 
             else { opciones = [{v:1, t:"1 día/sem"}, {v:2, t:"2 días/sem"}, {v:3, t:"3 días/sem"}, {v:4, t:"4 días/sem"}, {v:5, t:"5 días/sem"}]; }
@@ -3738,7 +3811,7 @@ function calcularRentabilidadFicha(ficha) {
             if (lblDesc) lblDesc.innerText = `Descuento: ${formatoPorcentajeDescuento(descuentoPct)}% · -${descuentoEuros.toFixed(2)} €`;
 
             // RENTABILIDAD POR SESIÓN: Cuota total / Total de sesiones en 4 semanas
-            const sesionesMes = mod.includes("Bono") ? 10 : (mod.includes("Suelta") ? 1 : factor * 4);
+            const sesionesMes = mod.includes("Bono 8") ? 8 : (mod.includes("Bono") ? 10 : (mod.includes("Suelta") ? 1 : factor * 4));
             const rentabilidadSesion = sesionesMes > 0 ? facturacionTotalMensual / sesionesMes : 0;
             document.getElementById('lbl-rentabilidad-sesion').innerText = `${rentabilidadSesion.toFixed(2)} €`;
             actualizarPreviewContadorModal();
@@ -3910,7 +3983,15 @@ function calcularRentabilidadFicha(ficha) {
             prepararContratoTemporalDesdeFicha({ contratoCliente: contratoVacio() });
             actualizarOrigenComercialModal(null);
 
-            
+            // CLIENT-08: un alta nueva nunca es una ficha de integrante -- re-habilita los campos
+            // que editarFicha() pudo haber dejado deshabilitados la última vez que se abrió una
+            // ficha de integrante de grupo.
+            ['cust-mod', 'cust-factor', 'cust-purchase-type', 'cust-bono-date', 'cust-color'].forEach(campoId => {
+                const el = document.getElementById(campoId);
+                if (el) el.disabled = false;
+            });
+            const notaMiembroAlta = document.getElementById('nota-ficha-miembro-grupo');
+            if (notaMiembroAlta) notaMiembroAlta.classList.add('hidden');
 
             if(tabFichaActiva === 'grupo') {
 
@@ -4001,7 +4082,20 @@ function calcularRentabilidadFicha(ficha) {
 
             });
 
-
+            // CLIENT-08: editar un integrante de grupo (ficha individual real, ver
+            // esFichaMiembroGrupo) permite nombre/teléfono/email/descuento -- igual que cualquier
+            // cliente individual -- pero NO modalidad/factor/tipoCompra/fecha de compra/color,
+            // porque esos son compartidos por todo el grupo y cambiarlos aquí desincronizaría a
+            // este integrante del resto sin que nadie lo pida explícitamente (eso se hace editando
+            // el grupo, con "Ver grupo"). El descuento SÍ es individual a propósito (regla B).
+            const camposCompartidosGrupo = ['cust-mod', 'cust-factor', 'cust-purchase-type', 'cust-bono-date', 'cust-color'];
+            const esMiembro = esFichaMiembroGrupo(c);
+            camposCompartidosGrupo.forEach(campoId => {
+                const el = document.getElementById(campoId);
+                if (el) el.disabled = esMiembro;
+            });
+            const notaMiembro = document.getElementById('nota-ficha-miembro-grupo');
+            if (notaMiembro) notaMiembro.classList.toggle('hidden', !esMiembro);
 
             if(c.tipo === 'grupo') {
 
@@ -4127,13 +4221,24 @@ function calcularRentabilidadFicha(ficha) {
 
                 let fichaMiembro = lista.find(c => c.tipo === 'individual' && c.vinculacion === fichaGrupo.id && c.memberId === miembro.id);
 
-                if (!fichaMiembro) {
+                const esNuevo = !fichaMiembro;
+
+                if (esNuevo) {
 
                     fichaMiembro = {
 
                         id: `cli_member_${fichaGrupo.id}_${miembro.id}`,
 
-                        tipo: 'individual'
+                        tipo: 'individual',
+
+                        // A4/CLIENT-08: el descuento individual solo se HEREDA del grupo al crear
+                        // el integrante (punto de partida razonable). A partir de aquí es un campo
+                        // propio del integrante -- editable desde su propia ficha (editarFicha) --
+                        // y el Object.assign de abajo, a propósito, YA NO lo vuelve a escribir en
+                        // cada guardado del grupo (antes sí lo hacía, y pisaba cualquier descuento
+                        // individual que se hubiera puesto, aunque la ficha del PT jamás ofrecía
+                        // una vía real para ponerlo -- ver CLIENT-08 en el informe).
+                        descuentoPct: fichaGrupo.descuentoPct || 0
 
                     };
 
@@ -4162,7 +4267,6 @@ function calcularRentabilidadFicha(ficha) {
                     fechaCompra: fichaGrupo.fechaCompra || '',
 
                     color: fichaGrupo.color,
-                    descuentoPct: fichaGrupo.descuentoPct || 0,
                     estadoCliente: estadoClienteFicha(fichaGrupo),
                     fechaAlta: fichaGrupo.fechaAlta || '',
                     fechaEstado: fichaGrupo.fechaEstado || '',
@@ -4174,9 +4278,9 @@ function calcularRentabilidadFicha(ficha) {
 
                     grupoNombre: fichaGrupo.nombre,
 
-                    facturacionEstadistica: calcularFacturacionEstadisticaMiembro(fichaGrupo),
+                    facturacionEstadistica: calcularFacturacionEstadisticaMiembro(fichaGrupo, fichaMiembro),
 
-                    notaFacturacion: 'Dato estadístico proporcional del grupo. No suma a la facturación de cartera.'
+                    notaFacturacion: 'Dato estadístico: lo que aporta este integrante al total del grupo según su propio descuento. El grupo cuenta una sola vez en cartera (esta ficha nunca suma aparte).'
 
                 });
 
@@ -4348,6 +4452,56 @@ function calcularRentabilidadFicha(ficha) {
 
             };
 
+            // CLIENT-08: guardar la ficha de UN integrante de grupo directamente (ver
+            // esFichaMiembroGrupo/editarFicha) actualiza solo nombre/teléfono/email/descuento --
+            // todo lo compartido por el grupo (modalidad/factor/tipoCompra/fechaCompra/color/
+            // vinculacion/memberId/grupoNombre/estado) se restaura tal cual estaba, y nunca se le
+            // genera un enlace de reservas propio (A3: un integrante no reserva por su cuenta,
+            // reserva el grupo). facturacionEstadistica se recalcula con SU descuento nuevo.
+            if (esFichaMiembroGrupo(fichaAnterior)) {
+                Object.assign(ficha, {
+                    modalidad: fichaAnterior.modalidad,
+                    factor: fichaAnterior.factor,
+                    tipoCompra: fichaAnterior.tipoCompra,
+                    fechaCompra: fichaAnterior.fechaCompra,
+                    color: fichaAnterior.color,
+                    vinculacion: fichaAnterior.vinculacion,
+                    memberId: fichaAnterior.memberId,
+                    grupoNombre: fichaAnterior.grupoNombre,
+                    estadoCliente: fichaAnterior.estadoCliente,
+                    fechaEstado: fichaAnterior.fechaEstado,
+                    observacionesEstado: fichaAnterior.observacionesEstado,
+                    reservaToken: '',
+                    reservasOnlineActivas: false,
+                    reservasBloqueadasTexto: '',
+                    restriccionesReservas: { modo: 'bloquear', bloquesTexto: '' },
+                    grupoAbierto: false,
+                    capacidadGrupoAbierto: 0,
+                    integrantesObj: []
+                });
+                ficha.facturacionEstadistica = importeEfectivoCliente(ficha);
+            }
+
+            // Espejo hacia el roster del grupo (integrantesObj) para que su modal no muestre datos
+            // obsoletos si el PT abre "Ver grupo" después de este cambio -- una sola dirección
+            // (miembro -> grupo); la otra dirección (grupo -> miembro) la sigue haciendo
+            // sincronizarIntegrantesGrupo() al guardar el grupo, sin tocar descuento. Se guarda el
+            // valor anterior de la fila para poder deshacer este espejo si falla el guardado real
+            // (mismo criterio de "sin falso éxito" que el resto de esta función).
+            let filaRosterMirror = null, filaRosterAnterior = null;
+            if (esFichaMiembroGrupo(fichaAnterior)) {
+                const fichaGrupoPadre = buscarFichaPorId(ficha.vinculacion);
+                if (fichaGrupoPadre && Array.isArray(fichaGrupoPadre.integrantesObj)) {
+                    filaRosterMirror = fichaGrupoPadre.integrantesObj.find(m => m.id === ficha.memberId) || null;
+                    if (filaRosterMirror) {
+                        filaRosterAnterior = { ...filaRosterMirror };
+                        filaRosterMirror.nombre = ficha.nombre;
+                        filaRosterMirror.telefono = ficha.telefono;
+                        filaRosterMirror.email = ficha.email;
+                    }
+                }
+            }
+
 
 
             const scopeGuardado = entrenadorVisto;
@@ -4422,6 +4576,7 @@ function calcularRentabilidadFicha(ficha) {
                 } else if (idxActual !== -1) {
                     dbClientes[scopeGuardado].splice(idxActual, 1);
                 }
+                if (filaRosterMirror && filaRosterAnterior) Object.assign(filaRosterMirror, filaRosterAnterior);
                 localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
                 renderClientes();
 
@@ -4621,9 +4776,18 @@ function calcularRentabilidadFicha(ficha) {
                 const origenLinea = (c.origenCRM || c.fuenteCaptacion || c.medioCaptacion) ? `<div class="text-[11px] text-cyan-300 mt-0.5 truncate max-w-[220px]">Origen: ${escapeHTML([c.fuenteCaptacion, c.medioCaptacion].filter(Boolean).join(' · ') || 'CRM')}</div>` : '';
                 const estadoBadge = estadoClienteFicha(c) !== 'activo' ? `<span class="text-[10px] ${claseBadgeEstadoCliente(c)} rounded-full px-1.5 py-0.5 align-middle font-bold">${escapeHTML(etiquetaEstadoCliente(c)).toUpperCase()}</span>` : '';
 
-                const botonEditarId = esVinculado ? c.vinculacion : c.id;
+                // CLIENT-08: antes, "Editar" en la card de un integrante abría SIEMPRE la ficha
+                // del grupo (nunca la propia) -- un integrante no tenía ninguna vía real para
+                // editar sus propios datos/descuento. Ahora "Editar" abre la ficha del propio
+                // integrante (editarFicha ya sabe tratarla, ver esFichaMiembroGrupo); "Histórico"
+                // sigue mostrando el histórico del GRUPO (el económico real es el del grupo).
+                const botonEditarId = c.id;
+                const botonHistoricoId = esVinculado ? c.vinculacion : c.id;
 
-                const textoBoton = esVinculado ? 'Editar grupo' : 'Editar';
+                const textoBoton = 'Editar';
+                const botonVerGrupoHTML = esVinculado
+                    ? `<button onclick="event.stopPropagation(); editarFicha('${escapeHTML(c.vinculacion)}')" class="text-slate-400 text-xs font-bold hover:underline">Ver grupo</button>`
+                    : '';
                 const solicitudPendienteCliente = !esVinculado && tieneSolicitudEliminacionPendiente(c.id, entrenadorVisto);
                 const bajaYaAprobada = estadoClienteFicha(c) === 'baja';
                 const botonSolicitarEliminacionHTML = (esVinculado || bajaYaAprobada) ? '' : (
@@ -4684,7 +4848,8 @@ function calcularRentabilidadFicha(ficha) {
                         <summary onclick="event.stopPropagation()" class="text-xs text-slate-500 font-semibold cursor-pointer select-none hover:text-slate-400 w-fit">Más acciones</summary>
                         <div class="flex flex-wrap gap-3 mt-1.5">
                             <button onclick="event.stopPropagation(); editarFicha('${botonEditarId}')" class="text-cyan-400 text-xs font-bold hover:underline">${textoBoton}</button>
-                            <button onclick="event.stopPropagation(); abrirModalHistoricoCliente('${botonEditarId}')" class="text-amber-400 text-xs font-bold hover:underline">Histórico</button>
+                            ${botonVerGrupoHTML}
+                            <button onclick="event.stopPropagation(); abrirModalHistoricoCliente('${botonHistoricoId}')" class="text-amber-400 text-xs font-bold hover:underline">Histórico</button>
                             ${esVinculado ? '' : `<button onclick="event.stopPropagation(); abrirModalHistoricoAvisos('${c.id}')" class="text-slate-400 text-xs font-bold hover:underline">Avisos${Array.isArray(c.avisosPortal) && c.avisosPortal.length ? ` (${c.avisosPortal.length})` : ''}</button>`}
                             ${botonReservasHTML}
                             ${botonRegenerarTokenHTML}
@@ -6684,6 +6849,255 @@ Cancelar = no hacer nada`,
         //   existen en este archivo (calcularContadorClases, dbAgenda...). Se declara así en la
         //   propia UI -- "respuestas basadas en reglas locales", nunca se presenta como IA
         //   conectada para no generar una falsa expectativa de capacidad.
+        // ============================================================
+        // AI-02 -- Registro estructurado de capacidades reales del PT
+        // ============================================================
+        // Fuente única para las respuestas "cómo hago X" del asistente (AI-03). Espejo
+        // estructurado de PT_CAPABILITIES_REGISTRY.md -- cualquier capacidad nueva se añade en
+        // AMBOS sitios. roles:['pt','admin'] = visible para cualquiera; ['admin'] = el asistente
+        // NUNCA la sugiere a un PT (B11), aunque el texto de la pregunta la mencione.
+        const CAPACIDADES_PT = [
+            { id: 'crear_cliente', nombre: 'Dar de alta un cliente', aliases: ['crear cliente', 'nuevo cliente', 'alta cliente', 'dar de alta', 'meter cliente', 'meto un cliente', 'meto cliente', 'añadir cliente', 'agregar cliente', 'creo un cliente', 'como creo cliente'], roles: ['pt', 'admin'],
+              pasos: ['Abre la pestaña Clientes.', 'Pulsa "+ Alta".', 'Rellena nombre, contacto, modalidad y tipo de compra (Plan o Bono).', 'Guarda -- si tiene email y teléfono, se genera su enlace de reservas automáticamente.'],
+              restricciones: ['El precio/tarifa lo determina la modalidad elegida, no se escribe a mano.'], ubicacion: 'clientes', tab: 'clientes' },
+            { id: 'editar_cliente', nombre: 'Editar la ficha de un cliente', aliases: ['editar cliente', 'modificar cliente', 'cambiar datos cliente', 'cambiar teléfono', 'cambiar telefono', 'cambio telefono', 'cambio el telefono', 'actualizar ficha'], roles: ['pt', 'admin'],
+              pasos: ['Abre la pestaña Clientes.', 'Toca la ficha del cliente.', 'Pulsa "Editar".', 'Cambia el campo que necesites y guarda.'], restricciones: [], ubicacion: 'clientes', tab: 'clientes' },
+            { id: 'baja_cliente', nombre: 'Solicitar la baja de un cliente', aliases: ['eliminar cliente', 'borrar cliente', 'dar de baja', 'quitar cliente', 'solicitar eliminación', 'solicitar eliminacion'], roles: ['pt', 'admin'],
+              pasos: ['Abre la ficha del cliente en Clientes.', 'Pulsa "Solicitar eliminación".', 'Indica el motivo.', 'Un administrador revisará el impacto (citas futuras, histórico) y aprobará o rechazará la baja.'],
+              restricciones: ['No puedes aprobar tu propia solicitud -- siempre la revisa un admin.', 'El histórico del cliente nunca se borra, aunque se apruebe la baja.'], ubicacion: 'clientes', tab: 'clientes' },
+            { id: 'agendar_sesion', nombre: 'Agendar una sesión', aliases: ['agendar', 'crear cita', 'nueva sesión', 'nueva sesion', 'programar sesión', 'poner una clase', 'reservar hueco interno'], roles: ['pt', 'admin'],
+              pasos: ['Ve a la pestaña Agenda.', 'Toca un hueco libre en el calendario.', 'Elige el cliente de la lista.', 'Confirma -- la sesión queda de 45 minutos.'],
+              restricciones: ['Las sesiones solo pueden empezar en múltiplos de 15 minutos.', 'No se puede agendar sobre un hueco ya ocupado o fuera de tu disponibilidad publicada.'], ubicacion: 'agenda', tab: 'agenda' },
+            { id: 'reprogramar_sesion', nombre: 'Mover / reprogramar una sesión', aliases: ['reprogramar', 'mover cita', 'cambiar hora sesión', 'cambiar hora sesion', 'cambiar día sesión', 'mover sesión', 'mover sesion'], roles: ['pt', 'admin'],
+              pasos: ['Abre la cita ya agendada.', 'Pulsa "Reprogramar".', 'Elige el nuevo hueco entre los disponibles.', 'BESOUL comprueba automáticamente conflictos antes de guardar.'], restricciones: [], ubicacion: 'agenda', tab: 'agenda' },
+            { id: 'eliminar_sesion', nombre: 'Eliminar / cancelar una sesión', aliases: ['eliminar sesión', 'eliminar sesion', 'elimino sesion', 'borrar sesión', 'borrar sesion', 'cancelar sesión', 'cancelar sesion', 'quitar cita', 'quitar entrenamiento'], roles: ['pt', 'admin'],
+              pasos: ['Abre la cita en Agenda.', 'Pulsa "Eliminar"/"Cancelar".', 'Confirma -- el hueco queda libre de nuevo.'], restricciones: [], ubicacion: 'agenda', tab: 'agenda' },
+            { id: 'disponibilidad', nombre: 'Añadir o cambiar tu disponibilidad', aliases: ['añadir disponibilidad', 'anadir disponibilidad', 'añado disponibilidad', 'anado disponibilidad', 'cambiar disponibilidad', 'poner horario', 'bloquear hora', 'bloquear franja'], roles: ['pt', 'admin'],
+              pasos: ['Pulsa "+ Disponibilidad" en la cabecera de Agenda.', 'Define tus franjas semanales habituales.', 'Para un bloqueo puntual (una franja concreta un día concreto), añade una excepción sin tocar tu disponibilidad general.'], restricciones: [], ubicacion: 'agenda', tab: 'agenda' },
+            { id: 'crear_grupo', nombre: 'Crear un grupo abierto', aliases: ['crear grupo', 'creo grupo', 'nuevo grupo', 'grupo abierto', 'clase grupal', 'crear clase grupo'], roles: ['pt', 'admin'],
+              pasos: ['Agenda una cita como "grupo abierto" en vez de individual.', 'Define la capacidad (número de plazas).', 'Los clientes se apuntan de forma independiente hasta completar el aforo.'], restricciones: [], ubicacion: 'grupos', tab: 'grupos' },
+            { id: 'añadir_cliente_grupo', nombre: 'Añadir un cliente a un grupo', aliases: ['añadir cliente a grupo', 'anadir cliente a grupo', 'añado cliente grupo', 'anado cliente grupo', 'meter cliente en grupo', 'apuntar a grupo'], roles: ['pt', 'admin'],
+              pasos: ['Abre el grupo abierto en Agenda o en la pestaña Grupos.', 'Selecciona el cliente y confírmalo como asistente.', 'Se descuenta una plaza libre automáticamente.'], restricciones: ['No se puede añadir a un cliente si el grupo ya está completo.'], ubicacion: 'grupos', tab: 'grupos' },
+            { id: 'marcar_prueba', nombre: 'Gestionar una prueba de valoración', aliases: ['marcar prueba', 'marco prueba', 'prueba realizada', 'prueba agendada', 'valoración cliente nuevo', 'valoracion cliente nuevo'], roles: ['pt', 'admin'],
+              pasos: ['Una prueba solicitada desde el QR de valoración aparece automáticamente en tu Agenda si tiene fecha asignada.', 'Se ve como cualquier cita, marcada como prueba.', 'La conversión del lead a cliente real la completa un administrador.'],
+              restricciones: ['No puedes editar el lead directamente -- eso es solo de administración.'], ubicacion: 'agenda', tab: 'agenda' },
+            { id: 'enviar_whatsapp', nombre: 'Enviar un WhatsApp a uno o varios clientes', aliases: ['mandar whatsapp', 'mando whatsapp', 'enviar whatsapp', 'envio whatsapp', 'avisar por whatsapp', 'whatsapp a varios', 'avisar a todos'], roles: ['pt', 'admin'],
+              pasos: ['Pulsa "Enviar aviso" en Agenda.', 'Selecciona uno o varios clientes.', 'Escribe el mensaje una vez.', 'Marca el canal WhatsApp.', 'Pulsa "Abrir WhatsApp" para cada cliente -- tú confirmas el envío dentro de WhatsApp.'],
+              restricciones: ['BESOUL nunca envía el WhatsApp por ti -- solo prepara el mensaje y abre la conversación.'], ubicacion: 'agenda', tab: 'agenda' },
+            { id: 'enviar_aviso_portal', nombre: 'Enviar un aviso al Portal del cliente', aliases: ['enviar aviso', 'envio aviso', 'aviso portal', 'notificar cliente portal', 'mandar aviso portal'], roles: ['pt', 'admin'],
+              pasos: ['Pulsa "Enviar aviso" en Agenda.', 'Selecciona el/los cliente(s).', 'Escribe el mensaje.', 'Marca el canal Portal Cliente (puedes marcar también WhatsApp a la vez).', 'El aviso se publica al instante -- verás "Publicado" o "Error" para cada cliente.'],
+              restricciones: [], ubicacion: 'agenda', tab: 'agenda' },
+            { id: 'ver_sesiones_cliente', nombre: 'Consultar las sesiones que le quedan a un cliente', aliases: ['sesiones restantes', 'cuántas sesiones le quedan', 'cuantas sesiones le quedan', 'consulto sesiones', 'consulto las sesiones', 'ver bono', 'veo bono', 'veo el bono', 'consultar bono', 'sesiones pendientes cliente'], roles: ['pt', 'admin'],
+              pasos: ['Abre la pestaña Clientes.', 'El contador (contratadas/usadas/restantes) aparece directamente en la card de cada cliente.'], restricciones: [], ubicacion: 'clientes', tab: 'clientes' },
+            { id: 'link_reservas', nombre: 'Copiar o regenerar el enlace de reservas/Portal', aliases: ['link reservas', 'enlace reservas', 'copiar link', 'regenerar enlace', 'enlace portal'], roles: ['pt', 'admin'],
+              pasos: ['Abre la ficha del cliente.', 'Pulsa "Link reservas" para copiarlo.', 'Si necesitas invalidar el anterior (se compartió por error), pulsa "Regenerar enlace" -- el antiguo deja de funcionar al instante.'], restricciones: [], ubicacion: 'clientes', tab: 'clientes' },
+            { id: 'hacer_reserva', nombre: 'Hacer una reserva desde el enlace del cliente', aliases: ['cómo hago una reserva', 'como hago una reserva', 'reservar por el cliente', 'reserva desde el link'], roles: ['pt', 'admin'],
+              pasos: ['El cliente usa su propio enlace (reservas.html o el Portal) para elegir un hueco libre.', 'La solicitud queda "pendiente" hasta que tú la aceptes o rechaces.'], restricciones: [], ubicacion: 'agenda', tab: 'agenda' },
+            // CLIENT-08/D5 -- capacidades reales que ya existían en el código pero no estaban
+            // documentadas ni eran entendidas por el asistente (gap encontrado en la auditoría).
+            { id: 'quitar_cliente_grupo', nombre: 'Quitar un cliente de un grupo', aliases: ['quitar cliente del grupo', 'quitar cliente grupo', 'quito a alguien del grupo', 'quito alguien del grupo', 'sacar cliente del grupo', 'eliminar integrante grupo', 'eliminar integrante del grupo', 'quitar integrante grupo'], roles: ['pt', 'admin'],
+              pasos: ['Abre la ficha del grupo ("Ver grupo" desde la card de cualquier integrante, o la pestaña Grupo).', 'Borra la fila de ese integrante (botón "×") en la lista de integrantes.', 'Guarda -- desde ese momento deja de contarse en el grupo y en su facturación.'],
+              restricciones: ['El histórico de meses anteriores de ese integrante no se modifica.'], ubicacion: 'clientes', tab: 'clientes' },
+            { id: 'recuperacion_no_facturable', nombre: 'Marcar una sesión como recuperación no facturable', aliases: ['marcar recuperacion', 'marco una recuperacion', 'recuperacion no facturable', 'sesion de recuperacion', 'clase de recuperacion', 'como marco una recuperacion'], roles: ['pt', 'admin'],
+              pasos: ['Abre la cita en Agenda.', 'Marca la casilla "Recuperación no facturable".', 'La sesión sigue ocupando la agenda, pero no cuenta para el bono/sesiones sueltas de ese cliente.'],
+              restricciones: ['Solo un administrador puede confirmar esta marca -- un PT puede proponerla pero no confirmarla por su cuenta.'], ubicacion: 'agenda', tab: 'agenda' },
+            { id: 'historico_avisos', nombre: 'Consultar el histórico de avisos de un cliente', aliases: ['historico de avisos', 'historico avisos', 'ver historico avisos', 'consultar avisos enviados', 'avisos enviados cliente', 'como veo el historico de avisos'], roles: ['pt', 'admin'],
+              pasos: ['Abre la ficha del cliente en Clientes.', 'Pulsa el botón "Avisos (N)".', 'Verás fecha, mensaje, remitente y canal (Portal/WhatsApp) de cada aviso enviado.'], restricciones: [], ubicacion: 'clientes', tab: 'clientes' },
+            // CLIENT-08/J -- capacidad NUEVA de esta fase: antes la respuesta honesta habría sido
+            // "no, un cliente de grupo no es editable" (cierto hasta este bloque). Ahora sí lo es.
+            { id: 'editar_cliente_grupo', nombre: 'Editar un cliente que pertenece a un grupo', aliases: ['editar cliente de grupo', 'puedo editar un cliente de un grupo', 'editar integrante grupo', 'modificar integrante grupo', 'editar integrante de un grupo'], roles: ['pt', 'admin'],
+              pasos: ['Sí: abre la ficha del integrante como cualquier cliente (botón "Editar" en su card).', 'Puedes cambiar su nombre, teléfono, email y descuento individual.', 'Modalidad, frecuencia, tipo de compra y color son compartidos por todo el grupo -- se cambian editando el grupo entero ("Ver grupo"), nunca desde un solo integrante.'],
+              restricciones: [], ubicacion: 'clientes', tab: 'clientes' },
+            { id: 'descuento_individual_grupo', nombre: 'Aplicar un descuento a un solo integrante de un grupo', aliases: ['descuento a un cliente de grupo', 'descuento individual grupo', 'hacer descuento a un integrante', 'descuento solo a un integrante', 'puedo hacer descuento a un cliente de grupo'], roles: ['pt', 'admin'],
+              pasos: ['Sí: abre la ficha de ese integrante y cambia su campo "Descuento".', 'Afecta solo a su propia aportación -- no cambia lo que pagan el resto de integrantes ni la tarifa base del grupo.'],
+              restricciones: [], ubicacion: 'clientes', tab: 'clientes' },
+            { id: 'facturacion_grupo_explicacion', nombre: 'Cómo se calcula lo que factura un grupo', aliases: ['como se calcula lo que factura un grupo', 'como factura un grupo', 'que pasa si descuento a un miembro del grupo', 'facturacion de un grupo', 'como se calcula la facturacion del grupo', 'cuanto factura un grupo'], roles: ['pt', 'admin'],
+              pasos: ['El grupo factura la SUMA de lo que paga cada integrante tras aplicar sus condiciones individuales vigentes (su propio descuento).', 'Si aplicas un descuento a un integrante, solo cambia su aportación -- el total se recalcula como esa nueva suma, nunca como tarifa × número de integrantes.'],
+              restricciones: [], ubicacion: 'clientes', tab: 'clientes' },
+            { id: 'bono8_info', nombre: 'Cómo funciona el Bono 8', aliases: ['como funciona bono 8', 'que es el bono 8', 'bono 8 sesiones', 'diferencia bono 8 y bono 10', 'diferencia entre bono 8 y bono 10', 'cuanto cuesta el bono 8', 'cuanto cuesta bono 8'], roles: ['pt', 'admin'],
+              // J: nunca hardcodear el precio -- se deriva de TARIFAS_2026 en el momento de responder
+              // (ver respuestaDinamica más abajo), así nunca puede desincronizarse del catálogo real.
+              pasos: [], restricciones: [], ubicacion: 'clientes', tab: 'clientes',
+              respuestaDinamica: () => {
+                  const precioInd = TARIFAS_2026['Individual Bono 8']?.[8] ?? 0;
+                  const precioGrupo = TARIFAS_2026['Grupo Reducido Bono 8']?.[8] ?? 0;
+                  return `Bono 8: 8 sesiones contratadas, mismo precio TOTAL que el Bono 10 equivalente (nunca el mismo precio por sesión -- al repartirse entre menos sesiones, cada sesión sale más cara).\n\nIndividual: ${precioInd.toFixed(2)}€ el bono completo (igual que el Bono 10 Individual).\nGrupo Reducido: ${precioGrupo.toFixed(2)}€ por persona (igual que el Bono 10 Grupo Reducido).\n\nLa única diferencia entre Bono 8 y Bono 10 es el número de sesiones -- vigencia, descuentos e histórico funcionan igual que cualquier bono.`;
+              } },
+        ];
+        // E1: normalización -- minúsculas, tildes fuera, Y (D1/E1, hallazgo real de auditoría)
+        // puntuación fuera: "¿cómo agendo?" antes dejaba los tokens "¿como" y "agendo?" pegados a
+        // los signos, así que nunca coincidían con ninguna palabra de alias -- cualquier pregunta
+        // bien escrita en español (con ¿...?) fallaba por esto, no por falta de aliases.
+        function normalizarTextoAsistente(v) {
+            return String(v || '')
+                .toLowerCase()
+                .normalize('NFD').replace(/[̀-ͯ]/g, '')
+                // ":" se conserva a propósito -- respuestaDiagnosticoHueco necesita el formato
+                // "18:15" intacto para extraer la hora (aunque en la app real el diagnóstico usa
+                // `q`, no este `qNorm`, mantenerlo aquí evita sorpresas si algo más lo reutiliza).
+                .replace(/[¿?¡!.,;"'()]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+        // E2: verbos de dominio -- diccionario CERRADO y explícito (nunca un stemmer genérico,
+        // que generaría falsos positivos con palabras que no son verbos). Cubre solo las
+        // conjugaciones de primera/tercera persona de los verbos que aparecen en preguntas reales
+        // de PT ("cómo reprogramo", "como agendo", "meto un cliente"...).
+        const LEMAS_VERBOS_ASISTENTE = {
+            creo: 'crear', crea: 'crear', crean: 'crear',
+            agendo: 'agendar', agenda: 'agendar', agendan: 'agendar',
+            reprogramo: 'reprogramar', reprograma: 'reprogramar', reprograman: 'reprogramar',
+            muevo: 'mover', mueve: 'mover', mueven: 'mover',
+            cambio: 'cambiar', cambia: 'cambiar', cambian: 'cambiar',
+            elimino: 'eliminar', elimina: 'eliminar', eliminan: 'eliminar',
+            borro: 'borrar', borra: 'borrar', borran: 'borrar',
+            quito: 'quitar', quita: 'quitar', quitan: 'quitar',
+            cancelo: 'cancelar', cancela: 'cancelar', cancelan: 'cancelar',
+            añado: 'añadir', añade: 'añadir', añaden: 'añadir',
+            anado: 'anadir', anade: 'anadir', anaden: 'anadir',
+            envio: 'enviar', envia: 'enviar', envian: 'enviar',
+            mando: 'mandar', manda: 'mandar', mandan: 'mandar',
+            marco: 'marcar', marca: 'marcar', marcan: 'marcar',
+            consulto: 'consultar', consulta: 'consultar',
+            meto: 'meter', mete: 'meter',
+            apunto: 'apuntar', apunta: 'apuntar'
+        };
+        function lematizarPalabra(p) { return LEMAS_VERBOS_ASISTENTE[p] || p; }
+
+        // E5: fuzzy conservador -- ÚLTIMA capa, solo para palabras de alias de 5+ caracteres, y
+        // solo se invoca si el paso exacto (con lematización) no ha encontrado ya una coincidencia
+        // clara. Tolera un único error de tipeo ("reprogrmar", "whatsap"), nunca más.
+        function distanciaEdicionAcotada(a, b) {
+            if (Math.abs(a.length - b.length) > 1) return 99;
+            const filas = a.length + 1, cols = b.length + 1;
+            const dp = Array.from({ length: filas }, () => new Array(cols).fill(0));
+            for (let i = 0; i < filas; i++) dp[i][0] = i;
+            for (let j = 0; j < cols; j++) dp[0][j] = j;
+            for (let i = 1; i < filas; i++) {
+                for (let j = 1; j < cols; j++) {
+                    dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+                }
+            }
+            return dp[a.length][b.length];
+        }
+        function palabraCoincideFuzzy(palabraAlias, palabrasQueryArr) {
+            if (palabraAlias.length < 5) return false;
+            return palabrasQueryArr.some(pq => pq.length >= 5 && distanciaEdicionAcotada(palabraAlias, pq) <= 1);
+        }
+
+        // AI-03/E: coincidencia por CONJUNTO DE PALABRAS lematizadas, no por substring literal --
+        // "quiero crear un cliente" debe encontrar el alias "crear cliente" aunque "un" se cuele
+        // en medio. Dos pasadas: (1) exacta tras lematizar -- igual de estricta que antes, cero
+        // riesgo nuevo de falso positivo; (2) solo si la (1) no encuentra nada, se repite
+        // permitiendo fuzzy conservador (E5) como red de seguridad para typos.
+        // E4: si dos capacidades DISTINTAS empatan en la mejor puntuación (2+ palabras), no se
+        // adivina -- se devuelve { ambiguo:true, opciones } para que el motor pregunte.
+        function buscarCapacidadPT(textoNormalizado, rolActual) {
+            const palabrasQuery = new Set(textoNormalizado.split(/\s+/).filter(Boolean).map(lematizarPalabra));
+            const palabrasQueryArr = [...palabrasQuery];
+
+            function intentar(permitirFuzzy) {
+                let mejorPuntos = 0, empatados = [];
+                CAPACIDADES_PT.forEach(cap => {
+                    if (!cap.roles.includes(rolActual)) return;
+                    cap.aliases.forEach(alias => {
+                        const palabrasAlias = normalizarTextoAsistente(alias).split(/\s+/).filter(Boolean).map(lematizarPalabra);
+                        const todasPresentes = palabrasAlias.every(p => palabrasQuery.has(p) || (permitirFuzzy && palabraCoincideFuzzy(p, palabrasQueryArr)));
+                        if (!todasPresentes) return;
+                        if (palabrasAlias.length > mejorPuntos) { mejorPuntos = palabrasAlias.length; empatados = [cap]; }
+                        else if (palabrasAlias.length === mejorPuntos && !empatados.includes(cap)) { empatados.push(cap); }
+                    });
+                });
+                return { mejorPuntos, empatados };
+            }
+
+            let { mejorPuntos, empatados } = intentar(false);
+            if (!empatados.length) ({ mejorPuntos, empatados } = intentar(true));
+            if (!empatados.length) return null;
+
+            const idsUnicos = [...new Set(empatados.map(c => c.id))];
+            if (idsUnicos.length > 1 && mejorPuntos >= 2) {
+                return { ambiguo: true, opciones: idsUnicos.map(id => empatados.find(c => c.id === id)) };
+            }
+            return empatados[0];
+        }
+        function respuestaCapacidadPT(cap) {
+            if (cap.respuestaDinamica) return { texto: cap.respuestaDinamica(), accionTab: cap.tab, accionLabel: `Ir a ${cap.tab === 'agenda' ? 'Agenda' : cap.tab === 'grupos' ? 'Grupos' : 'Clientes'}` };
+            const pasos = cap.pasos.map((p, i) => `${i + 1}. ${p}`).join('\n');
+            const restricciones = cap.restricciones.length ? `\n\nImportante: ${cap.restricciones.join(' ')}` : '';
+            return { texto: `${cap.nombre}:\n${pasos}${restricciones}`, accionTab: cap.tab, accionLabel: `Ir a ${cap.nombre.match(/agenda|cliente|grupo/i) ? (cap.tab === 'agenda' ? 'Agenda' : cap.tab === 'grupos' ? 'Grupos' : 'Clientes') : cap.nombre}` };
+        }
+        // E4: pregunta breve cuando dos capacidades empatan -- nunca se adivina.
+        function respuestaAmbiguaPT(opciones) {
+            const nombres = opciones.map(c => c.nombre.toLowerCase());
+            const lista = nombres.length === 2
+                ? `${nombres[0]} o ${nombres[1]}`
+                : `${nombres.slice(0, -1).join(', ')} o ${nombres[nombres.length - 1]}`;
+            return { texto: `¿Quieres ${lista}? Dímelo con esas palabras y te explico los pasos.` };
+        }
+
+        // ============================================================
+        // AI-04 -- Motor de cálculo determinista (nunca vía "IA", aritmética real)
+        // ============================================================
+        function respuestaCalculoAsistente(q) {
+            const numeros = (q.match(/\d+([.,]\d+)?/g) || []).map(n => parseFloat(n.replace(',', '.')));
+            // "X% de Y" / "Y - X%" / "aplico X% a Y" -> precio final
+            let m = q.match(/(\d+(?:[.,]\d+)?)\s*%.*?(?:de|a)\s*(\d+(?:[.,]\d+)?)/) || q.match(/(\d+(?:[.,]\d+)?)\s*€.*?(\d+(?:[.,]\d+)?)\s*%/);
+            // H (hallazgo de auditoria): "aplico" solo cubre 1a persona -- "aplicar 15% a 120"
+            // (infinitivo, tal cual pide el enunciado H de la auditoria) no coincidía.
+            if (/%/.test(q) && /descuento|resta|aplic|hago|quito/.test(q) && numeros.length >= 2) {
+                const pct = numeros.find(n => q.includes(String(n).replace('.', ',') + '%') || q.includes(String(n) + '%')) ?? numeros[0];
+                const base = numeros.find(n => n !== pct) ?? numeros[1];
+                const final = base * (1 - pct / 100);
+                return `${base}€ − ${pct}% = ${final.toFixed(2)}€ (descuento de ${(base - final).toFixed(2)}€).`;
+            }
+            if (/%\s*de/.test(q) && numeros.length >= 2) {
+                const [pct, base] = numeros;
+                return `${pct}% de ${base} = ${(base * pct / 100).toFixed(2)}.`;
+            }
+            // "qué descuento para pasar de A a B" / "de A a B qué descuento es"
+            m = q.match(/de\s*(\d+(?:[.,]\d+)?)\s*(?:€|euros)?\s*a\s*(\d+(?:[.,]\d+)?)/);
+            if (m && /descuento|rebaja|porcentaje/.test(q)) {
+                const a = parseFloat(m[1].replace(',', '.')), b = parseFloat(m[2].replace(',', '.'));
+                if (a > 0) return `Para pasar de ${a}€ a ${b}€ hace falta un descuento del ${(100 - (b / a) * 100).toFixed(2)}%.`;
+            }
+            // "N de M sesiones, qué % ha consumido" -- AMBIGUO sin contexto: "lleva 5 de 10
+            // sesiones" = 5 usadas, pero "le quedan 3 de 8 sesiones" = 3 RESTANTES (usadas=8-3=5).
+            // Hallazgo real de los tests (assistant_test_harness.cjs, caso exacto del enunciado
+            // "le quedan 3 de 8 sesiones" -> 62.5%): la primera versión trataba SIEMPRE el primer
+            // número como "usadas", dando 37.5% para ese caso -- resultado incorrecto. Se detecta
+            // "queda/quedan/restan" antes del número para invertir la interpretación.
+            m = q.match(/(\d+)\s*de\s*(\d+)\s*(?:sesion|clase)/);
+            if (m) {
+                const n = parseInt(m[1], 10), total = parseInt(m[2], 10);
+                const esRestantes = /queda|quedan|restan|restantes/.test(q.slice(0, q.indexOf(m[0])));
+                const usadas = esRestantes ? total - n : n;
+                if (total > 0) return `${usadas} de ${total} sesiones = ${(usadas / total * 100).toFixed(1)}% consumido (quedan ${total - usadas}).`;
+            }
+            return null;
+        }
+
+        // ============================================================
+        // AI-05 -- Diagnóstico determinista (huecos)
+        // ============================================================
+        // Comprueba el motivo REAL contra dbAgenda/dbDisponibilidadReservas del propio PT -- nunca
+        // una suposición genérica cuando BESOUL puede determinar la causa exacta.
+        function respuestaDiagnosticoHueco(q) {
+            // D4: sin valor mágico -- "agendar"/"hueco" ya cubren cualquier hora concreta, no
+            // hacía falta la hora del ejemplo (18:15) codificada aquí como si fuera una keyword.
+            if (!/por qu[eé]|porque/.test(q) || !/hueco|agendar|reservar|disponib|slot/.test(q)) return null;
+            const horaMatch = q.match(/(\d{1,2})[:h](\d{2})/);
+            if (!horaMatch) return 'Para diagnosticar un hueco concreto dime la hora exacta, por ejemplo: "¿por qué no puedo agendar a las 18:15?".';
+            const hora = `${horaMatch[1].padStart(2, '0')}:${horaMatch[2]}`;
+            const hoyISO = formatoFechaLocal(new Date());
+            const clave = `${hoyISO}_${hora}`;
+            const ocupado = dbAgenda[entrenadorVisto]?.[clave];
+            if (ocupado) return `A las ${hora} de hoy ya tienes una sesión ocupando ese hueco (${ocupado.nombre || 'cliente'}). Por eso no puedes agendar ahí -- elige otra franja o reprograma esa cita primero.`;
+            const disp = dbDisponibilidadReservas[entrenadorVisto];
+            if (!disp) return `No tienes disponibilidad publicada todavía, así que ningún hueco aparece como agendable. Añádela desde "+ Disponibilidad" en Agenda.`;
+            return `A las ${hora} de hoy el hueco no está ocupado por ninguna cita tuya que yo pueda ver -- si sigue sin dejarte agendar, puede estar fuera de tu disponibilidad publicada para ese día, o bloqueado como excepción puntual. Revisa "+ Disponibilidad".`;
+        }
+
         function asegurarPanelAsistente() {
             let panel = document.getElementById('panel-asistente-besoul');
             if (panel) return panel;
@@ -6707,6 +7121,8 @@ Cancelar = no hacer nada`,
                             <button type="button" onclick="preguntarAsistente('Resume mi agenda de mañana')" class="text-[10px] bg-slate-900 border border-slate-800 text-slate-300 rounded-full px-2.5 py-1 hover:text-white">Resume mañana</button>
                             <button type="button" onclick="preguntarAsistente('¿Quién lleva más de 10 días sin venir?')" class="text-[10px] bg-slate-900 border border-slate-800 text-slate-300 rounded-full px-2.5 py-1 hover:text-white">Sin venir 10+ días</button>
                             <button type="button" onclick="preguntarAsistente('¿Quién tiene sesiones pendientes?')" class="text-[10px] bg-slate-900 border border-slate-800 text-slate-300 rounded-full px-2.5 py-1 hover:text-white">Sesiones pendientes</button>
+                            <button type="button" onclick="preguntarAsistente('¿Qué puedo hacer?')" class="text-[10px] bg-slate-900 border border-amber-500/30 text-amber-300 rounded-full px-2.5 py-1 hover:text-white">¿Qué puedo hacer?</button>
+                            <button type="button" onclick="preguntarAsistente('¿Cómo agendo una sesión?')" class="text-[10px] bg-slate-900 border border-slate-800 text-slate-300 rounded-full px-2.5 py-1 hover:text-white">Cómo agendar</button>
                         </div>
                         <form onsubmit="return enviarPreguntaAsistente(event)" class="flex gap-2">
                             <input id="asistente-input" type="text" placeholder="Escribe una pregunta..." class="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white text-xs" autocomplete="off">
@@ -6723,7 +7139,7 @@ Cancelar = no hacer nada`,
             const cont = document.getElementById('asistente-mensajes');
             if (!cont.dataset.iniciado) {
                 cont.dataset.iniciado = '1';
-                pintarMensajeAsistente('assistant', 'Hola. Puedo resumir tu agenda, detectar clientes sin sesiones recientes o con sesiones pendientes, y sugerir huecos libres. Prueba uno de los botones o escribe tu pregunta.');
+                pintarMensajeAsistente('assistant', 'Hola. Puedo explicarte cómo usar cualquier función de BESOUL, hacer cálculos (descuentos, porcentajes, sesiones consumidas), resumir tu agenda, y responder sobre tus propios clientes. Escribe "qué puedo hacer" para ver todo, o prueba un botón.');
             }
             const input = document.getElementById('asistente-input');
             if (input) setTimeout(() => input.focus(), 50);
@@ -6732,7 +7148,7 @@ Cancelar = no hacer nada`,
             const panel = document.getElementById('panel-asistente-besoul');
             if (panel) panel.classList.add('hidden');
         }
-        function pintarMensajeAsistente(rol, texto) {
+        function pintarMensajeAsistente(rol, texto, accion) {
             const cont = document.getElementById('asistente-mensajes');
             if (!cont) return;
             const burbuja = document.createElement('div');
@@ -6741,6 +7157,16 @@ Cancelar = no hacer nada`,
                 : 'mr-auto max-w-[90%] bg-slate-900 border border-slate-800 text-slate-200 rounded-2xl rounded-bl-sm px-3 py-2 whitespace-pre-wrap';
             burbuja.textContent = texto;
             cont.appendChild(burbuja);
+            // B4/B5/B19: navegación contextual -- SOLO cambia de pestaña/abre una sección, nunca
+            // ejecuta una acción que modifique datos (B12: acciones destructivas fuera de esta fase).
+            if (accion && accion.tab) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'mr-auto mt-1 block text-[11px] font-bold text-amber-400 hover:underline';
+                btn.textContent = `${accion.label || 'Ir a la sección'} →`;
+                btn.onclick = () => { try { setMobileTabAgenda(accion.tab); } catch (e) {} cerrarAsistenteBesoul(); };
+                cont.appendChild(btn);
+            }
             cont.scrollTop = cont.scrollHeight;
         }
         function enviarPreguntaAsistente(e) {
@@ -6758,13 +7184,73 @@ Cancelar = no hacer nada`,
             let respuesta;
             try { respuesta = motorAsistenteBesoul(texto); }
             catch (err) { console.error('[AI-01][asistente] error calculando respuesta local', err); respuesta = 'No he podido calcular eso ahora mismo. Prueba a reformular la pregunta.'; }
-            pintarMensajeAsistente('assistant', respuesta);
+            if (respuesta && typeof respuesta === 'object') pintarMensajeAsistente('assistant', respuesta.texto, { tab: respuesta.accionTab, label: respuesta.accionLabel });
+            else pintarMensajeAsistente('assistant', respuesta);
+        }
+        // AI-06/B20: "qué puedo hacer" -- el asistente también sirve de documentación viva,
+        // filtrada por rol real (nunca sugiere Dashboard/CRM/Finanzas a un PT, B11).
+        function respuestaAyudaAsistente(rolActual) {
+            const categorias = {};
+            CAPACIDADES_PT.forEach(cap => {
+                if (!cap.roles.includes(rolActual)) return;
+                const cat = ({ crear_cliente:'Clientes', editar_cliente:'Clientes', baja_cliente:'Clientes', ver_sesiones_cliente:'Clientes', link_reservas:'Clientes',
+                    agendar_sesion:'Agenda', reprogramar_sesion:'Agenda', eliminar_sesion:'Agenda', disponibilidad:'Agenda', marcar_prueba:'Agenda', hacer_reserva:'Agenda',
+                    recuperacion_no_facturable:'Agenda',
+                    crear_grupo:'Grupos', añadir_cliente_grupo:'Grupos', quitar_cliente_grupo:'Grupos', editar_cliente_grupo:'Grupos', descuento_individual_grupo:'Grupos', facturacion_grupo_explicacion:'Grupos',
+                    enviar_whatsapp:'WhatsApp', enviar_aviso_portal:'Avisos y Portal', historico_avisos:'Avisos y Portal',
+                    bono8_info:'Bonos y Planes' })[cap.id] || 'Otros';
+                (categorias[cat] = categorias[cat] || []).push(cap.nombre);
+            });
+            const texto = Object.keys(categorias).map(cat => `${cat}:\n${categorias[cat].map(n => `· ${n}`).join('\n')}`).join('\n\n');
+            return { texto: `Esto es lo que puedo ayudarte a hacer:\n\n${texto}\n\nPregúntame "cómo..." sobre cualquiera de estas, o pídeme un cálculo (p.ej. "15% de 120").` };
         }
         // Motor de reglas: sin red, sin IA real todavía -- ver AI_ASSISTANT_ARCHITECTURE.md para
         // el diseño de la futura integración de backend (Cloud Function + proveedor de LLM).
         function motorAsistenteBesoul(preguntaOriginal) {
             const q = preguntaOriginal.toLowerCase();
+            const qNorm = normalizarTextoAsistente(preguntaOriginal);
+            const rolActual = rolActivo === 'admin' ? 'admin' : 'pt';
             const lista = (dbClientes[entrenadorVisto] || []).filter(c => !c.vinculacion && clienteActivoParaAgenda(c));
+
+            // AI-06 modo ayuda ("qué puedo hacer")
+            if (/qu[eé] puedo hacer|ay[uú]dame|qu[eé] sabes hacer|men[uú] de ayuda/.test(q)) return respuestaAyudaAsistente(rolActual);
+
+            // AI-05 diagnóstico (antes que capacidades, para no confundir "por qué no puedo
+            // agendar a las 18:15" con la capacidad genérica "cómo agendo")
+            const diagnostico = respuestaDiagnosticoHueco(q);
+            if (diagnostico) return { texto: diagnostico };
+
+            // AI-04 cálculo determinista
+            const calculo = respuestaCalculoAsistente(q);
+            if (calculo) return { texto: calculo };
+
+            // AI-08 consulta contextual sobre un cliente concreto ("¿cuándo entrena Alba?",
+            // "¿cuántas sesiones le quedan a Alba?") -- reutiliza calcularContadorClases/dbAgenda,
+            // nunca un segundo motor de cálculo. Solo dentro del scope del propio PT (`lista` ya
+            // está filtrada a dbClientes[entrenadorVisto]).
+            // D3 (hallazgo real de auditoría): antes era qNorm.includes(nombre) -- una
+            // SUBCADENA, no una palabra. Un cliente llamado "Ana" coincidía con "mañana" (que
+            // tras quitar la tilde de la ñ contiene literalmente "ana"). Ahora se exige que el
+            // nombre aparezca como PALABRA COMPLETA en la pregunta, igual que las capacidades.
+            const palabrasQNorm = new Set(qNorm.split(/\s+/).filter(Boolean));
+            const clienteMencionado = lista.find(c => {
+                const primerNombre = normalizarTextoAsistente(c.nombre).split(' ')[0];
+                return primerNombre.length > 2 && palabrasQNorm.has(primerNombre);
+            });
+            if (clienteMencionado && /sesion|clase|bono|entrena|pr[oó]xima/.test(q)) {
+                const contador = calcularContadorClases(clienteMencionado);
+                if (/entrena|pr[oó]xima|cu[aá]ndo/.test(q)) {
+                    const hoy = formatoFechaLocal(new Date());
+                    const futuras = Object.keys(dbAgenda[entrenadorVisto] || {}).filter(clave => dbAgenda[entrenadorVisto][clave]?.id === clienteMencionado.id && clave.split('_')[0] >= hoy).sort();
+                    return { texto: futuras.length ? `${clienteMencionado.nombre} tiene su próxima sesión el ${futuras[0].split('_')[0]} a las ${futuras[0].split('_')[1]}.` : `${clienteMencionado.nombre} no tiene ninguna sesión futura agendada.` };
+                }
+                return { texto: `${clienteMencionado.nombre}: ${contador.usadas}/${contador.contratadas} sesiones usadas este ${contador.tipo === 'bono' ? 'bono' : 'periodo'} (${contador.periodo}), ${contador.restantes} restantes.` };
+            }
+
+            // AI-02/03 capacidades ("cómo hago X") -- registro estructurado, roles reales
+            const capacidad = buscarCapacidadPT(qNorm, rolActual);
+            if (capacidad && capacidad.ambiguo) return respuestaAmbiguaPT(capacidad.opciones);
+            if (capacidad) return respuestaCapacidadPT(capacidad);
 
             if (/resum|hoy|mañana|manana/.test(q)) {
                 const esManana = /mañana|manana/.test(q);
@@ -6813,7 +7299,8 @@ Cancelar = no hacer nada`,
                 return 'Para buscar huecos libres concretos, usa el calendario semanal -- los slots "Disponible" en verde ya muestran exactamente eso. Esta versión del asistente todavía no cruza nombre de cliente + hueco automáticamente; está en la hoja de ruta (ver AI_ASSISTANT_ARCHITECTURE.md).';
             }
 
-            return 'Todavía no sé responder eso en modo local. Puedo: resumir el día/mañana, listar clientes sin venir hace X días, y listar clientes con sesiones pendientes. Prueba con uno de los botones rápidos.';
+            // B17/AI-07 fallback honesto -- nunca inventa una función que no existe.
+            return 'No encuentro una función de BESOUL que coincida exactamente con eso. Escribe "qué puedo hacer" para ver todo lo que sé explicar, o prueba con uno de los botones rápidos.';
         }
 
         function abrirModalNotificaciones() {
