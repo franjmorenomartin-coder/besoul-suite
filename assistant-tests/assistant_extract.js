@@ -20,6 +20,14 @@ const TARIFAS_2026 = {
 TARIFAS_2026["Individual Bono 8"] = { 8: TARIFAS_2026["Individual Bono"][10] };
 TARIFAS_2026["Grupo Reducido Bono 8"] = { 8: TARIFAS_2026["Grupo Reducido Bono"][10] };
 
+const CENTROS_BESOUL_INFO = [
+            { id: 'alfa_prime', nombre: 'Alfa Prime', economiaConfigurada: true },
+            { id: 'fantasy', nombre: 'Fantasy', economiaConfigurada: true },
+            { id: 'inacua', nombre: 'Inacua', economiaConfigurada: true },
+            { id: 'lagunillas', nombre: 'Lagunillas', economiaConfigurada: true },
+            { id: 'capuchinos', nombre: 'Capuchinos', economiaConfigurada: false }
+        ];
+
 const CAPACIDADES_PT = [
             { id: 'crear_cliente', nombre: 'Dar de alta un cliente', aliases: ['crear cliente', 'nuevo cliente', 'alta cliente', 'dar de alta', 'meter cliente', 'meto un cliente', 'meto cliente', 'añadir cliente', 'agregar cliente', 'creo un cliente', 'como creo cliente'], roles: ['pt', 'admin'],
               pasos: ['Abre la pestaña Clientes.', 'Pulsa "+ Alta".', 'Rellena nombre, contacto, modalidad y tipo de compra (Plan o Bono).', 'Guarda -- si tiene email y teléfono, se genera su enlace de reservas automáticamente.'],
@@ -86,6 +94,16 @@ const CAPACIDADES_PT = [
                   const precioInd = TARIFAS_2026['Individual Bono 8']?.[8] ?? 0;
                   const precioGrupo = TARIFAS_2026['Grupo Reducido Bono 8']?.[8] ?? 0;
                   return `Bono 8: 8 sesiones contratadas, mismo precio TOTAL que el Bono 10 equivalente (nunca el mismo precio por sesión -- al repartirse entre menos sesiones, cada sesión sale más cara).\n\nIndividual: ${precioInd.toFixed(2)}€ el bono completo (igual que el Bono 10 Individual).\nGrupo Reducido: ${precioGrupo.toFixed(2)}€ por persona (igual que el Bono 10 Grupo Reducido).\n\nLa única diferencia entre Bono 8 y Bono 10 es el número de sesiones -- vigencia, descuentos e histórico funcionan igual que cualquier bono.`;
+              } },
+            // ASSISTANT-PORTAL-CAPUCHINOS: solo admin -- la asignación de centro es una acción de
+            // Finanzas (editarTrainer/centroId), un PT no la hace nunca desde Agenda. Precio nunca
+            // hardcodeado: economiaConfigurada se lee de CENTROS_BESOUL_INFO en el momento de
+            // responder, igual que Bono 8 lee TARIFAS_2026.
+            { id: 'centros_besoul_info', nombre: 'Qué centros tiene BESOUL', aliases: ['que centros hay', 'que centros tiene besoul', 'cuantos centros hay', 'centros disponibles', 'que es capuchinos', 'capuchinos centro', 'centro capuchinos'], roles: ['admin'],
+              pasos: [], restricciones: [], ubicacion: 'clientes', tab: 'clientes',
+              respuestaDinamica: () => {
+                  const lista = CENTROS_BESOUL_INFO.map(c => `· ${c.nombre}${c.economiaConfigurada ? '' : ' (economía pendiente de configurar)'}`).join('\n');
+                  return `Centros de BESOUL:\n${lista}\n\nUn centro con economía pendiente ya es operativo (se le pueden asignar entrenadores/clientes/leads), pero Finanzas no le aplica ningún canon hasta que se configure de verdad -- nunca un valor inventado.`;
               } },
         ];
 
@@ -250,7 +268,7 @@ function respuestaAyudaAsistente(rolActual) {
                     recuperacion_no_facturable:'Agenda',
                     crear_grupo:'Grupos', añadir_cliente_grupo:'Grupos', quitar_cliente_grupo:'Grupos', editar_cliente_grupo:'Grupos', descuento_individual_grupo:'Grupos', facturacion_grupo_explicacion:'Grupos',
                     enviar_whatsapp:'WhatsApp', enviar_aviso_portal:'Avisos y Portal', historico_avisos:'Avisos y Portal',
-                    bono8_info:'Bonos y Planes' })[cap.id] || 'Otros';
+                    bono8_info:'Bonos y Planes', centros_besoul_info:'Centros' })[cap.id] || 'Otros';
                 (categorias[cat] = categorias[cat] || []).push(cap.nombre);
             });
             const texto = Object.keys(categorias).map(cat => `${cat}:\n${categorias[cat].map(n => `· ${n}`).join('\n')}`).join('\n\n');
