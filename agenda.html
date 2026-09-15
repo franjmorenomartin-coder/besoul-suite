@@ -4459,18 +4459,30 @@ function calcularRentabilidadFicha(ficha) {
             // genera un enlace de reservas propio (A3: un integrante no reserva por su cuenta,
             // reserva el grupo). facturacionEstadistica se recalcula con SU descuento nuevo.
             if (esFichaMiembroGrupo(fichaAnterior)) {
+                // HOTFIX-CLIENT-SAVE-V2 (2026-09-15): esFichaMiembroGrupo() solo garantiza
+                // modalidad==='Miembro Subordinado' y vinculacion truthy -- los otros 8 campos de
+                // abajo NO tienen esa garantía. Una ficha de integrante real que carezca de
+                // cualquiera de ellos (dato de producción: nunca antes existía una vía para abrir
+                // y guardar la ficha de un integrante por separado, así que este camino no se
+                // había ejercitado nunca contra datos reales) dejaba esa clave como `undefined`
+                // explícito -- Firestore .update() rechaza la escritura ENTERA si cualquier valor
+                // del documento es undefined, con el mismo mensaje genérico para cualquier
+                // cliente de ese entrenador. Causa raíz real, reproducida en
+                // hotfix-diagnostics/run.cjs escenario H. Fallback seguro, mismo valor por
+                // defecto que ya usa sincronizarIntegrantesGrupo()/mostrarModalNuevoCliente()
+                // para estos mismos campos -- no se inventa ningún default nuevo.
                 Object.assign(ficha, {
                     modalidad: fichaAnterior.modalidad,
-                    factor: fichaAnterior.factor,
-                    tipoCompra: fichaAnterior.tipoCompra,
-                    fechaCompra: fichaAnterior.fechaCompra,
-                    color: fichaAnterior.color,
+                    factor: fichaAnterior.factor || 1,
+                    tipoCompra: fichaAnterior.tipoCompra || 'Mensualidad',
+                    fechaCompra: fichaAnterior.fechaCompra || '',
+                    color: fichaAnterior.color || 'amber',
                     vinculacion: fichaAnterior.vinculacion,
-                    memberId: fichaAnterior.memberId,
-                    grupoNombre: fichaAnterior.grupoNombre,
-                    estadoCliente: fichaAnterior.estadoCliente,
-                    fechaEstado: fichaAnterior.fechaEstado,
-                    observacionesEstado: fichaAnterior.observacionesEstado,
+                    memberId: fichaAnterior.memberId || '',
+                    grupoNombre: fichaAnterior.grupoNombre || '',
+                    estadoCliente: fichaAnterior.estadoCliente || 'activo',
+                    fechaEstado: fichaAnterior.fechaEstado || '',
+                    observacionesEstado: fichaAnterior.observacionesEstado || '',
                     reservaToken: '',
                     reservasOnlineActivas: false,
                     reservasBloqueadasTexto: '',
