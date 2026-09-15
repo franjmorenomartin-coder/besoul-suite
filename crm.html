@@ -345,6 +345,10 @@ const CENTROS_FALLBACK = {
   'fantasy': { id:'fantasy', nombre:'Fantasy', orden:2, activo:true, visibleCRM:true },
   'inacua': { id:'inacua', nombre:'Inacua', orden:3, activo:true, visibleCRM:true },
   'lagunillas': { id:'lagunillas', nombre:'Lagunillas', orden:4, activo:true, visibleCRM:true },
+  // CENTER-CATALOG-CAPUCHINOS: mismo centro nuevo que en finanzas.html/dashboard.html (espejo,
+  // mismo patrón ya usado para TARIFAS_2026/DEFAULT_CENTROS entre estos archivos). El CRM no
+  // gestiona economía, solo necesita que exista como centro seleccionable para leads.
+  'capuchinos': { id:'capuchinos', nombre:'Capuchinos', orden:5, activo:true, visibleCRM:true },
   'sin-centro': { id:'sin-centro', nombre:'Sin centro asignado', orden:999, activo:true, visibleCRM:true }
 };
 const CENTRO_ALIASES = {
@@ -439,6 +443,7 @@ function detectarCentroCanon(id, nombre='') {
   if (combinado.includes('inacua')) return 'inacua';
   if (combinado.includes('fantasy')) return 'fantasy';
   if (combinado.includes('lagunillas')) return 'lagunillas';
+  if (combinado.includes('capuchinos')) return 'capuchinos';
   if (combinado.includes('sin_centro')) return 'sin-centro';
   return idSlug || 'sin-centro';
 }

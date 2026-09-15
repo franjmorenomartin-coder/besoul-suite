@@ -44,6 +44,7 @@ function extractConst(name, openChar, closeChar) {
 
 const parts = [
   extractTarifas2026(),
+  extractConst('CENTROS_BESOUL_INFO', '[', ']'),
   extractConst('CAPACIDADES_PT', '[', ']'),
   extractFunction('normalizarTextoAsistente'),
   extractConst('LEMAS_VERBOS_ASISTENTE', '{', '}'),

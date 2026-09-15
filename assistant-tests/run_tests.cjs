@@ -13,7 +13,7 @@ function formatoFechaLocal(d) { return `${d.getFullYear()}-${String(d.getMonth()
 
 const fn = new Function('dbAgenda', 'dbDisponibilidadReservas', 'entrenadorVisto', 'formatoFechaLocal', extracted + `
   return {
-    TARIFAS_2026, CAPACIDADES_PT, normalizarTextoAsistente, lematizarPalabra, distanciaEdicionAcotada,
+    TARIFAS_2026, CENTROS_BESOUL_INFO, CAPACIDADES_PT, normalizarTextoAsistente, lematizarPalabra, distanciaEdicionAcotada,
     palabraCoincideFuzzy, buscarCapacidadPT, respuestaCapacidadPT, respuestaAmbiguaPT,
     respuestaCalculoAsistente, respuestaDiagnosticoHueco, respuestaAyudaAsistente
   };`);
@@ -265,7 +265,10 @@ console.log('\n=== D3: correccion Ana/mañana (palabra completa, no subcadena) =
 // ============================================================
 console.log('\n=== B11/Permisos -- capacidades admin-only nunca se sugieren a un PT ===');
 // ============================================================
-check('permisos', 'ninguna capacidad hoy es admin-only (esperado, PT ya cubre todo lo auditado)', M.CAPACIDADES_PT.filter(c => !c.roles.includes('pt')).length, n => n === 0);
+// ASSISTANT-PORTAL-CAPUCHINOS: ya no es tautológico -- centros_besoul_info es real y admin-only
+// (asignar centro es una acción de Finanzas, no de Agenda/PT). Antes de esta capacidad, este
+// check era "0 admin-only" (nunca ejercitaba el bloqueo real, ver auditoría B11).
+check('permisos', 'exactamente 1 capacidad admin-only hoy (centros_besoul_info), el resto sigue cubriendo PT', M.CAPACIDADES_PT.filter(c => !c.roles.includes('pt')).map(c => c.id), ids => ids.length === 1 && ids[0] === 'centros_besoul_info');
 {
   // Mecanismo de bloqueo por rol verificado con una capacidad admin-only SINTETICA (ninguna
   // existe hoy de verdad -- ver hallazgo B11 de la auditoria: el test anterior era tautologico).
@@ -335,6 +338,17 @@ console.log('\n=== PLAN-01: Bono 8 -- respuesta nunca hardcodea el precio ===');
   const r = M.respuestaCapacidadPT(M.CAPACIDADES_PT.find(c => c.id === 'bono8_info'));
   check('bono8', 'precio Individual coincide con TARIFAS_2026 real', r.texto.includes(`${M.TARIFAS_2026['Individual Bono'][10].toFixed(2)}€`), actual => actual === true);
   check('bono8', 'precio Grupo Reducido coincide con TARIFAS_2026 real', r.texto.includes(`${M.TARIFAS_2026['Grupo Reducido Bono'][10].toFixed(2)}€`), actual => actual === true);
+}
+
+console.log('\n=== ASSISTANT-PORTAL-CAPUCHINOS: el asistente conoce Capuchinos (solo admin) ===');
+{
+  check('centros', '"que centros hay" (admin) -> centros_besoul_info', capId('que centros hay', 'admin'), actual => actual === 'centros_besoul_info');
+  check('centros', 'un PT preguntando lo mismo NO recibe esta capacidad (es admin-only)', capId('que centros hay', 'pt'), actual => actual === null);
+  const r = M.respuestaCapacidadPT(M.CENTROS_BESOUL_INFO && M.CAPACIDADES_PT.find(c => c.id === 'centros_besoul_info'));
+  check('centros', 'la respuesta menciona Capuchinos', r.texto.includes('Capuchinos'), actual => actual === true);
+  check('centros', 'la respuesta marca a Capuchinos con economía pendiente', /Capuchinos.*pendiente/.test(r.texto), actual => actual === true);
+  check('centros', 'la respuesta NO marca a Alfa Prime como pendiente (solo Capuchinos)', !/Alfa Prime.*pendiente/.test(r.texto), actual => actual === true);
+  check('centros', 'CENTROS_BESOUL_INFO tiene exactamente un centro con economía pendiente', M.CENTROS_BESOUL_INFO.filter(c => !c.economiaConfigurada).length, actual => actual === 1);
 }
 
 console.log(`\n${pass}/${pass + fail} pruebas OK.`);
