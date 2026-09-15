@@ -1,0 +1,203 @@
+=== AI-04 Motor de calculo determinista ===
+PASS -- 15% de 120 :: got="15% de 120 = 18.00."
+PASS -- 10 por ciento de 200 :: got=null
+PASS -- si le hago un 10% de descuento a 120 :: got="120€ − 10% = 108.00€ (descuento de 12.00€)."
+PASS -- si le descuento 10% a 120 euros :: got="120€ − 10% = 108.00€ (descuento de 12.00€)."
+PASS -- de 120 a 100 que descuento es :: got="Para pasar de 120€ a 100€ hace falta un descuento del 16.67%."
+PASS -- si cobra 95 y aplico 15%, cuanto queda :: got="95€ − 15% = 80.75€ (descuento de 14.25€)."
+PASS -- le quedan 3 de 8 sesiones que porcentaje ha consumido :: got="5 de 8 sesiones = 62.5% consumido (quedan 3)."
+PASS -- 5 de 10 clases :: got="5 de 10 sesiones = 50.0% consumido (quedan 5)."
+PASS -- hola que tal :: got=null
+PASS -- aplicar 15% a 120 :: got="120€ − 15% = 102.00€ (descuento de 18.00€)."
+PASS -- 20% de 60 :: got="20% de 60 = 12.00."
+PASS -- de 200 a 150 que descuento :: got="Para pasar de 200€ a 150€ hace falta un descuento del 25.00%."
+PASS -- cuentame un chiste sobre porcentajes :: got=null
+PASS -- 30 de 30 sesiones :: got="30 de 30 sesiones = 100.0% consumido (quedan 0)."
+PASS -- 0 de 10 sesiones :: got="0 de 10 sesiones = 0.0% consumido (quedan 10)."
+
+=== AI-02/03/E6 Capacidades -- casos obligatorios de la auditoria ===
+PASS -- como creo nuevo cliente? :: got="crear_cliente"
+PASS -- ¿cómo doy de alta a un cliente? :: got="crear_cliente"
+PASS -- cómo reprogramo :: got="reprogramar_sesion"
+PASS -- quiero mover una cita :: got="reprogramar_sesion"
+PASS -- meter cliente :: got="crear_cliente"
+PASS -- como mando un aviso por whatsapp :: got="enviar_whatsapp"
+PASS -- como veo el histórico de avisos :: got="historico_avisos"
+PASS -- como quito a alguien del grupo :: got="quitar_cliente_grupo"
+PASS -- cómo marco una recuperación :: got="recuperacion_no_facturable"
+PASS -- puedo editar un cliente de un grupo? :: got="editar_cliente_grupo"
+PASS -- puedo hacer descuento a un cliente de grupo? :: got="descuento_individual_grupo"
+PASS -- cómo se calcula lo que factura un grupo? :: got="facturacion_grupo_explicacion"
+PASS -- qué pasa si descuento a un miembro del grupo? :: got="facturacion_grupo_explicacion"
+PASS -- cómo funciona bono 8? :: got="bono8_info"
+PASS -- qué diferencia hay entre bono 8 y bono 10? :: got="bono8_info"
+
+=== D6/E5: fuzzy conservador (un solo typo, palabras largas) ===
+PASS -- reprogrmar sesion :: got="reprogramar_sesion"
+PASS -- como mando un whatsap :: got="enviar_whatsapp"
+PASS -- regenerr enlace :: got="link_reservas"
+
+=== E1: puntuacion, mayusculas, tildes, sin tildes ===
+PASS -- ¿CÓMO AGENDO UNA SESIÓN? :: got="agendar_sesion"
+PASS -- ¡Necesito reprogramar! :: got="reprogramar_sesion"
+PASS -- como añado disponibilidad... :: got="disponibilidad"
+PASS -- ¿regenerar enlace? :: got="link_reservas"
+PASS -- como creo un grupo. :: got="crear_grupo"
+PASS -- CÓMO ELIMINO UNA SESION :: got="eliminar_sesion"
+PASS -- como anado disponibilidad :: got="disponibilidad"
+
+=== Conjugaciones de dominio (E2) ===
+PASS -- como agendo una sesion :: got="agendar_sesion"
+PASS -- como creo un cliente :: got="crear_cliente"
+PASS -- como cancelo una sesion :: got="eliminar_sesion"
+PASS -- como envio un aviso :: got="enviar_aviso_portal"
+PASS -- como marco una prueba :: got="marcar_prueba"
+PASS -- como consulto las sesiones que le quedan :: got="ver_sesiones_cliente"
+PASS -- como añado un cliente a un grupo :: got="añadir_cliente_grupo"
+
+=== Frases incompletas / coloquiales ===
+PASS -- alta cliente :: got="crear_cliente"
+PASS -- mover sesion :: got="reprogramar_sesion"
+PASS -- bono :: got=null
+PASS -- grupo :: got=null
+PASS -- link :: got=null
+
+=== Cobertura previa (regresion 24 casos ya existentes) ===
+PASS -- como meto un cliente :: got="crear_cliente"
+PASS -- quiero crear un cliente :: got="crear_cliente"
+PASS -- dar de alta un cliente nuevo :: got="crear_cliente"
+PASS -- nuevo cliente :: got="crear_cliente"
+PASS -- como elimino una sesion :: got="eliminar_sesion"
+PASS -- borrar entrenamiento :: got=null
+PASS -- quitar cita :: got="eliminar_sesion"
+PASS -- como cambio una cita :: got=null
+PASS -- como añado disponibilidad :: got="disponibilidad"
+PASS -- anadir disponibilidad :: got="disponibilidad"
+PASS -- como creo un grupo :: got="crear_grupo"
+PASS -- como añado un cliente a un grupo :: got="añadir_cliente_grupo"
+PASS -- como mando un whatsapp :: got="enviar_whatsapp"
+PASS -- quiero avisar a todos :: got="enviar_whatsapp"
+PASS -- como envio un aviso :: got="enviar_aviso_portal"
+PASS -- como consulto las sesiones que le quedan :: got="ver_sesiones_cliente"
+PASS -- como cambio el telefono :: got="editar_cliente"
+PASS -- como veo el bono :: got="ver_sesiones_cliente"
+PASS -- como marco una prueba :: got="marcar_prueba"
+PASS -- como hago una reserva :: got="hacer_reserva"
+PASS -- como solicito eliminar un cliente :: got="baja_cliente"
+PASS -- regenerar enlace :: got="link_reservas"
+
+=== G: Cobertura amplia adicional -- mas variantes por capacidad (hacia 150+) ===
+PASS -- agregar cliente nuevo :: got="crear_cliente"
+PASS -- modificar cliente :: got="editar_cliente"
+PASS -- actualizar ficha del cliente :: got="editar_cliente"
+PASS -- cambio el telefono de un cliente :: got="editar_cliente"
+PASS -- dar de baja a un cliente :: got="baja_cliente"
+PASS -- solicitar eliminacion de un cliente :: got="baja_cliente"
+PASS -- borrar cliente :: got="baja_cliente"
+PASS -- crear una cita nueva :: got="agendar_sesion"
+PASS -- programar una sesion :: got="agendar_sesion"
+PASS -- nueva sesion con un cliente :: got="agendar_sesion"
+PASS -- cambiar hora de la sesion :: got="reprogramar_sesion"
+PASS -- cambiar dia de la sesion :: got="reprogramar_sesion"
+PASS -- mover la cita de mañana :: got="reprogramar_sesion"
+PASS -- cancelar sesion :: got="eliminar_sesion"
+PASS -- borrar sesion de hoy :: got="eliminar_sesion"
+PASS -- quitar entrenamiento :: got="eliminar_sesion"
+PASS -- bloquear una hora :: got="disponibilidad"
+PASS -- bloquear franja de mañana :: got="disponibilidad"
+PASS -- poner mi horario :: got="disponibilidad"
+PASS -- crear clase grupal :: got="crear_grupo"
+PASS -- nuevo grupo abierto :: got="crear_grupo"
+PASS -- apuntar a un cliente a un grupo :: got="añadir_cliente_grupo"
+PASS -- meter un cliente en un grupo :: got="añadir_cliente_grupo"
+PASS -- sacar a un cliente del grupo :: got="quitar_cliente_grupo"
+PASS -- eliminar un integrante del grupo :: got="quitar_cliente_grupo"
+PASS -- modificar un integrante de un grupo :: got="editar_cliente_grupo"
+PASS -- descuento solo a un integrante del grupo :: got="descuento_individual_grupo"
+PASS -- como factura un grupo :: got="facturacion_grupo_explicacion"
+PASS -- cuanto factura un grupo :: got="facturacion_grupo_explicacion"
+PASS -- prueba realizada :: got="marcar_prueba"
+PASS -- prueba agendada para valoracion :: got="marcar_prueba"
+PASS -- avisar por whatsapp a un cliente :: got="enviar_whatsapp"
+PASS -- whatsapp a varios clientes :: got="enviar_whatsapp"
+PASS -- notificar a un cliente por el portal :: got="enviar_aviso_portal"
+PASS -- aviso portal :: got="enviar_aviso_portal"
+PASS -- avisos enviados a un cliente :: got="historico_avisos"
+PASS -- consultar avisos enviados :: got="historico_avisos"
+PASS -- cuantas sesiones le quedan a un cliente :: got="ver_sesiones_cliente"
+PASS -- sesiones pendientes de un cliente :: got="ver_sesiones_cliente"
+PASS -- copiar el link de reservas :: got="link_reservas"
+PASS -- enlace de reservas de un cliente :: got="link_reservas"
+PASS -- reservar por el cliente :: got="hacer_reserva"
+PASS -- reserva desde el link :: got="hacer_reserva"
+PASS -- sesion de recuperacion :: got="recuperacion_no_facturable"
+PASS -- clase de recuperacion :: got="recuperacion_no_facturable"
+PASS -- que es el bono 8 :: got="bono8_info"
+PASS -- cuanto cuesta el bono 8 :: got="bono8_info"
+
+=== Mas negativos / ambiguedad real de dominio ===
+PASS -- que tiempo hace hoy :: got=null
+PASS -- cuentame una anecdota :: got=null
+PASS -- como subo de nivel :: got=null
+PASS -- como accedo al dashboard de ventas :: got=null
+PASS -- cambiame la contraseña :: got=null
+
+=== Roles: capacidades siguen visibles igual para admin (regresion) ===
+PASS -- como creo un cliente :: got="crear_cliente"
+PASS -- como quito a alguien del grupo :: got="quitar_cliente_grupo"
+PASS -- como funciona bono 8 :: got="bono8_info"
+
+=== Mas calculos (redondeo, formato, entradas invalidas) ===
+PASS -- 33% de 90 :: got="33% de 90 = 29.70."
+PASS -- 1% de 1 :: got="1% de 1 = 0.01."
+PASS -- descuento de -10% a 100 :: got="100€ − 10% = 90.00€ (descuento de 10.00€)."
+PASS -- de 50 a 50 que descuento :: got="Para pasar de 50€ a 50€ hace falta un descuento del 0.00%."
+PASS -- sin numeros aqui :: got=null
+
+=== E4: ambiguedad -- dos capacidades empatadas, no se adivina ===
+PASS -- dos capacidades de 2 palabras empatan -> ambiguo :: got={"ambiguo":true,"opciones":[{"id":"disponibilidad","nombre":"Añadir o cambiar tu disponibilidad","aliases":["añadir disponibilidad","anadir disponibilidad","añado disponibilidad","anado disponibilidad","cambiar disponibilidad","poner horario","bloquear hora","bloquear franja"],"roles":["pt","admin"],"pasos":["Pulsa \"+ Disponibilidad\" en la cabecera de Agenda.","Define tus franjas semanales habituales.","Para un bloqueo puntual (una franja concreta un día concreto), añade una excepción sin tocar tu disponibilidad general."],"restricciones":[],"ubicacion":"agenda","tab":"agenda"},{"id":"crear_grupo","nombre":"Crear un grupo abierto","aliases":["crear grupo","creo grupo","nuevo grupo","grupo abierto","clase grupal","crear clase grupo"],"roles":["pt","admin"],"pasos":["Agenda una cita como \"grupo abierto\" en vez de individual.","Define la capacidad (número de plazas).","Los clientes se apuntan de forma independiente hasta completar el aforo."],"restricciones":[],"ubicacion":"grupos","tab":"grupos"}]}
+PASS -- la respuesta ambigua pregunta, no elige :: got="¿Quieres añadir o cambiar tu disponibilidad o crear un grupo abierto? Dímelo con esas palabras y te explico los pasos."
+
+=== D3: correccion Ana/mañana (palabra completa, no subcadena) ===
+PASS -- "ana" NO es palabra completa dentro de "resume mi agenda de mañana" :: got=false
+PASS -- pero "manana" (sin tilde) si es una palabra completa de la frase :: got=true
+
+=== B11/Permisos -- capacidades admin-only nunca se sugieren a un PT ===
+PASS -- ninguna capacidad hoy es admin-only (esperado, PT ya cubre todo lo auditado) :: got=0
+PASS -- PT preguntando "como veo finanzas" con una capacidad admin-only sintetica presente -> null, nunca la admin-only :: got=null
+PASS -- admin preguntando lo mismo SI la encuentra (confirma que el filtro es por rol, no un bug que la esconda siempre) :: got="ver_finanzas_admin"
+
+=== AI-05 Diagnostico de hueco (con mock de dbAgenda) -- sin hardcode 18:15 ===
+PASS -- diagnostico detecta hueco ocupado (18:15) :: got="A las 18:15 de hoy ya tienes una sesión ocupando ese hueco (Ana). Por eso no puedes agendar ahí -- elige otra franja o reprograma esa cita primero."
+PASS -- diagnostico funciona para OTRA hora sin relacion con 18:15 (confirma que no dependia del valor magico) :: got="A las 09:30 de hoy ya tienes una sesión ocupando ese hueco (Luis). Por eso no puedes agendar ahí -- elige otra franja o reprograma esa cita primero."
+PASS -- diagnostico no confunde hueco libre con inventar una causa falsa :: got="A las 09:00 de hoy el hueco no está ocupado por ninguna cita tuya que yo pueda ver -- si sigue sin dejarte agendar, puede estar fuera de tu disponibilidad publicada para ese día, o bloqueado como excepción puntual. Revisa \"+ Disponibilidad\"."
+PASS -- sin hora concreta, pide precision en vez de adivinar :: got="Para diagnosticar un hueco concreto dime la hora exacta, por ejemplo: \"¿por qué no puedo agendar a las 18:15?\"."
+PASS -- sin keyword de hueco, no dispara el diagnostico :: got=null
+
+=== G1: Negativos -- nunca confundir intents, nunca ejecutar nada ===
+PASS -- quiero cambiar el precio :: got=null
+PASS -- elimina a Alba :: got=null
+PASS -- abre finanzas :: got=null
+PASS -- como accedo al dashboard :: got=null
+PASS -- como entro al crm :: got=null
+PASS -- "hazme un descuento del 20%" calcula... :: got="150€ − 20% = 120.00€ (descuento de 30.00€)."
+PASS -- ...pero el calculo es SOLO texto, nunca un objeto que module datos :: got="string"
+
+=== Fallback honesto -- nunca inventa ===
+PASS -- fallback honesto: "cuentame un chiste" :: got=null
+PASS -- fallback honesto: "cual es la capital de francia" :: got=null
+PASS -- fallback honesto: "como cambio el precio de un cliente" :: got=null
+PASS -- fallback honesto: "como veo finanzas" :: got=null
+PASS -- fallback honesto: "como accedo al crm" :: got=null
+
+=== Ayuda (AI-06) incluye las capacidades nuevas ===
+PASS -- "qué puedo hacer" menciona: Quitar un cliente de un grupo :: got=true
+PASS -- "qué puedo hacer" menciona: recuperación no facturable :: got=true
+PASS -- "qué puedo hacer" menciona: histórico de avisos :: got=true
+PASS -- "qué puedo hacer" menciona: Bono 8 :: got=true
+
+=== PLAN-01: Bono 8 -- respuesta nunca hardcodea el precio ===
+PASS -- precio Individual coincide con TARIFAS_2026 real :: got=true
+PASS -- precio Grupo Reducido coincide con TARIFAS_2026 real :: got=true
+
+164/164 pruebas OK.

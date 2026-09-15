@@ -165,7 +165,23 @@
       });
     })();
 
+    // PORTAL-10 (2026-09-05, weekend build): redirección a Portal Cliente V2, preparada pero
+    // DESACTIVADA por defecto -- activar es una decisión del usuario (cambia el comportamiento de
+    // enlaces ya enviados por WhatsApp), no algo que deba decidirse solo. Cuando se active: un
+    // enlace legacy `reservas.html?t=TOKEN` (o `?token=TOKEN`) redirige a
+    // `portal-cliente.html?token=TOKEN&view=reservar`, que abre directamente en Agenda→Reservar
+    // con el mismo motor de huecos/grupos ya portado (ver PORTAL_V2_ROOT_CAUSE_ANALYSIS.md y el
+    // commit de Portal V2). El token se conserva tal cual -- misma identidad, ningún re-login.
+    // `&legacy=1` sigue sirviendo esta página directamente aunque el flag esté activo (fallback
+    // explícito, nunca se elimina esta página -- instrucción expresa: NO borrar reservas.html).
+    const REDIRIGIR_A_PORTAL_V2 = false;
     const _tParamCrudo = new URLSearchParams(location.search).get('t') || new URLSearchParams(location.search).get('token') || '';
+    if (REDIRIGIR_A_PORTAL_V2 && _tParamCrudo && new URLSearchParams(location.search).get('legacy') !== '1') {
+      const tokenRedirigido = normalizarTokenReserva(_tParamCrudo);
+      if (tokenRedirigido) {
+        location.replace(`portal-cliente.html?token=${encodeURIComponent(tokenRedirigido)}&view=reservar`);
+      }
+    }
     let token = _tParamCrudo ? normalizarTokenReserva(_tParamCrudo) : '';
     let clientData = null;
     let scheduleData = null;

@@ -1,0 +1,33 @@
+=== CASO 1: 3 clientes sin descuento -> total = suma exacta ===
+PASS -- total sin descuentos = 3 x base :: got=135 expected=135
+
+=== CASO 2: 1 cliente con descuento -> solo cambia su aportacion ===
+PASS -- total = A(90%) + B + C :: got=130.5 expected=130.5
+PASS -- B no cambia (sin descuento) :: got=45 expected=45
+PASS -- C no cambia (sin descuento) :: got=45 expected=45
+PASS -- tarifa base del grupo no cambia :: got=45 expected=45
+
+=== CASO 3 / B1 (enunciado exacto): 3 descuentos distintos -> total = suma de importes finales ===
+PASS -- total = suma de importes finales (no tarifa x n) :: got=216 expected=216
+PASS -- total != tarifa x n con un solo descuento :: got=false expected=false
+
+=== CASO 6 (B/K): editar telefono/email NO cambia el total economico ===
+PASS -- total igual tras cambiar solo telefono/email :: got=128.25 expected=128.25
+
+=== CASO 7: quitar cliente del grupo -> deja de computar ===
+PASS -- antes de quitar: 3 miembros :: got=126 expected=126
+PASS -- despues de quitar: ya no computa ese miembro :: got=90 expected=90
+
+=== PLAN-01 / C: Bono 8 = mismo precio TOTAL que Bono 10 equivalente ===
+PASS -- Bono 8 Individual == Bono 10 Individual (precio total) :: got=270 expected=270
+PASS -- Bono 8 Grupo Reducido == Bono 10 Grupo Reducido (precio total, por persona) :: got=105 expected=105
+PASS -- sesionesContratadasFicha Bono 8 Individual = 8 :: got=8 expected=8
+PASS -- sesionesContratadasFicha Bono 10 Individual = 10 (no roto por Bono 8) :: got=10 expected=10
+PASS -- Bono 8 no se comporta como Bono 10 (sesiones distintas) :: got=false expected=false
+PASS -- facturacion Bono 8 Individual == facturacion Bono 10 Individual (mismo precio total) :: got=270 expected=270
+
+=== C4/C7: Bono 8 Grupo reducido + descuento individual ===
+PASS -- total grupo Bono8 con descuento individual = suma de importes efectivos (no precio teorico) :: got=183.75 expected=183.75
+PASS -- nunca suma el precio teorico sin descuento :: got=false expected=false
+
+18/18 pruebas OK.
