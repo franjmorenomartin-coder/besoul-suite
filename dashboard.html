@@ -241,6 +241,10 @@ const TARIFAS_2026 = {
   "Grupo Aire Libre": { 1: 30, 2: 40, 3: 50, 4: 60, 5: 70 },
   "Miembro Subordinado": { 1: 0 }
 };
+// PLAN-01: mismo precio derivado que en agenda.html/finanzas.html -- Bono 8 nunca es un número
+// escrito a mano, hereda el precio TOTAL vigente de su Bono 10 equivalente.
+TARIFAS_2026["Individual Bono 8"] = { 8: TARIFAS_2026["Individual Bono"][10] };
+TARIFAS_2026["Grupo Reducido Bono 8"] = { 8: TARIFAS_2026["Grupo Reducido Bono"][10] };
 const DEFAULT_CENTROS = {
   alfa_prime: { id:'alfa_prime', nombre:'Alfa Prime', orden:1, canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true, visibleCRM:true, visibleAgenda:true, visibleReservas:true, visibleQR:true },
   fantasy: { id:'fantasy', nombre:'Fantasy', orden:2, canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true, visibleCRM:true, visibleAgenda:true, visibleReservas:true, visibleQR:true },
@@ -457,13 +461,41 @@ function multiplicadorFacturacionFicha(ficha){
       return 1;
     }
 function obtenerDescuentoFicha(ficha){ const n=parseFloat(String(ficha?.descuentoPct??0).replace(',','.')); return Number.isNaN(n)?0:Math.max(0, Math.min(100,n)); }
-function calcularFacturacionFichaSimple(ficha){
+// FIN-GRUPO-02: mismo motor que agenda.html/finanzas.html (importeEfectivoCliente) -- cuánto
+// paga REALMENTE este cliente, con su propio descuento. Un integrante usa la tarifa POR PERSONA
+// del grupo (modalidad+factor compartidos) pero SU PROPIO descuento, nunca el del grupo.
+function importeEfectivoFichaDashboard(ficha, trainerKey){
+      if (!ficha) return 0;
+      if (ficha.modalidad === 'Miembro Subordinado' && ficha.vinculacion) {
+        const lista = (agendaData.clientes && agendaData.clientes[trainerKey]) || [];
+        const fichaGrupo = lista.find(c => c.id === ficha.vinculacion);
+        if (!fichaGrupo) return 0;
+        return Math.max(0, tarifaBaseFicha(fichaGrupo) * (1 - obtenerDescuentoFicha(ficha)/100));
+      }
+      const base = tarifaBaseFicha(ficha) * multiplicadorFacturacionFicha(ficha);
+      return Math.max(0, base * (1 - obtenerDescuentoFicha(ficha)/100));
+    }
+// B: TOTAL_GRUPO = SUMA de lo que paga cada integrante, nunca tarifa × número de integrantes
+// con un único descuento de grupo (fórmula anterior).
+function calcularFacturacionFichaSimple(ficha, trainerKey){
       if (!ficha) return 0;
       if (ficha.modalidad === 'Miembro Subordinado' || ficha.vinculacion) return 0;
+      if (ficha.tipo === 'grupo' && Array.isArray(ficha.integrantesObj) && ficha.integrantesObj.length) {
+        const lista = (agendaData.clientes && agendaData.clientes[trainerKey]) || [];
+        const miembros = ficha.integrantesObj
+          .map(m => lista.find(c => c.tipo === 'individual' && c.vinculacion === ficha.id && c.memberId === m.id))
+          .filter(Boolean);
+        if (miembros.length) return miembros.reduce((total, m) => total + importeEfectivoFichaDashboard(m, trainerKey), 0);
+      }
       const base = tarifaBaseFicha(ficha) * multiplicadorFacturacionFicha(ficha);
       return Math.max(0, base * (1 - obtenerDescuentoFicha(ficha)/100));
     }
 function esBonoFicha(ficha){ return !!(ficha && (ficha.tipoCompra === 'Bono' || String(ficha.modalidad||'').includes('Bono'))); }
+// PLAN-01: mismo criterio que en agenda.html/finanzas.html -- "Bono 8" antes que el genérico.
+function numeroSesionesBonoFicha(ficha){
+      if (ficha && String(ficha.modalidad || '').includes('Bono 8')) return 8;
+      return 10;
+    }
 function esSueltaFicha(ficha){ return !!(ficha && String(ficha.modalidad||'').includes('Suelta')); }
 function esMensualFicha(ficha){ return !!(ficha && !esBonoFicha(ficha) && !esSueltaFicha(ficha)); }
 function esCitaPruebaCRM(obj){ return !!(obj && (obj.esPruebaCRM === true || obj.tipoCita === 'pruebaCRM' || obj.noSumaFacturacion === true || obj.modalidad === 'Prueba CRM')); }
@@ -499,7 +531,7 @@ function sesionesPrevistasMensualesFicha(ficha){
       return factor * 4;
     }
 function calcularFacturacionFichaFinanzas(ficha, trainerKey, mesKey){
-      const importeBase = calcularFacturacionFichaSimple(ficha);
+      const importeBase = calcularFacturacionFichaSimple(ficha, trainerKey);
       if (!ficha || importeBase <= 0) return { total:0, mensual:0, variable:0, sesiones:0, sesionesAgendadas:0, sesionesPrevistas:0, valorAgenda:0, desviacion:0, tipo:'sin_importe', motivoDesviacion:'' };
       const sesiones = sesionesAgendadasFacturablesFichaMes(ficha, trainerKey, mesKey);
       if (esMensualFicha(ficha)) {
@@ -514,7 +546,7 @@ function calcularFacturacionFichaFinanzas(ficha, trainerKey, mesKey){
         else motivoDesviacion = 'Agenda alineada con la frecuencia contratada';
         return { total:importeBase, mensual:importeBase, variable:0, sesiones, sesionesAgendadas:sesiones, sesionesPrevistas, valorAgenda, desviacion, tipo:'mensual', motivoDesviacion };
       }
-      const divisor = esBonoFicha(ficha) ? 10 : 1;
+      const divisor = esBonoFicha(ficha) ? numeroSesionesBonoFicha(ficha) : 1;
       const valorSesion = importeBase / divisor;
       const variable = sesiones * valorSesion;
       return { total:variable, mensual:0, variable, sesiones, sesionesAgendadas:sesiones, sesionesPrevistas:sesiones, valorAgenda:variable, desviacion:0, tipo: esBonoFicha(ficha) ? 'bono' : 'suelta', motivoDesviacion: esBonoFicha(ficha) ? 'Bono: se factura por sesiones agendadas' : 'Sesión suelta: se factura por sesiones agendadas' };
@@ -528,7 +560,7 @@ function contarPersonasFicha(ficha){
 
 function sesionesContratadasFichaDashboard(ficha){
   if (!ficha) return 0;
-  if (esBonoFicha(ficha)) return 10;
+  if (esBonoFicha(ficha)) return numeroSesionesBonoFicha(ficha);
   if (esSueltaFicha(ficha)) return 1;
   return (parseInt(ficha.factor)||1) * 4;
 }
@@ -538,13 +570,12 @@ function facturacionFichaValorAgenda(ficha, trainerKey){
   if (!ficha) return 0;
   if (ficha.vinculacion || ficha.modalidad === 'Miembro Subordinado') {
     const padre = fichaPadreGrupoDashboard(ficha, trainerKey);
-    if (padre) {
-      const miembros = padre.integrantesObj && padre.integrantesObj.length ? padre.integrantesObj.length : 1;
-      return calcularFacturacionFichaSimple(padre) / miembros;
-    }
+    // FIN-GRUPO-02: el importe REAL de este integrante (su propio descuento), no un reparto
+    // igual del total del grupo -- mismo criterio que importeEfectivoFichaDashboard.
+    if (padre) return importeEfectivoFichaDashboard(ficha, trainerKey);
     return parseNum(ficha.facturacionEstadistica || 0);
   }
-  return calcularFacturacionFichaSimple(ficha);
+  return calcularFacturacionFichaSimple(ficha, trainerKey);
 }
 function sesionesFichaValorAgenda(ficha, trainerKey){
   const padre = fichaPadreGrupoDashboard(ficha, trainerKey);
