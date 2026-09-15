@@ -33,7 +33,7 @@ const names = [
   'esGrupoAbierto', 'esFichaMiembroGrupo', 'importeEfectivoCliente', 'fichasMiembrosGrupo',
   'calcularFacturacionGrupoTotal', 'calcularFacturacionEstadisticaMiembro', 'contratoVacio',
   'normalizarReservasBloqueadasTexto', 'sincronizarIntegrantesGrupo', 'generarTokenReservaCliente',
-  'catalogoActividadesVivo', 'guardarCliente'
+  'catalogoActividadesVivo', 'guardarCliente', 'valorInvalidoParaFirestore'
 ];
 
 const derivBono8 = [...html.matchAll(/TARIFAS_2026\["[^"]+"\]\s*=\s*\{[^}]*\};/g)].map(x => x[0]).join('\n');

@@ -623,3 +623,31 @@ async function guardarCliente() {
             }
 
         }
+
+function valorInvalidoParaFirestore(valor, rutaActual = '', vistos = new Set()) {
+            if (valor === undefined) return { ruta: rutaActual || '(raíz)', motivo: 'undefined' };
+            if (typeof valor === 'number' && Number.isNaN(valor)) return { ruta: rutaActual || '(raíz)', motivo: 'NaN' };
+            if (typeof valor === 'function') return { ruta: rutaActual || '(raíz)', motivo: 'función' };
+            if (valor === null || typeof valor !== 'object') return null;
+            if (valor instanceof Date) return null;
+            // FieldValue.serverTimestamp()/increment()/arrayUnion() etc son objetos especiales del
+            // SDK de Firestore, no datos de la app -- nunca hay que recorrerlos como si lo fueran.
+            // instanceof cuando el SDK está cargado; _methodName como duck-type de respaldo (así
+            // funciona igual en los tests, que no cargan el SDK real de Firebase).
+            if (typeof firebase !== 'undefined' && firebase.firestore && valor instanceof firebase.firestore.FieldValue) return null;
+            if (valor && valor._methodName) return null;
+            if (vistos.has(valor)) return { ruta: rutaActual || '(raíz)', motivo: 'referencia circular' };
+            vistos.add(valor);
+            if (Array.isArray(valor)) {
+                for (let i = 0; i < valor.length; i++) {
+                    const problema = valorInvalidoParaFirestore(valor[i], `${rutaActual}[${i}]`, vistos);
+                    if (problema) return problema;
+                }
+                return null;
+            }
+            for (const clave of Object.keys(valor)) {
+                const problema = valorInvalidoParaFirestore(valor[clave], rutaActual ? `${rutaActual}.${clave}` : clave, vistos);
+                if (problema) return problema;
+            }
+            return null;
+        }

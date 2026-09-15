@@ -190,6 +190,18 @@ const FACTOR_1_5 = ['1','2','3','4','5'];
     check('payload Bono 8 + descuento: no se pierden claves al serializar (mismo nº de claves antes/despues)', JSON.stringify(Object.keys(payload[1]).sort()) === JSON.stringify(Object.keys(JSON.parse(serializado)[1]).sort()));
   }
 
+  console.log('\n=== 5. valorInvalidoParaFirestore(): detecta ANTES de intentar persistir (HOTFIX-CLIENT-SAVE-V2, red de seguridad) ===');
+  {
+    const sandbox = new Function(extracted + '\nreturn { valorInvalidoParaFirestore };')();
+    const v = sandbox.valorInvalidoParaFirestore;
+    check('detecta undefined anidado y da la ruta exacta', v({ a: { b: [1, undefined, 3] } })?.ruta === 'a.b[1]');
+    check('detecta NaN', v({ x: NaN })?.motivo === 'NaN');
+    check('detecta funciones', v({ f: function () {} })?.motivo === 'función');
+    check('detecta referencias circulares', (() => { const o = {}; o.self = o; return v(o)?.motivo === 'referencia circular'; })());
+    check('payload valido (sin problemas) -> null, no bloquea nada', v({ a: 1, b: 'x', c: [1, 2, { d: null }], e: new Date() }) === null);
+    check('NO elimina ni "arregla" nada -- solo detecta (no muta el objeto de entrada)', (() => { const o = { a: undefined, b: 1 }; const copia = JSON.stringify(Object.keys(o)); v(o); return JSON.stringify(Object.keys(o)) === copia; })());
+  }
+
   console.log(`\n${pass}/${pass + fail} pruebas OK.`);
   if (fail > 0) { console.log('\nFALLOS:'); fails.forEach(f => console.log(' - ' + f)); process.exitCode = 1; }
 })().catch(err => { console.error('ERROR EJECUTANDO TESTS:', err); process.exitCode = 1; });
