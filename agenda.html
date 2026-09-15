@@ -3252,13 +3252,22 @@ function calcularRentabilidadFicha(ficha) {
 
         function actualizarPreviewContadorModal() {
 
-            const mod = document.getElementById('cust-mod').value;
+            // FIX-GROUP-MEMBER-ECONOMICS: mismo motivo que en autoCalcularTarifa() -- cust-mod/
+            // cust-factor están deshabilitados y vacíos para un integrante de grupo (su <select>
+            // nunca tuvo una <option> para 'Miembro Subordinado'). Se resuelven aquí desde el
+            // grupo real para que el contador previsto (Bono/Mensualidad, nº de clases) no
+            // muestre datos del grupo equivocados ni "0 clases".
+            const fichaEnEdicionPreview = idFichaEditando ? (dbClientes[entrenadorVisto] || []).find(c => c.id === idFichaEditando) : null;
+            const esMiembroPreview = esFichaMiembroGrupo(fichaEnEdicionPreview);
+            const fichaGrupoPreview = esMiembroPreview ? buscarFichaPorId(fichaEnEdicionPreview.vinculacion) : null;
 
-            const factor = parseInt(document.getElementById('cust-factor').value) || 1;
+            const mod = esMiembroPreview ? (fichaGrupoPreview?.modalidad || '') : document.getElementById('cust-mod').value;
 
-            const pType = document.getElementById('cust-purchase-type').value;
+            const factor = esMiembroPreview ? (parseInt(fichaGrupoPreview?.factor) || 1) : (parseInt(document.getElementById('cust-factor').value) || 1);
 
-            const pDate = document.getElementById('cust-bono-date').value;
+            const pType = esMiembroPreview ? (fichaGrupoPreview?.tipoCompra || 'Mensualidad') : document.getElementById('cust-purchase-type').value;
+
+            const pDate = esMiembroPreview ? (fichaGrupoPreview?.fechaCompra || '') : document.getElementById('cust-bono-date').value;
 
             const fichaTemporal = {
 
@@ -3840,15 +3849,31 @@ function calcularRentabilidadFicha(ficha) {
         // MOTOR FINANCIERO CORREGIDO Y EXACTO
 
         function autoCalcularTarifa() {
-            const mod = document.getElementById('cust-mod').value;
-            const factor = parseInt(document.getElementById('cust-factor').value) || 1;
+            // FIX-GROUP-MEMBER-ECONOMICS (2026-09-15): al editar un integrante de grupo,
+            // cust-mod/cust-factor están deshabilitados (CLIENT-08) y su <select> NUNCA tuvo una
+            // <option value="Miembro Subordinado"> -- asignarle ese valor deja el <select> sin
+            // ninguna opción seleccionada (comportamiento estándar del DOM: value pasa a ''), así
+            // que este preview leía TARIFAS_2026[''] (undefined) y mostraba 0,00 € en precio
+            // base/facturación/rentabilidad para CUALQUIER integrante, con cualquier descuento.
+            // El importe REALMENTE GUARDADO (facturacionEstadistica, vía importeEfectivoCliente)
+            // siempre fue correcto -- usa tarifaBaseFicha(fichaGrupo), nunca este preview --  por
+            // eso Agenda/Finanzas/Dashboard (que leen facturacionEstadistica) nunca mostraron el
+            // error: es un bug de PREVIEW en el modal, no del motor económico. Se resuelve aquí
+            // usando la MISMA función (tarifaBaseFicha) sobre el GRUPO real del integrante, para
+            // que el preview no pueda divergir nunca del cálculo que de verdad se va a guardar.
+            const fichaEnEdicion = idFichaEditando ? (dbClientes[entrenadorVisto] || []).find(c => c.id === idFichaEditando) : null;
+            const esMiembroEnEdicion = esFichaMiembroGrupo(fichaEnEdicion);
+            const fichaGrupoDelMiembro = esMiembroEnEdicion ? buscarFichaPorId(fichaEnEdicion.vinculacion) : null;
+
+            const mod = esMiembroEnEdicion ? (fichaGrupoDelMiembro?.modalidad || '') : document.getElementById('cust-mod').value;
+            const factor = esMiembroEnEdicion ? (parseInt(fichaGrupoDelMiembro?.factor) || 1) : (parseInt(document.getElementById('cust-factor').value) || 1);
             const descuentoPct = normalizarPorcentajeDescuento(document.getElementById('cust-discount')?.value || 0);
-            
+
             // Personas asumidas por facturación en la matriz
-            let multiplicadorPersonas = 1; 
+            let multiplicadorPersonas = 1;
             if(mod.includes("Pareja")) multiplicadorPersonas = 2;
             if(mod.includes("Trío")) multiplicadorPersonas = 3;
-            
+
             let personasEnGrupo = 1;
             if(tabFichaActiva === 'grupo') {
                 const filas = Array.from(document.querySelectorAll('.member-row'));
@@ -3856,8 +3881,12 @@ function calcularRentabilidadFicha(ficha) {
                 personasEnGrupo = filasConNombre > 0 ? filasConNombre : (filas.length > 0 ? filas.length : 1);
                 if(mod.includes("Grupo Reducido")) multiplicadorPersonas = personasEnGrupo;
             }
+            // Un integrante individual nunca multiplica por cabezas -- su preview es SU importe
+            // por persona (igual que importeEfectivoCliente), no el total del grupo.
 
-            const tarifaBasePersona = TARIFAS_2026[mod] ? (TARIFAS_2026[mod][factor] || TARIFAS_2026[mod][1] || 0) : 0;
+            const tarifaBasePersona = esMiembroEnEdicion
+                ? tarifaBaseFicha(fichaGrupoDelMiembro)
+                : (TARIFAS_2026[mod] ? (TARIFAS_2026[mod][factor] || TARIFAS_2026[mod][1] || 0) : 0);
             const facturacionBaseMensual = tarifaBasePersona * multiplicadorPersonas;
             const descuentoEuros = facturacionBaseMensual - aplicarDescuentoImporte(facturacionBaseMensual, descuentoPct);
             const facturacionTotalMensual = aplicarDescuentoImporte(facturacionBaseMensual, descuentoPct);
