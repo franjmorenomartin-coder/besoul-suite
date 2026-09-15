@@ -57,6 +57,8 @@ const DEFAULT_CATALOGO_ACTIVIDADES = {
             }
         };
 
+const CANCELACION_MIN_HORAS_DEFAULT = 6;
+
 function buscarFichaPorId(id) {
 
             if (!dbClientes[entrenadorVisto]) return null;
@@ -481,17 +483,14 @@ async function guardarCliente() {
             // reserva el grupo). facturacionEstadistica se recalcula con SU descuento nuevo.
             if (esFichaMiembroGrupo(fichaAnterior)) {
                 // HOTFIX-CLIENT-SAVE-V2 (2026-09-15): esFichaMiembroGrupo() solo garantiza
-                // modalidad==='Miembro Subordinado' y vinculacion truthy -- los otros 8 campos de
-                // abajo NO tienen esa garantía. Una ficha de integrante real que carezca de
-                // cualquiera de ellos (dato de producción: nunca antes existía una vía para abrir
-                // y guardar la ficha de un integrante por separado, así que este camino no se
-                // había ejercitado nunca contra datos reales) dejaba esa clave como `undefined`
+                // modalidad==='Miembro Subordinado' y vinculacion truthy -- ningún otro campo de
+                // abajo tiene esa garantía. Una ficha de integrante real que carezca de cualquiera
+                // de ellos (dato de producción: nunca antes existía una vía para abrir y guardar
+                // la ficha de un integrante por separado, así que este camino no se había
+                // ejercitado nunca contra datos reales) dejaba esa clave como `undefined`
                 // explícito -- Firestore .update() rechaza la escritura ENTERA si cualquier valor
                 // del documento es undefined, con el mismo mensaje genérico para cualquier
-                // cliente de ese entrenador. Causa raíz real, reproducida en
-                // hotfix-diagnostics/run.cjs escenario H. Fallback seguro, mismo valor por
-                // defecto que ya usa sincronizarIntegrantesGrupo()/mostrarModalNuevoCliente()
-                // para estos mismos campos -- no se inventa ningún default nuevo.
+                // cliente de ese entrenador.
                 Object.assign(ficha, {
                     modalidad: fichaAnterior.modalidad,
                     factor: fichaAnterior.factor || 1,
@@ -510,7 +509,28 @@ async function guardarCliente() {
                     restriccionesReservas: { modo: 'bloquear', bloquesTexto: '' },
                     grupoAbierto: false,
                     capacidadGrupoAbierto: 0,
-                    integrantesObj: []
+                    integrantesObj: [],
+                    // HOTFIX-GROUP-MEMBER-SAVE-FINAL (2026-09-15): el fuzzing de 200+ combinaciones
+                    // de campos presentes/ausentes no reprodujo ya undefined en los 8 campos de
+                    // arriba, pero SÍ confirmó (vía el validador real) que estos otros -- que
+                    // llegan intactos desde fichaAnterior por el spread, sin que nada los
+                    // recalcule -- también podrían quedar `undefined` explícito si alguna vez
+                    // faltan en el dato real, con el mismo efecto (guardado de CUALQUIER cliente
+                    // de ese entrenador rechazado). Mismos valores por defecto que ya usa el resto
+                    // de la app para estos campos (publicarReservasPublicas, etc.) -- no se inventa
+                    // ningún default nuevo.
+                    notaFacturacion: fichaAnterior.notaFacturacion || 'Dato estadístico: lo que aporta este integrante al total del grupo según su propio descuento.',
+                    avatarUrl: fichaAnterior.avatarUrl || '',
+                    avatarPath: fichaAnterior.avatarPath || '',
+                    origenCRM: fichaAnterior.origenCRM || '',
+                    leadId: fichaAnterior.leadId || '',
+                    fuenteCaptacion: fichaAnterior.fuenteCaptacion || '',
+                    medioCaptacion: fichaAnterior.medioCaptacion || '',
+                    centroInteres: fichaAnterior.centroInteres || '',
+                    objetivoCliente: fichaAnterior.objetivoCliente || '',
+                    notaEntrenadorPrueba: fichaAnterior.notaEntrenadorPrueba || '',
+                    cancelacionMinHoras: parseInt(fichaAnterior.cancelacionMinHoras, 10) || CANCELACION_MIN_HORAS_DEFAULT,
+                    avisosPortal: Array.isArray(fichaAnterior.avisosPortal) ? fichaAnterior.avisosPortal : []
                 });
                 ficha.facturacionEstadistica = importeEfectivoCliente(ficha);
             }

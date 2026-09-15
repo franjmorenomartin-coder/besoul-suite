@@ -25,6 +25,12 @@ function extractConstBraces(name) {
   const end = extractBalanced(m.index, '{', '}');
   return html.slice(m.index, end) + ';';
 }
+function extractSimpleConst(name) {
+  const re = new RegExp(`const\\s+${name}\\s*=\\s*[^;]+;`);
+  const m = re.exec(html);
+  if (!m) throw new Error(`No se encontró const simple ${name}`);
+  return m[0];
+}
 
 const names = [
   'buscarFichaPorId', 'tarifaBaseFicha', 'multiplicadorFacturacionFicha',
@@ -41,6 +47,7 @@ const derivBono8 = [...html.matchAll(/TARIFAS_2026\["[^"]+"\]\s*=\s*\{[^}]*\};/g
 const parts = [
   extractConstBraces('TARIFAS_2026') + '\n' + derivBono8,
   extractConstBraces('DEFAULT_CATALOGO_ACTIVIDADES'),
+  extractSimpleConst('CANCELACION_MIN_HORAS_DEFAULT'),
   ...names.map(extractFunction)
 ];
 fs.writeFileSync(path.join(__dirname, 'guardar_extract.js'), parts.join('\n\n'));

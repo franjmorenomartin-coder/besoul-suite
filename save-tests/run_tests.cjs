@@ -169,6 +169,37 @@ const FACTOR_1_5 = ['1','2','3','4','5'];
     check('integrante legacy: campos ausentes reciben fallback seguro, no undefined', final.grupoNombre === '' && final.fechaEstado === '' && final.observacionesEstado === '' && final.color === 'amber' && final.tipoCompra === 'Mensualidad' && final.factor === 1 && final.memberId === '' && final.estadoCliente === 'activo');
   }
 
+  console.log('\n=== 3b. HOTFIX-GROUP-MEMBER-SAVE-FINAL: campos adicionales con undefined/NaN EXPLICITO (no solo ausentes) ===');
+  {
+    // A diferencia del caso 3 (campos ausentes), aqui los campos SI existen en la ficha pero con
+    // valor undefined/NaN explicito -- el caso que el fuzzing (blocker0-tests/fuzz2.cjs) encontro
+    // que el primer hotfix NO cubria (notaFacturacion, avatarUrl/Path, origenCRM, leadId,
+    // fuenteCaptacion, medioCaptacion, centroInteres, objetivoCliente, notaEntrenadorPrueba,
+    // cancelacionMinHoras).
+    const grupo = { id: 'grp6', tipo: 'grupo', nombre: 'Grupo Six', modalidad: 'Grupo Reducido Plan', factor: 1, tipoCompra: 'Mensualidad', estadoCliente: 'activo', integrantesObj: [{ id: 'm0', nombre: 'M6', telefono: '600', email: 'm6@x.com' }] };
+    const miembroConUndefinedExplicito = {
+      id: 'cli_member_grp6_m0', tipo: 'individual', nombre: 'M6', telefono: '600', email: 'm6@x.com',
+      modalidad: 'Miembro Subordinado', descuentoPct: 0, vinculacion: 'grp6',
+      notaFacturacion: undefined, avatarUrl: undefined, avatarPath: undefined, origenCRM: undefined,
+      leadId: undefined, fuenteCaptacion: undefined, medioCaptacion: undefined, centroInteres: undefined,
+      objetivoCliente: undefined, notaEntrenadorPrueba: undefined, cancelacionMinHoras: NaN,
+    };
+    const { dbClientesFinal, payload } = await ejecutarGuardarCliente({
+      tabFichaActiva: 'individual', idFichaEditando: 'cli_member_grp6_m0',
+      dbClientesIniciales: [grupo, miembroConUndefinedExplicito],
+      dom: {
+        'cust-name': { value: 'M6' }, 'cust-phone': { value: '600' }, 'cust-email': { value: 'm6@x.com' },
+        'cust-mod': { value: 'Individual Plan', options: MOD_OPTIONS }, 'cust-factor': { value: '1', options: FACTOR_1_5 },
+        'cust-purchase-type': { value: 'Mensualidad' }, 'cust-bono-date': { value: '' }, 'cust-color': { value: 'amber' },
+        'cust-discount': { value: '0' }, 'cust-status': { value: 'activo' }, 'cust-start-date': { value: '' },
+      }
+    });
+    const malos = valoresProblematicos(payload, 'payload');
+    check('integrante con undefined/NaN explicito en campos secundarios: guardado SIN undefined/NaN', malos.length === 0, malos.join('; '));
+    const final = dbClientesFinal.find(c => c.id === 'cli_member_grp6_m0');
+    check('campos secundarios reciben fallback seguro', typeof final.notaFacturacion === 'string' && final.avatarUrl === '' && final.avatarPath === '' && final.origenCRM === '' && final.leadId === '' && final.fuenteCaptacion === '' && final.medioCaptacion === '' && final.centroInteres === '' && final.objetivoCliente === '' && final.notaEntrenadorPrueba === '' && Number.isFinite(final.cancelacionMinHoras));
+  }
+
   console.log('\n=== 4. Payload realmente serializable por Firestore (JSON.stringify no pierde nada inesperado) ===');
   {
     const grupo = { id: 'grpX', tipo: 'grupo', nombre: 'Grupo X', modalidad: 'Grupo Reducido Bono 8', factor: 8, tipoCompra: 'Bono', fechaCompra: '2026-09-01', color: 'cyan', descuentoPct: 0, estadoCliente: 'activo', fechaEstado: '', observacionesEstado: '', integrantesObj: [{ id: 'm0', nombre: 'X', telefono: '600', email: 'x@x.com' }] };
