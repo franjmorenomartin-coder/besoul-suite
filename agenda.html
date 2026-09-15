@@ -1557,7 +1557,43 @@ miércoles 07:00-09:00"></textarea>
 
         window.bsAgendaAplicandoNube = false;
 
-
+        // HOTFIX-CLIENT-SAVE-V2 (2026-09-15): defensa adicional ANTES de intentar persistir --
+        // detecta recursivamente valores que Firestore .update()/.set() rechaza (undefined, NaN,
+        // funciones, referencias circulares) en cualquier profundidad del payload. A propósito
+        // NO arregla ni elimina nada en silencio: solo detecta, para poder impedir la escritura
+        // con un error controlado y la ruta exacta, en vez de dejar que Firestore la rechace tras
+        // un round-trip de red con un error genérico. El caso concreto que motivó esto (8 campos
+        // sin fallback en guardarCliente() al editar un integrante de grupo) ya está corregido en
+        // origen -- esto es una red de seguridad para que un futuro descuido similar (aquí o en
+        // cualquier otro punto que escriba en este documento) nunca vuelva a producir un fallo
+        // opaco: se detecta y se bloquea ANTES de llegar a Firestore, con la ruta exacta en consola.
+        function valorInvalidoParaFirestore(valor, rutaActual = '', vistos = new Set()) {
+            if (valor === undefined) return { ruta: rutaActual || '(raíz)', motivo: 'undefined' };
+            if (typeof valor === 'number' && Number.isNaN(valor)) return { ruta: rutaActual || '(raíz)', motivo: 'NaN' };
+            if (typeof valor === 'function') return { ruta: rutaActual || '(raíz)', motivo: 'función' };
+            if (valor === null || typeof valor !== 'object') return null;
+            if (valor instanceof Date) return null;
+            // FieldValue.serverTimestamp()/increment()/arrayUnion() etc son objetos especiales del
+            // SDK de Firestore, no datos de la app -- nunca hay que recorrerlos como si lo fueran.
+            // instanceof cuando el SDK está cargado; _methodName como duck-type de respaldo (así
+            // funciona igual en los tests, que no cargan el SDK real de Firebase).
+            if (typeof firebase !== 'undefined' && firebase.firestore && valor instanceof firebase.firestore.FieldValue) return null;
+            if (valor && valor._methodName) return null;
+            if (vistos.has(valor)) return { ruta: rutaActual || '(raíz)', motivo: 'referencia circular' };
+            vistos.add(valor);
+            if (Array.isArray(valor)) {
+                for (let i = 0; i < valor.length; i++) {
+                    const problema = valorInvalidoParaFirestore(valor[i], `${rutaActual}[${i}]`, vistos);
+                    if (problema) return problema;
+                }
+                return null;
+            }
+            for (const clave of Object.keys(valor)) {
+                const problema = valorInvalidoParaFirestore(valor[clave], rutaActual ? `${rutaActual}.${clave}` : clave, vistos);
+                if (problema) return problema;
+            }
+            return null;
+        }
 
         function estadoLocalAgendaParaNube(trainerKeyScope) {
 
@@ -1622,6 +1658,16 @@ miércoles 07:00-09:00"></textarea>
                 const scope = trainerKeyScope || entrenadorVisto;
 
                 const payload = estadoLocalAgendaParaNube(scope);
+
+                // HOTFIX-CLIENT-SAVE-V2: valida ANTES de tocar Firestore -- si algo en el estado
+                // local (cualquier campo, no solo clientes) es undefined/NaN/función/circular, se
+                // bloquea aquí con la ruta exacta en consola, en vez de dejar que Firestore lo
+                // rechace tras un round-trip con un error genérico para el usuario.
+                const problemaPayload = valorInvalidoParaFirestore(payload);
+                if (problemaPayload) {
+                    console.error(`[BESOUL Agenda] guardarEstadoNubeAgenda: payload inválido, escritura BLOQUEADA antes de llegar a Firestore · trainerKey=${scope} · ruta=${problemaPayload.ruta} · motivo=${problemaPayload.motivo}`);
+                    return Promise.resolve({ ok: false, err: { code: 'invalid-payload', message: `Valor no válido para Firestore en "${problemaPayload.ruta}" (${problemaPayload.motivo}).`, ruta: problemaPayload.ruta } });
+                }
 
                 payload.actualizadoEn = firebase.firestore.FieldValue.serverTimestamp();
 
@@ -4459,18 +4505,30 @@ function calcularRentabilidadFicha(ficha) {
             // genera un enlace de reservas propio (A3: un integrante no reserva por su cuenta,
             // reserva el grupo). facturacionEstadistica se recalcula con SU descuento nuevo.
             if (esFichaMiembroGrupo(fichaAnterior)) {
+                // HOTFIX-CLIENT-SAVE-V2 (2026-09-15): esFichaMiembroGrupo() solo garantiza
+                // modalidad==='Miembro Subordinado' y vinculacion truthy -- los otros 8 campos de
+                // abajo NO tienen esa garantía. Una ficha de integrante real que carezca de
+                // cualquiera de ellos (dato de producción: nunca antes existía una vía para abrir
+                // y guardar la ficha de un integrante por separado, así que este camino no se
+                // había ejercitado nunca contra datos reales) dejaba esa clave como `undefined`
+                // explícito -- Firestore .update() rechaza la escritura ENTERA si cualquier valor
+                // del documento es undefined, con el mismo mensaje genérico para cualquier
+                // cliente de ese entrenador. Causa raíz real, reproducida en
+                // hotfix-diagnostics/run.cjs escenario H. Fallback seguro, mismo valor por
+                // defecto que ya usa sincronizarIntegrantesGrupo()/mostrarModalNuevoCliente()
+                // para estos mismos campos -- no se inventa ningún default nuevo.
                 Object.assign(ficha, {
                     modalidad: fichaAnterior.modalidad,
-                    factor: fichaAnterior.factor,
-                    tipoCompra: fichaAnterior.tipoCompra,
-                    fechaCompra: fichaAnterior.fechaCompra,
-                    color: fichaAnterior.color,
+                    factor: fichaAnterior.factor || 1,
+                    tipoCompra: fichaAnterior.tipoCompra || 'Mensualidad',
+                    fechaCompra: fichaAnterior.fechaCompra || '',
+                    color: fichaAnterior.color || 'amber',
                     vinculacion: fichaAnterior.vinculacion,
-                    memberId: fichaAnterior.memberId,
-                    grupoNombre: fichaAnterior.grupoNombre,
-                    estadoCliente: fichaAnterior.estadoCliente,
-                    fechaEstado: fichaAnterior.fechaEstado,
-                    observacionesEstado: fichaAnterior.observacionesEstado,
+                    memberId: fichaAnterior.memberId || '',
+                    grupoNombre: fichaAnterior.grupoNombre || '',
+                    estadoCliente: fichaAnterior.estadoCliente || 'activo',
+                    fechaEstado: fichaAnterior.fechaEstado || '',
+                    observacionesEstado: fichaAnterior.observacionesEstado || '',
                     reservaToken: '',
                     reservasOnlineActivas: false,
                     reservasBloqueadasTexto: '',
