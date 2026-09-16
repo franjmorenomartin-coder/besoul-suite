@@ -3505,9 +3505,16 @@ function calcularRentabilidadFicha(ficha) {
         // exclusivamente el estado ya cargado en memoria (dbCredenciales/dbClientes/dbAgenda/
         // dbDisponibilidadReservas), sin ninguna consulta ni escritura nueva a Firestore. Objetivo
         // explícito: exponer, para cada trainerKey, si tiene disponibilidad activa configurada --
-        // el incidente real (un cliente asignado a un trainerKey "hermano" sin disponibilidad,
-        // mientras la persona real publica sus huecos bajo otra clave) es indetectable desde la
-        // UI normal porque cada pantalla solo mira SU PROPIO trainerKey a la vez.
+        // útil para detectar, si algún día llegara a ocurrir, un cliente asignado a un trainerKey
+        // "hermano" sin disponibilidad mientras la persona real publica sus huecos bajo otra clave
+        // (indetectable desde la UI normal porque cada pantalla solo mira SU PROPIO trainerKey a la
+        // vez). NOTA (2026-09-16): comprobado con lectura real de producción que el caso concreto
+        // reportado (Lourdes Frapolli / Miguel Fenech, trainerKey "lillo") NO es una duplicidad de
+        // identidad -- Miguel Fenech tiene un único trainerKey ("lillo") en besoulUsers, y "miguel"
+        // pertenece a un entrenador real distinto ("Miguel Luna"). La causa real de ese caso fue de
+        // publicación (ver publicarReservasPublicas()), no de identidad. Esta auditoría se conserva
+        // porque sigue siendo la única forma de detectar una duplicidad real si llegara a darse en
+        // otro PT, no porque haya confirmado una en este incidente.
         function diasDisponibilidadActivaTrainer(trainerKey) {
             const disp = dbDisponibilidadReservas[trainerKey];
             if (!disp || !disp.semanal) return 0;
@@ -8322,23 +8329,29 @@ Cancelar = no hacer nada`,
             try {
                 if (!window.firebase || !firebase.apps.length || !usuarioFirebaseActual) return;
                 const fs = firebase.firestore();
-                // PORTAL-SLOTS-P0 (2026-09-16): hallazgo real confirmado contra producción. Esta
-                // función se dispara tras CUALQUIER guardado en Firestore (guardarEstadoNubeAgenda),
-                // republicando de golpe TODOS los trainerKeys, pero leía disponibilidad/clientes/
-                // agenda de las variables globales dbDisponibilidadReservas/dbClientes/dbAgenda tal
-                // como estuvieran en memoria del navegador que disparó esa acción -- si ese navegador
-                // llevaba tiempo abierto y su listener en tiempo real aún no había recibido el último
-                // cambio guardado por OTRO trainer en OTRA sesión, esta función republicaba de todos
-                // modos para ese trainer con datos obsoletos, sobrescribiendo en silencio una
-                // publicación correcta y reciente con una vacía/desactualizada. Confirmado en
-                // producción vía lectura de solo lectura: un PT con disponibilidad real guardada y
-                // persistente en besoulSuite/agenda tenía su besoulPublicSchedule publicado con 0
-                // días activos y un updatedAt POSTERIOR al último guardado real de esa disponibilidad
-                // -- solo se explica por una publicación disparada con una copia local obsoleta. Fix:
-                // releer el documento real directamente del servidor (nunca de caché local)
-                // inmediatamente antes de construir el batch, para que la publicación siempre parta
-                // del estado confirmado en Firestore, nunca de una copia en memoria potencialmente
-                // desincronizada. Aplica igual para cualquier trainerKey, sin excepciones.
+                // PORTAL-SLOTS-P0 (2026-09-16): causa raíz EXACTA, confirmada leyendo producción de
+                // solo lectura (comparando disponibilidadReservas.<trainerKey> real contra el
+                // besoulPublicSchedule/<trainerKey> publicado, campo a campo). Más abajo, la línea
+                // `dbDisponibilidadReservas[trainerKey] || disponibilidadReservasPorDefecto()` cae al
+                // default (todos los días inactivos) en cuanto esa clave no existe TODAVÍA en la
+                // copia LOCAL en memoria del navegador que dispara esta función -- y
+                // disponibilidadReservasPorDefecto() sella su propio `actualizadoEn` con
+                // `new Date().toISOString()` en ese instante. Confirmado exactamente así en
+                // producción: el `disponibilidad.actualizadoEn` publicado coincidía (al segundo) con
+                // el `updatedAt` de ESA publicación, no con el `actualizadoEn` real del último
+                // guardado -- es decir, se publicó el default fabricado, no una copia vieja del dato
+                // real. Esto puede pasar porque esta función se dispara automáticamente tras
+                // CUALQUIER guardado de CUALQUIER PT/admin (guardarEstadoNubeAgenda ->
+                // publicarReservasPublicas), republicando de golpe TODOS los trainerKeys con lo que
+                // hubiera en memoria en ESE momento -- y, a diferencia de la edición de disponibilidad
+                // (disponibilidadListaParaEditar(), que ya bloquea guardar hasta que
+                // window.bsAgendaDisponibilidadCargada confirme que llegó al menos un snapshot real),
+                // esta función nunca comprobaba si el snapshot con el dato de OTRO trainerKey ya había
+                // llegado a esta sesión concreta antes de publicar por él. Fix: releer el documento
+                // real directamente del servidor (nunca de caché local) inmediatamente antes de
+                // construir el batch, para que la publicación siempre parta del estado confirmado en
+                // Firestore -- nunca de una copia en memoria potencialmente todavía no sincronizada.
+                // Aplica igual para cualquier trainerKey, sin excepciones ni nombres hardcodeados.
                 if (window.bsAgendaCloudDocRef) {
                     const snapshotFresco = await window.bsAgendaCloudDocRef.get({ source: 'server' });
                     const datosFrescos = snapshotFresco.data() || {};
