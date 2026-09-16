@@ -46,6 +46,7 @@ function crearFirestoreMock() {
       };
     },
     leerDoc(coleccionNombre, id) { return deepClone((colecciones[coleccionNombre] || {})[id]); },
+    listarDocs(coleccionNombre) { return Object.values(deepClone(colecciones[coleccionNombre] || {})); },
   };
 }
 
@@ -133,14 +134,17 @@ console.log('=== ESCENARIO REAL: cliente correctamente asignado ve los huecos de
 }
 
 // ============================================================
-console.log('\n=== CAUSA RAÍZ DEMOSTRADA: identidad trainerKey duplicada -- cliente ve CERO huecos aunque "la misma persona" SÍ tiene disponibilidad ===');
+console.log('\n=== CAPACIDAD GENERAL DE LA AUDITORÍA: detecta una identidad trainerKey duplicada SI llegara a existir ===');
 // ============================================================
 {
-  // Reproduce mecánicamente el incidente real ya documentado (Miguel Fenech con más de un
-  // trainerKey a la vez, ver BESOUL_WORK_STATE.md): dos perfiles para la misma persona --
-  // "miguel_real" (donde de verdad abre "+ Disponibilidad" y guarda) y "miguel_otro" (un segundo
-  // perfil/clave, vacío de disponibilidad). El cliente de prueba está asignado al perfil
-  // EQUIVOCADO.
+  // NOTA (2026-09-16): esto NO reproduce el caso real de Lourdes/Miguel Fenech -- la lectura de
+  // producción de solo lectura confirmó que su identidad NO está duplicada (un único trainerKey
+  // "lillo" para Miguel Fenech en besoulUsers; "miguel" pertenece a un entrenador real distinto,
+  // "Miguel Luna"). Este bloque prueba una capacidad GENERAL, independiente del incidente real:
+  // si dos perfiles distintos ("miguel_real" con disponibilidad, "miguel_otro" sin ella)
+  // compartieran nombre, la auditoría de solo lectura los señala y un cliente mal asignado al
+  // perfil sin disponibilidad vería cero huecos -- útil para cualquier OTRO PT en el futuro, no
+  // una afirmación sobre este caso concreto.
   const fsx = crearFirestoreMock();
   const dbCredenciales = {
     miguel_real: { nombre: 'Miguel Fenech', centroId: 'lagunillas', centroNombre: 'Lagunillas' },
@@ -171,7 +175,7 @@ console.log('\n=== CAUSA RAÍZ DEMOSTRADA: identidad trainerKey duplicada -- cli
 
   const portal = crearSesionPortal(clientData, scheduleQueVeElCliente);
   const slots = portal.generarSlotsReserva();
-  check('CAUSA RAÍZ DEMOSTRADA: el Portal del cliente muestra CERO huecos aunque "Miguel Fenech" SÍ tenga disponibilidad real (bajo el OTRO trainerKey)', slots.length, 0);
+  check('mecanismo genérico: el Portal del cliente muestra CERO huecos si está mal asignado a un trainerKey "hermano" sin disponibilidad', slots.length, 0);
 
   // La auditoría de solo lectura debe señalar exactamente este caso.
   const { filas, duplicados } = sesion.construirAuditoriaTrainerKey();
@@ -181,38 +185,61 @@ console.log('\n=== CAUSA RAÍZ DEMOSTRADA: identidad trainerKey duplicada -- cli
 }
 
 // ============================================================
-console.log('\n=== PUBLICACIÓN-P0: causa REAL confirmada en producción (lectura de solo lectura) ===');
+console.log('\n=== PUBLICACIÓN-P0: causa EXACTA confirmada en producción (lectura de solo lectura, campo a campo) ===');
 // ============================================================
 {
-  // Confirmado con datos reales de producción (solo lectura, sin PII): besoulPublicSchedule/lillo
-  // (Miguel Fenech, ÚNICO trainerKey real -- la identidad NO está duplicada) tenía 0 días activos
-  // publicados con un updatedAt POSTERIOR al último guardado real de su disponibilidad (que sí
-  // tiene 5 días activos en besoulSuite/agenda). Esto solo se explica por una publicación
-  // disparada con una copia local (dbDisponibilidadReservas) obsoleta -- publicarReservasPublicas()
-  // republica TODOS los trainerKeys ante CUALQUIER guardado de CUALQUIER PT/admin, usando lo que
-  // hubiera en memoria del navegador que disparó esa acción. Este test reproduce exactamente esa
-  // mecánica: la sesión que dispara la publicación tiene en memoria una copia YA OBSOLETA (sin
-  // disponibilidad) de "lillo", mientras el servidor real ya tiene la disponibilidad correcta
-  // guardada -- y confirma que, tras el fix, se publica la fresca del servidor, nunca la obsoleta.
+  // Causa raíz EXACTA (no una hipótesis): se comparó, de solo lectura y campo a campo, la
+  // disponibilidadReservas.<trainerKey> real (besoulSuite/agenda: 5 días activos,
+  // actualizadoEn = <fecha del último guardado real>) contra el besoulPublicSchedule/<trainerKey>
+  // publicado (0 días activos). El `disponibilidad.actualizadoEn` publicado NO coincidía con el
+  // actualizadoEn real -- coincidía (al segundo) con el propio `updatedAt` de esa publicación. Eso
+  // es exactamente lo que produce disponibilidadReservasPorDefecto() (agenda.html): sella
+  // `actualizadoEn: new Date().toISOString()` en el momento en que se la invoca. Conclusión: en
+  // publicarReservasPublicas(), la expresión `dbDisponibilidadReservas[trainerKey] ||
+  // disponibilidadReservasPorDefecto()` cayó al DEFAULT (todo inactivo) porque esa clave
+  // sencillamente NO EXISTÍA TODAVÍA en la copia local en memoria de quien disparó esa
+  // publicación concreta -- no porque hubiera una copia vieja pero presente. Esto puede pasar
+  // porque esta función se dispara automáticamente tras CUALQUIER guardado de CUALQUIER PT/admin
+  // (guardarEstadoNubeAgenda -> publicarReservasPublicas), republicando de golpe TODOS los
+  // trainerKeys -- y, a diferencia de la UI de edición de disponibilidad (que sí espera a
+  // window.bsAgendaDisponibilidadCargada antes de permitir guardar), esta función nunca esperaba a
+  // que el snapshot con el dato de OTRO trainerKey hubiera llegado antes de publicar por él.
+  // CLASIFICACIÓN: A -- publicarReservasPublicas() RECIBE una disponibilidad vacía/fabricada (el
+  // default), no la transforma ni la sobrescribe una segunda operación.
   const fsx = crearFirestoreMock();
-  const dbCredenciales = { lillo: { nombre: 'Miguel Fenech', centroId: 'lagunillas', centroNombre: 'Lagunillas' } };
-  // Copia local OBSOLETA en memoria de quien dispara la publicación: sin disponibilidad activa.
-  const dbClientesObsoleto = { lillo: [{ id: 'cliente-test', nombre: 'Cliente Test', tipo: 'individual', email: 'c@test.com', telefono: '600000000' }] };
-  const dbAgendaObsoleto = { lillo: {} };
-  const dbDisponibilidadObsoleta = { lillo: (() => { const s = {}; for (let d = 1; d <= 7; d++) s[d] = { activo: false, bloques: [] }; return s; })() && { semanal: (() => { const s = {}; for (let d = 1; d <= 7; d++) s[d] = { activo: false, bloques: [] }; return s; })(), excepciones: {}, bloqueos: {}, recurrenteSemanal: true } };
-  // Estado REAL en el servidor en el momento de publicar: disponibilidad correcta ya guardada.
+  const dbCredenciales = { pt_disponible: { nombre: 'PT con disponibilidad real', centroId: 'centro-1', centroNombre: 'Centro 1' } };
+  const dbClientesLocal = { pt_disponible: [{ id: 'cliente-test', nombre: 'Cliente Test', tipo: 'individual', email: 'c@test.com', telefono: '600000000' }] };
+  const dbAgendaLocal = { pt_disponible: {} };
+  // La clave del trainer NI SIQUIERA EXISTE en la copia local en memoria de quien dispara la
+  // publicación (no es "obsoleta pero presente" -- está ausente del todo), tal como se confirmó
+  // en producción vía el actualizadoEn fabricado en el momento de publicar.
+  const dbDisponibilidadLocalIncompleta = {};
+  // Estado REAL en el servidor en el momento de publicar: disponibilidad correcta ya guardada,
+  // con su actualizadoEn real (de un guardado anterior, no del instante de la publicación).
+  const dispRealDelServidor = { ...disponibilidadLunesA('08:00', '14:00'), actualizadoEn: isoOffset(-20) + 'T12:18:37.684Z', actualizadoPor: 'pt_disponible' };
   const datosFrescosServidor = {
-    clientes: dbClientesObsoleto,
-    agenda: dbAgendaObsoleto,
-    disponibilidadReservas: { lillo: disponibilidadLunesA('09:00', '13:00') },
+    clientes: dbClientesLocal,
+    agenda: dbAgendaLocal,
+    disponibilidadReservas: { pt_disponible: dispRealDelServidor },
   };
   const bsAgendaCloudDocRef = { async get(opts) { check('el refetch pide explícitamente los datos del servidor, nunca de caché', opts && opts.source, 'server'); return { data: () => deepClone(datosFrescosServidor) }; } };
 
-  const sesion = crearSesionAgenda({ dbCredenciales, dbClientes: dbClientesObsoleto, dbAgenda: dbAgendaObsoleto, dbDisponibilidadReservas: dbDisponibilidadObsoleta, firestoreMock: fsx, bsAgendaCloudDocRef });
+  const sesion = crearSesionAgenda({ dbCredenciales, dbClientes: dbClientesLocal, dbAgenda: dbAgendaLocal, dbDisponibilidadReservas: dbDisponibilidadLocalIncompleta, firestoreMock: fsx, bsAgendaCloudDocRef });
   await sesion.publicarReservasPublicas();
 
-  const schedule = fsx.leerDoc('besoulPublicSchedule', 'lillo');
-  check('FIX PUBLICACIÓN-P0: se publica la disponibilidad FRESCA del servidor, no la copia obsoleta en memoria', Object.values(schedule.disponibilidad.semanal).some(d => d.activo === true), true);
+  const schedule = fsx.leerDoc('besoulPublicSchedule', 'pt_disponible');
+  check('FIX PUBLICACIÓN-P0: pese a que la clave no existía en memoria local, se publica la disponibilidad FRESCA del servidor, no el default fabricado', Object.values(schedule.disponibilidad.semanal).some(d => d.activo === true), true);
+  check('el actualizadoEn publicado es el REAL del último guardado, no uno fabricado en el instante de publicar', schedule.disponibilidad.actualizadoEn, dispRealDelServidor.actualizadoEn);
+
+  // Cadena completa post-fix, exactamente como en producción: source (5 días) -> publicación ->
+  // besoulPublicSchedule -> Portal cliente -> generarSlotsReserva() -> huecos futuros > 0.
+  // (El fix reasigna dbClientes dentro de la función a una copia recién leída del servidor, así
+  // que el token real hay que leerlo de lo publicado, no de la variable local ya desconectada.)
+  const clientData = fsx.listarDocs('besoulPublicClients')[0];
+  check('la ficha pública del cliente apunta al trainerKey correcto', clientData.trainerKey, 'pt_disponible');
+  const portal = crearSesionPortal(clientData, schedule);
+  const slots = portal.generarSlotsReserva();
+  check('CADENA COMPLETA POST-FIX: source con 5 días activos -> publicación -> Portal -> huecos futuros > 0', slots.length > 0, true);
 }
 
 // ============================================================
