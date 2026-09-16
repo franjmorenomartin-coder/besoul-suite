@@ -1109,7 +1109,7 @@ miércoles 07:00-09:00"></textarea>
             <div id="disponibilidad-grid" class="space-y-2"></div>
             <div class="flex justify-end gap-2 pt-2">
                 <button onclick="cerrarModalDisponibilidadReservas()" class="bg-slate-800 text-slate-400 px-3 py-2 rounded font-bold hover:text-white transition">Cancelar</button>
-                <button onclick="guardarDisponibilidadReservas()" class="bg-cyan-400 text-slate-950 px-4 py-2 rounded font-black hover:bg-cyan-500 transition">Guardar disponibilidad</button>
+                <button id="btn-guardar-disponibilidad" onclick="guardarDisponibilidadReservas()" class="bg-cyan-400 text-slate-950 px-4 py-2 rounded font-black hover:bg-cyan-500 transition disabled:opacity-50 disabled:cursor-not-allowed">Guardar disponibilidad</button>
             </div>
         </div>
     </div>
@@ -1659,6 +1659,34 @@ miércoles 07:00-09:00"></textarea>
 
 
 
+        // FIX-PT-AVAILABILITY-PERSISTENCE-V2 (2026-09-16): un trainerKey puede legítimamente
+        // contener un punto -- p.ej. trainerKeyDesdeEmail() derivaba "fran.jmorenomartin" de un
+        // email sin trainerKey explícito en besoulUsers (antes de este mismo fix, ver más abajo).
+        // Firestore .update({'a.b.c': valor}) interpreta CADA punto de la cadena como separador
+        // de ruta anidada real, así que una clave como "disponibilidadReservas.fran.jmorenomartin"
+        // se guardaba como disponibilidadReservas.fran.jmorenomartin (TRES niveles anidados), no
+        // como el campo plano disponibilidadReservas["fran.jmorenomartin"] que el resto del código
+        // lee con dbDisponibilidadReservas[trainerKey]. El guardado parecía funcionar (éxito
+        // optimista en memoria, sin error) pero el eco real de Firestore ya no tenía la clave
+        // esperada -- causa raíz demostrada del "aparece y, segundos después, desaparece"
+        // reportado en producción (ver availability-tests/). firebase.firestore.FieldPath(...)
+        // trata cada argumento como un segmento LITERAL (nunca lo vuelve a partir por puntos), así
+        // que se usa para el segundo segmento (el trainerKey completo) en cualquier clave con más
+        // de un punto. Comportamiento IDÉNTICO para cualquier trainerKey sin puntos (la inmensa
+        // mayoría hoy) -- split('.') da un único elemento y sigue el camino de siempre.
+        function payloadParaUpdateFirestore(payload) {
+            const args = [];
+            Object.keys(payload).forEach(key => {
+                const partes = key.split('.');
+                if (partes.length > 1) {
+                    args.push(new firebase.firestore.FieldPath(partes[0], partes.slice(1).join('.')), payload[key]);
+                } else {
+                    args.push(key, payload[key]);
+                }
+            });
+            return args;
+        }
+
         function guardarEstadoNubeAgenda(trainerKeyScope) {
 
             // Hallazgo real (hotfix edición de fichas, 2026-09-02): esta función SIEMPRE
@@ -1706,7 +1734,7 @@ miércoles 07:00-09:00"></textarea>
                 // Devuelve la promesa (antes se descartaba) para que quien lo necesite
                 // pueda esperar a que el guardado+publicación terminen de verdad, sin
                 // cambiar el comportamiento de las llamadas existentes que la ignoran.
-                return window.bsAgendaCloudDocRef.update(payload)
+                return window.bsAgendaCloudDocRef.update(...payloadParaUpdateFirestore(payload))
                     .then(() => publicarReservasPublicas())
                     .then(() => ({ ok: true }))
                     .catch(err => { console.error('Error guardando agenda en Firebase:', err); return { ok: false, err }; });
@@ -2542,6 +2570,19 @@ miércoles 07:00-09:00"></textarea>
                 });
                 ficha.avisosPortal = ficha.avisosPortal.slice(0, 20);
                 localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
+                // PORTAL-NOTICES-FIX (2026-09-16): hallazgo real de auditoría -- este aviso nunca
+                // se guardaba en besoulSuite/agenda (solo en localStorage + la proyección pública
+                // besoulPublicClients vía publicarReservasPublicasDebounced()). En cuanto llegaba
+                // CUALQUIER otro snapshot del documento (p.ej. tras guardar disponibilidad, un
+                // cliente, o cualquier otro cambio de cualquier PT), aplicarEstadoNubeAgenda()
+                // sustituye dbClientes por completo con la copia remota -- que nunca tuvo este
+                // aviso -- y el contador/histórico "desaparecían" sin explicación, exactamente lo
+                // reportado ("aparece un 1, luego 'sin avisos enviados'"). Ahora también se
+                // persiste en el documento compartido, igual que el resto de la ficha -- sin
+                // colección ni Rules nuevas (besoulSuite/agenda ya admite escritura de cualquier
+                // usuario activo). Debounced (no directo) porque avisar a varios clientes ejecuta
+                // esta función en bucle -- coalesce en un único guardado real.
+                programarGuardadoNubeAgenda(entrenadorVisto);
                 publicarReservasPublicasDebounced();
                 estado.portal = 'ok';
             } catch (err) {
@@ -6637,6 +6678,31 @@ Cancelar = no hacer nada`,
             pasadas.sort((a, b) => b.clave.localeCompare(a.clave));
             return { proximas: futuras.slice(0, 5), recientes: pasadas.slice(0, 3) };
         }
+
+        // PORTAL-MONTHLY-CALENDAR (2026-09-16): ventana amplia (no ilimitada) para que el
+        // calendario mensual del Portal pueda navegar varios meses atrás/adelante sin depender de
+        // otra consulta al PT -- separado de sesionesClienteParaPortal() de arriba (que sigue
+        // limitada a 5/3 para "Próximas"/"Recientes") para no tener que ampliar ESE límite y
+        // arriesgar una regresión en una vista que ya funciona. Ningún estado nuevo: el mismo
+        // estadoCancelacion ya almacenado (solo 'cancelada_fuera_plazo' existe hoy -- una
+        // cancelación dentro de plazo BORRA la sesión sin dejar rastro, así que no hay forma
+        // honesta de reconstruir un estado "cancelada sin penalización" aquí).
+        function calendarioSesionesClienteParaPortal(trainerKey, clientId) {
+            const hoy = new Date();
+            const desdeISO = formatoFechaLocal(new Date(hoy.getFullYear(), hoy.getMonth() - 4, 1));
+            const hastaISO = formatoFechaLocal(new Date(hoy.getFullYear(), hoy.getMonth() + 4, 1));
+            const items = [];
+            Object.keys(dbAgenda[trainerKey] || {}).forEach(clave => {
+                const obj = dbAgenda[trainerKey][clave];
+                if (!obj || obj.id !== clientId) return;
+                const [fechaISO, hora] = clave.split('_');
+                if (fechaISO < desdeISO || fechaISO > hastaISO) return;
+                items.push({ fechaISO, hora, estadoCancelacion: obj.estadoCancelacion || '', modalidad: obj.modalidad || '' });
+            });
+            items.sort((a, b) => a.fechaISO.localeCompare(b.fechaISO) || a.hora.localeCompare(b.hora));
+            return items;
+        }
+
         function generarTokenReservaCliente() {
             // SEC-05 (2026-09-04): Math.random() no es un CSPRNG -- con suficientes muestras del
             // mismo generador (p.ej. observando varios tokens emitidos seguidos) su estado interno
@@ -6887,7 +6953,7 @@ Cancelar = no hacer nada`,
             return semanal;
         }
 
-        function guardarDisponibilidadReservas() {
+        async function guardarDisponibilidadReservas() {
             // FIX-PT-AVAILABILITY-PERSISTENCE: defensa en profundidad -- si por cualquier vía se
             // llega aquí sin que el snapshot real se haya aplicado todavía, "anterior" de abajo
             // sería un default fabricado, no los datos reales del PT; guardar sobre eso los
@@ -6899,9 +6965,10 @@ Cancelar = no hacer nada`,
             const recurrente = !!document.getElementById('disp-recurrente-semanal')?.checked;
             const bloqueos = anterior.bloqueos || {};
             const excepciones = anterior.excepciones || {};
+            let nuevoValor;
 
             if (recurrente) {
-                dbDisponibilidadReservas[entrenadorVisto] = {
+                nuevoValor = {
                     ...anterior,
                     semanal: semanalFormulario,
                     excepciones,
@@ -6918,7 +6985,7 @@ Cancelar = no hacer nada`,
                     const fechaISO = formatoFechaLocal(fecha);
                     nuevasExcepciones[fechaISO] = { ...semanalFormulario[d], override: true };
                 }
-                dbDisponibilidadReservas[entrenadorVisto] = {
+                nuevoValor = {
                     ...anterior,
                     semanal: anterior.semanal || disponibilidadReservasPorDefecto().semanal,
                     excepciones: nuevasExcepciones,
@@ -6929,11 +6996,36 @@ Cancelar = no hacer nada`,
                 };
             }
 
+            // FIX-PT-AVAILABILITY-PERSISTENCE-V2: confirmación real de guardado (bloque 6 del
+            // hotfix). Antes: el estado local se sustituía y se anunciaba "guardado" de forma
+            // incondicional, sin esperar a que el write a Firestore realmente terminara -- si
+            // fallaba (red, cuota, error del servidor), el PT veía "Disponibilidad guardada" para
+            // segundos después ver cómo la franja recién puesta desaparecía sin ninguna
+            // explicación, en cuanto llegaba el próximo snapshot con el estado remoto real (el
+            // guardado nunca llegó a aplicarse). Ahora: se aplica en memoria de forma optimista
+            // (para que el PT vea el cambio al instante), pero se ESPERA la confirmación real
+            // antes de cerrar el modal/anunciar éxito -- y si falla, se revierte la memoria al
+            // valor anterior y se avisa explícitamente, dejando el modal abierto para reintentar.
+            const btn = document.getElementById('btn-guardar-disponibilidad');
+            if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+            dbDisponibilidadReservas[entrenadorVisto] = nuevoValor;
             localStorage.setItem('bs_db_disponibilidad_reservas_v6', JSON.stringify(dbDisponibilidadReservas));
-            guardarEstadoNubeAgenda();
-            publicarReservasPublicas();
-            cerrarModalDisponibilidadReservas();
             renderAgenda();
+
+            const resultado = await guardarEstadoNubeAgenda();
+            if (!resultado || !resultado.ok) {
+                dbDisponibilidadReservas[entrenadorVisto] = anterior;
+                localStorage.setItem('bs_db_disponibilidad_reservas_v6', JSON.stringify(dbDisponibilidadReservas));
+                renderAgenda();
+                if (btn) { btn.disabled = false; btn.textContent = 'Guardar disponibilidad'; }
+                const motivo = resultado?.err ? (resultado.err.message || resultado.err.code || 'error desconocido') : 'la app está sincronizando otro cambio en este instante';
+                alert(`No se ha podido guardar la disponibilidad en el servidor (${motivo}). Se ha restaurado la disponibilidad anterior en pantalla. Vuelve a intentarlo.`);
+                return;
+            }
+
+            publicarReservasPublicas();
+            if (btn) { btn.disabled = false; btn.textContent = 'Guardar disponibilidad'; }
+            cerrarModalDisponibilidadReservas();
             alert(recurrente ? 'Disponibilidad recurrente guardada. Se generarán slots de 45 min todas las semanas.' : 'Disponibilidad guardada solo para la semana visible.');
         }
 
@@ -8248,6 +8340,9 @@ Cancelar = no hacer nada`,
                             proximaSesion: sesionesPortal.proximas[0] || null,
                             proximasSesiones: sesionesPortal.proximas,
                             sesionesRecientes: sesionesPortal.recientes,
+                            // PORTAL-MONTHLY-CALENDAR: ventana propia de ±4 meses (ver función),
+                            // separada de proximas/recientes para no tocar ese límite existente.
+                            calendarioSesiones: calendarioSesionesClienteParaPortal(trainerKey, c.id),
                             cancelacionMinHoras: parseInt(c.cancelacionMinHoras, 10) || CANCELACION_MIN_HORAS_DEFAULT,
                             avisos: Array.isArray(c.avisosPortal) ? c.avisosPortal.slice(0, 10).map(a => ({ id: a.id, fecha: a.fecha, contenido: a.contenido })) : [],
                             updatedAt: firebase.firestore.FieldValue.serverTimestamp()

@@ -1,6 +1,5 @@
-// FIX-PT-AVAILABILITY-PERSISTENCE: extrae VERBATIM de agenda.html todo el flujo real de
-// disponibilidad PT -- UI -> estado en memoria -> payload de guardado -> Firestore (simulado) ->
-// carga posterior -> render. Mismo patrón de brace-matching que el resto de la suite.
+// PORTAL-NOTICES-FIX: extrae VERBATIM de agenda.html el flujo de avisos internos PT -> cliente --
+// mismo patrón de brace-matching que el resto de la suite.
 const fs = require('fs');
 const path = require('path');
 
@@ -23,8 +22,6 @@ function extractFunction(name) {
   return html.slice(m.index, end);
 }
 function extractLet(name) {
-  // Algunas declaraciones let comparten línea con otras ("let a = 1; let b = 2;") -- se busca
-  // la MÁS CORTA coincidencia hasta el primer ';' propio de esta variable.
   const re = new RegExp(`let\\s+${name}\\s*=\\s*[^;]+;`);
   const m = re.exec(html);
   if (!m) throw new Error(`No se encontró let ${name}`);
@@ -42,28 +39,17 @@ const funciones = [
   'normalizarCredenciales',
   'guardarCredenciales',
   'sanitizarCredenciales',
-  'normalizarTrainerKey',
-  'disponibilidadReservasPorDefecto',
-  'disponibilidadTrainerActual',
-  'leerDisponibilidadFormulario',
-  'guardarDisponibilidadReservas',
-  'disponibilidadListaParaEditar',
-  'asegurarDisponibilidadTrainerEditable',
-  'disponibilidadTrainerLectura',
-  'bloquesDisponibilidadFecha',
-  'normalizarBloquesDisponibilidad',
-  'fusionarBloquesDisponibilidad',
-  'formatoFechaLocal',
-  'emailDocId',
-  'trainerKeyDesdeEmail',
-  'perfilFirestoreAcredencial',
+  'buscarClientePorIdTrainer',
+  'nombreEntrenador',
+  'publicarAvisoPortalCliente',
 ];
 const lets = [
   'usuarioLogeado', 'rolActivo', 'entrenadorVisto',
   'dbClientes', 'dbAgenda', 'dbPruebasCRM', 'dbDisponibilidadReservas',
-  'dbNotas', 'dbHistoricoClientes', 'dbCredenciales', 'lunesActual',
+  'dbNotas', 'dbHistoricoClientes', 'dbCredenciales',
+  'avisoMultipleEstados', 'avisoCanalWhatsAppActivo',
 ];
 
 const parts = [...lets.map(extractLet), ...funciones.map(extractFunction)];
-fs.writeFileSync(path.join(__dirname, 'availability_extract.js'), parts.join('\n\n'));
+fs.writeFileSync(path.join(__dirname, 'notices_extract.js'), parts.join('\n\n'));
 console.log('OK, bloques extraidos:', parts.length);

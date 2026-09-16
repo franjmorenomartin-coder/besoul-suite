@@ -18,7 +18,9 @@ let dbHistoricoClientes = JSON.parse(localStorage.getItem('bs_db_historico_clien
 
 let dbCredenciales = sanitizarCredenciales(JSON.parse(localStorage.getItem('bs_db_credenciales_v6')) || CREDENCIALES_BASE);
 
-let lunesActual = new Date();
+let avisoMultipleEstados = new Map();
+
+let avisoCanalWhatsAppActivo = true;
 
 function valorInvalidoParaFirestore(valor, rutaActual = '', vistos = new Set()) {
             if (valor === undefined) return { ruta: rutaActual || '(raíz)', motivo: 'undefined' };
@@ -316,212 +318,57 @@ function sanitizarCredenciales(input) {
             return salida;
         }
 
-function normalizarTrainerKey(valor) {
-            return String(valor || '')
-                .trim()
-                .toLowerCase()
-                .normalize('NFD').replace(/\p{Diacritic}/gu, '')
-                .replace(/\s+/g, '_')
-                .replace(/[^a-z0-9._-]/g, '');
+function buscarClientePorIdTrainer(trainerKey, id) {
+            const lista = dbClientes[trainerKey] || [];
+            return lista.find(c => c && c.id === id) || null;
         }
 
-function disponibilidadReservasPorDefecto() {
-            // Nueva filosofía: sin disponibilidad publicada no hay slots agendables.
-            // El PT/admin debe definir franjas antes de agendar clientes.
-            const semanal = {};
-            for (let d=1; d<=7; d++) semanal[d] = { activo: false, bloques: [] };
-            return { semanal, excepciones: {}, bloqueos: {}, recurrenteSemanal: true, actualizadoEn: new Date().toISOString() };
+function nombreEntrenador(user) {
+
+            return dbCredenciales[user]?.nombre || user;
+
         }
 
-function disponibilidadTrainerActual() {
-            if (!dbDisponibilidadReservas[entrenadorVisto]) dbDisponibilidadReservas[entrenadorVisto] = disponibilidadReservasPorDefecto();
-            return dbDisponibilidadReservas[entrenadorVisto];
-        }
-
-function leerDisponibilidadFormulario() {
-            const semanal = {};
-            for (let d=1; d<=7; d++) {
-                const activo = !!document.getElementById(`disp-active-${d}`)?.checked;
-                const b1s = document.getElementById(`disp-${d}-b1-start`)?.value || '';
-                const b1e = document.getElementById(`disp-${d}-b1-end`)?.value || '';
-                const b2s = document.getElementById(`disp-${d}-b2-start`)?.value || '';
-                const b2e = document.getElementById(`disp-${d}-b2-end`)?.value || '';
-                const bloques = [];
-                if (activo && b1s && b1e && b1s < b1e) bloques.push({inicio:b1s, fin:b1e});
-                if (activo && b2s && b2e && b2s < b2e) bloques.push({inicio:b2s, fin:b2e});
-                semanal[d] = { activo, bloques };
+function publicarAvisoPortalCliente(id) {
+            const ficha = buscarClientePorIdTrainer(entrenadorVisto, id);
+            const mensaje = document.getElementById('aviso-multiple-mensaje')?.value.trim() || '';
+            const estado = avisoMultipleEstados.get(id) || {};
+            if (!ficha || !mensaje) { estado.portal = 'error'; avisoMultipleEstados.set(id, estado); renderListaEnvioAvisoMultiple(); return; }
+            try {
+                if (!Array.isArray(ficha.avisosPortal)) ficha.avisosPortal = [];
+                ficha.avisosPortal.unshift({
+                    id: `av_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,6)}`,
+                    fecha: new Date().toISOString(),
+                    contenido: mensaje,
+                    remitente: nombreEntrenador(entrenadorVisto),
+                    canales: { portal: true, whatsapp: avisoCanalWhatsAppActivo },
+                    // A6 (addendum): 'manual' siempre hoy -- campo preparado para que un futuro
+                    // generador automático (sesión mañana, bono a punto de agotarse/caducar,
+                    // reserva confirmada...) pueda marcar sus propios avisos como 'sistema' sin
+                    // cambiar el esquema. Ninguna automatización activa en esta fase.
+                    tipo: 'manual'
+                });
+                ficha.avisosPortal = ficha.avisosPortal.slice(0, 20);
+                localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
+                // PORTAL-NOTICES-FIX (2026-09-16): hallazgo real de auditoría -- este aviso nunca
+                // se guardaba en besoulSuite/agenda (solo en localStorage + la proyección pública
+                // besoulPublicClients vía publicarReservasPublicasDebounced()). En cuanto llegaba
+                // CUALQUIER otro snapshot del documento (p.ej. tras guardar disponibilidad, un
+                // cliente, o cualquier otro cambio de cualquier PT), aplicarEstadoNubeAgenda()
+                // sustituye dbClientes por completo con la copia remota -- que nunca tuvo este
+                // aviso -- y el contador/histórico "desaparecían" sin explicación, exactamente lo
+                // reportado ("aparece un 1, luego 'sin avisos enviados'"). Ahora también se
+                // persiste en el documento compartido, igual que el resto de la ficha -- sin
+                // colección ni Rules nuevas (besoulSuite/agenda ya admite escritura de cualquier
+                // usuario activo). Debounced (no directo) porque avisar a varios clientes ejecuta
+                // esta función en bucle -- coalesce en un único guardado real.
+                programarGuardadoNubeAgenda(entrenadorVisto);
+                publicarReservasPublicasDebounced();
+                estado.portal = 'ok';
+            } catch (err) {
+                console.error('[NOTICE-01] Error publicando aviso en Portal:', err);
+                estado.portal = 'error';
             }
-            return semanal;
-        }
-
-async function guardarDisponibilidadReservas() {
-            // FIX-PT-AVAILABILITY-PERSISTENCE: defensa en profundidad -- si por cualquier vía se
-            // llega aquí sin que el snapshot real se haya aplicado todavía, "anterior" de abajo
-            // sería un default fabricado, no los datos reales del PT; guardar sobre eso los
-            // sustituiría permanentemente. abrirModalDisponibilidadReservas() ya bloquea el camino
-            // normal (el botón "+ Disponibilidad"); este guardián cubre cualquier otro disparador.
-            if (!disponibilidadListaParaEditar()) return;
-            const semanalFormulario = leerDisponibilidadFormulario();
-            const anterior = dbDisponibilidadReservas[entrenadorVisto] || disponibilidadReservasPorDefecto();
-            const recurrente = !!document.getElementById('disp-recurrente-semanal')?.checked;
-            const bloqueos = anterior.bloqueos || {};
-            const excepciones = anterior.excepciones || {};
-            let nuevoValor;
-
-            if (recurrente) {
-                nuevoValor = {
-                    ...anterior,
-                    semanal: semanalFormulario,
-                    excepciones,
-                    bloqueos,
-                    recurrenteSemanal: true,
-                    actualizadoEn: new Date().toISOString(),
-                    actualizadoPor: usuarioLogeado
-                };
-            } else {
-                const nuevasExcepciones = { ...excepciones };
-                for (let d=1; d<=7; d++) {
-                    const fecha = new Date(lunesActual);
-                    fecha.setDate(fecha.getDate() + (d - 1));
-                    const fechaISO = formatoFechaLocal(fecha);
-                    nuevasExcepciones[fechaISO] = { ...semanalFormulario[d], override: true };
-                }
-                nuevoValor = {
-                    ...anterior,
-                    semanal: anterior.semanal || disponibilidadReservasPorDefecto().semanal,
-                    excepciones: nuevasExcepciones,
-                    bloqueos,
-                    recurrenteSemanal: false,
-                    actualizadoEn: new Date().toISOString(),
-                    actualizadoPor: usuarioLogeado
-                };
-            }
-
-            // FIX-PT-AVAILABILITY-PERSISTENCE-V2: confirmación real de guardado (bloque 6 del
-            // hotfix). Antes: el estado local se sustituía y se anunciaba "guardado" de forma
-            // incondicional, sin esperar a que el write a Firestore realmente terminara -- si
-            // fallaba (red, cuota, error del servidor), el PT veía "Disponibilidad guardada" para
-            // segundos después ver cómo la franja recién puesta desaparecía sin ninguna
-            // explicación, en cuanto llegaba el próximo snapshot con el estado remoto real (el
-            // guardado nunca llegó a aplicarse). Ahora: se aplica en memoria de forma optimista
-            // (para que el PT vea el cambio al instante), pero se ESPERA la confirmación real
-            // antes de cerrar el modal/anunciar éxito -- y si falla, se revierte la memoria al
-            // valor anterior y se avisa explícitamente, dejando el modal abierto para reintentar.
-            const btn = document.getElementById('btn-guardar-disponibilidad');
-            if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
-            dbDisponibilidadReservas[entrenadorVisto] = nuevoValor;
-            localStorage.setItem('bs_db_disponibilidad_reservas_v6', JSON.stringify(dbDisponibilidadReservas));
-            renderAgenda();
-
-            const resultado = await guardarEstadoNubeAgenda();
-            if (!resultado || !resultado.ok) {
-                dbDisponibilidadReservas[entrenadorVisto] = anterior;
-                localStorage.setItem('bs_db_disponibilidad_reservas_v6', JSON.stringify(dbDisponibilidadReservas));
-                renderAgenda();
-                if (btn) { btn.disabled = false; btn.textContent = 'Guardar disponibilidad'; }
-                const motivo = resultado?.err ? (resultado.err.message || resultado.err.code || 'error desconocido') : 'la app está sincronizando otro cambio en este instante';
-                alert(`No se ha podido guardar la disponibilidad en el servidor (${motivo}). Se ha restaurado la disponibilidad anterior en pantalla. Vuelve a intentarlo.`);
-                return;
-            }
-
-            publicarReservasPublicas();
-            if (btn) { btn.disabled = false; btn.textContent = 'Guardar disponibilidad'; }
-            cerrarModalDisponibilidadReservas();
-            alert(recurrente ? 'Disponibilidad recurrente guardada. Se generarán slots de 45 min todas las semanas.' : 'Disponibilidad guardada solo para la semana visible.');
-        }
-
-function disponibilidadListaParaEditar() {
-            if (window.bsAgendaCloudDocRef && !window.bsAgendaDisponibilidadCargada) {
-                alert('Todavía se está cargando la disponibilidad desde el servidor. Espera un momento y vuelve a intentarlo.');
-                return false;
-            }
-            return true;
-        }
-
-function asegurarDisponibilidadTrainerEditable(trainerKey = entrenadorVisto) {
-            if (!dbDisponibilidadReservas[trainerKey]) dbDisponibilidadReservas[trainerKey] = disponibilidadReservasPorDefecto();
-            if (!dbDisponibilidadReservas[trainerKey].semanal) dbDisponibilidadReservas[trainerKey].semanal = disponibilidadReservasPorDefecto().semanal;
-            if (!dbDisponibilidadReservas[trainerKey].excepciones) dbDisponibilidadReservas[trainerKey].excepciones = {};
-            if (!dbDisponibilidadReservas[trainerKey].bloqueos) dbDisponibilidadReservas[trainerKey].bloqueos = {};
-            return dbDisponibilidadReservas[trainerKey];
-        }
-
-function disponibilidadTrainerLectura(trainerKey = entrenadorVisto) {
-            return dbDisponibilidadReservas[trainerKey] || null;
-        }
-
-function bloquesDisponibilidadFecha(trainerKey, fechaISO) {
-            const disp = disponibilidadTrainerLectura(trainerKey);
-            if (!disp) return [];
-            const fecha = new Date(`${fechaISO}T00:00:00`);
-            const dia = diaSemanaBesoul(fecha);
-            const semanal = disp.semanal?.[dia];
-            const excepcion = disp.excepciones?.[fechaISO];
-
-            // Si hay excepción semanal/día con override, manda sobre la recurrente.
-            if (excepcion) {
-                if (excepcion.activo === false) return [];
-                if (excepcion.override === true) {
-                    return excepcion.activo ? normalizarBloquesDisponibilidad(excepcion.bloques) : [];
-                }
-            }
-
-            let bloques = [];
-            if (semanal?.activo) bloques = bloques.concat(normalizarBloquesDisponibilidad(semanal.bloques));
-            if (excepcion?.activo !== false) bloques = bloques.concat(normalizarBloquesDisponibilidad(excepcion?.bloques));
-            return fusionarBloquesDisponibilidad(bloques);
-        }
-
-function normalizarBloquesDisponibilidad(bloques) {
-            return (Array.isArray(bloques) ? bloques : [])
-                .map(b => ({ inicio: String(b.inicio || '').slice(0,5), fin: String(b.fin || '').slice(0,5) }))
-                .filter(b => b.inicio && b.fin && b.inicio < b.fin)
-                .sort((a,b) => a.inicio.localeCompare(b.inicio));
-        }
-
-function fusionarBloquesDisponibilidad(bloques) {
-            const lista = normalizarBloquesDisponibilidad(bloques);
-            if (!lista.length) return [];
-            const salida = [lista[0]];
-            for (let i=1; i<lista.length; i++) {
-                const ultimo = salida[salida.length - 1];
-                const actual = lista[i];
-                if (actual.inicio <= ultimo.fin) {
-                    if (actual.fin > ultimo.fin) ultimo.fin = actual.fin;
-                } else salida.push(actual);
-            }
-            return salida;
-        }
-
-function formatoFechaLocal(fecha) {
-
-            const y = fecha.getFullYear();
-
-            const m = String(fecha.getMonth() + 1).padStart(2, '0');
-
-            const d = String(fecha.getDate()).padStart(2, '0');
-
-            return `${y}-${m}-${d}`;
-
-        }
-
-function emailDocId(email) {
-            return String(email || '').trim().toLowerCase();
-        }
-
-function trainerKeyDesdeEmail(email) {
-            return String(email || '').split('@')[0].toLowerCase().replace(/[^a-z0-9._-]/g, '');
-        }
-
-function perfilFirestoreAcredencial(perfil, emailFallback='') {
-            const email = emailDocId(perfil?.email || emailFallback);
-            const trainerKey = String(perfil?.trainerKey || trainerKeyDesdeEmail(email)).trim().toLowerCase().replace(/\s+/g, '');
-            return {
-                nombre: perfil?.nombre || trainerKey.charAt(0).toUpperCase() + trainerKey.slice(1),
-                rol: perfil?.rol === 'admin' ? 'admin' : 'pt',
-                email,
-                uid: perfil?.uid || '',
-                trainerKey,
-                activo: perfil?.activo !== false
-            };
+            avisoMultipleEstados.set(id, estado);
+            renderListaEnvioAvisoMultiple();
         }
