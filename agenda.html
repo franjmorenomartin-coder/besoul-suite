@@ -2570,6 +2570,19 @@ miércoles 07:00-09:00"></textarea>
                 });
                 ficha.avisosPortal = ficha.avisosPortal.slice(0, 20);
                 localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
+                // PORTAL-NOTICES-FIX (2026-09-16): hallazgo real de auditoría -- este aviso nunca
+                // se guardaba en besoulSuite/agenda (solo en localStorage + la proyección pública
+                // besoulPublicClients vía publicarReservasPublicasDebounced()). En cuanto llegaba
+                // CUALQUIER otro snapshot del documento (p.ej. tras guardar disponibilidad, un
+                // cliente, o cualquier otro cambio de cualquier PT), aplicarEstadoNubeAgenda()
+                // sustituye dbClientes por completo con la copia remota -- que nunca tuvo este
+                // aviso -- y el contador/histórico "desaparecían" sin explicación, exactamente lo
+                // reportado ("aparece un 1, luego 'sin avisos enviados'"). Ahora también se
+                // persiste en el documento compartido, igual que el resto de la ficha -- sin
+                // colección ni Rules nuevas (besoulSuite/agenda ya admite escritura de cualquier
+                // usuario activo). Debounced (no directo) porque avisar a varios clientes ejecuta
+                // esta función en bucle -- coalesce en un único guardado real.
+                programarGuardadoNubeAgenda(entrenadorVisto);
                 publicarReservasPublicasDebounced();
                 estado.portal = 'ok';
             } catch (err) {

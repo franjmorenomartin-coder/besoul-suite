@@ -52,10 +52,14 @@
 
   <div id="app" class="hidden max-w-lg md:max-w-2xl mx-auto">
     <header class="p-4 flex items-center gap-3 border-b border-slate-800">
-      <div id="header-avatar" class="w-10 h-10 rounded-full shrink-0 overflow-hidden text-sm"></div>
+      <div id="header-avatar" class="w-11 h-11 rounded-full shrink-0 overflow-hidden text-sm"></div>
       <div class="min-w-0 flex-1">
-        <div class="text-sm font-black text-white truncate" id="lbl-cliente-nombre">---</div>
-        <div class="text-[11px] text-slate-500 truncate"><span id="lbl-cliente-entrenador">---</span> · <span id="lbl-cliente-centro">---</span></div>
+        <div class="text-base font-black text-white truncate leading-tight" id="lbl-cliente-nombre">---</div>
+        <div class="flex items-baseline gap-1.5 mt-0.5 truncate">
+          <span class="text-[9px] text-slate-600 uppercase tracking-wide font-bold shrink-0">Entrenador asignado</span>
+          <span class="text-[11px] text-amber-300/90 font-bold truncate" id="lbl-cliente-entrenador">---</span>
+        </div>
+        <div id="lbl-cliente-centro-wrap" class="hidden text-[10px] text-slate-500 truncate mt-0.5"><span id="lbl-cliente-centro"></span></div>
       </div>
     </header>
 
@@ -298,11 +302,18 @@
       document.getElementById('header-avatar').innerHTML = avatarHTML(c.clientName, c.avatarUrl);
       document.getElementById('perfil-avatar').innerHTML = avatarHTML(c.clientName, c.avatarUrl, 'text-2xl');
       document.getElementById('lbl-cliente-nombre').textContent = c.clientName || 'Cliente';
-      document.getElementById('lbl-cliente-entrenador').textContent = c.trainerName || '---';
-      document.getElementById('lbl-cliente-centro').textContent = c.centroNombre || '---';
+      document.getElementById('lbl-cliente-entrenador').textContent = c.trainerName || 'Sin asignar';
+      // B21 (2026-09-16): "---"/"N/A" para un dato real ausente confunde más que ayuda -- se
+      // oculta el campo entero (centro) en vez de mostrar un placeholder vacío, tanto aquí como en
+      // Perfil. Nunca se inventa un centro: si centroNombre no llega del PT, simplemente no se
+      // muestra esta línea.
+      document.getElementById('lbl-cliente-centro').textContent = c.centroNombre || '';
+      document.getElementById('lbl-cliente-centro-wrap').classList.toggle('hidden', !c.centroNombre);
       document.getElementById('perfil-nombre-grande').textContent = c.clientName || 'Cliente';
-      document.getElementById('perfil-entrenador').textContent = c.trainerName || '---';
-      document.getElementById('perfil-centro').textContent = c.centroNombre || '---';
+      document.getElementById('perfil-entrenador').textContent = c.trainerName || 'Sin asignar';
+      const filaPerfilCentro = document.getElementById('perfil-centro')?.closest('div');
+      if (filaPerfilCentro) filaPerfilCentro.classList.toggle('hidden', !c.centroNombre);
+      document.getElementById('perfil-centro').textContent = c.centroNombre || '';
       document.getElementById('perfil-email').textContent = c.email || '---';
       document.getElementById('perfil-telefono').textContent = c.telefono || '---';
 
