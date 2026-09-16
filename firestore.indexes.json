@@ -1,0 +1,60 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "besoulSuite",
+      "fieldPath": "*",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulSuite",
+      "fieldPath": "clientes",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulSuite",
+      "fieldPath": "agenda",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulSuite",
+      "fieldPath": "pruebasCRM",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulSuite",
+      "fieldPath": "disponibilidadReservas",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulSuite",
+      "fieldPath": "historicoClientes",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulSuite",
+      "fieldPath": "notas",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulSuite",
+      "fieldPath": "catalogoActividades",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulSuite",
+      "fieldPath": "trainerActividades",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulSuite",
+      "fieldPath": "tarifasActividadVersiones",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulSuite",
+      "fieldPath": "repartoActividadVersiones",
+      "indexes": []
+    }
+  ]
+}
