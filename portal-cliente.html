@@ -120,6 +120,27 @@
           <div class="text-[10px] uppercase tracking-wide text-slate-500 font-bold mb-2">Sesiones recientes</div>
           <div id="lista-recientes" class="space-y-2"></div>
         </div>
+
+        <!-- PORTAL-MONTHLY-CALENDAR: solo estados que el modelo distingue de verdad (ver
+             estadoDiaCalendarioMensual) -- nunca se infiere una cancelación a tiempo (se borra sin
+             dejar rastro en el motor de agenda.html, así que no hay forma honesta de marcarla). -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <button type="button" onclick="moverMesCalendarioMensual(-1)" class="bs-focus-ring text-slate-400 hover:text-white px-2 py-1 text-sm font-black">‹</button>
+            <div class="text-[10px] uppercase tracking-wide text-slate-500 font-bold" id="lbl-mes-calendario-mensual">---</div>
+            <button type="button" onclick="moverMesCalendarioMensual(1)" class="bs-focus-ring text-slate-400 hover:text-white px-2 py-1 text-sm font-black">›</button>
+          </div>
+          <div class="grid grid-cols-7 gap-1 text-center text-[9px] text-slate-600 font-bold mb-1">
+            <div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div>
+          </div>
+          <div id="calendario-mensual" class="grid grid-cols-7 gap-1"></div>
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[9px] text-slate-500">
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>Realizada</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-500 inline-block"></span>Cancelación tardía</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>Próxima</span>
+          </div>
+          <div id="detalle-dia-calendario-mensual" class="hidden mt-2 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs space-y-1.5"></div>
+        </div>
       </div>
 
       <!-- RESERVAR (motor de reservas.html, integrado) -->
@@ -339,6 +360,8 @@
 
       pintarCalendarioSemana();
       pintarListasSesiones();
+      if (!mesVistoCalendarioMensual) mesVistoCalendarioMensual = new Date();
+      pintarCalendarioMensual();
       pintarAvisos();
     }
 
@@ -448,6 +471,71 @@
           <div class="text-slate-300 font-semibold text-sm">${escapeHTML(labelFecha(s.fechaISO))} · ${escapeHTML(s.hora)}</div>
           ${badgeEstadoSesion(s)}
         </div>`).join('') : '<div class="text-xs text-slate-500 text-center py-4">Sin sesiones recientes.</div>';
+    }
+
+    // ================== PORTAL-MONTHLY-CALENDAR ==================
+    // Reutiliza exactamente el mismo modelo de estado que badgeEstadoSesion() (arriba, ya en
+    // producción para "Sesiones recientes") -- ROJO solo para cancelada_fuera_plazo (el único
+    // estado que el motor de agenda.html conserva sin ambigüedad; una cancelación DENTRO de plazo
+    // borra la sesión sin dejar rastro, así que no hay forma honesta de distinguirla de "sin
+    // sesión ese día" -- por eso no existe un estado ÁMBAR aquí, tal y como se pidió explícitamente
+    // no inferir). VERDE = pasada sin cancelación registrada (misma asunción que ya usa el resto
+    // del Portal/Agenda para "sesión realizada"). AMBAR/"Próxima" = fecha futura ya agendada.
+    let mesVistoCalendarioMensual = null;
+
+    function estadoDiaCalendarioMensual(sesionesDia) {
+      if (!sesionesDia.length) return null;
+      if (sesionesDia.some(s => s.estadoCancelacion === 'cancelada_fuera_plazo')) return 'rojo';
+      const hoyISO = dateISO(new Date());
+      if (sesionesDia.some(s => s.fechaISO >= hoyISO)) return 'ambar';
+      return 'verde';
+    }
+
+    function moverMesCalendarioMensual(delta) {
+      mesVistoCalendarioMensual.setMonth(mesVistoCalendarioMensual.getMonth() + delta);
+      document.getElementById('detalle-dia-calendario-mensual').classList.add('hidden');
+      pintarCalendarioMensual();
+    }
+
+    function verDetalleDiaCalendarioMensual(fechaISO) {
+      const sesionesDia = (Array.isArray(clientData.calendarioSesiones) ? clientData.calendarioSesiones : []).filter(s => s.fechaISO === fechaISO);
+      const cont = document.getElementById('detalle-dia-calendario-mensual');
+      if (!sesionesDia.length) { cont.classList.add('hidden'); return; }
+      cont.classList.remove('hidden');
+      cont.innerHTML = `<div class="text-[10px] uppercase tracking-wide text-slate-500 font-bold mb-1">${escapeHTML(labelFechaLarga(fechaISO))}</div>` +
+        sesionesDia.map(s => `<div class="flex items-center justify-between gap-2"><span class="text-white font-mono font-bold">${escapeHTML(s.hora)}${s.modalidad ? ` · ${escapeHTML(s.modalidad)}` : ''}</span>${badgeEstadoSesion(s)}</div>`).join('');
+    }
+
+    function pintarCalendarioMensual() {
+      const cont = document.getElementById('calendario-mensual');
+      const lblMes = document.getElementById('lbl-mes-calendario-mensual');
+      if (!cont || !mesVistoCalendarioMensual) return;
+      const anio = mesVistoCalendarioMensual.getFullYear();
+      const mes = mesVistoCalendarioMensual.getMonth();
+      lblMes.textContent = mesVistoCalendarioMensual.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }).toUpperCase();
+
+      const sesionesPorFechaISO = {};
+      (Array.isArray(clientData.calendarioSesiones) ? clientData.calendarioSesiones : []).forEach(s => {
+        (sesionesPorFechaISO[s.fechaISO] = sesionesPorFechaISO[s.fechaISO] || []).push(s);
+      });
+
+      const primerDiaMes = new Date(anio, mes, 1);
+      const offsetLunes = dayIndexMonSun(primerDiaMes) - 1; // 0 = el mes ya empieza en lunes
+      const diasEnMes = new Date(anio, mes + 1, 0).getDate();
+      const hoyISO = dateISO(new Date());
+      const celdas = [];
+      for (let i = 0; i < offsetLunes; i++) celdas.push('<div></div>');
+      for (let dia = 1; dia <= diasEnMes; dia++) {
+        const fechaISO = dateISO(new Date(anio, mes, dia));
+        const sesionesDia = sesionesPorFechaISO[fechaISO] || [];
+        const estado = estadoDiaCalendarioMensual(sesionesDia);
+        const colorPunto = estado === 'rojo' ? 'bg-red-500' : estado === 'verde' ? 'bg-emerald-500' : estado === 'ambar' ? 'bg-amber-400' : '';
+        const esHoy = fechaISO === hoyISO;
+        celdas.push(`<button type="button" onclick="verDetalleDiaCalendarioMensual('${fechaISO}')" class="bs-focus-ring aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold ${esHoy ? 'ring-1 ring-amber-500/70' : ''} ${estado ? 'bg-slate-900 text-white hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-900/50'}">
+          <span>${dia}</span>${colorPunto ? `<span class="w-1.5 h-1.5 rounded-full ${colorPunto}"></span>` : ''}
+        </button>`);
+      }
+      cont.innerHTML = celdas.join('');
     }
 
     // ================== B11 AVISOS ==================
@@ -756,6 +844,16 @@
           { fechaISO: iso(-1), hora: '10:00' },
           { fechaISO: iso(-3), hora: '18:00' },
           { fechaISO: iso(-6), hora: '10:00', estadoCancelacion: 'cancelada_fuera_plazo' },
+        ],
+        calendarioSesiones: [
+          { fechaISO: iso(1), hora: '10:00', modalidad: 'Individual 3x/semana' },
+          { fechaISO: iso(3), hora: '18:00', modalidad: 'Individual 3x/semana' },
+          { fechaISO: iso(5), hora: '10:00', modalidad: 'Individual 3x/semana' },
+          { fechaISO: iso(-1), hora: '10:00', modalidad: 'Individual 3x/semana' },
+          { fechaISO: iso(-3), hora: '18:00', modalidad: 'Individual 3x/semana' },
+          { fechaISO: iso(-6), hora: '10:00', estadoCancelacion: 'cancelada_fuera_plazo', modalidad: 'Individual 3x/semana' },
+          { fechaISO: iso(-8), hora: '10:00', modalidad: 'Individual 3x/semana' },
+          { fechaISO: iso(-10), hora: '18:00', modalidad: 'Individual 3x/semana' },
         ],
         avisos: [
           { id: 'av1', fecha: new Date(hoy - 2 * 3600000).toISOString(), contenido: 'Recuerda traer una toalla para la sesión de mañana.' },

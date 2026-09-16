@@ -6678,6 +6678,31 @@ Cancelar = no hacer nada`,
             pasadas.sort((a, b) => b.clave.localeCompare(a.clave));
             return { proximas: futuras.slice(0, 5), recientes: pasadas.slice(0, 3) };
         }
+
+        // PORTAL-MONTHLY-CALENDAR (2026-09-16): ventana amplia (no ilimitada) para que el
+        // calendario mensual del Portal pueda navegar varios meses atrás/adelante sin depender de
+        // otra consulta al PT -- separado de sesionesClienteParaPortal() de arriba (que sigue
+        // limitada a 5/3 para "Próximas"/"Recientes") para no tener que ampliar ESE límite y
+        // arriesgar una regresión en una vista que ya funciona. Ningún estado nuevo: el mismo
+        // estadoCancelacion ya almacenado (solo 'cancelada_fuera_plazo' existe hoy -- una
+        // cancelación dentro de plazo BORRA la sesión sin dejar rastro, así que no hay forma
+        // honesta de reconstruir un estado "cancelada sin penalización" aquí).
+        function calendarioSesionesClienteParaPortal(trainerKey, clientId) {
+            const hoy = new Date();
+            const desdeISO = formatoFechaLocal(new Date(hoy.getFullYear(), hoy.getMonth() - 4, 1));
+            const hastaISO = formatoFechaLocal(new Date(hoy.getFullYear(), hoy.getMonth() + 4, 1));
+            const items = [];
+            Object.keys(dbAgenda[trainerKey] || {}).forEach(clave => {
+                const obj = dbAgenda[trainerKey][clave];
+                if (!obj || obj.id !== clientId) return;
+                const [fechaISO, hora] = clave.split('_');
+                if (fechaISO < desdeISO || fechaISO > hastaISO) return;
+                items.push({ fechaISO, hora, estadoCancelacion: obj.estadoCancelacion || '', modalidad: obj.modalidad || '' });
+            });
+            items.sort((a, b) => a.fechaISO.localeCompare(b.fechaISO) || a.hora.localeCompare(b.hora));
+            return items;
+        }
+
         function generarTokenReservaCliente() {
             // SEC-05 (2026-09-04): Math.random() no es un CSPRNG -- con suficientes muestras del
             // mismo generador (p.ej. observando varios tokens emitidos seguidos) su estado interno
@@ -8315,6 +8340,9 @@ Cancelar = no hacer nada`,
                             proximaSesion: sesionesPortal.proximas[0] || null,
                             proximasSesiones: sesionesPortal.proximas,
                             sesionesRecientes: sesionesPortal.recientes,
+                            // PORTAL-MONTHLY-CALENDAR: ventana propia de ±4 meses (ver función),
+                            // separada de proximas/recientes para no tocar ese límite existente.
+                            calendarioSesiones: calendarioSesionesClienteParaPortal(trainerKey, c.id),
                             cancelacionMinHoras: parseInt(c.cancelacionMinHoras, 10) || CANCELACION_MIN_HORAS_DEFAULT,
                             avisos: Array.isArray(c.avisosPortal) ? c.avisosPortal.slice(0, 10).map(a => ({ id: a.id, fecha: a.fecha, contenido: a.contenido })) : [],
                             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
