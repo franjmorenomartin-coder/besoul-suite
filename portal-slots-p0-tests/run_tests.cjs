@@ -59,13 +59,15 @@ function crearSesionAgenda({ dbCredenciales, dbClientes, dbAgenda, dbDisponibili
   const localStorageFalso = { setItem() {} };
   const preamble = `
     let dbSolicitudesReservas = {};
-    function calcularContadorClases(){ return { contratadas:0, usadas:0, restantes:0, periodo:'', tipo:'', caducidad:'' }; }
+    let dbHistoricoClientes = {};
+    let lunesActual = new Date();
+    let entrenadorVisto = '';
     function generarTokenReservaCliente(){ return 'res_test_' + Math.random().toString(36).slice(2); }
     function escapeHTML(v){ return String(v||''); }
   `;
   const fn = new Function('dbCredenciales', 'dbClientes', 'dbAgenda', 'dbDisponibilidadReservas', 'window', 'firebase', 'usuarioFirebaseActual', 'localStorage',
     preamble + agendaExtracted + `
-    return { publicarReservasPublicas, construirAuditoriaTrainerKey, normalizarTrainerKey };`);
+    return { publicarReservasPublicas, construirAuditoriaTrainerKey, normalizarTrainerKey, calcularContadorClases };`);
   return fn(dbCredenciales, dbClientes, dbAgenda, dbDisponibilidadReservas, windowFalso, firebaseFalso, { uid: 'test' }, localStorageFalso);
 }
 
@@ -101,6 +103,14 @@ function disponibilidadLunesA(hIni, hFin) {
   // qué día de la semana caiga "hoy" al ejecutar la suite) en vez de solo lunes.
   for (let d = 1; d <= 7; d++) semanal[d] = { activo: true, bloques: [{ inicio: hIni, fin: hFin }] };
   return { semanal, excepciones: {}, bloqueos: {}, recurrenteSemanal: true };
+}
+function disponibilidadDiasActivos(hIni, hFin, numDiasActivos) {
+  const semanal = {};
+  for (let d = 1; d <= 7; d++) semanal[d] = d <= numDiasActivos ? { activo: true, bloques: [{ inicio: hIni, fin: hFin }] } : { activo: false, bloques: [] };
+  return { semanal, excepciones: {}, bloqueos: {}, recurrenteSemanal: true };
+}
+function contarDiasActivos(disp) {
+  return Object.values(disp?.semanal || {}).filter(d => d && d.activo === true && Array.isArray(d.bloques) && d.bloques.length > 0).length;
 }
 
 async function main() {
@@ -240,6 +250,147 @@ console.log('\n=== PUBLICACIÓN-P0: causa EXACTA confirmada en producción (lect
   const portal = crearSesionPortal(clientData, schedule);
   const slots = portal.generarSlotsReserva();
   check('CADENA COMPLETA POST-FIX: source con 5 días activos -> publicación -> Portal -> huecos futuros > 0', slots.length > 0, true);
+}
+
+// ============================================================
+console.log('\n=== MULTI-PT: publicación global, no depende de una sesión parcial ni de un batch compartido ===');
+// ============================================================
+{
+  // Nueva evidencia real (2026-09-16): el fix anterior (releer del servidor) es necesario pero NO
+  // suficiente -- una auditoría global de producción mostró 6 de 13 trainerKeys DESINCRONIZADOS
+  // simultáneamente, algunos con el mismo updatedAt exacto (mismo batch), lo que demuestra que un
+  // solo batch compartido para TODOS los PT puede fallar/quedar obsoleto para varios a la vez. Este
+  // bloque reproduce un escenario con 3 PT reales (A=5 días, B=3 días, C=0 días) MÁS un cuarto PT
+  // con un punto literal en su trainerKey (verifica que un ID de documento con punto no rompe
+  // nada -- un punto en un ID de documento no es una ruta anidada, a diferencia de una key de
+  // objeto en .update()). La sesión que dispara la publicación es una sesión de PT NORMAL (no
+  // admin): su dbCredenciales SOLO contiene su propia clave ("a") -- exactamente como en
+  // producción -- para demostrar que la lista de trainerKeys a publicar YA NO depende de eso.
+  const fsx = crearFirestoreMock();
+  const dbCredenciales = { a: { nombre: 'PT A' } }; // sesión de PT normal: solo se ve a sí mismo
+  const dbClientesLocal = {
+    a: [{ id: 'ca', nombre: 'Cliente A', tipo: 'individual', email: 'a@x.com', telefono: '1' }],
+    // Cliente B tiene modalidad + una sesión real agendada HOY en dbAgenda.b -- usado más abajo
+    // para probar que sesionesUsadas se calcula sobre la agenda REAL de "b", no sobre la de
+    // quien dispara la publicación (hallazgo PORTAL-SLOTS-P0 GLOBAL: contarSesionesAgendadas()
+    // leía el global entrenadorVisto en vez del trainerKey del cliente que se está publicando).
+    b: [{ id: 'cb', nombre: 'Cliente B', tipo: 'individual', email: 'b@x.com', telefono: '2', modalidad: '2x semana' }],
+    c: [{ id: 'cc', nombre: 'Cliente C', tipo: 'individual', email: 'c@x.com', telefono: '3' }],
+    'pt.con.punto': [{ id: 'cd', nombre: 'Cliente D', tipo: 'individual', email: 'd@x.com', telefono: '4' }],
+  };
+  const hoyISO = isoOffset(0);
+  const dbAgendaLocal = { a: {}, b: { [`${hoyISO}_09:00`]: { id: 'cb', nombre: 'Cliente B' } }, c: {}, 'pt.con.punto': {} };
+  const dbDisponibilidadFresca = {
+    a: disponibilidadDiasActivos('09:00', '14:00', 5),
+    b: disponibilidadDiasActivos('09:00', '14:00', 3),
+    c: disponibilidadDiasActivos('09:00', '14:00', 0),
+    'pt.con.punto': disponibilidadDiasActivos('09:00', '14:00', 5),
+  };
+  const datosFrescosServidor = { clientes: dbClientesLocal, agenda: dbAgendaLocal, disponibilidadReservas: dbDisponibilidadFresca };
+  const snapshotAntesDePublicar = deepClone(datosFrescosServidor);
+  const bsAgendaCloudDocRef = { async get() { return { data: () => deepClone(datosFrescosServidor) }; } };
+
+  const sesion = crearSesionAgenda({ dbCredenciales, dbClientes: dbClientesLocal, dbAgenda: dbAgendaLocal, dbDisponibilidadReservas: dbDisponibilidadFresca, firestoreMock: fsx, bsAgendaCloudDocRef });
+  await sesion.publicarReservasPublicas();
+
+  // 1-3: cada PT publica exactamente sus propios días activos.
+  const schedA = fsx.leerDoc('besoulPublicSchedule', 'a');
+  const schedB = fsx.leerDoc('besoulPublicSchedule', 'b');
+  const schedC = fsx.leerDoc('besoulPublicSchedule', 'c');
+  const schedPunto = fsx.leerDoc('besoulPublicSchedule', 'pt.con.punto');
+  check('MULTI-PT 1: PT A (5 días fuente) publica 5 días', contarDiasActivos(schedA?.disponibilidad), 5);
+  check('MULTI-PT 2: PT B (3 días fuente) publica 3 días', contarDiasActivos(schedB?.disponibilidad), 3);
+  check('MULTI-PT 3: PT C (0 días fuente) publica 0 días (no fabricado)', contarDiasActivos(schedC?.disponibilidad), 0);
+  check('MULTI-PT 7: trainerKey con punto literal en el ID de documento funciona igual (no es una ruta anidada)', contarDiasActivos(schedPunto?.disponibilidad), 5);
+  check('MULTI-PT 8: trainerKey normal (A) sigue funcionando igual junto al de punto', !!schedA, true);
+
+  // 4-6, 14: cada cliente ve slots (o no) según SU PT real, nunca el de otro.
+  const clienteA = fsx.listarDocs('besoulPublicClients').find(c => c.trainerKey === 'a');
+  const clienteB = fsx.listarDocs('besoulPublicClients').find(c => c.trainerKey === 'b');
+  const clienteC = fsx.listarDocs('besoulPublicClients').find(c => c.trainerKey === 'c');
+  const slotsA = crearSesionPortal(clienteA, schedA).generarSlotsReserva();
+  const slotsB = crearSesionPortal(clienteB, schedB).generarSlotsReserva();
+  const slotsC = crearSesionPortal(clienteC, schedC).generarSlotsReserva();
+  check('MULTI-PT 4: cliente de PT A obtiene huecos reales', slotsA.length > 0, true);
+  check('MULTI-PT 5: cliente de PT B obtiene huecos reales', slotsB.length > 0, true);
+  check('MULTI-PT 6: cliente de PT C NO obtiene huecos (su PT no tiene disponibilidad)', slotsC.length, 0);
+  check('MULTI-PT 14: cliente A nunca recibe el trainerKey de B', clienteA.trainerKey !== clienteB.trainerKey, true);
+  check('MULTI-PT 12: ningún PT pisa a otro -- cada cliente publicado bajo su propio trainerKey', [clienteA, clienteB, clienteC].map(c => c.trainerKey).sort(), ['a', 'b', 'c']);
+
+  // Hallazgo adicional (contarSesionesAgendadas/calcularContadorClases): el contador de sesiones
+  // publicado para el cliente de "b" debe salir de la agenda REAL de "b" -- la sesión de hoy debe
+  // contar como usada -- pese a que quien disparó la publicación tenía dbCredenciales de "a" (y
+  // entrenadorVisto en este arnés de pruebas es '' por defecto, distinto de ambos).
+  check('CONTADOR-P0: sesionesUsadas del cliente de "b" se calcula sobre la agenda REAL de "b", no sobre la de quien publica', clienteB.sesionesUsadas, 1);
+
+  // 9-10, 15: la sesión que disparó la publicación era de un PT normal (dbCredenciales solo tenía
+  // "a") y, aun así, se publicaron TODOS -- la lista sale de la fuente fresca del servidor, no de
+  // una sesión parcial del navegador.
+  check('MULTI-PT 9/10/15: aunque dbCredenciales local solo tenía "a", se publicaron TODOS los trainerKeys reales de la fuente fresca del servidor', !!(schedA && schedB && schedC && schedPunto), true);
+
+  // 13: la publicación nunca modifica los datos que leyó del servidor.
+  check('MULTI-PT 13: publicarReservasPublicas() nunca modifica los datos fuente que releyó', datosFrescosServidor, snapshotAntesDePublicar);
+
+  // 11: dos ejecuciones consecutivas con el mismo estado fuente producen el mismo resultado lógico
+  // (mismos días activos publicados, misma asignación de clientes) -- idempotente.
+  await sesion.publicarReservasPublicas();
+  const schedA2 = fsx.leerDoc('besoulPublicSchedule', 'a');
+  const schedB2 = fsx.leerDoc('besoulPublicSchedule', 'b');
+  check('MULTI-PT 11: dos ejecuciones consecutivas producen el mismo resultado lógico (idempotente)',
+    [contarDiasActivos(schedA2?.disponibilidad), contarDiasActivos(schedB2?.disponibilidad)],
+    [contarDiasActivos(schedA?.disponibilidad), contarDiasActivos(schedB?.disponibilidad)]);
+}
+
+// ============================================================
+console.log('\n=== MULTI-PT NEGATIVE CONTROL: un solo cliente corrupto ya NO bloquea a los demás PT ===');
+// ============================================================
+{
+  // Reproduce el mecanismo real sospechado en producción: un batch ÚNICO compartido para todos los
+  // PT hace que un solo registro inválido (aquí, un cliente con un campo `undefined`, que Firestore
+  // rechaza al construir el write) aborte la publicación de TODOS los PT a la vez -- incluidos los
+  // que no tienen ningún dato corrupto. Con la función canónica actual (un batch POR trainerKey vía
+  // Promise.allSettled), el PT con el dato corrupto falla en aislamiento y el resto se publica bien.
+  const fsx = crearFirestoreMock();
+  // crearFirestoreMock().batch().set() usa JSON.stringify internamente (deepClone) -- un valor
+  // `undefined` real desaparece silenciosamente en ese mock, así que para que el mock SÍ reproduzca
+  // un fallo real de Firestore (que rechaza `undefined` de forma síncrona) forzamos el error
+  // directamente en el propio mock para ese trainerKey concreto.
+  const fsxOriginalBatch = fsx.batch.bind(fsx);
+  let trainerKeyEnCurso = null;
+  fsx.batch = function () {
+    const b = fsxOriginalBatch();
+    const setOriginal = b.set.bind(b);
+    b.set = function (ref, payload, opts) {
+      if (ref._coleccion === 'besoulPublicSchedule' && ref._id === 'pt_corrupto') {
+        throw new Error('Valor no soportado por Firestore (simulando un campo undefined real)');
+      }
+      return setOriginal(ref, payload, opts);
+    };
+    return b;
+  };
+  const dbCredenciales = { pt_sano_1: { nombre: 'PT Sano 1' } };
+  const dbClientesLocal = {
+    pt_sano_1: [{ id: 'c1', nombre: 'Cliente Sano 1', tipo: 'individual', email: 'x@x.com', telefono: '1' }],
+    pt_corrupto: [{ id: 'c2', nombre: 'Cliente Corrupto', tipo: 'individual', email: 'y@x.com', telefono: '2' }],
+    pt_sano_2: [{ id: 'c3', nombre: 'Cliente Sano 2', tipo: 'individual', email: 'z@x.com', telefono: '3' }],
+  };
+  const dbAgendaLocal = { pt_sano_1: {}, pt_corrupto: {}, pt_sano_2: {} };
+  const dbDisponibilidadFresca = {
+    pt_sano_1: disponibilidadLunesA('09:00', '13:00'),
+    pt_corrupto: disponibilidadLunesA('09:00', '13:00'),
+    pt_sano_2: disponibilidadLunesA('09:00', '13:00'),
+  };
+  const datosFrescosServidor = { clientes: dbClientesLocal, agenda: dbAgendaLocal, disponibilidadReservas: dbDisponibilidadFresca };
+  const bsAgendaCloudDocRef = { async get() { return { data: () => deepClone(datosFrescosServidor) }; } };
+  const sesion = crearSesionAgenda({ dbCredenciales, dbClientes: dbClientesLocal, dbAgenda: dbAgendaLocal, dbDisponibilidadReservas: dbDisponibilidadFresca, firestoreMock: fsx, bsAgendaCloudDocRef });
+  await sesion.publicarReservasPublicas();
+
+  const schedSano1 = fsx.leerDoc('besoulPublicSchedule', 'pt_sano_1');
+  const schedSano2 = fsx.leerDoc('besoulPublicSchedule', 'pt_sano_2');
+  const schedCorrupto = fsx.leerDoc('besoulPublicSchedule', 'pt_corrupto');
+  check('AISLAMIENTO DE FALLO: el PT con el dato corrupto NO se publica (esperado)', !!schedCorrupto, false);
+  check('AISLAMIENTO DE FALLO: pese al fallo de pt_corrupto, pt_sano_1 SÍ se publica correctamente', contarDiasActivos(schedSano1?.disponibilidad) > 0, true);
+  check('AISLAMIENTO DE FALLO: pese al fallo de pt_corrupto, pt_sano_2 SÍ se publica correctamente', contarDiasActivos(schedSano2?.disponibilidad) > 0, true);
 }
 
 // ============================================================

@@ -18,7 +18,11 @@ function extractFunction(html, name) {
   const re = new RegExp(`(async\\s+)?function\\s+${name}\\s*\\(`);
   const m = re.exec(html);
   if (!m) throw new Error(`No se encontró function ${name}`);
-  const end = extractBalanced(html, m.index, '{', '}');
+  // El cuerpo de la función empieza en el "{" que sigue al CIERRE de la lista de parámetros, no en
+  // el primer "{" tras el nombre -- un parámetro desestructurado (p.ej. "(trainerKey, { fs })")
+  // tiene su propio "{...}" antes del cuerpo real, y balancear desde ahí corta la función en seco.
+  const finParametros = extractBalanced(html, m.index + m[0].length - 1, '(', ')');
+  const end = extractBalanced(html, finParametros, '{', '}');
   return html.slice(m.index, end);
 }
 function extractSimpleConst(html, name) {
@@ -36,8 +40,14 @@ const agendaFunciones = [
   'esGrupoAbierto', 'capacidadGrupoAbierto', 'asistentesGrupoAbierto', 'clavesBloqueSesion',
   'minutosDesdeHorario', 'claveDesdeFechaYMinutos', 'formatoMinutosHorario',
   'sesionesClienteParaPortal', 'calendarioSesionesClienteParaPortal', 'nombreEntrenador',
-  'publicarReservasPublicas', 'normalizarTrainerKey', 'diasDisponibilidadActivaTrainer',
-  'construirAuditoriaTrainerKey', 'disponibilidadReservasPorDefecto',
+  'publicarReservasPublicasParaTrainer', 'publicarReservasPublicas', 'normalizarTrainerKey',
+  'diasDisponibilidadActivaTrainer', 'construirAuditoriaTrainerKey', 'disponibilidadReservasPorDefecto',
+  // Cadena real de calcularContadorClases() (nunca un stub): PORTAL-SLOTS-P0 GLOBAL encontró que
+  // contarSesionesAgendadas() leía el global entrenadorVisto en vez del trainerKey real del cliente
+  // publicado -- exacta, no una aproximación, para poder probar el fix con datos reales.
+  'calcularContadorClases', 'contarSesionesAgendadas', 'sesionesContratadasFicha', 'sumarMeses',
+  'fichaBaseParaContador', 'buscarFichaPorId', 'formatoFechaCorta', 'etiquetaMesDesdeClave',
+  'esCitaPruebaCRM',
 ];
 const agendaConsts = ['BS_PUBLIC_CLIENTS_COLLECTION', 'BS_PUBLIC_SCHEDULE_COLLECTION', 'CANCELACION_MIN_HORAS_DEFAULT'];
 const agendaParts = [...agendaConsts.map(n => extractSimpleConst(agendaHtml, n)), ...agendaFunciones.map(n => extractFunction(agendaHtml, n))];
