@@ -1568,6 +1568,15 @@ miércoles 07:00-09:00"></textarea>
 
         window.bsAgendaAplicandoNube = false;
 
+        // FIX-PT-AVAILABILITY-PERSISTENCE (2026-09-16): true solo después de que
+        // aplicarEstadoNubeAgenda() haya aplicado al menos un snapshot REAL de Firestore en esta
+        // sesión. Antes de eso, dbDisponibilidadReservas[trainerKey] puede estar vacío
+        // simplemente porque la respuesta de red todavía no ha llegado -- NO porque el PT
+        // realmente no tenga disponibilidad guardada. Ver guardián en
+        // abrirModalDisponibilidadReservas()/habilitarSlotSobreLaMarcha()/
+        // ocultarSlotDisponibilidad()/limpiarBloqueosDisponibilidadSemana().
+        window.bsAgendaDisponibilidadCargada = false;
+
         // HOTFIX-CLIENT-SAVE-V2 (2026-09-15): defensa adicional ANTES de intentar persistir --
         // detecta recursivamente valores que Firestore .update()/.set() rechaza (undefined, NaN,
         // funciones, referencias circulares) en cualquier profundidad del payload. A propósito
@@ -1731,6 +1740,12 @@ miércoles 07:00-09:00"></textarea>
         function aplicarEstadoNubeAgenda(data) {
 
             if (!data) return;
+
+            // FIX-PT-AVAILABILITY-PERSISTENCE: a partir de aquí, dbDisponibilidadReservas (y el
+            // resto de dbXxx) refleja de verdad lo que hay en Firestore -- ya es seguro fabricar
+            // un default para un trainerKey sin disponibilidad, porque significa que REALMENTE no
+            // tiene ninguna, no que la respuesta de red aún no ha llegado.
+            window.bsAgendaDisponibilidadCargada = true;
 
             window.bsAgendaAplicandoNube = true;
 
@@ -5211,6 +5226,7 @@ function calcularRentabilidadFicha(ficha) {
         }
 
         function habilitarSlotSobreLaMarcha(clave) {
+            if (!disponibilidadListaParaEditar()) return false;
             const partes = String(clave || '').split('_');
             if (partes.length < 2) return false;
             const fechaISO = partes[0];
@@ -5249,6 +5265,7 @@ function calcularRentabilidadFicha(ficha) {
 
 
         function ocultarSlotDisponibilidad(clave) {
+            if (!disponibilidadListaParaEditar()) return false;
             const partes = String(clave || '').split('_');
             if (partes.length < 2) return false;
             const fechaISO = partes[0];
@@ -5307,6 +5324,7 @@ Cancelar = no hacer nada`,
         }
 
         function limpiarBloqueosDisponibilidadSemana() {
+            if (!disponibilidadListaParaEditar()) return;
             const disp = asegurarDisponibilidadTrainerEditable(entrenadorVisto);
             if (!disp.bloqueos) disp.bloqueos = {};
             let borrados = 0;
@@ -6748,7 +6766,25 @@ Cancelar = no hacer nada`,
             return dbDisponibilidadReservas[entrenadorVisto];
         }
 
+        // FIX-PT-AVAILABILITY-PERSISTENCE (2026-09-16): causa raíz demostrada (ver
+        // availability-tests/) -- disponibilidadTrainerActual()/asegurarDisponibilidadTrainerEditable()
+        // fabrican y ESCRIBEN un default vacío en memoria en cuanto se leen si
+        // dbDisponibilidadReservas[trainerKey] todavía no existe. Justo después de entrar/recargar,
+        // eso puede pasar simplemente porque el snapshot de Firestore (asíncrono, red) aún no ha
+        // llegado -- no porque el PT no tenga disponibilidad real. Si en ese instante se abre el
+        // modal y se guarda, el formulario "vacío" fabricado sustituye para siempre la
+        // disponibilidad real que ni siquiera llegó a mostrarse. Este guardián bloquea CUALQUIER
+        // vía de edición hasta que se confirme que ya se aplicó al menos un snapshot real.
+        function disponibilidadListaParaEditar() {
+            if (window.bsAgendaCloudDocRef && !window.bsAgendaDisponibilidadCargada) {
+                alert('Todavía se está cargando la disponibilidad desde el servidor. Espera un momento y vuelve a intentarlo.');
+                return false;
+            }
+            return true;
+        }
+
         function abrirModalDisponibilidadReservas() {
+            if (!disponibilidadListaParaEditar()) return;
             const modal = document.getElementById('modal-disponibilidad-reservas');
             if (!modal) return;
             document.getElementById('disp-trainer-label').innerText = nombreEntrenador(entrenadorVisto);
@@ -6852,6 +6888,12 @@ Cancelar = no hacer nada`,
         }
 
         function guardarDisponibilidadReservas() {
+            // FIX-PT-AVAILABILITY-PERSISTENCE: defensa en profundidad -- si por cualquier vía se
+            // llega aquí sin que el snapshot real se haya aplicado todavía, "anterior" de abajo
+            // sería un default fabricado, no los datos reales del PT; guardar sobre eso los
+            // sustituiría permanentemente. abrirModalDisponibilidadReservas() ya bloquea el camino
+            // normal (el botón "+ Disponibilidad"); este guardián cubre cualquier otro disparador.
+            if (!disponibilidadListaParaEditar()) return;
             const semanalFormulario = leerDisponibilidadFormulario();
             const anterior = dbDisponibilidadReservas[entrenadorVisto] || disponibilidadReservasPorDefecto();
             const recurrente = !!document.getElementById('disp-recurrente-semanal')?.checked;
