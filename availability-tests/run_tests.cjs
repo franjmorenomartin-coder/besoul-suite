@@ -1,9 +1,13 @@
-// FIX-PT-AVAILABILITY-PERSISTENCE: reproduce el flujo REAL (UI -> memoria -> payload -> Firestore
-// -> carga posterior -> render) usando el código extraído VERBATIM de agenda.html
-// (availability_extract.js) contra un mock de Firestore que replica de verdad la semántica de
-// `.update()` con rutas de punto (solo toca la ruta exacta, nunca pisa hermanos) y el
-// comportamiento real de onSnapshot (se dispara de forma asíncrona tras cada escritura, incluidas
-// las propias -- "self-echo"). Nunca toca Firestore real.
+// FIX-PT-AVAILABILITY-PERSISTENCE-V2: reproduce el flujo REAL (UI -> memoria -> payload ->
+// Firestore -> self-echo/snapshot -> render), usando el código extraído VERBATIM de agenda.html
+// (availability_extract.js) contra un mock de Firestore que replica fielmente:
+//   - `.update({'a.b': v})` (forma de objeto único): CADA punto de la clave se interpreta como
+//     separador de ruta anidada real -- incluidos los puntos que pudiera tener un trainerKey.
+//   - `.update(field1, v1, field2, v2, ...)` (forma varargs): cada `field` puede ser un string
+//     (mismo comportamiento que arriba) o un FieldPathFalso, cuyos segmentos se usan LITERALMENTE,
+//     sin volver a partir por puntos -- exactamente como el FieldPath real de Firestore.
+//   - onSnapshot asíncrono, incluido el "self-echo" de los propios escritores.
+// Nunca toca Firestore real.
 const fs = require('fs');
 const path = require('path');
 
@@ -11,37 +15,54 @@ const extracted = fs.readFileSync(path.join(__dirname, 'availability_extract.js'
 
 function deepClone(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
 
-function setEnRuta(obj, rutaConPuntos, valor) {
-  const partes = rutaConPuntos.split('.');
-  let cursor = obj;
-  for (let i = 0; i < partes.length - 1; i++) {
-    if (typeof cursor[partes[i]] !== 'object' || cursor[partes[i]] === null) cursor[partes[i]] = {};
-    cursor = cursor[partes[i]];
-  }
-  cursor[partes[partes.length - 1]] = valor;
+class FieldPathFalso {
+  constructor(...segmentos) { this.segmentos = segmentos; }
 }
 
-// --- Mock de Firestore: replica fielmente `.update()` con FieldPath de puntos + onSnapshot
-// asíncrono (incluye el "self-echo" de los propios escritores, como el SDK real). ---
+function setEnRuta(obj, segmentos, valor) {
+  let cursor = obj;
+  for (let i = 0; i < segmentos.length - 1; i++) {
+    if (typeof cursor[segmentos[i]] !== 'object' || cursor[segmentos[i]] === null) cursor[segmentos[i]] = {};
+    cursor = cursor[segmentos[i]];
+  }
+  cursor[segmentos[segmentos.length - 1]] = valor;
+}
+
+// --- Mock de Firestore: replica fielmente `.update()` (objeto único Y varargs con FieldPath) +
+// onSnapshot asíncrono (incluye el "self-echo" de los propios escritores, como el SDK real). ---
 function crearFirestoreMock(estadoInicial) {
   let estado = estadoInicial === undefined ? null : deepClone(estadoInicial);
   let numeroDeEscrituras = 0;
+  let fallosPendientes = 0;
   const listeners = [];
   const microtasksPendientes = [];
   function notificar() {
     const snap = { exists: estado !== null, data: () => deepClone(estado) };
     listeners.forEach(cb => microtasksPendientes.push(() => cb(snap)));
   }
+  function aplicarCampo(campo, valor) {
+    if (campo instanceof FieldPathFalso) { setEnRuta(estado, campo.segmentos, deepClone(valor)); return; }
+    if (typeof campo === 'string' && campo.includes('.')) { setEnRuta(estado, campo.split('.'), deepClone(valor)); return; }
+    estado[campo] = deepClone(valor);
+  }
   return {
     docRef: {
-      update(payload) {
+      update(...args) {
         return new Promise((resolve, reject) => {
           try {
             if (estado === null) { reject(new Error('NOT_FOUND (update sobre documento inexistente)')); return; }
-            Object.keys(payload).forEach(clave => {
-              if (clave.includes('.')) setEnRuta(estado, clave, deepClone(payload[clave]));
-              else estado[clave] = deepClone(payload[clave]);
-            });
+            if (fallosPendientes > 0) {
+              fallosPendientes--;
+              const err = new Error('simulated-network-error');
+              err.code = 'unavailable';
+              microtasksPendientes.push(() => reject(err));
+              return;
+            }
+            if (args.length === 1 && args[0] && typeof args[0] === 'object' && !(args[0] instanceof FieldPathFalso)) {
+              Object.keys(args[0]).forEach(clave => aplicarCampo(clave, args[0][clave]));
+            } else {
+              for (let i = 0; i < args.length; i += 2) aplicarCampo(args[i], args[i + 1]);
+            }
             numeroDeEscrituras++;
             microtasksPendientes.push(() => { notificar(); resolve(); });
           } catch (e) { reject(e); }
@@ -59,11 +80,17 @@ function crearFirestoreMock(estadoInicial) {
       let i = 0;
       while (microtasksPendientes.length && i < maxIter) { const fn = microtasksPendientes.shift(); await fn(); i++; }
       if (i >= maxIter) throw new Error('flush(): posible bucle infinito de escrituras (más de ' + maxIter + ' iteraciones) -- ver normalizarCredenciales()/programarGuardadoNubeAgenda()');
+      // Además de drenar la cola propia, deja varias vueltas del bucle de eventos real para que
+      // cadenas .then()/.catch()/await nativas (p.ej. tras un reject()) terminen de propagarse --
+      // reject()/resolve() programan sus continuaciones como microtareas nativas de V8, no en
+      // microtasksPendientes, así que un solo "await fn()" no basta para esperarlas todas.
+      for (let k = 0; k < 10; k++) await new Promise(r => setImmediate(r));
       return i;
     },
     estadoActual() { return deepClone(estado); },
     setEstado(nuevo) { estado = deepClone(nuevo); },
-    get numeroDeEscrituras() { return numeroDeEscrituras; }
+    get numeroDeEscrituras() { return numeroDeEscrituras; },
+    fallarProximasEscrituras(n = 1) { fallosPendientes += n; }
   };
 }
 
@@ -123,14 +150,15 @@ function nuevaSesion(firestoreMock, { domValores = {}, credencialesIniciales = {
       get dbDisponibilidadReservas() { return dbDisponibilidadReservas; }, set dbDisponibilidadReservas(v) { dbDisponibilidadReservas = v; },
       get dbClientes() { return dbClientes; }, set dbClientes(v) { dbClientes = v; },
       get dbAgenda() { return dbAgenda; },
-      guardarDisponibilidadReservas, guardarEstadoNubeAgenda, aplicarEstadoNubeAgenda,
+      guardarDisponibilidadReservas, guardarEstadoNubeAgenda, programarGuardadoNubeAgenda, aplicarEstadoNubeAgenda,
       disponibilidadTrainerActual, disponibilidadReservasPorDefecto, normalizarTrainerKey,
       disponibilidadTrainerLectura, bloquesDisponibilidadFecha, asegurarDisponibilidadTrainerEditable,
-      disponibilidadListaParaEditar
+      disponibilidadListaParaEditar, payloadParaUpdateFirestore, trainerKeyDesdeEmail,
+      emailDocId, perfilFirestoreAcredencial, sanitizarCredenciales
     };`);
   const windowFalso = { bsAgendaCloudDocRef: firestoreMock.docRef, bsAgendaAplicandoNube: false, bsAgendaCloudTimer: null };
   class FieldValueFalso { constructor(nombre) { this._methodName = nombre; } }
-  const firebaseFalso = { firestore: { FieldValue: FieldValueFalso } };
+  const firebaseFalso = { firestore: { FieldValue: FieldValueFalso, FieldPath: FieldPathFalso } };
   firebaseFalso.firestore.FieldValue.serverTimestamp = () => new FieldValueFalso('serverTimestamp');
   const M = fn(localStorageFalso, document, windowFalso, firebaseFalso, (msg) => alerts.push(msg), reloj.setTimeout, reloj.clearTimeout);
   M.window = windowFalso;
@@ -411,6 +439,151 @@ console.log('\n=== VERIFICACIÓN: normalizarCredenciales() NO desencadena un buc
   s.reloj.avanzar(350); // si programarGuardadoNubeAgenda() hubiera programado algo, dispararía aquí
   await fsx.flush(5);
   check('cargar la página sin que el usuario toque nada NO provoca ninguna escritura automática', fsx.numeroDeEscrituras, escriturasTrasCarga);
+}
+
+// ============================================================
+console.log('\n=== CONTROL NEGATIVO V2 (causa raíz real de "aparece y desaparece"): trainerKey con punto ===');
+// ============================================================
+{
+  // Reproduce EXACTAMENTE lo que el usuario describió en producción: guardar -> se ve
+  // correctamente -> segundos después desaparece SIN RECARGAR. La causa: trainerKeyDesdeEmail()
+  // preserva puntos literales de un email (p.ej. "fran.jmorenomartin@gmail.com" -> trainerKey
+  // "fran.jmorenomartin" cuando besoulUsers no tiene un trainerKey explícito). Antes de este fix,
+  // guardarEstadoNubeAgenda() enviaba la clave `disponibilidadReservas.fran.jmorenomartin` como
+  // OBJETO con un punto literal -- Firestore .update() interpreta CADA punto como un separador de
+  // ruta anidada real, así que el dato se guardaba en 3 niveles
+  // (disponibilidadReservas.fran.jmorenomartin), nunca en la clave PLANA
+  // disponibilidadReservas["fran.jmorenomartin"] que el resto del código lee. El guardado en
+  // memoria "funcionaba" al instante (aparece) pero el self-echo de Firestore, con la estructura
+  // mal anidada, hacía que dbDisponibilidadReservas["fran.jmorenomartin"] volviera a ser
+  // undefined en cuanto llegaba (desaparece) -- SIN necesitar recargar la página.
+  const trainerKeyConPunto = 'fran.jmorenomartin';
+  check('trainerKeyDesdeEmail() de un email con punto en la parte local conserva el punto', (() => { const s = nuevaSesion(crearFirestoreMock(null)); return s.trainerKeyDesdeEmail('fran.jmorenomartin@gmail.com'); })(), trainerKeyConPunto);
+
+  const fsx = crearFirestoreMock({ clientes: {}, agenda: {}, pruebasCRM: {}, disponibilidadReservas: {}, notas: {}, historicoClientes: {} });
+  const s = nuevaSesion(fsx, { domValores: domDisponibilidad({ b1: ['09:00', '13:00'] }), credencialesIniciales: { [trainerKeyConPunto]: {} } });
+  await fsx.flush();
+  s.entrenadorVisto = trainerKeyConPunto;
+
+  s.guardarDisponibilidadReservas();
+  check('CONTROL NEGATIVO V2: justo tras guardar, la disponibilidad "aparece" en memoria (optimista)', s.dbDisponibilidadReservas[trainerKeyConPunto]?.semanal?.['1'], { activo: true, bloques: [{ inicio: '09:00', fin: '13:00' }] });
+  await fsx.flush();
+
+  check('CONTROL NEGATIVO V2: tras el self-echo, la disponibilidad de un trainerKey con punto SIGUE ahí (no desaparece)', s.dbDisponibilidadReservas[trainerKeyConPunto]?.semanal?.['1'], { activo: true, bloques: [{ inicio: '09:00', fin: '13:00' }] });
+
+  // La clave remota debe ser PLANA ("fran.jmorenomartin" como único segmento bajo
+  // disponibilidadReservas), nunca anidada en 3 niveles.
+  const remoto = fsx.estadoActual().disponibilidadReservas;
+  check('la clave remota es plana (disponibilidadReservas["fran.jmorenomartin"]), no anidada en 3 niveles', !!remoto[trainerKeyConPunto], true);
+  check('...y "fran" NO se ha convertido en un mapa anidado fantasma', remoto.fran, undefined);
+
+  // Reload independiente: una sesión nueva debe ver exactamente lo mismo.
+  const s2 = nuevaSesion(fsx, { credencialesIniciales: { [trainerKeyConPunto]: {} } });
+  await fsx.flush();
+  check('una recarga completa también ve la disponibilidad de un trainerKey con punto', s2.dbDisponibilidadReservas[trainerKeyConPunto]?.semanal?.['1'], { activo: true, bloques: [{ inicio: '09:00', fin: '13:00' }] });
+}
+
+// ============================================================
+console.log('\n=== Debounce programado ANTES del cambio de disponibilidad, disparado DESPUÉS: no revierte ===');
+// ============================================================
+{
+  const fsx = crearFirestoreMock({ clientes: {}, agenda: {}, pruebasCRM: {}, disponibilidadReservas: {}, notas: {}, historicoClientes: {} });
+  const s = nuevaSesion(fsx, { domValores: domDisponibilidad({ b1: ['09:00', '13:00'] }), credencialesIniciales: CREDS_2PT });
+  await fsx.flush();
+  s.entrenadorVisto = 'carmen';
+
+  // Algo (p.ej. guardarCredenciales()) programó un guardado debounced ANTES de que el PT tocara
+  // disponibilidad -- guardarEstadoNubeAgenda() lee el estado EN VIVO en el momento en que el
+  // temporizador realmente dispara, nunca un payload capturado por adelantado, así que no puede
+  // reintroducir un valor antiguo aunque dispare después del cambio real.
+  s.programarGuardadoNubeAgenda('carmen');
+  s.guardarDisponibilidadReservas();
+  await fsx.flush();
+  check('el guardado directo de disponibilidad se aplica primero', fsx.estadoActual().disponibilidadReservas.carmen.semanal['1'], { activo: true, bloques: [{ inicio: '09:00', fin: '13:00' }] });
+
+  s.reloj.avanzar(350); // dispara el debounce que quedaba pendiente desde ANTES del cambio
+  await fsx.flush();
+  check('el debounce disparado después NO revierte la disponibilidad (relee el estado en vivo, no uno capturado)', fsx.estadoActual().disponibilidadReservas.carmen.semanal['1'], { activo: true, bloques: [{ inicio: '09:00', fin: '13:00' }] });
+}
+
+// ============================================================
+console.log('\n=== Fallo de escritura: rollback controlado + aviso claro, nunca una desaparición silenciosa ===');
+// ============================================================
+{
+  const fsx = crearFirestoreMock({ clientes: {}, agenda: {}, pruebasCRM: {}, disponibilidadReservas: { carmen: { semanal: { 1: { activo: true, bloques: [{ inicio: '08:00', fin: '12:00' }] } }, excepciones: {}, bloqueos: {}, recurrenteSemanal: true } }, notas: {}, historicoClientes: {} });
+  const s = nuevaSesion(fsx, { domValores: domDisponibilidad({ b1: ['10:00', '15:00'] }), credencialesIniciales: CREDS_2PT });
+  await fsx.flush();
+  s.entrenadorVisto = 'carmen';
+  fsx.fallarProximasEscrituras(1);
+
+  s.guardarDisponibilidadReservas();
+  check('mientras el write está en vuelo, el cambio se muestra de forma optimista', s.dbDisponibilidadReservas.carmen.semanal['1'], { activo: true, bloques: [{ inicio: '10:00', fin: '15:00' }] });
+  await fsx.flush();
+
+  check('tras el fallo, se revierte al valor anterior (nunca queda a medias ni desaparece sin explicación)', s.dbDisponibilidadReservas.carmen.semanal['1'], { activo: true, bloques: [{ inicio: '08:00', fin: '12:00' }] });
+  check('el PT recibe un aviso explícito del fallo', s.alerts.some(a => /no se ha podido guardar/i.test(a)), true);
+  check('el documento remoto nunca llegó a cambiar (la escritura fallida no dejó nada a medias)', fsx.estadoActual().disponibilidadReservas.carmen.semanal['1'], { activo: true, bloques: [{ inicio: '08:00', fin: '12:00' }] });
+}
+
+// ============================================================
+console.log('\n=== MULTI-TAB: Carmen y Fran en pestañas distintas, cada una conserva SU disponibilidad ===');
+// ============================================================
+{
+  const fsx = crearFirestoreMock({ clientes: {}, agenda: {}, pruebasCRM: {}, disponibilidadReservas: {}, notas: {}, historicoClientes: {} });
+  const tabCarmen = nuevaSesion(fsx, { domValores: domDisponibilidad({ b1: ['09:00', '13:00'] }), credencialesIniciales: CREDS_2PT });
+  const tabFran = nuevaSesion(fsx, { domValores: domDisponibilidad({ b1: ['17:00', '21:00'] }), credencialesIniciales: CREDS_2PT });
+  await fsx.flush();
+  tabCarmen.entrenadorVisto = 'carmen';
+  tabFran.entrenadorVisto = 'lillo'; // "Fran" en esta suite reutiliza el trainerKey de pruebas "lillo" ya definido en CREDS_2PT
+
+  // Carmen guarda B (su propia disponibilidad).
+  tabCarmen.guardarDisponibilidadReservas();
+  await fsx.flush();
+  check('Carmen guarda su disponibilidad', fsx.estadoActual().disponibilidadReservas.carmen.semanal['1'], { activo: true, bloques: [{ inicio: '09:00', fin: '13:00' }] });
+
+  // Fran, con estado desactualizado en su pestaña (todavía no ha recibido el cambio de Carmen vía
+  // el flush de arriba en ESTA prueba concreta -- aunque en la práctica su onSnapshot ya lo habría
+  // aplicado), agenda una sesión / edita un cliente / guarda SU disponibilidad.
+  tabFran.dbClientes['lillo'] = [{ id: 'c1', nombre: 'Cliente de Fran' }];
+  const pGuardarClienteFran = tabFran.guardarEstadoNubeAgenda('lillo');
+  await fsx.flush();
+  await pGuardarClienteFran;
+  tabFran.guardarDisponibilidadReservas();
+  await fsx.flush();
+
+  check('Carmen SIGUE con su disponibilidad tras las acciones de Fran (ni un guardado de cliente ni de disponibilidad de Fran la tocó)', fsx.estadoActual().disponibilidadReservas.carmen.semanal['1'], { activo: true, bloques: [{ inicio: '09:00', fin: '13:00' }] });
+  check('Fran tiene su propia disponibilidad, no la de Carmen', fsx.estadoActual().disponibilidadReservas.lillo.semanal['1'], { activo: true, bloques: [{ inicio: '17:00', fin: '21:00' }] });
+
+  check('tras todas las acciones anteriores (en ambos sentidos), ninguno de los dos ha perdido su propia franja original', [fsx.estadoActual().disponibilidadReservas.carmen.semanal['1'].bloques[0], fsx.estadoActual().disponibilidadReservas.lillo.semanal['1'].bloques[0]], [{ inicio: '09:00', fin: '13:00' }, { inicio: '17:00', fin: '21:00' }]);
+}
+
+// ============================================================
+console.log('\n=== MULTI-TAB (mismo PT): una pestaña obsoleta no borra silenciosamente un guardado más nuevo ===');
+// ============================================================
+{
+  const fsx = crearFirestoreMock({ clientes: {}, agenda: {}, pruebasCRM: {}, disponibilidadReservas: {}, notas: {}, historicoClientes: {} });
+  const tabA = nuevaSesion(fsx, { domValores: domDisponibilidad({ b1: ['09:00', '13:00'] }), credencialesIniciales: CREDS_2PT });
+  const tabB = nuevaSesion(fsx, { domValores: domDisponibilidad({ b1: ['14:00', '18:00'] }), credencialesIniciales: CREDS_2PT });
+  await fsx.flush();
+  tabA.entrenadorVisto = 'carmen';
+  tabB.entrenadorVisto = 'carmen';
+
+  // Tab A guarda primero (09:00-13:00).
+  tabA.guardarDisponibilidadReservas();
+  await fsx.flush();
+  // Tab B, que abrió su formulario ANTES del guardado de A pero pulsa "Guardar" DESPUÉS, guarda
+  // su propio valor (14:00-18:00) -- esto es un "last write wins" ACEPTADO para el mismo trainer
+  // en la misma franja de edición (no hay forma de saber cuál de los dos es la intención final del
+  // PT sin un mecanismo de bloqueo optimista, que sería una arquitectura nueva no pedida aquí);
+  // lo que se comprueba es que el resultado es EXACTAMENTE lo que B guardó, sin mezclas ni
+  // corrupción -- nunca un estado intermedio o vacío.
+  tabB.guardarDisponibilidadReservas();
+  await fsx.flush();
+  check('el resultado final es exactamente lo que la última pestaña en guardar quiso (sin mezclas ni datos vacíos)', fsx.estadoActual().disponibilidadReservas.carmen.semanal['1'], { activo: true, bloques: [{ inicio: '14:00', fin: '18:00' }] });
+
+  const tabC = nuevaSesion(fsx, { credencialesIniciales: CREDS_2PT });
+  await fsx.flush();
+  check('una recarga posterior ve ese mismo resultado, coherente (no revierte a un estado intermedio)', tabC.dbDisponibilidadReservas.carmen.semanal['1'], { activo: true, bloques: [{ inicio: '14:00', fin: '18:00' }] });
 }
 
 console.log(`\n${pass}/${pass + fail} pruebas OK.`);

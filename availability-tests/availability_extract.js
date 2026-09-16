@@ -137,7 +137,7 @@ function guardarEstadoNubeAgenda(trainerKeyScope) {
                 // Devuelve la promesa (antes se descartaba) para que quien lo necesite
                 // pueda esperar a que el guardado+publicación terminen de verdad, sin
                 // cambiar el comportamiento de las llamadas existentes que la ignoran.
-                return window.bsAgendaCloudDocRef.update(payload)
+                return window.bsAgendaCloudDocRef.update(...payloadParaUpdateFirestore(payload))
                     .then(() => publicarReservasPublicas())
                     .then(() => ({ ok: true }))
                     .catch(err => { console.error('Error guardando agenda en Firebase:', err); return { ok: false, err }; });
@@ -150,6 +150,19 @@ function guardarEstadoNubeAgenda(trainerKeyScope) {
 
             }
 
+        }
+
+function payloadParaUpdateFirestore(payload) {
+            const args = [];
+            Object.keys(payload).forEach(key => {
+                const partes = key.split('.');
+                if (partes.length > 1) {
+                    args.push(new firebase.firestore.FieldPath(partes[0], partes.slice(1).join('.')), payload[key]);
+                } else {
+                    args.push(key, payload[key]);
+                }
+            });
+            return args;
         }
 
 function programarGuardadoNubeAgenda(trainerKeyScope) {
@@ -341,7 +354,7 @@ function leerDisponibilidadFormulario() {
             return semanal;
         }
 
-function guardarDisponibilidadReservas() {
+async function guardarDisponibilidadReservas() {
             // FIX-PT-AVAILABILITY-PERSISTENCE: defensa en profundidad -- si por cualquier vía se
             // llega aquí sin que el snapshot real se haya aplicado todavía, "anterior" de abajo
             // sería un default fabricado, no los datos reales del PT; guardar sobre eso los
@@ -353,9 +366,10 @@ function guardarDisponibilidadReservas() {
             const recurrente = !!document.getElementById('disp-recurrente-semanal')?.checked;
             const bloqueos = anterior.bloqueos || {};
             const excepciones = anterior.excepciones || {};
+            let nuevoValor;
 
             if (recurrente) {
-                dbDisponibilidadReservas[entrenadorVisto] = {
+                nuevoValor = {
                     ...anterior,
                     semanal: semanalFormulario,
                     excepciones,
@@ -372,7 +386,7 @@ function guardarDisponibilidadReservas() {
                     const fechaISO = formatoFechaLocal(fecha);
                     nuevasExcepciones[fechaISO] = { ...semanalFormulario[d], override: true };
                 }
-                dbDisponibilidadReservas[entrenadorVisto] = {
+                nuevoValor = {
                     ...anterior,
                     semanal: anterior.semanal || disponibilidadReservasPorDefecto().semanal,
                     excepciones: nuevasExcepciones,
@@ -383,11 +397,36 @@ function guardarDisponibilidadReservas() {
                 };
             }
 
+            // FIX-PT-AVAILABILITY-PERSISTENCE-V2: confirmación real de guardado (bloque 6 del
+            // hotfix). Antes: el estado local se sustituía y se anunciaba "guardado" de forma
+            // incondicional, sin esperar a que el write a Firestore realmente terminara -- si
+            // fallaba (red, cuota, error del servidor), el PT veía "Disponibilidad guardada" para
+            // segundos después ver cómo la franja recién puesta desaparecía sin ninguna
+            // explicación, en cuanto llegaba el próximo snapshot con el estado remoto real (el
+            // guardado nunca llegó a aplicarse). Ahora: se aplica en memoria de forma optimista
+            // (para que el PT vea el cambio al instante), pero se ESPERA la confirmación real
+            // antes de cerrar el modal/anunciar éxito -- y si falla, se revierte la memoria al
+            // valor anterior y se avisa explícitamente, dejando el modal abierto para reintentar.
+            const btn = document.getElementById('btn-guardar-disponibilidad');
+            if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+            dbDisponibilidadReservas[entrenadorVisto] = nuevoValor;
             localStorage.setItem('bs_db_disponibilidad_reservas_v6', JSON.stringify(dbDisponibilidadReservas));
-            guardarEstadoNubeAgenda();
-            publicarReservasPublicas();
-            cerrarModalDisponibilidadReservas();
             renderAgenda();
+
+            const resultado = await guardarEstadoNubeAgenda();
+            if (!resultado || !resultado.ok) {
+                dbDisponibilidadReservas[entrenadorVisto] = anterior;
+                localStorage.setItem('bs_db_disponibilidad_reservas_v6', JSON.stringify(dbDisponibilidadReservas));
+                renderAgenda();
+                if (btn) { btn.disabled = false; btn.textContent = 'Guardar disponibilidad'; }
+                const motivo = resultado?.err ? (resultado.err.message || resultado.err.code || 'error desconocido') : 'la app está sincronizando otro cambio en este instante';
+                alert(`No se ha podido guardar la disponibilidad en el servidor (${motivo}). Se ha restaurado la disponibilidad anterior en pantalla. Vuelve a intentarlo.`);
+                return;
+            }
+
+            publicarReservasPublicas();
+            if (btn) { btn.disabled = false; btn.textContent = 'Guardar disponibilidad'; }
+            cerrarModalDisponibilidadReservas();
             alert(recurrente ? 'Disponibilidad recurrente guardada. Se generarán slots de 45 min todas las semanas.' : 'Disponibilidad guardada solo para la semana visible.');
         }
 
@@ -464,4 +503,25 @@ function formatoFechaLocal(fecha) {
 
             return `${y}-${m}-${d}`;
 
+        }
+
+function emailDocId(email) {
+            return String(email || '').trim().toLowerCase();
+        }
+
+function trainerKeyDesdeEmail(email) {
+            return String(email || '').split('@')[0].toLowerCase().replace(/[^a-z0-9._-]/g, '');
+        }
+
+function perfilFirestoreAcredencial(perfil, emailFallback='') {
+            const email = emailDocId(perfil?.email || emailFallback);
+            const trainerKey = String(perfil?.trainerKey || trainerKeyDesdeEmail(email)).trim().toLowerCase().replace(/\s+/g, '');
+            return {
+                nombre: perfil?.nombre || trainerKey.charAt(0).toUpperCase() + trainerKey.slice(1),
+                rol: perfil?.rol === 'admin' ? 'admin' : 'pt',
+                email,
+                uid: perfil?.uid || '',
+                trainerKey,
+                activo: perfil?.activo !== false
+            };
         }

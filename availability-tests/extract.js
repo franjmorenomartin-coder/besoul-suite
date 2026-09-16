@@ -35,6 +35,7 @@ const funciones = [
   'valorInvalidoParaFirestore',
   'estadoLocalAgendaParaNube',
   'guardarEstadoNubeAgenda',
+  'payloadParaUpdateFirestore',
   'programarGuardadoNubeAgenda',
   'aplicarEstadoNubeAgenda',
   'sincronizarPruebasCRMDentroDeAgenda',
@@ -53,6 +54,9 @@ const funciones = [
   'normalizarBloquesDisponibilidad',
   'fusionarBloquesDisponibilidad',
   'formatoFechaLocal',
+  'emailDocId',
+  'trainerKeyDesdeEmail',
+  'perfilFirestoreAcredencial',
 ];
 const lets = [
   'usuarioLogeado', 'rolActivo', 'entrenadorVisto',
