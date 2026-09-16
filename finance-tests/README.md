@@ -31,4 +31,19 @@ propio motor de cierres de `finanzas.html`, fuera del alcance de esta fórmula c
 
 ```bash
 node finance-tests/extract.js && node finance-tests/run_tests.cjs
+node finance-tests/centros_extract.js && node finance-tests/run_centros_tests.cjs
+node finance-tests/finanzas_ux_extract.js && node finance-tests/run_finanzas_ux_tests.cjs
 ```
+
+## FINANZAS-UX-V2 (`finanzas_ux_extract.js` / `run_finanzas_ux_tests.cjs`)
+
+Extrae de `finanzas.html` el selector dinámico de centro (`renderSelectorCentrosFinanzas`,
+`renderComparativaCentrosFinanzas`, `renderCentrosResumen`) y el panel de avisos de carrera
+colapsable (`avisosCarreraColapsado`/`ocultarAvisoCarrera`/etc.). 25 casos: "Todos" siempre
+presente y generado dinámicamente (nunca una lista de centros hardcodeada), un centro sin
+`economiaConfigurada` marca ⚠ en su pill y "Pendiente" en la comparativa sin inventar una cifra,
+seleccionar un centro concreto pinta SOLO su detalle completo (nunca los demás), un id de centro
+obsoleto cae de vuelta a "Todos", y el colapso/ocultar del panel de avisos vive en
+`localStorage` (nunca en Firestore, nunca cambia qué avisos existen). `renderAlertasCarrera()`
+en sí (lógica de rangos por antigüedad de cada PT) no se re-verifica aquí porque no cambió en
+FINANZAS-UX-V2 -- solo su presentación pasó de string a `{id, atencion, texto}`.

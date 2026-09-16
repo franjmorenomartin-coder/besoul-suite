@@ -135,7 +135,19 @@
           <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 text-center"><h3 class="text-[9px] font-bold uppercase text-slate-500 tracking-wider mb-1">Gastos</h3><div id="kpi-gastos-total" class="text-sm font-black text-red-300">0,00 €</div></div>
         </div>
 
-        <div id="alertas-carrera" class="hidden bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-xs text-amber-100"></div>
+        <!-- FINANZAS-UX-V2: panel de avisos plegable -- UX pura (colapso/ocultar es local al
+             navegador, vía localStorage; nunca toca Firestore ni ningún dato económico). -->
+        <div id="panel-avisos-carrera" class="hidden bg-amber-500/10 border border-amber-500/30 rounded-xl overflow-hidden">
+          <button type="button" onclick="toggleAvisosCarrera()" class="w-full flex flex-wrap items-center justify-between gap-2 p-3 text-left">
+            <span id="avisos-carrera-resumen" class="text-xs font-bold text-amber-100">0 avisos</span>
+            <span class="flex items-center gap-3">
+              <span onclick="event.stopPropagation(); ocultarTodosAvisosCarrera()" class="text-[10px] text-amber-300 hover:underline font-bold uppercase">Ocultar todos</span>
+              <span id="avisos-carrera-restaurar" onclick="event.stopPropagation(); restaurarAvisosCarreraOcultos()" class="hidden text-[10px] text-cyan-300 hover:underline font-bold uppercase"></span>
+              <span id="avisos-carrera-chevron" class="text-amber-300 text-xs">▾ Ver</span>
+            </span>
+          </button>
+          <div id="alertas-carrera" class="hidden px-3 pb-3 space-y-2 text-xs text-amber-100"></div>
+        </div>
 
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
           <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-slate-800 pb-3">
@@ -149,7 +161,13 @@
               <button onclick="cerrarMesActual()" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black px-4 py-2 rounded-lg text-xs uppercase">Cerrar / recalcular cierre</button>
             </div>
           </div>
-          <div id="centros-resumen" class="grid grid-cols-1 xl:grid-cols-2 gap-4"></div>
+          <!-- FINANZAS-UX-V2: selector dinámico de centro (Todos + un botón por centro real,
+               generado desde los datos, nunca hardcodeado). "Todos" = resumen comparativo
+               compacto; un centro concreto = su detalle completo a ancho completo. Ningún cambio
+               de fórmula: es exactamente el mismo renderCentrosResumen() de antes, ahora filtrado
+               por selección en vez de mostrar todo apilado siempre. -->
+          <div id="centros-selector" class="flex flex-wrap gap-2"></div>
+          <div id="centros-resumen" class="space-y-4"></div>
         </div>
       </section>
 
@@ -387,6 +405,9 @@
     let calculoActual = null;
     let mesCerradoEditando = null;
     let tabActivo = 'directo';
+    // FINANZAS-UX-V2: 'todos' = resumen comparativo compacto; un id de centro = su detalle
+    // completo a ancho completo. Puramente de vista -- no afecta a ningún cálculo.
+    let centroSeleccionadoFinanzas = 'todos';
 
     function escapeHTML(valor){ return String(valor ?? '').replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch])); }
     function dinero(num){ return (Number(num)||0).toLocaleString('es-ES',{minimumFractionDigits:2, maximumFractionDigits:2}) + ' €'; }
@@ -1185,13 +1206,25 @@
       renderCentrosResumen(); renderGastos(); renderOtrosIngresos(); renderHistorico(); renderConfigCentros(); renderConfigTrainers(); renderConfigActividades();
     }
 
-    function renderAlertasCarrera(){
-      const box = document.getElementById('alertas-carrera');
-      if (!box) return;
+    // FINANZAS-UX-V2: colapso + ocultar (individual/todos) son puramente locales al navegador --
+    // localStorage, nunca Firestore -- y nunca alteran qué avisos EXISTEN ni ningún cálculo
+    // económico; solo qué se muestra en pantalla ahora mismo.
+    const LS_AVISOS_COLAPSADO = 'bs_finanzas_avisos_colapsado';
+    const LS_AVISOS_OCULTOS = 'bs_finanzas_avisos_ocultos';
+    function avisosCarreraColapsado(){ try { return localStorage.getItem(LS_AVISOS_COLAPSADO) !== '0'; } catch(e){ return true; } }
+    function setAvisosCarreraColapsado(v){ try { localStorage.setItem(LS_AVISOS_COLAPSADO, v ? '1' : '0'); } catch(e){} }
+    function avisosCarreraOcultosSet(){ try { return new Set(JSON.parse(localStorage.getItem(LS_AVISOS_OCULTOS) || '[]')); } catch(e){ return new Set(); } }
+    function setAvisosCarreraOcultosSet(s){ try { localStorage.setItem(LS_AVISOS_OCULTOS, JSON.stringify([...s])); } catch(e){} }
+    function toggleAvisosCarrera(){ setAvisosCarreraColapsado(!avisosCarreraColapsado()); renderAlertasCarrera(); }
+    function ocultarAvisoCarrera(id){ const s = avisosCarreraOcultosSet(); s.add(id); setAvisosCarreraOcultosSet(s); renderAlertasCarrera(); }
+    function ocultarTodosAvisosCarrera(){ const s = avisosCarreraOcultosSet(); (window._bsAvisosCarreraVisiblesIds || []).forEach(id => s.add(id)); setAvisosCarreraOcultosSet(s); renderAlertasCarrera(); }
+    function restaurarAvisosCarreraOcultos(){ setAvisosCarreraOcultosSet(new Set()); renderAlertasCarrera(); }
+
+    function calcularAvisosCarrera(){
       const alertas = [];
       const cambiosCierre = detectarCambiosPostCierre(mesTrabajoKey());
       if(cambiosCierre.length){
-        alertas.push(`🔒 El mes ${escapeHTML(etiquetaMes(mesTrabajoKey()))} está cerrado, pero hay cambios posteriores respecto al cierre: ${escapeHTML(cambiosCierre.join(' · '))}. Reabre edición si quieres recalcular y actualizar el histórico.`);
+        alertas.push({ id: `cierre_cambios_${mesTrabajoKey()}`, atencion: true, texto: `🔒 El mes ${escapeHTML(etiquetaMes(mesTrabajoKey()))} está cerrado, pero hay cambios posteriores respecto al cierre: ${escapeHTML(cambiosCierre.join(' · '))}. Reabre edición si quieres recalcular y actualizar el histórico.` });
       }
       perfilesUsuarios.filter(esPerfilOperativo).forEach(p => {
         const key = trainerKeyPerfil(p);
@@ -1201,31 +1234,100 @@
         const centroId = centroTrainer(key, p);
         const row = (calculoActual?.trainers || []).find(t => t.key === key);
         if (!fecha) {
-          alertas.push(`⚠️ ${escapeHTML(nombre)} no tiene fecha de alta configurada. No se podrán calcular rangos ni avisos.`);
+          alertas.push({ id: `${key}_sin_fecha`, atencion: true, texto: `⚠️ ${escapeHTML(nombre)} no tiene fecha de alta configurada. No se podrán calcular rangos ni avisos.` });
           return;
         }
         const d1 = daysUntilAnniversary(fecha, 1);
         const d3 = daysUntilAnniversary(fecha, 3);
         const d4 = daysUntilAnniversary(fecha, 4);
         const posteriores = contarPosterioresCentro(key, centroId, fecha);
-        if (d1 !== null && d1 > 0 && d1 <= 60) alertas.push(`⏳ ${escapeHTML(nombre)} cumple 1 año en ${d1} días. Preparar paso a Rango II.`);
-        if (d1 !== null && d1 <= 0 && d3 > 0) alertas.push(`✅ ${escapeHTML(nombre)} está en Rango II por antigüedad: 50/50 · 60/40 · 85/15.`);
-        if (d3 !== null && d3 > 0 && d3 <= 90) alertas.push(`⏳ ${escapeHTML(nombre)} cumple 3 años en ${d3} días. Revisar paso a Rango III canon fijo.`);
-        if (d3 !== null && d3 <= 0 && d4 > 0) alertas.push(`✅ ${escapeHTML(nombre)} cumple Rango III: canon fijo configurado.`);
-        if (d4 !== null && d4 > 0 && d4 <= 120) alertas.push(`⏳ ${escapeHTML(nombre)} cumple 4 años en ${d4} días. Revisar posible coordinación si hay 3 PT posteriores.`);
-        if (d4 !== null && d4 <= 0 && posteriores < 3) alertas.push(`ℹ️ ${escapeHTML(nombre)} cumple antigüedad para Rango IV, pero solo tiene ${posteriores}/3 PT posteriores en ${escapeHTML(nombreCentro(centroId))}.`);
-        if (d4 !== null && d4 <= 0 && posteriores >= 3 && !settings.coordinadorAutorizado && settings.sistemaPago !== 'coordinador') alertas.push(`⭐ ${escapeHTML(nombre)} cumple condición para posible Coordinador/a de Sede: 4 años + ${posteriores} PT posteriores en ${escapeHTML(nombreCentro(centroId))}. Falta autorización de gerencia.`);
-        if ((settings.coordinadorAutorizado || settings.sistemaPago === 'coordinador') && row?.sistemaEfectivo === 'coordinador') alertas.push(`🏅 ${escapeHTML(nombre)} tiene Rango IV aplicado. Reducción coordinación: ${dinero(row.coordinacionBonus || 0)}.`);
+        if (d1 !== null && d1 > 0 && d1 <= 60) alertas.push({ id: `${key}_r2_proximo`, atencion: false, texto: `⏳ ${escapeHTML(nombre)} cumple 1 año en ${d1} días. Preparar paso a Rango II.` });
+        if (d1 !== null && d1 <= 0 && d3 > 0) alertas.push({ id: `${key}_r2_activo`, atencion: false, texto: `✅ ${escapeHTML(nombre)} está en Rango II por antigüedad: 50/50 · 60/40 · 85/15.` });
+        if (d3 !== null && d3 > 0 && d3 <= 90) alertas.push({ id: `${key}_r3_proximo`, atencion: false, texto: `⏳ ${escapeHTML(nombre)} cumple 3 años en ${d3} días. Revisar paso a Rango III canon fijo.` });
+        if (d3 !== null && d3 <= 0 && d4 > 0) alertas.push({ id: `${key}_r3_activo`, atencion: false, texto: `✅ ${escapeHTML(nombre)} cumple Rango III: canon fijo configurado.` });
+        if (d4 !== null && d4 > 0 && d4 <= 120) alertas.push({ id: `${key}_r4_proximo`, atencion: false, texto: `⏳ ${escapeHTML(nombre)} cumple 4 años en ${d4} días. Revisar posible coordinación si hay 3 PT posteriores.` });
+        if (d4 !== null && d4 <= 0 && posteriores < 3) alertas.push({ id: `${key}_r4_pendiente_pt`, atencion: false, texto: `ℹ️ ${escapeHTML(nombre)} cumple antigüedad para Rango IV, pero solo tiene ${posteriores}/3 PT posteriores en ${escapeHTML(nombreCentro(centroId))}.` });
+        if (d4 !== null && d4 <= 0 && posteriores >= 3 && !settings.coordinadorAutorizado && settings.sistemaPago !== 'coordinador') alertas.push({ id: `${key}_r4_elegible`, atencion: true, texto: `⭐ ${escapeHTML(nombre)} cumple condición para posible Coordinador/a de Sede: 4 años + ${posteriores} PT posteriores en ${escapeHTML(nombreCentro(centroId))}. Falta autorización de gerencia.` });
+        if ((settings.coordinadorAutorizado || settings.sistemaPago === 'coordinador') && row?.sistemaEfectivo === 'coordinador') alertas.push({ id: `${key}_r4_aplicado`, atencion: false, texto: `🏅 ${escapeHTML(nombre)} tiene Rango IV aplicado. Reducción coordinación: ${dinero(row.coordinacionBonus || 0)}.` });
       });
-      box.classList.toggle('hidden', !alertas.length);
-      box.innerHTML = alertas.length ? alertas.map(a=>`<div class="text-xs p-2 bg-slate-950 border border-slate-800 rounded text-slate-300">${a}</div>`).join('') : '';
+      return alertas;
+    }
+
+    function renderAlertasCarrera(){
+      const panel = document.getElementById('panel-avisos-carrera');
+      const box = document.getElementById('alertas-carrera');
+      if (!panel || !box) return;
+      const todas = calcularAvisosCarrera();
+      panel.classList.toggle('hidden', !todas.length);
+      if (!todas.length) return;
+
+      const ocultos = avisosCarreraOcultosSet();
+      const visibles = todas.filter(a => !ocultos.has(a.id));
+      window._bsAvisosCarreraVisiblesIds = visibles.map(a => a.id);
+      const requierenAtencion = visibles.filter(a => a.atencion).length;
+
+      const resumen = document.getElementById('avisos-carrera-resumen');
+      if (resumen) resumen.textContent = `${visibles.length} aviso${visibles.length === 1 ? '' : 's'}${requierenAtencion ? ` · ${requierenAtencion} requiere${requierenAtencion === 1 ? '' : 'n'} atención` : ''}`;
+
+      const restaurarBtn = document.getElementById('avisos-carrera-restaurar');
+      if (restaurarBtn) {
+        const nOcultos = ocultos.size;
+        restaurarBtn.classList.toggle('hidden', !nOcultos);
+        restaurarBtn.textContent = `Mostrar ${nOcultos} oculto${nOcultos === 1 ? '' : 's'}`;
+      }
+
+      const colapsado = avisosCarreraColapsado();
+      box.classList.toggle('hidden', colapsado);
+      const chevron = document.getElementById('avisos-carrera-chevron');
+      if (chevron) chevron.textContent = colapsado ? '▾ Ver' : '▴ Plegar';
+
+      box.innerHTML = visibles.length
+        ? visibles.map(a => `<div class="flex items-start justify-between gap-2 text-xs p-2 bg-slate-950 border border-slate-800 rounded text-slate-300"><span class="flex-1">${a.texto}</span><button type="button" onclick="ocultarAvisoCarrera('${a.id}')" title="Ocultar este aviso" class="shrink-0 text-slate-600 hover:text-amber-300 leading-none">✕</button></div>`).join('')
+        : '<div class="text-xs text-slate-500 p-2">Todos los avisos de esta sesión están ocultos.</div>';
     }
     function claseDesviacion(valor){ return (valor || 0) > 0 ? 'text-red-300' : ((valor || 0) < 0 ? 'text-emerald-300' : 'text-slate-300'); }
+    function seleccionarCentroFinanzas(id){ centroSeleccionadoFinanzas = id; renderCentrosResumen(); }
+    function renderSelectorCentrosFinanzas(centrosOrden){
+      const sel = document.getElementById('centros-selector');
+      if (!sel) return;
+      if (centroSeleccionadoFinanzas !== 'todos' && !centrosOrden.some(c => c.id === centroSeleccionadoFinanzas)) centroSeleccionadoFinanzas = 'todos';
+      const pill = (id, label, pendiente) => {
+        const activo = centroSeleccionadoFinanzas === id;
+        const base = 'px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wide border transition';
+        const clase = activo ? 'bg-cyan-500 text-slate-950 border-cyan-500' : 'bg-slate-950 text-slate-300 border-slate-700 hover:border-cyan-500/50';
+        return `<button type="button" onclick="seleccionarCentroFinanzas('${escapeHTML(id)}')" class="${base} ${clase}">${escapeHTML(label)}${pendiente ? ' ⚠' : ''}</button>`;
+      };
+      sel.innerHTML = [pill('todos', 'Todos', false)].concat(
+        centrosOrden.map(c => pill(c.id, c.nombre, !economiaCentroConfigurada(c)))
+      ).join('');
+    }
+    function renderComparativaCentrosFinanzas(centrosOrden){
+      return `
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 overflow-x-auto">
+          <table class="w-full text-[11px] min-w-[760px]">
+            <thead class="text-slate-500 uppercase"><tr><th class="text-left py-2">Centro</th><th class="text-right">Clientes</th><th class="text-right">Fact. cartera</th><th class="text-right">PT</th><th class="text-right">BESOUL</th><th class="text-right">Canon</th><th class="text-right">Neto centro</th></tr></thead>
+            <tbody class="divide-y divide-slate-800/60">
+              ${centrosOrden.map(c => `<tr class="hover:bg-slate-900/40 cursor-pointer" onclick="seleccionarCentroFinanzas('${escapeHTML(c.id)}')">
+                <td class="py-2 text-white font-semibold">${escapeHTML(c.nombre)}</td>
+                <td class="text-right">${numero(c.clientes)}</td>
+                <td class="text-right font-mono">${dinero(c.facturacion)}</td>
+                <td class="text-right font-mono text-amber-400">${dinero(c.ptNeto)}</td>
+                <td class="text-right font-mono text-emerald-400">${dinero(c.bsBruto)}</td>
+                <td class="text-right font-mono text-red-300">-${dinero(c.canon)}</td>
+                <td class="text-right font-mono">${economiaCentroConfigurada(c) ? `<b class="text-cyan-400">${dinero(c.bsBruto - c.canon)}</b>` : '<span class="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-full px-2 py-0.5 font-bold uppercase whitespace-nowrap">Pendiente</span>'}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }
     function renderCentrosResumen(){
       const cont = document.getElementById('centros-resumen');
       const centrosOrden = Object.values(calculoActual.centros).filter(c => c.id !== 'sin_centro' || c.trainers.length > 0);
+      renderSelectorCentrosFinanzas(centrosOrden);
       if (!centrosOrden.length) { cont.innerHTML = '<div class="text-xs text-slate-500">Sin datos.</div>'; return; }
-      cont.innerHTML = centrosOrden.map(c => `
+      if (centroSeleccionadoFinanzas === 'todos') { cont.innerHTML = renderComparativaCentrosFinanzas(centrosOrden); return; }
+      const centrosAMostrar = centrosOrden.filter(c => c.id === centroSeleccionadoFinanzas);
+      cont.innerHTML = centrosAMostrar.map(c => `
         <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
           <div class="flex justify-between items-start gap-3">
             <div><h3 class="text-sm font-black text-white">${escapeHTML(c.nombre)}</h3><p class="text-[10px] text-slate-500">${c.trainers.length} entrenador(es) · ${numero(c.clientes)} cliente(s)</p></div>
