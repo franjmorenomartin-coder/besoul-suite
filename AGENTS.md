@@ -34,7 +34,7 @@ Before editing:
 - `crm.html`: leads, trials and lead-to-client conversion.
 - `finanzas.html`: trainer economics, ranges, center costs, company expenses and monthly history.
 - `dashboard.html`: executive analytics.
-- `reservas.html`: public/private customer booking request portal.
+- `portal-cliente.html`: sole public customer-facing portal (sessions, notices, profile, booking request). `reservas.html` was removed 2026-09-16 once its booking engine was ported in and verified at parity (PORTAL-RESERVATIONS-INTEGRATION / REMOVE-RESERVAS-LEGACY).
 - `manifest.json`: PWA metadata.
 - `sw.js`: service worker.
 - `icon-192.png`, `icon-512.png`, `apple-touch-icon.png`: PWA icons.

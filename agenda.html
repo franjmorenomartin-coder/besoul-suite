@@ -1101,7 +1101,6 @@ miércoles 07:00-09:00"></textarea>
                 <div class="flex flex-wrap gap-2">
                     <button type="button" onclick="marcarDisponibilidadLaboral()" class="bg-amber-500/10 text-amber-300 border border-amber-500/30 px-3 py-2 rounded font-bold text-[10px] hover:bg-amber-500/20 transition">L-V 08-14 / 16-21</button>
                     <button type="button" onclick="limpiarBloqueosDisponibilidadSemana()" class="bg-slate-800 text-slate-300 border border-slate-700 px-3 py-2 rounded font-bold text-[10px] hover:text-white transition">Restaurar slots ocultos semana</button>
-                    <button type="button" onclick="copiarLinkPortalReservasGenerico()" class="bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-3 py-2 rounded font-bold text-[10px] hover:bg-cyan-500/20 transition">Copiar link portal clientes</button>
                 </div>
             </div>
             <div class="bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-[11px] text-slate-400 leading-relaxed">
@@ -2324,7 +2323,10 @@ miércoles 07:00-09:00"></textarea>
             reservation_rejected: d => `Hola ${d.nombre}, no hemos podido confirmar tu reserva para ${d.fecha} a las ${d.hora}. Puedes consultar otras franjas disponibles o contactar con nosotros.`,
             appointment_created: d => `Hola ${d.nombre}, hemos agendado tu sesión para ${d.fecha} a las ${d.hora} en ${d.centro}. ¡Te esperamos!`,
             appointment_rescheduled: d => `Hola ${d.nombre}, tu sesión ha sido actualizada. La nueva fecha es ${d.fecha} a las ${d.hora} en ${d.centro}.`,
-            appointment_cancelled: d => `Hola ${d.nombre}, te informamos de que tu sesión prevista para ${d.fecha} a las ${d.hora} ha sido cancelada. Contacta con nosotros si necesitas reprogramarla.`
+            appointment_cancelled: d => `Hola ${d.nombre}, te informamos de que tu sesión prevista para ${d.fecha} a las ${d.hora} ha sido cancelada. Contacta con nosotros si necesitas reprogramarla.`,
+            // PORTAL-CANONICAL-ACCESS: mensaje natural, sin jerga técnica ni el token visible --
+            // el enlace ya lleva el token embebido, pero el texto nunca lo menciona como tal.
+            portal_access: d => `Hola ${d.nombre}, ya tienes acceso a tu Portal BESOUL: ahí puedes ver tus próximas sesiones, tus avisos y reservar nueva sesión cuando quieras. Entra aquí: ${d.url}`
         };
         function crearMensajeWhatsApp(tipo, datos) {
             const plantilla = BS_WHATSAPP_PLANTILLAS[tipo];
@@ -3252,13 +3254,22 @@ function calcularRentabilidadFicha(ficha) {
 
         function actualizarPreviewContadorModal() {
 
-            const mod = document.getElementById('cust-mod').value;
+            // FIX-GROUP-MEMBER-ECONOMICS: mismo motivo que en autoCalcularTarifa() -- cust-mod/
+            // cust-factor están deshabilitados y vacíos para un integrante de grupo (su <select>
+            // nunca tuvo una <option> para 'Miembro Subordinado'). Se resuelven aquí desde el
+            // grupo real para que el contador previsto (Bono/Mensualidad, nº de clases) no
+            // muestre datos del grupo equivocados ni "0 clases".
+            const fichaEnEdicionPreview = idFichaEditando ? (dbClientes[entrenadorVisto] || []).find(c => c.id === idFichaEditando) : null;
+            const esMiembroPreview = esFichaMiembroGrupo(fichaEnEdicionPreview);
+            const fichaGrupoPreview = esMiembroPreview ? buscarFichaPorId(fichaEnEdicionPreview.vinculacion) : null;
 
-            const factor = parseInt(document.getElementById('cust-factor').value) || 1;
+            const mod = esMiembroPreview ? (fichaGrupoPreview?.modalidad || '') : document.getElementById('cust-mod').value;
 
-            const pType = document.getElementById('cust-purchase-type').value;
+            const factor = esMiembroPreview ? (parseInt(fichaGrupoPreview?.factor) || 1) : (parseInt(document.getElementById('cust-factor').value) || 1);
 
-            const pDate = document.getElementById('cust-bono-date').value;
+            const pType = esMiembroPreview ? (fichaGrupoPreview?.tipoCompra || 'Mensualidad') : document.getElementById('cust-purchase-type').value;
+
+            const pDate = esMiembroPreview ? (fichaGrupoPreview?.fechaCompra || '') : document.getElementById('cust-bono-date').value;
 
             const fichaTemporal = {
 
@@ -3840,15 +3851,31 @@ function calcularRentabilidadFicha(ficha) {
         // MOTOR FINANCIERO CORREGIDO Y EXACTO
 
         function autoCalcularTarifa() {
-            const mod = document.getElementById('cust-mod').value;
-            const factor = parseInt(document.getElementById('cust-factor').value) || 1;
+            // FIX-GROUP-MEMBER-ECONOMICS (2026-09-15): al editar un integrante de grupo,
+            // cust-mod/cust-factor están deshabilitados (CLIENT-08) y su <select> NUNCA tuvo una
+            // <option value="Miembro Subordinado"> -- asignarle ese valor deja el <select> sin
+            // ninguna opción seleccionada (comportamiento estándar del DOM: value pasa a ''), así
+            // que este preview leía TARIFAS_2026[''] (undefined) y mostraba 0,00 € en precio
+            // base/facturación/rentabilidad para CUALQUIER integrante, con cualquier descuento.
+            // El importe REALMENTE GUARDADO (facturacionEstadistica, vía importeEfectivoCliente)
+            // siempre fue correcto -- usa tarifaBaseFicha(fichaGrupo), nunca este preview --  por
+            // eso Agenda/Finanzas/Dashboard (que leen facturacionEstadistica) nunca mostraron el
+            // error: es un bug de PREVIEW en el modal, no del motor económico. Se resuelve aquí
+            // usando la MISMA función (tarifaBaseFicha) sobre el GRUPO real del integrante, para
+            // que el preview no pueda divergir nunca del cálculo que de verdad se va a guardar.
+            const fichaEnEdicion = idFichaEditando ? (dbClientes[entrenadorVisto] || []).find(c => c.id === idFichaEditando) : null;
+            const esMiembroEnEdicion = esFichaMiembroGrupo(fichaEnEdicion);
+            const fichaGrupoDelMiembro = esMiembroEnEdicion ? buscarFichaPorId(fichaEnEdicion.vinculacion) : null;
+
+            const mod = esMiembroEnEdicion ? (fichaGrupoDelMiembro?.modalidad || '') : document.getElementById('cust-mod').value;
+            const factor = esMiembroEnEdicion ? (parseInt(fichaGrupoDelMiembro?.factor) || 1) : (parseInt(document.getElementById('cust-factor').value) || 1);
             const descuentoPct = normalizarPorcentajeDescuento(document.getElementById('cust-discount')?.value || 0);
-            
+
             // Personas asumidas por facturación en la matriz
-            let multiplicadorPersonas = 1; 
+            let multiplicadorPersonas = 1;
             if(mod.includes("Pareja")) multiplicadorPersonas = 2;
             if(mod.includes("Trío")) multiplicadorPersonas = 3;
-            
+
             let personasEnGrupo = 1;
             if(tabFichaActiva === 'grupo') {
                 const filas = Array.from(document.querySelectorAll('.member-row'));
@@ -3856,8 +3883,12 @@ function calcularRentabilidadFicha(ficha) {
                 personasEnGrupo = filasConNombre > 0 ? filasConNombre : (filas.length > 0 ? filas.length : 1);
                 if(mod.includes("Grupo Reducido")) multiplicadorPersonas = personasEnGrupo;
             }
+            // Un integrante individual nunca multiplica por cabezas -- su preview es SU importe
+            // por persona (igual que importeEfectivoCliente), no el total del grupo.
 
-            const tarifaBasePersona = TARIFAS_2026[mod] ? (TARIFAS_2026[mod][factor] || TARIFAS_2026[mod][1] || 0) : 0;
+            const tarifaBasePersona = esMiembroEnEdicion
+                ? tarifaBaseFicha(fichaGrupoDelMiembro)
+                : (TARIFAS_2026[mod] ? (TARIFAS_2026[mod][factor] || TARIFAS_2026[mod][1] || 0) : 0);
             const facturacionBaseMensual = tarifaBasePersona * multiplicadorPersonas;
             const descuentoEuros = facturacionBaseMensual - aplicarDescuentoImporte(facturacionBaseMensual, descuentoPct);
             const facturacionTotalMensual = aplicarDescuentoImporte(facturacionBaseMensual, descuentoPct);
@@ -4886,11 +4917,19 @@ function calcularRentabilidadFicha(ficha) {
                 const botonBorrarHTML = (rolActivo === 'admin' && !esVinculado)
                     ? `<button onclick="event.stopPropagation(); borrarFichaCliente('${c.id}')" class="text-slate-600 text-[10px] hover:text-red-400 hover:underline" title="Eliminación física inmediata e irreversible. Uso solo de emergencia — el flujo normal es Solicitar eliminación.">Borrar (legacy)</button>`
                     : '';
-                const botonReservasHTML = (!esVinculado && c.tipo === 'individual' && clienteActivoParaAgenda(c))
-                    ? `<button onclick="event.stopPropagation(); copiarLinkReservaCliente('${c.id}')" class="text-cyan-300 text-xs font-bold hover:underline">Link reservas${c.reservasOnlineActivas === false ? ' (off)' : ''}</button>`
+                // PORTAL-CANONICAL-ACCESS: Portal Cliente es ahora la única vía pública (reservas.html
+                // eliminado) -- 3 acciones explícitas en vez de un único "Link reservas". Las 3 usan el
+                // mismo token/flujo race-safe que ya tenía copiarLinkReservaCliente (ahora
+                // copiarLinkPortalCliente): generan el token si falta y esperan la publicación en
+                // Firestore antes de abrir/copiar/enviar, para no compartir nunca un enlace roto.
+                const offBadgePortal = c.reservasOnlineActivas === false ? ' (reservas off)' : '';
+                const botonesPortalHTML = (!esVinculado && c.tipo === 'individual' && clienteActivoParaAgenda(c))
+                    ? `<button onclick="event.stopPropagation(); abrirPortalCliente('${c.id}')" class="text-cyan-300 text-xs font-bold hover:underline">Abrir Portal${offBadgePortal}</button>
+                       <button onclick="event.stopPropagation(); copiarLinkPortalCliente('${c.id}')" class="text-cyan-300 text-xs font-bold hover:underline">Copiar enlace</button>
+                       <button onclick="event.stopPropagation(); enviarWhatsAppPortalCliente('${c.id}')" class="text-emerald-300 text-xs font-bold hover:underline">Enviar por WhatsApp</button>`
                     : '';
                 // SEC-05 (2026-09-04): solo tiene sentido regenerar un token que ya existe --
-                // si todavía no se ha generado ninguno, "Link reservas" ya lo crea (seguro, CSPRNG).
+                // si todavía no se ha generado ninguno, "Abrir Portal"/"Copiar enlace" ya lo crean (seguro, CSPRNG).
                 const botonRegenerarTokenHTML = (!esVinculado && c.tipo === 'individual' && clienteActivoParaAgenda(c) && c.reservaToken)
                     ? `<button onclick="event.stopPropagation(); regenerarTokenReservaCliente('${c.id}')" class="text-slate-500 text-[10px] hover:text-cyan-300 hover:underline" title="Genera un enlace nuevo y desactiva el anterior de inmediato. Útil si el enlace se ha compartido por error.">Regenerar enlace</button>`
                     : '';
@@ -4939,7 +4978,7 @@ function calcularRentabilidadFicha(ficha) {
                             ${botonVerGrupoHTML}
                             <button onclick="event.stopPropagation(); abrirModalHistoricoCliente('${botonHistoricoId}')" class="text-amber-400 text-xs font-bold hover:underline">Histórico</button>
                             ${esVinculado ? '' : `<button onclick="event.stopPropagation(); abrirModalHistoricoAvisos('${c.id}')" class="text-slate-400 text-xs font-bold hover:underline">Avisos${Array.isArray(c.avisosPortal) && c.avisosPortal.length ? ` (${c.avisosPortal.length})` : ''}</button>`}
-                            ${botonReservasHTML}
+                            ${botonesPortalHTML}
                             ${botonRegenerarTokenHTML}
                             ${botonSolicitarEliminacionHTML}
                         </div>
@@ -6587,8 +6626,9 @@ Cancelar = no hacer nada`,
             // lo que aparenta (documentado en SECURITY_AUDIT_PORTAL.md). crypto.getRandomValues()
             // es un CSPRNG real, nativo en todo navegador evergreen, sin dependencias nuevas.
             // Mismo formato de salida (prefijo res_, resto en minúsculas/dígitos/guion bajo) --
-            // sigue encajando en /^res_[a-z0-9_]{3,60}$/, el mismo validador que ya usan
-            // reservas.html y portal-cliente.html. Los tokens YA EMITIDOS con Math.random() NO se
+            // sigue encajando en /^res_[a-z0-9_]{3,60}$/, el mismo validador que usa
+            // portal-cliente.html (antes también reservas.html, eliminado en REMOVE-RESERVAS-LEGACY).
+            // Los tokens YA EMITIDOS con Math.random() NO se
             // invalidan por este cambio: el formato nunca cambió, solo la fuente de aleatoriedad de
             // los tokens NUEVOS a partir de ahora. Migración de los ya emitidos: progresiva, bajo
             // demanda, vía regenerarTokenReservaCliente() (revoca el antiguo, emite uno nuevo con
@@ -6610,14 +6650,14 @@ Cancelar = no hacer nada`,
         // SEC-05 (2026-09-04): revocación + regeneración bajo demanda. No invalida nada en bloque --
         // solo actúa sobre el cliente concreto que el PT/admin decide regenerar (p.ej. tras compartir
         // el enlace por error). El token ANTERIOR queda con activo:false en su propio documento
-        // besoulPublicClients (ya interpretado como "enlace no activo" tanto por reservas.html como
-        // por portal-cliente.html -- comportamiento ya desplegado, no un mecanismo nuevo), así que
-        // deja de servir de inmediato aunque alguien lo conserve.
+        // besoulPublicClients (ya interpretado como "enlace no activo" por portal-cliente.html --
+        // comportamiento ya desplegado, no un mecanismo nuevo), así que deja de servir de
+        // inmediato aunque alguien lo conserve.
         async function regenerarTokenReservaCliente(idCliente) {
             const c = (dbClientes[entrenadorVisto] || []).find(x => x.id === idCliente);
             if (!c) return;
-            if (!c.reservaToken) { alert('Este cliente todavía no tiene un enlace de reservas generado. Usa "Link reservas" para crear el primero.'); return; }
-            if (!confirm(`¿Regenerar el enlace de reservas de "${c.nombre}"?\n\nEl enlace ANTERIOR dejará de funcionar de inmediato (tanto para reservar como en su Portal Cliente). Tendrás que reenviarle el nuevo enlace.`)) return;
+            if (!c.reservaToken) { alert('Este cliente todavía no tiene un enlace de Portal generado. Usa "Abrir Portal" o "Copiar enlace" para crear el primero.'); return; }
+            if (!confirm(`¿Regenerar el enlace del Portal de "${c.nombre}"?\n\nEl enlace ANTERIOR dejará de funcionar de inmediato. Tendrás que reenviarle el nuevo enlace.`)) return;
             const tokenAnterior = c.reservaToken;
             c.reservaToken = generarTokenReservaCliente();
             localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
@@ -6629,7 +6669,7 @@ Cancelar = no hacer nada`,
             }
             await publicarReservasPublicas();
             renderClientes();
-            copiarLinkReservaCliente(idCliente);
+            copiarLinkPortalCliente(idCliente);
         }
 
         function urlBaseBesoul() {
@@ -6637,8 +6677,11 @@ Cancelar = no hacer nada`,
             return `${window.location.origin}${path}`;
         }
 
-        function urlReservasCliente(token) {
-            return `${urlBaseBesoul()}reservas.html?t=${encodeURIComponent(token || '')}`;
+        function urlPortalCliente(token) {
+            // PORTAL-CANONICAL-ACCESS: URL canónica única para clientes (reservas.html eliminado).
+            // portal-cliente.html acepta tanto ?token= como el antiguo ?t=; se emite siempre con
+            // ?token= porque es el nombre de parámetro canónico hacia delante.
+            return `${urlBaseBesoul()}portal-cliente.html?token=${encodeURIComponent(token || '')}`;
         }
 
         async function copiarTextoBesoul(texto, mensajeOk='Copiado') {
@@ -6650,24 +6693,20 @@ Cancelar = no hacer nada`,
             }
         }
 
-        function copiarLinkPortalReservasGenerico() {
-            copiarTextoBesoul(`${urlBaseBesoul()}reservas.html`, 'Link del portal de reservas copiado. Para clientes reales, usa el botón “Link reservas” de su ficha.');
-        }
-
-        async function copiarLinkReservaCliente(idCliente) {
+        // Garantiza el token del cliente + su publicación en Firestore (besoulPublicClients/{token})
+        // ANTES de devolver la URL -- mismo mecanismo race-safe que ya existía (antes duplicado
+        // dentro de copiarLinkReservaCliente), ahora compartido por las 3 acciones del Portal
+        // (Abrir/Copiar/WhatsApp) para que ninguna pueda abrir/compartir un enlace roto.
+        async function asegurarTokenYPublicarPortalCliente(idCliente) {
             const c = (dbClientes[entrenadorVisto] || []).find(x => x.id === idCliente);
-            if (!c) return;
+            if (!c) return null;
             if (!c.email || !c.telefono) {
-                alert('Este cliente necesita email y teléfono antes de generar/enviar el enlace de reservas.');
-                return;
+                alert('Este cliente necesita email y teléfono antes de generar/enviar su acceso al Portal.');
+                return null;
             }
             if (c.reservasOnlineActivas === false) {
-                if (!confirm('Este cliente tiene reservas online desactivadas. ¿Quieres copiar igualmente el enlace? El portal le indicará que debe contactar con BESOUL.')) return;
+                if (!confirm('Este cliente tiene reservas online desactivadas. ¿Quieres continuar igualmente? El Portal le indicará que debe contactar con BESOUL para reservar.')) return null;
             }
-            // Espera a que el guardado + publicarReservasPublicas() terminen de verdad
-            // antes de copiar el enlace: evita compartir un link cuyo documento
-            // besoulPublicClients/{token} todavía no existe en Firestore (race real
-            // detectado -- antes esto era fire-and-forget).
             if (!c.reservaToken) {
                 c.reservaToken = generarTokenReservaCliente();
                 localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
@@ -6675,7 +6714,25 @@ Cancelar = no hacer nada`,
             } else {
                 await publicarReservasPublicas();
             }
-            copiarTextoBesoul(urlReservasCliente(c.reservaToken), `Link de reservas de ${c.nombre} copiado.`);
+            return c;
+        }
+
+        async function abrirPortalCliente(idCliente) {
+            const c = await asegurarTokenYPublicarPortalCliente(idCliente);
+            if (!c) return;
+            window.open(urlPortalCliente(c.reservaToken), '_blank', 'noopener');
+        }
+
+        async function copiarLinkPortalCliente(idCliente) {
+            const c = await asegurarTokenYPublicarPortalCliente(idCliente);
+            if (!c) return;
+            copiarTextoBesoul(urlPortalCliente(c.reservaToken), `Link del Portal de ${c.nombre} copiado.`);
+        }
+
+        async function enviarWhatsAppPortalCliente(idCliente) {
+            const c = await asegurarTokenYPublicarPortalCliente(idCliente);
+            if (!c) return;
+            abrirWhatsApp(c.telefono, crearMensajeWhatsApp('portal_access', { nombre: c.nombre, url: urlPortalCliente(c.reservaToken) }));
         }
 
         function disponibilidadReservasPorDefecto() {
@@ -6946,7 +7003,7 @@ Cancelar = no hacer nada`,
         // NUNCA la sugiere a un PT (B11), aunque el texto de la pregunta la mencione.
         const CAPACIDADES_PT = [
             { id: 'crear_cliente', nombre: 'Dar de alta un cliente', aliases: ['crear cliente', 'nuevo cliente', 'alta cliente', 'dar de alta', 'meter cliente', 'meto un cliente', 'meto cliente', 'añadir cliente', 'agregar cliente', 'creo un cliente', 'como creo cliente'], roles: ['pt', 'admin'],
-              pasos: ['Abre la pestaña Clientes.', 'Pulsa "+ Alta".', 'Rellena nombre, contacto, modalidad y tipo de compra (Plan o Bono).', 'Guarda -- si tiene email y teléfono, se genera su enlace de reservas automáticamente.'],
+              pasos: ['Abre la pestaña Clientes.', 'Pulsa "+ Alta".', 'Rellena nombre, contacto, modalidad y tipo de compra (Plan o Bono).', 'Guarda -- si tiene email y teléfono, se genera su acceso al Portal automáticamente.'],
               restricciones: ['El precio/tarifa lo determina la modalidad elegida, no se escribe a mano.'], ubicacion: 'clientes', tab: 'clientes' },
             { id: 'editar_cliente', nombre: 'Editar la ficha de un cliente', aliases: ['editar cliente', 'modificar cliente', 'cambiar datos cliente', 'cambiar teléfono', 'cambiar telefono', 'cambio telefono', 'cambio el telefono', 'actualizar ficha'], roles: ['pt', 'admin'],
               pasos: ['Abre la pestaña Clientes.', 'Toca la ficha del cliente.', 'Pulsa "Editar".', 'Cambia el campo que necesites y guarda.'], restricciones: [], ubicacion: 'clientes', tab: 'clientes' },
@@ -6977,10 +7034,10 @@ Cancelar = no hacer nada`,
               restricciones: [], ubicacion: 'agenda', tab: 'agenda' },
             { id: 'ver_sesiones_cliente', nombre: 'Consultar las sesiones que le quedan a un cliente', aliases: ['sesiones restantes', 'cuántas sesiones le quedan', 'cuantas sesiones le quedan', 'consulto sesiones', 'consulto las sesiones', 'ver bono', 'veo bono', 'veo el bono', 'consultar bono', 'sesiones pendientes cliente'], roles: ['pt', 'admin'],
               pasos: ['Abre la pestaña Clientes.', 'El contador (contratadas/usadas/restantes) aparece directamente en la card de cada cliente.'], restricciones: [], ubicacion: 'clientes', tab: 'clientes' },
-            { id: 'link_reservas', nombre: 'Copiar o regenerar el enlace de reservas/Portal', aliases: ['link reservas', 'enlace reservas', 'copiar link', 'regenerar enlace', 'enlace portal'], roles: ['pt', 'admin'],
-              pasos: ['Abre la ficha del cliente.', 'Pulsa "Link reservas" para copiarlo.', 'Si necesitas invalidar el anterior (se compartió por error), pulsa "Regenerar enlace" -- el antiguo deja de funcionar al instante.'], restricciones: [], ubicacion: 'clientes', tab: 'clientes' },
-            { id: 'hacer_reserva', nombre: 'Hacer una reserva desde el enlace del cliente', aliases: ['cómo hago una reserva', 'como hago una reserva', 'reservar por el cliente', 'reserva desde el link'], roles: ['pt', 'admin'],
-              pasos: ['El cliente usa su propio enlace (reservas.html o el Portal) para elegir un hueco libre.', 'La solicitud queda "pendiente" hasta que tú la aceptes o rechaces.'], restricciones: [], ubicacion: 'agenda', tab: 'agenda' },
+            { id: 'link_reservas', nombre: 'Abrir, copiar o enviar el acceso al Portal de un cliente', aliases: ['link reservas', 'enlace reservas', 'copiar link', 'regenerar enlace', 'enlace portal'], roles: ['pt', 'admin'],
+              pasos: ['Abre la ficha del cliente.', 'Pulsa "Abrir Portal", "Copiar enlace" o "Enviar por WhatsApp" según lo que necesites.', 'Si necesitas invalidar el anterior (se compartió por error), pulsa "Regenerar enlace" -- el antiguo deja de funcionar al instante.'], restricciones: [], ubicacion: 'clientes', tab: 'clientes' },
+            { id: 'hacer_reserva', nombre: 'Hacer una reserva desde el Portal del cliente', aliases: ['cómo hago una reserva', 'como hago una reserva', 'reservar por el cliente', 'reserva desde el link'], roles: ['pt', 'admin'],
+              pasos: ['El cliente entra en su Portal (pestaña Agenda → Reservar) y elige un hueco libre.', 'La solicitud queda "pendiente" hasta que tú la aceptes o rechaces.'], restricciones: [], ubicacion: 'agenda', tab: 'agenda' },
             // CLIENT-08/D5 -- capacidades reales que ya existían en el código pero no estaban
             // documentadas ni eran entendidas por el asistente (gap encontrado en la auditoría).
             { id: 'quitar_cliente_grupo', nombre: 'Quitar un cliente de un grupo', aliases: ['quitar cliente del grupo', 'quitar cliente grupo', 'quito a alguien del grupo', 'quito alguien del grupo', 'sacar cliente del grupo', 'eliminar integrante grupo', 'eliminar integrante del grupo', 'quitar integrante grupo'], roles: ['pt', 'admin'],
@@ -8107,8 +8164,9 @@ Cancelar = no hacer nada`,
                         if (!c.reservaToken) c.reservaToken = generarTokenReservaCliente();
                         const ref = fs.collection(BS_PUBLIC_CLIENTS_COLLECTION).doc(c.reservaToken);
                         // CLIENT-01/02 (2026-09-04): campos añadidos para portal-cliente.html --
-                        // MISMO documento por token que reservas.html ya usa (besoulPublicClients
-                        // ya era, de facto, la proyección aislada por cliente que pedía el brief;
+                        // MISMO documento por token que ya usaba reservas.html (eliminado en
+                        // REMOVE-RESERVAS-LEGACY; besoulPublicClients ya era, de facto, la proyección
+                        // aislada por cliente que pedía el brief;
                         // no se crea una colección paralela). contador/proximaSesion se calculan
                         // aquí, en el lado PT ya autenticado, con las MISMAS funciones que usa el
                         // resto de Agenda (calcularContadorClases, dbAgenda) -- el cliente nunca

@@ -24,7 +24,7 @@ Main pages:
 - `crm.html`
 - `finanzas.html`
 - `dashboard.html`
-- `reservas.html`
+- `portal-cliente.html`
 
 ## Technology
 
