@@ -33,6 +33,8 @@ propio motor de cierres de `finanzas.html`, fuera del alcance de esta fórmula c
 node finance-tests/extract.js && node finance-tests/run_tests.cjs
 node finance-tests/centros_extract.js && node finance-tests/run_centros_tests.cjs
 node finance-tests/finanzas_ux_extract.js && node finance-tests/run_finanzas_ux_tests.cjs
+node finance-tests/extract_reparto.js && node finance-tests/run_reparto_actividad_tests.cjs
+node finance-tests/extract_cierre.js && node finance-tests/run_cierre_tests.cjs
 ```
 
 ## FINANZAS-UX-V2 (`finanzas_ux_extract.js` / `run_finanzas_ux_tests.cjs`)
@@ -47,3 +49,23 @@ obsoleto cae de vuelta a "Todos", y el colapso/ocultar del panel de avisos vive 
 `localStorage` (nunca en Firestore, nunca cambia qué avisos existen). `renderAlertasCarrera()`
 en sí (lógica de rangos por antigüedad de cada PT) no se re-verifica aquí porque no cambió en
 FINANZAS-UX-V2 -- solo su presentación pasó de string a `{id, atencion, texto}`.
+
+## Reparto de actividades especiales (`extract_reparto.js` / `run_reparto_actividad_tests.cjs`)
+
+12 casos que reproducen, contra el motor real, el ejemplo pedido explícitamente durante
+QA-BESOUL-MEGA-V3-CONT: Verónica / Alfa Prime / Pilates Máquina, plan general de 8 sesiones (95€
+en el catálogo real `DEFAULT_CATALOGO_ACTIVIDADES`) con reparto 50/35/15 -> 47,50 € PT / 33,25 €
+centro / 14,25 € BESOUL, verificando explícitamente que el share de BESOUL nunca resulta de
+restarle el share del centro al total (la resta duplicada que se pidió descartar). También cubre
+`distribuirReparto()` (método del mayor resto: la suma de las partes nunca se desvía del importe
+original aunque el porcentaje no divida en céntimos exactos) y confirma que Ciclo Indoor conserva
+su propio reparto sin heredar nada de Pilates. No existía ningún test de este reparto antes de
+esta fase.
+
+## Cierre de meses (`extract_cierre.js` / `run_cierre_tests.cjs`)
+
+14 casos para "closed months immutable": un mes con `dbFinanzas.historico[key]` bloquea
+`agregarGasto`/`editarGasto`/`borrarGasto`/`agregarOtroIngreso` (ninguna mutación se aplica, cero
+guardados disparados, el usuario recibe el aviso de mes bloqueado) salvo que el mes se reabra
+explícitamente (`mesCerradoEditando === key`), en cuyo caso las mutaciones sí aplican y reabrir un
+mes no reabre ningún otro. No existía ningún test de este guardián antes de esta fase.
