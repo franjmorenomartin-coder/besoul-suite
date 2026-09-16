@@ -935,7 +935,10 @@ miércoles 07:00-09:00"></textarea>
 
                 </div>
 
-                <button onclick="cerrarModalEntrenadores()" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
+                <div class="flex items-start gap-2 shrink-0">
+                    <button onclick="abrirModalAuditoriaTrainerKey()" title="Detecta si dos entrenadores distintos podrían ser la misma persona (mismo nombre, distinta clave interna) -- solo lectura, no cambia nada." class="text-[10px] font-bold text-cyan-300 hover:underline uppercase tracking-wide whitespace-nowrap pt-0.5">Auditoría trainerKey</button>
+                    <button onclick="cerrarModalEntrenadores()" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
+                </div>
 
             </div>
 
@@ -979,7 +982,30 @@ miércoles 07:00-09:00"></textarea>
 
     </div>
 
-
+    <!-- FIELDPATH-P0 / PORTAL-SLOTS-P0: auditoría de identidad trainerKey, SOLO LECTURA -- nunca
+         escribe nada. Objetivo: detectar de un vistazo si dos entrenadores "parecen" la misma
+         persona bajo dos trainerKey distintos (p.ej. incidente real ya documentado: Miguel
+         Fenech con "Lillo"/"lillo"/"miguel_fenech") -- caso en el que un cliente asignado al
+         trainerKey "equivocado" nunca vería la disponibilidad real de su PT en el Portal, aunque
+         esa disponibilidad exista y esté correctamente guardada. -->
+    <div id="modal-auditoria-trainerkey" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-4xl space-y-4 my-8">
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <h3 class="text-sm font-bold text-cyan-300 uppercase tracking-wider">Auditoría de identidad trainerKey</h3>
+                    <p class="text-[11px] text-slate-400 mt-1">Solo lectura -- no modifica nada. Para cada entrenador: si tiene disponibilidad activa configurada y cuántos clientes/sesiones tiene bajo SU clave interna. Si dos filas parecen ser la misma persona bajo claves distintas, un cliente puede estar asignado a la clave "equivocada" (sin disponibilidad real) mientras la persona real publica sus huecos bajo la otra.</p>
+                </div>
+                <button onclick="document.getElementById('modal-auditoria-trainerkey').classList.add('hidden')" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
+            </div>
+            <div id="posibles-duplicados-trainerkey" class="hidden bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-[11px] text-amber-100"></div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-[11px] min-w-[760px]">
+                    <thead class="text-slate-500 uppercase"><tr><th class="text-left py-2">trainerKey</th><th class="text-left">Nombre</th><th class="text-right">Clientes</th><th class="text-right">Sesiones en agenda</th><th class="text-right">Días con disponibilidad activa</th><th class="text-left">Estado</th></tr></thead>
+                    <tbody id="auditoria-trainerkey-tbody" class="divide-y divide-slate-800/60"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
     <!-- MODAL NOTAS -->
 
@@ -3473,6 +3499,74 @@ function calcularRentabilidadFicha(ficha) {
 
             document.getElementById('modal-entrenadores').classList.add('hidden');
 
+        }
+
+        // FIELDPATH-P0 / PORTAL-SLOTS-P0: auditoría de identidad trainerKey, SOLO LECTURA -- lee
+        // exclusivamente el estado ya cargado en memoria (dbCredenciales/dbClientes/dbAgenda/
+        // dbDisponibilidadReservas), sin ninguna consulta ni escritura nueva a Firestore. Objetivo
+        // explícito: exponer, para cada trainerKey, si tiene disponibilidad activa configurada --
+        // el incidente real (un cliente asignado a un trainerKey "hermano" sin disponibilidad,
+        // mientras la persona real publica sus huecos bajo otra clave) es indetectable desde la
+        // UI normal porque cada pantalla solo mira SU PROPIO trainerKey a la vez.
+        function diasDisponibilidadActivaTrainer(trainerKey) {
+            const disp = dbDisponibilidadReservas[trainerKey];
+            if (!disp || !disp.semanal) return 0;
+            return Object.values(disp.semanal).filter(d => d && d.activo === true && Array.isArray(d.bloques) && d.bloques.length > 0).length;
+        }
+
+        function construirAuditoriaTrainerKey() {
+            const filas = Object.keys(dbCredenciales || {}).sort().map(key => {
+                const cred = dbCredenciales[key] || {};
+                const clientes = (dbClientes[key] || []).length;
+                const sesiones = Object.keys(dbAgenda[key] || {}).length;
+                const diasActivos = diasDisponibilidadActivaTrainer(key);
+                let estado = 'OK';
+                if (clientes > 0 && diasActivos === 0) estado = 'Tiene clientes pero SIN disponibilidad activa publicada';
+                else if (clientes === 0 && diasActivos === 0) estado = 'Sin clientes ni disponibilidad';
+                return { key, nombre: cred.nombre || key, clientes, sesiones, diasActivos, estado };
+            });
+
+            // Heurística de posible duplicado: mismo nombre normalizado (minúsculas, sin acentos,
+            // sin espacios) bajo DOS O MÁS trainerKey distintos -- exactamente el patrón del
+            // incidente real ya documentado (Miguel Fenech con más de una clave a la vez). No
+            // asume nada sobre NINGÚN nombre concreto -- es una comparación genérica aplicable a
+            // cualquier PT.
+            const porNombreNormalizado = {};
+            filas.forEach(f => {
+                const norm = normalizarTrainerKey(f.nombre);
+                (porNombreNormalizado[norm] = porNombreNormalizado[norm] || []).push(f.key);
+            });
+            const duplicados = Object.entries(porNombreNormalizado).filter(([, keys]) => keys.length > 1);
+
+            return { filas, duplicados };
+        }
+
+        function abrirModalAuditoriaTrainerKey() {
+            if (rolActivo !== 'admin') return;
+            const { filas, duplicados } = construirAuditoriaTrainerKey();
+
+            const avisoDuplicados = document.getElementById('posibles-duplicados-trainerkey');
+            if (duplicados.length) {
+                avisoDuplicados.classList.remove('hidden');
+                avisoDuplicados.innerHTML = '⚠ Posible identidad duplicada -- mismo nombre bajo varias claves internas distintas: ' +
+                    duplicados.map(([, keys]) => keys.map(k => `<b>${escapeHTML(k)}</b>`).join(' / ')).join(' · ') +
+                    '. Si un cliente está asignado a la clave sin disponibilidad, el Portal le mostrará "Sin huecos disponibles" aunque la persona real SÍ la tenga publicada bajo la otra clave.';
+            } else {
+                avisoDuplicados.classList.add('hidden');
+                avisoDuplicados.innerHTML = '';
+            }
+
+            document.getElementById('auditoria-trainerkey-tbody').innerHTML = filas.map(f => `
+                <tr>
+                    <td class="py-2 text-white font-mono font-bold">${escapeHTML(f.key)}</td>
+                    <td>${escapeHTML(f.nombre)}</td>
+                    <td class="text-right">${f.clientes}</td>
+                    <td class="text-right">${f.sesiones}</td>
+                    <td class="text-right">${f.diasActivos}</td>
+                    <td class="${f.estado === 'OK' ? 'text-emerald-400' : 'text-amber-300'}">${escapeHTML(f.estado)}</td>
+                </tr>`).join('');
+
+            document.getElementById('modal-auditoria-trainerkey').classList.remove('hidden');
         }
 
 
@@ -8228,6 +8322,30 @@ Cancelar = no hacer nada`,
             try {
                 if (!window.firebase || !firebase.apps.length || !usuarioFirebaseActual) return;
                 const fs = firebase.firestore();
+                // PORTAL-SLOTS-P0 (2026-09-16): hallazgo real confirmado contra producción. Esta
+                // función se dispara tras CUALQUIER guardado en Firestore (guardarEstadoNubeAgenda),
+                // republicando de golpe TODOS los trainerKeys, pero leía disponibilidad/clientes/
+                // agenda de las variables globales dbDisponibilidadReservas/dbClientes/dbAgenda tal
+                // como estuvieran en memoria del navegador que disparó esa acción -- si ese navegador
+                // llevaba tiempo abierto y su listener en tiempo real aún no había recibido el último
+                // cambio guardado por OTRO trainer en OTRA sesión, esta función republicaba de todos
+                // modos para ese trainer con datos obsoletos, sobrescribiendo en silencio una
+                // publicación correcta y reciente con una vacía/desactualizada. Confirmado en
+                // producción vía lectura de solo lectura: un PT con disponibilidad real guardada y
+                // persistente en besoulSuite/agenda tenía su besoulPublicSchedule publicado con 0
+                // días activos y un updatedAt POSTERIOR al último guardado real de esa disponibilidad
+                // -- solo se explica por una publicación disparada con una copia local obsoleta. Fix:
+                // releer el documento real directamente del servidor (nunca de caché local)
+                // inmediatamente antes de construir el batch, para que la publicación siempre parta
+                // del estado confirmado en Firestore, nunca de una copia en memoria potencialmente
+                // desincronizada. Aplica igual para cualquier trainerKey, sin excepciones.
+                if (window.bsAgendaCloudDocRef) {
+                    const snapshotFresco = await window.bsAgendaCloudDocRef.get({ source: 'server' });
+                    const datosFrescos = snapshotFresco.data() || {};
+                    dbClientes = datosFrescos.clientes || {};
+                    dbAgenda = datosFrescos.agenda || {};
+                    dbDisponibilidadReservas = datosFrescos.disponibilidadReservas || {};
+                }
                 const batch = fs.batch();
                 const hoy = new Date(); hoy.setHours(0,0,0,0);
                 const diasPublicar = 60;

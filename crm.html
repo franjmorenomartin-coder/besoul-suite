@@ -1141,10 +1141,19 @@ async function sincronizarPruebaAgendaDesdeLead(leadId, leadData, avisar = true)
       const agendaData = snap.exists ? snap.data() : {};
       const agenda = agendaData.agenda || {};
       const pruebasCRM = agendaData.pruebasCRM || {};
-      const updatePayload = {
+      const camposSimples = {
         ultimaActualizacionLocal: ahoraISO(),
         actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
       };
+      // FIX-PT-AVAILABILITY-PERSISTENCE-V2 (mismo hallazgo aplicado aquí): un trainerKey puede
+      // legítimamente contener un punto (causa raíz real ya confirmada en agenda.html con
+      // "fran.jmorenomartin"). Antes, estas rutas se construían como STRINGS concatenados
+      // ("agenda.<trainerKey>.<clave>") dentro de un objeto para tx.update() -- Firestore
+      // interpreta CADA punto de esa cadena como separador de ruta anidada real, así que un
+      // trainerKey con punto habría partido la ruta en más niveles de los que existen realmente.
+      // rutasAnidadas guarda los segmentos SIN concatenar; FieldPath(...) los usa como literales,
+      // sin volver a partirlos, al construir la llamada final a tx.update() (forma varargs).
+      const rutasAnidadas = [];
 
       // Borrar cualquier prueba anterior de este lead, tanto del mapa principal agenda
       // como del mapa auxiliar pruebasCRM. Usamos FieldValue.delete() sobre rutas exactas
@@ -1154,7 +1163,7 @@ async function sincronizarPruebaAgendaDesdeLead(leadId, leadData, avisar = true)
         Object.keys(agendaTrainer).forEach(clave => {
           const cita = agendaTrainer[clave];
           if (cita && cita.esPruebaCRM === true && cita.leadId === leadId) {
-            updatePayload[`agenda.${trainerKey}.${clave}`] = firebase.firestore.FieldValue.delete();
+            rutasAnidadas.push({ segmentos: ['agenda', trainerKey, clave], valor: firebase.firestore.FieldValue.delete() });
             if (!borrados[trainerKey]) borrados[trainerKey] = {};
             borrados[trainerKey][clave] = true;
           }
@@ -1166,7 +1175,7 @@ async function sincronizarPruebaAgendaDesdeLead(leadId, leadData, avisar = true)
         Object.keys(agendaTrainer).forEach(clave => {
           const cita = agendaTrainer[clave];
           if (cita && cita.leadId === leadId) {
-            updatePayload[`pruebasCRM.${trainerKey}.${clave}`] = firebase.firestore.FieldValue.delete();
+            rutasAnidadas.push({ segmentos: ['pruebasCRM', trainerKey, clave], valor: firebase.firestore.FieldValue.delete() });
             if (!borrados[trainerKey]) borrados[trainerKey] = {};
             borrados[trainerKey][clave] = true;
           }
@@ -1188,8 +1197,8 @@ async function sincronizarPruebaAgendaDesdeLead(leadId, leadData, avisar = true)
             resultado.error = `La franja ${claveInfo.clave.replace('_', ' ')} ya está ocupada por ${ocupada.nombre || 'otra cita'}. Lead guardado, pero la prueba no se ha colocado en Agenda.`;
           } else {
             const citaPrueba = objetoPruebaAgendaCRM(leadId, leadData, claveInfo);
-            updatePayload[`agenda.${trainerKey}.${claveInfo.clave}`] = citaPrueba;
-            updatePayload[`pruebasCRM.${trainerKey}.${claveInfo.clave}`] = citaPrueba;
+            rutasAnidadas.push({ segmentos: ['agenda', trainerKey, claveInfo.clave], valor: citaPrueba });
+            rutasAnidadas.push({ segmentos: ['pruebasCRM', trainerKey, claveInfo.clave], valor: citaPrueba });
             resultado.visible = true;
             resultado.clave = claveInfo.clave;
 
@@ -1207,8 +1216,14 @@ async function sincronizarPruebaAgendaDesdeLead(leadId, leadData, avisar = true)
       // campo literal, no como ruta anidada -- la prueba nunca llegaba a verse realmente en
       // Agenda pese a no dar ningún error. tx.update() sí interpreta las claves con punto del
       // payload como ruta anidada real (incluido con FieldValue.delete(), su caso de uso
-      // estándar). Mismo payload dirigido de siempre, solo cambia el método de escritura.
-      tx.update(agendaRef, updatePayload);
+      // estándar) -- PERO solo si esa clave nunca tiene más puntos de los que representan
+      // niveles reales, algo que ya no podemos garantizar si trainerKey contiene un punto (ver
+      // rutasAnidadas arriba). Se pasa cada ruta como FieldPath explícito (forma varargs) en vez
+      // de reconstruir el string, para que un trainerKey con punto nunca se parta de más.
+      const argsUpdate = [];
+      Object.keys(camposSimples).forEach(k => argsUpdate.push(k, camposSimples[k]));
+      rutasAnidadas.forEach(r => argsUpdate.push(new firebase.firestore.FieldPath(...r.segmentos), r.valor));
+      tx.update(agendaRef, ...argsUpdate);
     });
 
     await db.collection('besoulLeads').doc(leadId).set({

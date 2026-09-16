@@ -1810,6 +1810,23 @@
       entrada._registradoPor = usuarioFinanzasEmail || '';
       versiones.push(entrada);
     }
+    // FIX-PT-AVAILABILITY-PERSISTENCE-V2 (mismo hallazgo, aplicado aquí): un trainerKey/actividadId
+    // puede legítimamente contener un punto (ver agenda.html, causa raíz real ya confirmada en
+    // producción con "fran.jmorenomartin"). Firestore .update({'a.b.c': valor}) interpreta CADA
+    // punto de la cadena como separador de ruta anidada real -- así que
+    // "trainerActividades.fran.jmorenomartin" se guardaría en 3 niveles, nunca en el campo plano
+    // trainerActividades["fran.jmorenomartin"] que actividadesAutorizadasTrainer() lee. FieldPath
+    // trata el segundo segmento (la clave dinámica completa) como LITERAL, sin volver a partirlo.
+    // Comportamiento idéntico para cualquier clave sin puntos (la inmensa mayoría hoy).
+    function payloadParaUpdateFirestoreFinanzas(payload){
+      const args = [];
+      Object.keys(payload).forEach(key => {
+        const partes = key.split('.');
+        if (partes.length > 1) args.push(new firebase.firestore.FieldPath(partes[0], partes.slice(1).join('.')), payload[key]);
+        else args.push(key, payload[key]);
+      });
+      return args;
+    }
     function guardarCatalogoActividadesNube(payload){
       if (!agendaRef) return;
       // Hallazgo real (confirmado contra el código fuente del SDK de Firestore, mismo bug ya
@@ -1820,7 +1837,7 @@
       // trainerActividades.<key> que lee actividadesAutorizadasTrainer() nunca se llegaba a
       // tocar. update() sí interpreta las claves con punto del objeto como ruta anidada real.
       // Mismo payload dirigido de siempre, solo cambia el método de escritura.
-      agendaRef.update(payload).catch(err => { console.error(err); alert('Error guardando el catálogo de actividades. Revisa permisos/reglas.'); });
+      agendaRef.update(...payloadParaUpdateFirestoreFinanzas(payload)).catch(err => { console.error(err); alert('Error guardando el catálogo de actividades. Revisa permisos/reglas.'); });
     }
     function crearActividadEspecial(){
       const nombre = prompt('Nombre de la nueva actividad especial (ej.: Pilates Máquina):');
