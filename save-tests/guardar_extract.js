@@ -291,8 +291,9 @@ function generarTokenReservaCliente() {
             // lo que aparenta (documentado en SECURITY_AUDIT_PORTAL.md). crypto.getRandomValues()
             // es un CSPRNG real, nativo en todo navegador evergreen, sin dependencias nuevas.
             // Mismo formato de salida (prefijo res_, resto en minúsculas/dígitos/guion bajo) --
-            // sigue encajando en /^res_[a-z0-9_]{3,60}$/, el mismo validador que ya usan
-            // reservas.html y portal-cliente.html. Los tokens YA EMITIDOS con Math.random() NO se
+            // sigue encajando en /^res_[a-z0-9_]{3,60}$/, el mismo validador que usa
+            // portal-cliente.html (antes también reservas.html, eliminado en REMOVE-RESERVAS-LEGACY).
+            // Los tokens YA EMITIDOS con Math.random() NO se
             // invalidan por este cambio: el formato nunca cambió, solo la fuente de aleatoriedad de
             // los tokens NUEVOS a partir de ahora. Migración de los ya emitidos: progresiva, bajo
             // demanda, vía regenerarTokenReservaCliente() (revoca el antiguo, emite uno nuevo con

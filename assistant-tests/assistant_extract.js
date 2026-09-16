@@ -30,7 +30,7 @@ const CENTROS_BESOUL_INFO = [
 
 const CAPACIDADES_PT = [
             { id: 'crear_cliente', nombre: 'Dar de alta un cliente', aliases: ['crear cliente', 'nuevo cliente', 'alta cliente', 'dar de alta', 'meter cliente', 'meto un cliente', 'meto cliente', 'añadir cliente', 'agregar cliente', 'creo un cliente', 'como creo cliente'], roles: ['pt', 'admin'],
-              pasos: ['Abre la pestaña Clientes.', 'Pulsa "+ Alta".', 'Rellena nombre, contacto, modalidad y tipo de compra (Plan o Bono).', 'Guarda -- si tiene email y teléfono, se genera su enlace de reservas automáticamente.'],
+              pasos: ['Abre la pestaña Clientes.', 'Pulsa "+ Alta".', 'Rellena nombre, contacto, modalidad y tipo de compra (Plan o Bono).', 'Guarda -- si tiene email y teléfono, se genera su acceso al Portal automáticamente.'],
               restricciones: ['El precio/tarifa lo determina la modalidad elegida, no se escribe a mano.'], ubicacion: 'clientes', tab: 'clientes' },
             { id: 'editar_cliente', nombre: 'Editar la ficha de un cliente', aliases: ['editar cliente', 'modificar cliente', 'cambiar datos cliente', 'cambiar teléfono', 'cambiar telefono', 'cambio telefono', 'cambio el telefono', 'actualizar ficha'], roles: ['pt', 'admin'],
               pasos: ['Abre la pestaña Clientes.', 'Toca la ficha del cliente.', 'Pulsa "Editar".', 'Cambia el campo que necesites y guarda.'], restricciones: [], ubicacion: 'clientes', tab: 'clientes' },
@@ -61,10 +61,10 @@ const CAPACIDADES_PT = [
               restricciones: [], ubicacion: 'agenda', tab: 'agenda' },
             { id: 'ver_sesiones_cliente', nombre: 'Consultar las sesiones que le quedan a un cliente', aliases: ['sesiones restantes', 'cuántas sesiones le quedan', 'cuantas sesiones le quedan', 'consulto sesiones', 'consulto las sesiones', 'ver bono', 'veo bono', 'veo el bono', 'consultar bono', 'sesiones pendientes cliente'], roles: ['pt', 'admin'],
               pasos: ['Abre la pestaña Clientes.', 'El contador (contratadas/usadas/restantes) aparece directamente en la card de cada cliente.'], restricciones: [], ubicacion: 'clientes', tab: 'clientes' },
-            { id: 'link_reservas', nombre: 'Copiar o regenerar el enlace de reservas/Portal', aliases: ['link reservas', 'enlace reservas', 'copiar link', 'regenerar enlace', 'enlace portal'], roles: ['pt', 'admin'],
-              pasos: ['Abre la ficha del cliente.', 'Pulsa "Link reservas" para copiarlo.', 'Si necesitas invalidar el anterior (se compartió por error), pulsa "Regenerar enlace" -- el antiguo deja de funcionar al instante.'], restricciones: [], ubicacion: 'clientes', tab: 'clientes' },
-            { id: 'hacer_reserva', nombre: 'Hacer una reserva desde el enlace del cliente', aliases: ['cómo hago una reserva', 'como hago una reserva', 'reservar por el cliente', 'reserva desde el link'], roles: ['pt', 'admin'],
-              pasos: ['El cliente usa su propio enlace (reservas.html o el Portal) para elegir un hueco libre.', 'La solicitud queda "pendiente" hasta que tú la aceptes o rechaces.'], restricciones: [], ubicacion: 'agenda', tab: 'agenda' },
+            { id: 'link_reservas', nombre: 'Abrir, copiar o enviar el acceso al Portal de un cliente', aliases: ['link reservas', 'enlace reservas', 'copiar link', 'regenerar enlace', 'enlace portal'], roles: ['pt', 'admin'],
+              pasos: ['Abre la ficha del cliente.', 'Pulsa "Abrir Portal", "Copiar enlace" o "Enviar por WhatsApp" según lo que necesites.', 'Si necesitas invalidar el anterior (se compartió por error), pulsa "Regenerar enlace" -- el antiguo deja de funcionar al instante.'], restricciones: [], ubicacion: 'clientes', tab: 'clientes' },
+            { id: 'hacer_reserva', nombre: 'Hacer una reserva desde el Portal del cliente', aliases: ['cómo hago una reserva', 'como hago una reserva', 'reservar por el cliente', 'reserva desde el link'], roles: ['pt', 'admin'],
+              pasos: ['El cliente entra en su Portal (pestaña Agenda → Reservar) y elige un hueco libre.', 'La solicitud queda "pendiente" hasta que tú la aceptes o rechaces.'], restricciones: [], ubicacion: 'agenda', tab: 'agenda' },
             // CLIENT-08/D5 -- capacidades reales que ya existían en el código pero no estaban
             // documentadas ni eran entendidas por el asistente (gap encontrado en la auditoría).
             { id: 'quitar_cliente_grupo', nombre: 'Quitar un cliente de un grupo', aliases: ['quitar cliente del grupo', 'quitar cliente grupo', 'quito a alguien del grupo', 'quito alguien del grupo', 'sacar cliente del grupo', 'eliminar integrante grupo', 'eliminar integrante del grupo', 'quitar integrante grupo'], roles: ['pt', 'admin'],

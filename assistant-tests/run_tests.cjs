@@ -351,5 +351,16 @@ console.log('\n=== ASSISTANT-PORTAL-CAPUCHINOS: el asistente conoce Capuchinos (
   check('centros', 'CENTROS_BESOUL_INFO tiene exactamente un centro con economía pendiente', M.CENTROS_BESOUL_INFO.filter(c => !c.economiaConfigurada).length, actual => actual === 1);
 }
 
+console.log('\n=== PORTAL-CANONICAL-ACCESS/REMOVE-RESERVAS-LEGACY: el asistente nunca menciona reservas.html ===');
+{
+  const linkR = M.respuestaCapacidadPT(M.CAPACIDADES_PT.find(c => c.id === 'link_reservas'));
+  const hacerR = M.respuestaCapacidadPT(M.CAPACIDADES_PT.find(c => c.id === 'hacer_reserva'));
+  check('portal', '"link_reservas" no menciona reservas.html', linkR.texto.includes('reservas.html'), actual => actual === false);
+  check('portal', '"hacer_reserva" no menciona reservas.html', hacerR.texto.includes('reservas.html'), actual => actual === false);
+  check('portal', '"link_reservas" sí menciona el Portal', /Portal/.test(linkR.texto), actual => actual === true);
+  const todasLasRespuestas = M.CAPACIDADES_PT.map(c => M.respuestaCapacidadPT(c).texto).join('\n');
+  check('portal', 'ninguna capacidad menciona reservas.html en toda la lista', todasLasRespuestas.includes('reservas.html'), actual => actual === false);
+}
+
 console.log(`\n${pass}/${pass + fail} pruebas OK.`);
 if (fail > 0) { console.log('\nFALLOS:'); fails.forEach(f => console.log(' -', f)); process.exitCode = 1; }
