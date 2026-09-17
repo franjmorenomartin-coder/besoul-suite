@@ -1625,20 +1625,30 @@ miércoles 07:00-09:00"></textarea>
             // funciona igual en los tests, que no cargan el SDK real de Firebase).
             if (typeof firebase !== 'undefined' && firebase.firestore && valor instanceof firebase.firestore.FieldValue) return null;
             if (valor && valor._methodName) return null;
+            // HARDENING (QA 2026-09-17): "vistos" debe representar los ANCESTROS del nodo actual
+            // en ESTA rama de la recursión, no "todo objeto visto en cualquier parte del árbol" --
+            // lo segundo daba un falso positivo de "referencia circular" cuando el MISMO objeto
+            // aparece dos veces por caminos distintos sin anidarse entre sí (p.ej.
+            // sincronizarPruebasCRMDentroDeAgenda() enlaza, POR REFERENCIA (nunca clonada), la
+            // misma prueba CRM dentro de dbAgenda además de dbPruebasCRM -- ambos acaban en el
+            // mismo payload de guardarEstadoNubeAgenda(), sin que exista ningún ciclo real).
+            // Se elimina el nodo de "vistos" al terminar de recorrer sus hijos (backtrack), así
+            // solo detecta un objeto que se contiene a sí mismo, directa o indirectamente.
             if (vistos.has(valor)) return { ruta: rutaActual || '(raíz)', motivo: 'referencia circular' };
             vistos.add(valor);
+            let problema = null;
             if (Array.isArray(valor)) {
-                for (let i = 0; i < valor.length; i++) {
-                    const problema = valorInvalidoParaFirestore(valor[i], `${rutaActual}[${i}]`, vistos);
-                    if (problema) return problema;
+                for (let i = 0; i < valor.length && !problema; i++) {
+                    problema = valorInvalidoParaFirestore(valor[i], `${rutaActual}[${i}]`, vistos);
                 }
-                return null;
+            } else {
+                for (const clave of Object.keys(valor)) {
+                    problema = valorInvalidoParaFirestore(valor[clave], rutaActual ? `${rutaActual}.${clave}` : clave, vistos);
+                    if (problema) break;
+                }
             }
-            for (const clave of Object.keys(valor)) {
-                const problema = valorInvalidoParaFirestore(valor[clave], rutaActual ? `${rutaActual}.${clave}` : clave, vistos);
-                if (problema) return problema;
-            }
-            return null;
+            vistos.delete(valor);
+            return problema;
         }
 
         function estadoLocalAgendaParaNube(trainerKeyScope) {
@@ -1868,6 +1878,38 @@ miércoles 07:00-09:00"></textarea>
 
             try {
 
+                // HARDENING-PRE-BASELINE-v3.2.1: instantánea de "lo último que esta pestaña sabe
+                // con certeza que hay en el servidor", por trainerKey -- usada únicamente por
+                // guardarEstadoNubeAgenda() para detectar (nunca para fusionar) si otra sesión ha
+                // guardado cambios de ESTE MISMO entrenador entre medias. Ver esa función.
+                // IMPORTANTE (2): debe ser una copia profunda, NUNCA las mismas referencias que
+                // dbClientes/dbDisponibilidadReservas/etc. -- esos objetos se MUTAN en el sitio en
+                // más de un punto del código (p.ej. guardarDisponibilidadReservas():
+                // "dbDisponibilidadReservas[entrenadorVisto] = nuevoValor" antes de guardar). Si
+                // esta instantánea compartiera referencia, esa mutación optimista contaminaría el
+                // propio "estado conocido" usado como base de comparación, dando un falso conflicto
+                // en TODOS los guardados, incluso sin ninguna otra sesión de por medio.
+                // IMPORTANTE (3, QA 2026-09-17 -- P0 real, SEGUNDA vuelta): tiene que capturarse
+                // AQUÍ, ANTES de "dbAgenda = data.agenda" (más abajo) -- ese "=" es una asignación
+                // de REFERENCIA, no una copia: dbAgenda y data.agenda pasan a ser el MISMO objeto
+                // en memoria. sincronizarPruebasCRMDentroDeAgenda() muta dbAgenda EN EL SITIO para
+                // pintar en Agenda las pruebas CRM que todavía no están fusionadas de verdad en el
+                // campo "agenda" del servidor (su propio comentario lo dice: "solo en
+                // memoria/local antes de renderizar") -- y como dbAgenda === data.agenda, esa
+                // mutación ensucia igualmente data.agenda. Un primer intento de arreglo que leía
+                // "data.agenda" DESPUÉS de esa mutación (en vez de dbAgenda) parecía correcto pero
+                // seguía viendo el mismo objeto ya mutado -- confirmado con un negative control que
+                // reprodujo el conflicto incluso así. La única captura realmente segura es ANTES
+                // de que exista cualquier alias hacia data.agenda/data.pruebasCRM/etc., con
+                // JSON.parse(JSON.stringify(...)) rompiendo el enlace de una vez. Causa raíz real
+                // del P0 reportado en QA tras activar FASE 2 (visible al "ver como" un PT con una
+                // valoración/prueba CRM agendada -- conflicto falso, determinista, en cada
+                // guardado de ese entrenador, sin que nadie más escribiera nada).
+                window.bsUltimoServidorConocido = JSON.parse(JSON.stringify({
+                    clientes: data.clientes || {}, agenda: data.agenda || {}, pruebasCRM: data.pruebasCRM || {},
+                    disponibilidadReservas: data.disponibilidadReservas || {}, historicoClientes: data.historicoClientes || {},
+                }));
+
                 // Los entrenadores vienen de besoulUsers, no del documento de agenda.
                 // Así evitamos perder el modo admin o el selector si el campo credenciales de agenda quedó antiguo.
                 dbCredenciales = sanitizarCredenciales(dbCredenciales || CREDENCIALES_BASE);
@@ -1886,22 +1928,6 @@ miércoles 07:00-09:00"></textarea>
                 dbTrainerActividades = data.trainerActividades || {};
                 dbTarifasActividadVersiones = data.tarifasActividadVersiones || {};
                 dbRepartoActividadVersiones = data.repartoActividadVersiones || {};
-
-                // HARDENING-PRE-BASELINE-v3.2.1: instantánea de "lo último que esta pestaña sabe
-                // con certeza que hay en el servidor", por trainerKey -- usada únicamente por
-                // guardarEstadoNubeAgenda() para detectar (nunca para fusionar) si otra sesión ha
-                // guardado cambios de ESTE MISMO entrenador entre medias. Ver esa función.
-                // IMPORTANTE: debe ser una copia profunda, NUNCA las mismas referencias que
-                // dbClientes/dbDisponibilidadReservas/etc. -- esos objetos se MUTAN en el sitio en
-                // más de un punto del código (p.ej. guardarDisponibilidadReservas():
-                // "dbDisponibilidadReservas[entrenadorVisto] = nuevoValor" antes de guardar). Si
-                // esta instantánea compartiera referencia, esa mutación optimista contaminaría el
-                // propio "estado conocido" usado como base de comparación, dando un falso conflicto
-                // en TODOS los guardados, incluso sin ninguna otra sesión de por medio.
-                window.bsUltimoServidorConocido = JSON.parse(JSON.stringify({
-                    clientes: dbClientes, agenda: dbAgenda, pruebasCRM: dbPruebasCRM,
-                    disponibilidadReservas: dbDisponibilidadReservas, historicoClientes: dbHistoricoClientes,
-                }));
 
                 localStorage.setItem('bs_db_credenciales_v6', JSON.stringify(dbCredenciales));
 

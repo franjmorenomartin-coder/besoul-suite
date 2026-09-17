@@ -10,20 +10,30 @@ function valorInvalidoParaFirestore(valor, rutaActual = '', vistos = new Set()) 
             // funciona igual en los tests, que no cargan el SDK real de Firebase).
             if (typeof firebase !== 'undefined' && firebase.firestore && valor instanceof firebase.firestore.FieldValue) return null;
             if (valor && valor._methodName) return null;
+            // HARDENING (QA 2026-09-17): "vistos" debe representar los ANCESTROS del nodo actual
+            // en ESTA rama de la recursión, no "todo objeto visto en cualquier parte del árbol" --
+            // lo segundo daba un falso positivo de "referencia circular" cuando el MISMO objeto
+            // aparece dos veces por caminos distintos sin anidarse entre sí (p.ej.
+            // sincronizarPruebasCRMDentroDeAgenda() enlaza, POR REFERENCIA (nunca clonada), la
+            // misma prueba CRM dentro de dbAgenda además de dbPruebasCRM -- ambos acaban en el
+            // mismo payload de guardarEstadoNubeAgenda(), sin que exista ningún ciclo real).
+            // Se elimina el nodo de "vistos" al terminar de recorrer sus hijos (backtrack), así
+            // solo detecta un objeto que se contiene a sí mismo, directa o indirectamente.
             if (vistos.has(valor)) return { ruta: rutaActual || '(raíz)', motivo: 'referencia circular' };
             vistos.add(valor);
+            let problema = null;
             if (Array.isArray(valor)) {
-                for (let i = 0; i < valor.length; i++) {
-                    const problema = valorInvalidoParaFirestore(valor[i], `${rutaActual}[${i}]`, vistos);
-                    if (problema) return problema;
+                for (let i = 0; i < valor.length && !problema; i++) {
+                    problema = valorInvalidoParaFirestore(valor[i], `${rutaActual}[${i}]`, vistos);
                 }
-                return null;
+            } else {
+                for (const clave of Object.keys(valor)) {
+                    problema = valorInvalidoParaFirestore(valor[clave], rutaActual ? `${rutaActual}.${clave}` : clave, vistos);
+                    if (problema) break;
+                }
             }
-            for (const clave of Object.keys(valor)) {
-                const problema = valorInvalidoParaFirestore(valor[clave], rutaActual ? `${rutaActual}.${clave}` : clave, vistos);
-                if (problema) return problema;
-            }
-            return null;
+            vistos.delete(valor);
+            return problema;
         }
 
 function estadoLocalAgendaParaNube(trainerKeyScope) {
