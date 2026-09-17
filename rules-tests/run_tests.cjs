@@ -139,6 +139,7 @@ async function main() {
   })());
   await checkOk('PT A puede crear su propio besoulPublicClients (trainerKey=pta)', ptA.collection('besoulPublicClients').doc('res_nuevoTokenDeA0000000000000').set({ trainerKey: 'pta', clientId: 'nuevo', clientName: 'x' }));
   await checkDenied('PT A NO puede crear un besoulPublicClients a nombre de OTRO trainerKey', ptA.collection('besoulPublicClients').doc('res_tokenFalsoDeB000000000000').set({ trainerKey: 'ptb', clientId: 'x', clientName: 'x' }));
+  await checkOk('QA 2026-09-17: ADMIN SÍ puede crear un besoulPublicClients a nombre de OTRO trainerKey (viendo-como ese PT, publicando un cliente nuevo)', admin.collection('besoulPublicClients').doc('res_tokenCreadoPorAdmin00000000').set({ trainerKey: 'ptb', clientId: 'nuevo', clientName: 'x' }));
   await checkOk('CLIENTE (portal, sin auth) puede actualizar SOLO avisosLeidos de su propia ficha', anon.collection('besoulPublicClients').doc(TOKEN_A).update({ avisosLeidos: ['aviso1'] }));
   await checkDenied('CLIENTE (portal, sin auth) NO puede tocar ningún otro campo (p.ej. sesionesContratadas)', anon.collection('besoulPublicClients').doc(TOKEN_A).update({ sesionesContratadas: 999 }));
 

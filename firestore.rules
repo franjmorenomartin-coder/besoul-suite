@@ -220,8 +220,16 @@ service cloud.firestore {
       allow get: if true;
       allow list: if false;
 
-      // Solo se puede crear el propio (trainerKey del creador).
-      allow create: if isActiveUser() && request.resource.data.trainerKey == myTrainerKey();
+      // Solo se puede crear el propio (trainerKey del creador) -- salvo ADMIN, que crea en
+      // nombre del trainerKey real del cliente al publicar/republicar mientras "ve como" ese PT
+      // (publicarReservasPublicasParaTrainer(), primera publicación de un cliente nuevo = create,
+      // no update). ASIMETRÍA REAL encontrada en QA (2026-09-17): update/delete de esta colección
+      // YA tenían el bypass isAdmin() desde el diseño original; create nunca lo tuvo -- un admin
+      // viendo-como un PT con al menos un cliente sin publicar todavía no podía publicarlo (el
+      // batch de ESE trainerKey fallaba con permission-denied, aislado por trainerKey gracias al
+      // fix de publicación por-lote independiente, así que nunca tumbaba el guardado en sí, pero
+      // sí dejaba a ese cliente sin enlace de reservas). Ver rules-tests/run_admin_viewas_repro.cjs.
+      allow create: if isAdmin() || (isActiveUser() && request.resource.data.trainerKey == myTrainerKey());
 
       // Solo el dueño puede actualizar, y no puede reasignarlo a otro trainerKey.
       // CLIENT-09 (2026-09-04, propuesta -- NO desplegada, sin código cliente que la use todavía):

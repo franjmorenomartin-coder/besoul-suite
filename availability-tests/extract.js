@@ -35,6 +35,7 @@ const funciones = [
   'valorInvalidoParaFirestore',
   'estadoLocalAgendaParaNube',
   'guardarEstadoNubeAgenda',
+  'mensajeErrorGuardadoAgenda',
   'payloadParaUpdateFirestore',
   'programarGuardadoNubeAgenda',
   'aplicarEstadoNubeAgenda',

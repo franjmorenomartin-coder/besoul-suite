@@ -194,6 +194,23 @@ function guardarEstadoNubeAgenda(trainerKeyScope) {
 
         }
 
+function mensajeErrorGuardadoAgenda(err) {
+            const code = err && err.code || '';
+            if (code === 'conflict') {
+                return (err && err.message) || 'Otra sesión ha guardado cambios de este entrenador que esta pantalla todavía no tenía. Recarga la página antes de reintentar para no perder ese cambio.';
+            }
+            if (code === 'permission-denied') {
+                return 'Tu sesión no tiene permiso para guardar este cambio ahora mismo. Cierra sesión y vuelve a entrar; si sigue sin funcionar, contacta con administración.';
+            }
+            if (code === 'no-trainer-scope' || code === 'invalid-payload') {
+                return (err && err.message) || 'No se pudo preparar el guardado. Recarga la página e inténtalo de nuevo.';
+            }
+            if (code === 'unavailable' || code === 'deadline-exceeded' || code === 'cancelled') {
+                return 'No hay conexión con el servidor ahora mismo. Revisa tu conexión e inténtalo de nuevo.';
+            }
+            return 'Ha ocurrido un error inesperado al guardar. Inténtalo de nuevo; si se repite, contacta con administración.';
+        }
+
 function payloadParaUpdateFirestore(payload) {
             const args = [];
             Object.keys(payload).forEach(key => {
@@ -475,8 +492,8 @@ async function guardarDisponibilidadReservas() {
                 localStorage.setItem('bs_db_disponibilidad_reservas_v6', JSON.stringify(dbDisponibilidadReservas));
                 renderAgenda();
                 if (btn) { btn.disabled = false; btn.textContent = 'Guardar disponibilidad'; }
-                const motivo = resultado?.err ? (resultado.err.message || resultado.err.code || 'error desconocido') : 'la app está sincronizando otro cambio en este instante';
-                alert(`No se ha podido guardar la disponibilidad en el servidor (${motivo}). Se ha restaurado la disponibilidad anterior en pantalla. Vuelve a intentarlo.`);
+                const motivo = resultado?.err ? mensajeErrorGuardadoAgenda(resultado.err) : 'la app está sincronizando otro cambio en este instante -- vuelve a intentarlo en unos segundos.';
+                alert(`No se ha podido guardar la disponibilidad en el servidor. Se ha restaurado la disponibilidad anterior en pantalla. ${motivo}`);
                 return;
             }
 

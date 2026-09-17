@@ -635,7 +635,7 @@ async function guardarCliente() {
                 renderClientes();
 
                 console.error(`[BESOUL Agenda] guardarCliente: fallo al guardar en Firestore · trainerKey=${scopeGuardado} · clientId=${ficha.id} · code=${err?.code || '(sin código)'} · message=${err?.message || err}`, err);
-                alert('No se ha podido guardar la ficha en el servidor. Revisa tu conexión e inténtalo de nuevo -- el cambio NO se ha guardado.');
+                alert(`No se ha podido guardar la ficha en el servidor -- el cambio NO se ha guardado. ${mensajeErrorGuardadoAgenda(err)}`);
 
             } finally {
 

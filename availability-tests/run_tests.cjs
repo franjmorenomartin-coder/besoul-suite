@@ -211,7 +211,7 @@ function nuevaSesion(firestoreMock, { domValores = {}, credencialesIniciales = {
       get dbDisponibilidadReservas() { return dbDisponibilidadReservas; }, set dbDisponibilidadReservas(v) { dbDisponibilidadReservas = v; },
       get dbClientes() { return dbClientes; }, set dbClientes(v) { dbClientes = v; },
       get dbAgenda() { return dbAgenda; },
-      guardarDisponibilidadReservas, guardarEstadoNubeAgenda, programarGuardadoNubeAgenda, aplicarEstadoNubeAgenda,
+      guardarDisponibilidadReservas, guardarEstadoNubeAgenda, mensajeErrorGuardadoAgenda, programarGuardadoNubeAgenda, aplicarEstadoNubeAgenda,
       disponibilidadTrainerActual, disponibilidadReservasPorDefecto, normalizarTrainerKey,
       disponibilidadTrainerLectura, bloquesDisponibilidadFecha, asegurarDisponibilidadTrainerEditable,
       disponibilidadListaParaEditar, payloadParaUpdateFirestore, trainerKeyDesdeEmail,
@@ -645,6 +645,24 @@ console.log('\n=== MULTI-TAB (mismo PT): una pestaña obsoleta no borra silencio
   const tabC = nuevaSesion(fsx, { credencialesIniciales: CREDS_2PT });
   await fsx.flush();
   check('una recarga posterior ve ese mismo resultado, coherente (no revierte a un estado intermedio)', tabC.dbDisponibilidadReservas.carmen.semanal['1'], { activo: true, bloques: [{ inicio: '14:00', fin: '18:00' }] });
+}
+
+// ============================================================
+console.log('\n=== P0 (QA 2026-09-17): mensajeErrorGuardadoAgenda() da un mensaje DISTINTO según la causa real ===');
+// ============================================================
+{
+  const s = nuevaSesion(crearFirestoreMock(null), {});
+  const mConflict = s.mensajeErrorGuardadoAgenda({ code: 'conflict' }); // sin message: prueba el texto por defecto
+  const mPermission = s.mensajeErrorGuardadoAgenda({ code: 'permission-denied', message: 'Missing or insufficient permissions.' });
+  const mNetwork = s.mensajeErrorGuardadoAgenda({ code: 'unavailable', message: 'x' });
+  const mUnknown = s.mensajeErrorGuardadoAgenda({ code: 'algo-nunca-visto', message: 'x' });
+  check('conflicto: mensaje habla de "otra sesión"/"recarga"', /otra sesión|recarga/i.test(mConflict), true);
+  check('permission-denied: mensaje NUNCA es el genérico de "revisa tu conexión"', /conexión/i.test(mPermission), false);
+  check('permission-denied: mensaje habla de sesión/permiso, no de red', /permiso|sesión/i.test(mPermission), true);
+  check('red/unavailable: mensaje SÍ habla de conexión', /conexión/i.test(mNetwork), true);
+  check('los 3 mensajes son mutuamente distintos entre sí', new Set([mConflict, mPermission, mNetwork]).size, 3);
+  check('código desconocido: no lanza, da un mensaje genérico razonable', typeof mUnknown === 'string' && mUnknown.length > 10, true);
+  check('ningún mensaje expone el code/stack técnico en crudo al usuario', [mConflict, mPermission, mNetwork, mUnknown].every(m => !/permission-denied|unavailable|algo-nunca-visto/.test(m)), true);
 }
 
 console.log(`\n${pass}/${pass + fail} pruebas OK.`);
