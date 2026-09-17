@@ -1650,6 +1650,18 @@ miércoles 07:00-09:00"></textarea>
             // completo). "notas" sigue siendo un mapa plano (clave "trainerKey__clave", no
             // anidado) y por eso se envía entero como excepción documentada — riesgo residual
             // menor y aceptado, ver BESOUL_WORK_STATE.md.
+            //
+            // HARDENING-PRE-BASELINE-v3.2.1 (2026-09-17): el fallback legacy que existía aquí
+            // ("sin trainerKey conocido, escribe el documento COMPLETO de todos los entrenadores")
+            // se retira. Auditoría de TODOS los llamadores de guardarEstadoNubeAgenda()/
+            // programarGuardadoNubeAgenda() confirmó que ninguno depende hoy de recibir ese
+            // fallback: o pasan un trainerKey explícito, o dependen de `entrenadorVisto`, que se
+            // fija una única vez en el login (línea ~3409) y nunca se vacía después salvo el borde
+            // `if (!dbCredenciales[entrenadorVisto]) entrenadorVisto = usuarioLogeado || ... || ''`
+            // (línea ~1854) -- un caso raro pero posible si la primera carga de dbCredenciales
+            // llega vacía. Sin un fallback legítimo real, se devuelve null en vez de un payload de
+            // documento completo: ver guardarEstadoNubeAgenda(), que ahora trata null como fallo
+            // explícito en vez de escribir a ciegas.
             if (trainerKeyScope) {
                 return {
                     [`clientes.${trainerKeyScope}`]: dbClientes[trainerKeyScope] || [],
@@ -1662,24 +1674,7 @@ miércoles 07:00-09:00"></textarea>
                 };
             }
 
-            // Fallback legacy (sin trainerKey conocido): documento completo, como antes.
-            return {
-
-                // En la versión con Firebase Authentication, los usuarios/roles se leen de besoulUsers.
-                // No guardamos credenciales dentro del documento de agenda para evitar que una copia antigua
-                // sobrescriba el selector de entrenadores o elimine perfiles por error.
-                clientes: dbClientes || {},
-
-                agenda: dbAgenda || {},
-                pruebasCRM: dbPruebasCRM || {},
-                disponibilidadReservas: dbDisponibilidadReservas || {},
-
-                notas: dbNotas || {},
-                historicoClientes: dbHistoricoClientes || {},
-
-                ultimaActualizacionLocal: new Date().toISOString()
-
-            };
+            return null;
 
         }
 
@@ -1730,6 +1725,15 @@ miércoles 07:00-09:00"></textarea>
             try {
 
                 const scope = trainerKeyScope || entrenadorVisto;
+
+                // HARDENING-PRE-BASELINE-v3.2.1: sin trainerKey conocido no hay guardado seguro
+                // posible -- estadoLocalAgendaParaNube() devuelve null a propósito en vez del
+                // antiguo fallback de documento completo. Fallar aquí, explícito y detectable,
+                // en vez de sobrescribir en silencio los datos de TODOS los entrenadores.
+                if (!scope) {
+                    console.error('[BESOUL Agenda] guardarEstadoNubeAgenda: sin trainerKey de scope (entrenadorVisto vacío) -- guardado BLOQUEADO para evitar sobrescribir el documento completo.');
+                    return Promise.resolve({ ok: false, err: { code: 'no-trainer-scope', message: 'No se pudo determinar el entrenador afectado; guardado cancelado por seguridad.' } });
+                }
 
                 const payload = estadoLocalAgendaParaNube(scope);
 

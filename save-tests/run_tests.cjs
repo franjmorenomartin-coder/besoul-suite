@@ -233,6 +233,29 @@ const FACTOR_1_5 = ['1','2','3','4','5'];
     check('NO elimina ni "arregla" nada -- solo detecta (no muta el objeto de entrada)', (() => { const o = { a: undefined, b: 1 }; const copia = JSON.stringify(Object.keys(o)); v(o); return JSON.stringify(Object.keys(o)) === copia; })());
   }
 
+  console.log('\n=== 6. HARDENING-PRE-BASELINE-v3.2.1: estadoLocalAgendaParaNube() ya NO tiene fallback de documento completo ===');
+  {
+    const dbClientes = { a: [{ id: 'ca' }], b: [{ id: 'cb' }] };
+    const dbAgenda = { a: {}, b: {} };
+    const dbPruebasCRM = { a: {}, b: {} };
+    const dbDisponibilidadReservas = { a: {}, b: {} };
+    const dbHistoricoClientes = { a: {}, b: {} };
+    const dbNotas = { 'a__nota1': 'x' };
+    const sandbox = new Function(
+      'dbClientes', 'dbAgenda', 'dbPruebasCRM', 'dbDisponibilidadReservas', 'dbHistoricoClientes', 'dbNotas',
+      extracted + '\nreturn { estadoLocalAgendaParaNube };'
+    )(dbClientes, dbAgenda, dbPruebasCRM, dbDisponibilidadReservas, dbHistoricoClientes, dbNotas);
+
+    check('sin trainerKey (undefined) -> null, NUNCA un payload de documento completo', sandbox.estadoLocalAgendaParaNube(undefined) === null);
+    check('sin trainerKey (string vacío) -> null', sandbox.estadoLocalAgendaParaNube('') === null);
+
+    const payloadA = sandbox.estadoLocalAgendaParaNube('a');
+    const claves = Object.keys(payloadA);
+    check('con trainerKey: SOLO claves de ruta punteada dirigidas a "a" (+ notas/ultimaActualizacionLocal), nunca "clientes"/"agenda" a secas', claves.every(k => k.includes('.a') || k === 'notas' || k === 'ultimaActualizacionLocal'), claves.join(', '));
+    check('con trainerKey: no incluye ninguna clave que exponga los datos de "b"', !claves.some(k => k.includes('.b')));
+    check('con trainerKey: el payload de clientes.a es EXACTAMENTE la porción de "a", no el mapa completo', JSON.stringify(payloadA['clientes.a']) === JSON.stringify(dbClientes.a));
+  }
+
   console.log(`\n${pass}/${pass + fail} pruebas OK.`);
   if (fail > 0) { console.log('\nFALLOS:'); fails.forEach(f => console.log(' - ' + f)); process.exitCode = 1; }
 })().catch(err => { console.error('ERROR EJECUTANDO TESTS:', err); process.exitCode = 1; });
