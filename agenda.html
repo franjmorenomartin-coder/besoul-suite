@@ -3737,7 +3737,16 @@ function calcularRentabilidadFicha(ficha) {
 
             if (!user || !nombre || !email) { alert('Clave interna, nombre visible y email Firebase son obligatorios.'); return; }
 
-            if (!/^[a-z0-9._-]+$/.test(user)) { alert('La clave interna solo puede contener letras, números, punto, guion y guion bajo.'); return; }
+            // HARDENING-PRE-BASELINE-v3.2.1: el punto queda prohibido SOLO para trainerKeys
+            // NUEVOS a partir de aquí -- es la causa raíz real de 3 incidentes de corrupción de
+            // field-path ya parcheados (ver payloadParaUpdateFirestore()/
+            // payloadParaUpdateFirestoreFinanzas() más arriba). Los trainerKeys existentes con
+            // punto (confirmado en producción: "fran.jmorenomartin") NO se tocan ni se migran --
+            // normalizarTrainerKey() en sí sigue aceptando puntos porque se usa también para
+            // normalizar/comparar claves YA existentes (auditoría de duplicados, línea ~3558) y
+            // no debe dejar de reconocerlas. Esta validación solo cierra la puerta de entrada a
+            // que se creen MÁS trainerKeys con punto desde ahora.
+            if (!/^[a-z0-9_-]+$/.test(user)) { alert('La clave interna solo puede contener letras, números y guion/guion bajo (el punto ya no está permitido en claves NUEVAS: es la causa raíz de un bug de guardado ya corregido para las claves antiguas que lo tenían).'); return; }
 
             if (dbCredenciales[user]) { alert('Ya existe un entrenador con esa clave interna.'); return; }
 
