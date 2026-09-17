@@ -131,6 +131,26 @@ console.log('\n=== crm.html: sincronizarPruebaAgendaDesdeLead() -- trainerKey co
   check('...y es la nueva clave, no la antigua', Object.keys(remoto2.agenda[trainerKeyConPunto])[0], resultado3.clave);
 }
 
+// ============================================================
+console.log('\n=== HARDENING-PRE-BASELINE-v3.2.1: crearEntrenador() rechaza el punto SOLO para claves NUEVAS ===');
+// ============================================================
+{
+  const agendaHtml = fs.readFileSync(path.join(__dirname, '..', 'agenda.html'), 'utf8');
+  const m = /if \(!(\/\^\[a-z0-9_-\]\+\$\/)\.test\(user\)\)/.exec(agendaHtml);
+  check('crearEntrenador() usa el regex endurecido (sin punto) para validar trainerKeys NUEVOS', !!m, true);
+  const regexNuevaClave = m ? new RegExp(m[1].slice(1, -1)) : /^$/;
+
+  check('clave nueva SIN punto: aceptada', regexNuevaClave.test('miguel_luna'), true);
+  check('clave nueva CON punto: rechazada (causa raíz cerrada para altas nuevas)', regexNuevaClave.test('miguel.luna'), false);
+
+  // normalizarTrainerKey() en sí NO debe tocarse -- se sigue usando para normalizar/comparar
+  // trainerKeys YA EXISTENTES con punto (auditoría de duplicados, construirAuditoriaTrainerKey()),
+  // y trainerKeyDesdeEmail()/el resto de la app deben seguir reconociendo "fran.jmorenomartin"
+  // sin ninguna migración. Verifica que el propio normalizador sigue aceptando el punto.
+  const mNorm = /function normalizarTrainerKey\(valor\) \{[\s\S]*?replace\(\/\[\^a-z0-9\._-\]\/g, ''\)/.exec(agendaHtml);
+  check('normalizarTrainerKey() en sí sigue aceptando el punto (no se toca, compatibilidad con claves existentes)', !!mNorm, true);
+}
+
 console.log(`\n${pass}/${pass + fail} pruebas OK.`);
 if (fail > 0) { console.log('\nFALLOS:'); fails.forEach(f => console.log(' -', f)); process.exitCode = 1; }
 }

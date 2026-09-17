@@ -57,6 +57,18 @@ function estadoLocalAgendaParaNube(trainerKeyScope) {
             // completo). "notas" sigue siendo un mapa plano (clave "trainerKey__clave", no
             // anidado) y por eso se envía entero como excepción documentada — riesgo residual
             // menor y aceptado, ver BESOUL_WORK_STATE.md.
+            //
+            // HARDENING-PRE-BASELINE-v3.2.1 (2026-09-17): el fallback legacy que existía aquí
+            // ("sin trainerKey conocido, escribe el documento COMPLETO de todos los entrenadores")
+            // se retira. Auditoría de TODOS los llamadores de guardarEstadoNubeAgenda()/
+            // programarGuardadoNubeAgenda() confirmó que ninguno depende hoy de recibir ese
+            // fallback: o pasan un trainerKey explícito, o dependen de `entrenadorVisto`, que se
+            // fija una única vez en el login (línea ~3409) y nunca se vacía después salvo el borde
+            // `if (!dbCredenciales[entrenadorVisto]) entrenadorVisto = usuarioLogeado || ... || ''`
+            // (línea ~1854) -- un caso raro pero posible si la primera carga de dbCredenciales
+            // llega vacía. Sin un fallback legítimo real, se devuelve null en vez de un payload de
+            // documento completo: ver guardarEstadoNubeAgenda(), que ahora trata null como fallo
+            // explícito en vez de escribir a ciegas.
             if (trainerKeyScope) {
                 return {
                     [`clientes.${trainerKeyScope}`]: dbClientes[trainerKeyScope] || [],
@@ -69,24 +81,7 @@ function estadoLocalAgendaParaNube(trainerKeyScope) {
                 };
             }
 
-            // Fallback legacy (sin trainerKey conocido): documento completo, como antes.
-            return {
-
-                // En la versión con Firebase Authentication, los usuarios/roles se leen de besoulUsers.
-                // No guardamos credenciales dentro del documento de agenda para evitar que una copia antigua
-                // sobrescriba el selector de entrenadores o elimine perfiles por error.
-                clientes: dbClientes || {},
-
-                agenda: dbAgenda || {},
-                pruebasCRM: dbPruebasCRM || {},
-                disponibilidadReservas: dbDisponibilidadReservas || {},
-
-                notas: dbNotas || {},
-                historicoClientes: dbHistoricoClientes || {},
-
-                ultimaActualizacionLocal: new Date().toISOString()
-
-            };
+            return null;
 
         }
 
@@ -107,6 +102,15 @@ function guardarEstadoNubeAgenda(trainerKeyScope) {
             try {
 
                 const scope = trainerKeyScope || entrenadorVisto;
+
+                // HARDENING-PRE-BASELINE-v3.2.1: sin trainerKey conocido no hay guardado seguro
+                // posible -- estadoLocalAgendaParaNube() devuelve null a propósito en vez del
+                // antiguo fallback de documento completo. Fallar aquí, explícito y detectable,
+                // en vez de sobrescribir en silencio los datos de TODOS los entrenadores.
+                if (!scope) {
+                    console.error('[BESOUL Agenda] guardarEstadoNubeAgenda: sin trainerKey de scope (entrenadorVisto vacío) -- guardado BLOQUEADO para evitar sobrescribir el documento completo.');
+                    return Promise.resolve({ ok: false, err: { code: 'no-trainer-scope', message: 'No se pudo determinar el entrenador afectado; guardado cancelado por seguridad.' } });
+                }
 
                 const payload = estadoLocalAgendaParaNube(scope);
 
@@ -134,13 +138,51 @@ function guardarEstadoNubeAgenda(trainerKeyScope) {
                 // cambiaba. .update() SÍ interpreta las claves con punto del objeto como ruta
                 // anidada real (fieldPathFromDotSeparatedString) -- es el método correcto
                 // para este payload dirigido, sin cambiar su forma.
-                // Devuelve la promesa (antes se descartaba) para que quien lo necesite
-                // pueda esperar a que el guardado+publicación terminen de verdad, sin
-                // cambiar el comportamiento de las llamadas existentes que la ignoran.
-                return window.bsAgendaCloudDocRef.update(...payloadParaUpdateFirestore(payload))
+
+                // HARDENING-PRE-BASELINE-v3.2.1: guardarEstadoNubeAgenda() construye su payload a
+                // partir del estado LOCAL en memoria (dbClientes[scope], etc.), no de una lectura
+                // fresca -- así que ni una relectura del servidor justo antes de escribir basta por
+                // sí sola (get(source:'server') + update() SIGUE pudiendo pisar en silencio un
+                // cambio de la MISMA scope guardado por otra pestaña/sesión que esta pestaña
+                // todavía no ha aplicado vía su propio onSnapshot). En vez de fusionar a ciegas
+                // (arriesgado sin conocer con certeza qué cambió en cada caso -- ver auditoría),
+                // se usa una transacción real para DETECTAR el conflicto y abortar el guardado en
+                // vez de sobrescribirlo en silencio: si lo que el servidor tiene AHORA MISMO para
+                // este trainerKey ya no coincide con lo último que esta pestaña sincronizó
+                // (bsUltimoServidorConocido, actualizado en cada aplicarEstadoNubeAgenda()),
+                // significa que otra sesión guardó algo de este mismo entrenador entre medias.
+                // Comportamiento en el caso común (sin conflicto): idéntico a antes. En el caso de
+                // conflicto real: el guardado se cancela con un error claro en vez de perder el
+                // cambio ajeno silenciosamente -- objetivo explícito de esta fase.
+                const CAMPOS_CONCURRENCIA_COMPARABLES = ['clientes', 'agenda', 'pruebasCRM', 'disponibilidadReservas', 'historicoClientes'];
+                const conocidoPrevio = window.bsUltimoServidorConocido;
+                const docRef = window.bsAgendaCloudDocRef;
+
+                return docRef.firestore.runTransaction(async tx => {
+                    const snap = await tx.get(docRef);
+                    const actual = snap.exists ? (snap.data() || {}) : {};
+                    const huboConflicto = conocidoPrevio ? CAMPOS_CONCURRENCIA_COMPARABLES.some(campo => {
+                        const previo = JSON.stringify((conocidoPrevio[campo] || {})[scope] ?? null);
+                        const fresco = JSON.stringify((actual[campo] || {})[scope] ?? null);
+                        return previo !== fresco;
+                    }) : false;
+                    if (huboConflicto) {
+                        const errConflicto = new Error('Conflicto de concurrencia detectado para trainerKey=' + scope);
+                        errConflicto.code = 'conflict';
+                        throw errConflicto;
+                    }
+                    tx.update(docRef, ...payloadParaUpdateFirestore(payload));
+                })
                     .then(() => publicarReservasPublicas())
                     .then(() => ({ ok: true }))
-                    .catch(err => { console.error('Error guardando agenda en Firebase:', err); return { ok: false, err }; });
+                    .catch(err => {
+                        if (err && err.code === 'conflict') {
+                            console.error(`[BESOUL Agenda] guardarEstadoNubeAgenda: CONFLICTO de concurrencia para trainerKey=${scope} -- otra sesión guardó cambios de este entrenador que esta pestaña aún no había recibido. Guardado cancelado para no sobrescribirlos.`);
+                            return { ok: false, err: { code: 'conflict', message: 'Se han detectado cambios más recientes de este entrenador guardados desde otra sesión/pestaña. Recarga la página antes de volver a guardar para no perder esos cambios.' } };
+                        }
+                        console.error('Error guardando agenda en Firebase:', err);
+                        return { ok: false, err };
+                    });
 
             } catch (err) {
 
@@ -210,7 +252,21 @@ function aplicarEstadoNubeAgenda(data) {
                 dbTarifasActividadVersiones = data.tarifasActividadVersiones || {};
                 dbRepartoActividadVersiones = data.repartoActividadVersiones || {};
 
-
+                // HARDENING-PRE-BASELINE-v3.2.1: instantánea de "lo último que esta pestaña sabe
+                // con certeza que hay en el servidor", por trainerKey -- usada únicamente por
+                // guardarEstadoNubeAgenda() para detectar (nunca para fusionar) si otra sesión ha
+                // guardado cambios de ESTE MISMO entrenador entre medias. Ver esa función.
+                // IMPORTANTE: debe ser una copia profunda, NUNCA las mismas referencias que
+                // dbClientes/dbDisponibilidadReservas/etc. -- esos objetos se MUTAN en el sitio en
+                // más de un punto del código (p.ej. guardarDisponibilidadReservas():
+                // "dbDisponibilidadReservas[entrenadorVisto] = nuevoValor" antes de guardar). Si
+                // esta instantánea compartiera referencia, esa mutación optimista contaminaría el
+                // propio "estado conocido" usado como base de comparación, dando un falso conflicto
+                // en TODOS los guardados, incluso sin ninguna otra sesión de por medio.
+                window.bsUltimoServidorConocido = JSON.parse(JSON.stringify({
+                    clientes: dbClientes, agenda: dbAgenda, pruebasCRM: dbPruebasCRM,
+                    disponibilidadReservas: dbDisponibilidadReservas, historicoClientes: dbHistoricoClientes,
+                }));
 
                 localStorage.setItem('bs_db_credenciales_v6', JSON.stringify(dbCredenciales));
 

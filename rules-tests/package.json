@@ -1,0 +1,8 @@
+{
+  "name": "besoul-rules-tests",
+  "description": "HARDENING-PRE-BASELINE-v3.2.1: pruebas reales de autorizacion de firestore.rules contra el Firebase Emulator Suite (@firebase/rules-unit-testing, oficial). Nunca toca Firestore real -- projectId 'demo-besoul-suite' (prefijo demo- fuerza modo emulador puro en el SDK). No forma parte del deploy de la app.",
+  "private": true,
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4"
+  }
+}

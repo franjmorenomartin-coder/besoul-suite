@@ -31,32 +31,77 @@ function crearFirestoreMock(estadoInicial) {
     if (typeof campo === 'string' && campo.includes('.')) { setEnRuta(estado, campo.split('.'), deepClone(valor)); return; }
     estado[campo] = deepClone(valor);
   }
-  return {
-    docRef: {
-      update(...args) {
-        return new Promise((resolve, reject) => {
-          try {
-            if (estado === null) { reject(new Error('NOT_FOUND')); return; }
-            if (args.length === 1 && args[0] && typeof args[0] === 'object' && !(args[0] instanceof FieldPathFalso)) {
-              Object.keys(args[0]).forEach(clave => aplicarCampo(clave, args[0][clave]));
-            } else {
-              for (let i = 0; i < args.length; i += 2) aplicarCampo(args[i], args[i + 1]);
-            }
-            microtasksPendientes.push(() => { notificar(); resolve(); });
-          } catch (e) { reject(e); }
-        });
-      },
-      onSnapshot(cb) {
-        listeners.push(cb);
-        microtasksPendientes.push(() => cb({ exists: estado !== null, data: () => deepClone(estado) }));
-        return () => { const i = listeners.indexOf(cb); if (i >= 0) listeners.splice(i, 1); };
-      }
+  const docRef = {
+    update(...args) {
+      return new Promise((resolve, reject) => {
+        try {
+          if (estado === null) { reject(new Error('NOT_FOUND')); return; }
+          if (args.length === 1 && args[0] && typeof args[0] === 'object' && !(args[0] instanceof FieldPathFalso)) {
+            Object.keys(args[0]).forEach(clave => aplicarCampo(clave, args[0][clave]));
+          } else {
+            for (let i = 0; i < args.length; i += 2) aplicarCampo(args[i], args[i + 1]);
+          }
+          microtasksPendientes.push(() => { notificar(); resolve(); });
+        } catch (e) { reject(e); }
+      });
     },
+    onSnapshot(cb) {
+      listeners.push(cb);
+      microtasksPendientes.push(() => cb({ exists: estado !== null, data: () => deepClone(estado) }));
+      return () => { const i = listeners.indexOf(cb); if (i >= 0) listeners.splice(i, 1); };
+    }
+  };
+  // HARDENING-PRE-BASELINE-v3.2.1: guardarEstadoNubeAgenda() ahora escribe vía
+  // docRef.firestore.runTransaction() (detección de conflicto de concurrencia same-trainerKey) --
+  // ver availability-tests/README y concurrency-tests/README para el detalle completo.
+  docRef.firestore = {
+    runTransaction(fn) {
+      return new Promise((resolve, reject) => {
+        let escrituraPendiente = null;
+        const tx = {
+          get(ref) {
+            return new Promise((resGet) => {
+              microtasksPendientes.push(() => resGet({ exists: estado !== null, data: () => deepClone(estado) }));
+            });
+          },
+          update(ref, ...args) { escrituraPendiente = args; }
+        };
+        fn(tx).then(() => {
+          try {
+            if (escrituraPendiente) {
+              if (escrituraPendiente.length === 1 && escrituraPendiente[0] && typeof escrituraPendiente[0] === 'object' && !(escrituraPendiente[0] instanceof FieldPathFalso)) {
+                Object.keys(escrituraPendiente[0]).forEach(clave => aplicarCampo(clave, escrituraPendiente[0][clave]));
+              } else {
+                for (let i = 0; i < escrituraPendiente.length; i += 2) aplicarCampo(escrituraPendiente[i], escrituraPendiente[i + 1]);
+              }
+            }
+          } catch (e) { microtasksPendientes.push(() => reject(e)); return; }
+          microtasksPendientes.push(() => { notificar(); resolve(); });
+        }).catch(err => { microtasksPendientes.push(() => reject(err)); });
+      });
+    }
+  };
+  return {
+    docRef,
+    // Alterna drenar la cola con un respiro real del bucle de eventos (setImmediate) hasta 3
+    // rondas estables seguidas sin nada nuevo -- una cadena anidada (runTransaction) puede empujar
+    // su resolución final DESPUÉS de que el bucle simple ya viera la cola vacía; ver
+    // availability-tests/run_tests.cjs para el caso real que lo demostró.
     async flush(maxIter = 200) {
       let i = 0;
-      while (microtasksPendientes.length && i < maxIter) { const fn = microtasksPendientes.shift(); await fn(); i++; }
+      let rondasEstables = 0;
+      while (i < maxIter && rondasEstables < 3) {
+        if (microtasksPendientes.length) {
+          const fn = microtasksPendientes.shift();
+          await fn();
+          i++;
+          rondasEstables = 0;
+          continue;
+        }
+        await new Promise(r => setImmediate(r));
+        rondasEstables++;
+      }
       if (i >= maxIter) throw new Error('flush(): posible bucle infinito');
-      for (let k = 0; k < 10; k++) await new Promise(r => setImmediate(r));
       return i;
     },
     estadoActual() { return deepClone(estado); }

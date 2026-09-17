@@ -4,7 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>BESOUL — Mi cuenta</title>
-  <link rel="manifest" href="./manifest.json?v=pwa-logo2">
+  <!-- HARDENING-PRE-BASELINE-v3.2.1 (PWA-CLIENT): manifest PROPIO del Portal (start_url/scope =
+       portal-cliente.html), separado del de agenda/crm/finanzas/dashboard (manifest.json,
+       start_url = index.html). Antes compartían el mismo manifest: instalar el Portal desde el
+       enlace de un cliente abría, al tocar el icono instalado, la pantalla de login de PT/admin en
+       vez de la cuenta del propio cliente. -->
+  <link rel="manifest" href="./manifest-portal.json?v=pwa-logo2">
   <meta name="theme-color" content="#0B0F17">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -247,7 +252,23 @@
       return TOKEN_RE.test(v) ? v : null;
     }
     const qs = new URLSearchParams(location.search);
-    const token = normalizarToken(qs.get('t') || qs.get('token') || '');
+    // HARDENING-PRE-BASELINE-v3.2.1 (PWA-CLIENT): el token es la identidad del cliente (capability
+    // URL, sin Firebase Auth) -- viaja en la query string del enlace que el PT le envía. Un
+    // manifest de PWA no puede llevar un start_url dinámico por cliente en un sitio 100% estático
+    // (GitHub Pages, sin backend que sirva un manifest personalizado), así que la PWA instalada
+    // relanza siempre la MISMA start_url sin query string. Para que "abrir la app instalada" siga
+    // llevando al cliente a SU propia cuenta: si llega un token válido por URL, se recuerda en
+    // localStorage (por dispositivo); si no llega ninguno (relanzamiento desde el icono instalado),
+    // se recupera el último conocido. Nunca sustituye la validación real contra Firestore -- solo
+    // decide QUÉ token intentar cargar.
+    const BS_PORTAL_ULTIMO_TOKEN_KEY = 'bs_portal_ultimo_token';
+    const tokenDeURL = normalizarToken(qs.get('t') || qs.get('token') || '');
+    let token = tokenDeURL;
+    if (token) {
+      try { localStorage.setItem(BS_PORTAL_ULTIMO_TOKEN_KEY, token); } catch (e) {}
+    } else {
+      try { token = normalizarToken(localStorage.getItem(BS_PORTAL_ULTIMO_TOKEN_KEY) || ''); } catch (e) {}
+    }
     const vistaInicial = qs.get('view') === 'reservar' ? 'reservar' : null;
     // DEMO local (B19): solo activo en localhost/127.0.0.1 con ?demo=1 -- nunca lee ni escribe
     // Firestore, nunca puede activarse en producción (comprobación de host, no solo de query
@@ -872,6 +893,17 @@
     }
 
     init();
+  </script>
+
+  <!-- HARDENING-PRE-BASELINE-v3.2.1 (PWA-CLIENT): antes ausente -- portal-cliente.html era la
+       única página principal de la suite que nunca registraba el service worker, así que no
+       tenía capacidad offline propia ni, según el navegador, garantías de ser instalable. Mismo
+       sw.js compartido (ya precachea portal-cliente.html); el manifest propio de arriba es lo que
+       separa el contexto instalado del de agenda/crm/finanzas/dashboard. -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+    }
   </script>
 </body>
 </html>

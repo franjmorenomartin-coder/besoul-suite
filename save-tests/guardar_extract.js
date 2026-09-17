@@ -672,3 +672,40 @@ function valorInvalidoParaFirestore(valor, rutaActual = '', vistos = new Set()) 
             }
             return null;
         }
+
+function estadoLocalAgendaParaNube(trainerKeyScope) {
+
+            // Escritura dirigida: si se conoce el trainerKey afectado, solo se envían
+            // sus propios sub-mapas (notación de punto) con merge:true, para que Firestore
+            // fusione a nivel de campo y nunca pise los datos de otro entrenador que se
+            // hayan guardado casi al mismo tiempo (evita "last write wins" sobre el documento
+            // completo). "notas" sigue siendo un mapa plano (clave "trainerKey__clave", no
+            // anidado) y por eso se envía entero como excepción documentada — riesgo residual
+            // menor y aceptado, ver BESOUL_WORK_STATE.md.
+            //
+            // HARDENING-PRE-BASELINE-v3.2.1 (2026-09-17): el fallback legacy que existía aquí
+            // ("sin trainerKey conocido, escribe el documento COMPLETO de todos los entrenadores")
+            // se retira. Auditoría de TODOS los llamadores de guardarEstadoNubeAgenda()/
+            // programarGuardadoNubeAgenda() confirmó que ninguno depende hoy de recibir ese
+            // fallback: o pasan un trainerKey explícito, o dependen de `entrenadorVisto`, que se
+            // fija una única vez en el login (línea ~3409) y nunca se vacía después salvo el borde
+            // `if (!dbCredenciales[entrenadorVisto]) entrenadorVisto = usuarioLogeado || ... || ''`
+            // (línea ~1854) -- un caso raro pero posible si la primera carga de dbCredenciales
+            // llega vacía. Sin un fallback legítimo real, se devuelve null en vez de un payload de
+            // documento completo: ver guardarEstadoNubeAgenda(), que ahora trata null como fallo
+            // explícito en vez de escribir a ciegas.
+            if (trainerKeyScope) {
+                return {
+                    [`clientes.${trainerKeyScope}`]: dbClientes[trainerKeyScope] || [],
+                    [`agenda.${trainerKeyScope}`]: dbAgenda[trainerKeyScope] || {},
+                    [`pruebasCRM.${trainerKeyScope}`]: dbPruebasCRM[trainerKeyScope] || {},
+                    [`disponibilidadReservas.${trainerKeyScope}`]: dbDisponibilidadReservas[trainerKeyScope] || {},
+                    [`historicoClientes.${trainerKeyScope}`]: dbHistoricoClientes[trainerKeyScope] || {},
+                    notas: dbNotas || {},
+                    ultimaActualizacionLocal: new Date().toISOString()
+                };
+            }
+
+            return null;
+
+        }
