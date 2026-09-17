@@ -38,13 +38,23 @@ function extractFunction(html, name) {
   const end = extractBalanced(html, finParametros, '{', '}');
   return html.slice(m.index, end);
 }
+function extractSimpleConst(html, name) {
+  const re = new RegExp(`const\\s+${name}\\s*=\\s*[^;]+;`);
+  const m = re.exec(html);
+  if (!m) throw new Error(`No se encontró const simple ${name}`);
+  return m[0];
+}
 
 const agendaHtml = fs.readFileSync(AGENDA_HTML_PATH, 'utf8');
 const extracted = [
-  'valorInvalidoParaFirestore', 'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore',
-  'guardarEstadoNubeAgenda', 'aplicarEstadoNubeAgenda', 'sincronizarPruebasCRMDentroDeAgenda',
-  'esCitaPruebaCRM',
-].map(n => extractFunction(agendaHtml, n)).join('\n\n');
+  extractSimpleConst(agendaHtml, 'BS_APP_BUILD_TAG'),
+  ...[
+    'valorInvalidoParaFirestore', 'canonicalizarValorDiagnostico', 'hashEstableDiagnostico',
+    'contarElementosDiagnostico', 'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore',
+    'guardarEstadoNubeAgenda', 'aplicarEstadoNubeAgenda', 'sincronizarPruebasCRMDentroDeAgenda',
+    'esCitaPruebaCRM',
+  ].map(n => extractFunction(agendaHtml, n)),
+].join('\n\n');
 
 async function main() {
   const testEnv = await initializeTestEnvironment({

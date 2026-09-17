@@ -30,9 +30,19 @@ function extractLet(name) {
   if (!m) throw new Error(`No se encontró let ${name}`);
   return m[0];
 }
+function extractSimpleConst(name) {
+  const re = new RegExp(`const\\s+${name}\\s*=\\s*[^;]+;`);
+  const m = re.exec(html);
+  if (!m) throw new Error(`No se encontró const simple ${name}`);
+  return m[0];
+}
 
+const consts = ['BS_APP_BUILD_TAG'];
 const funciones = [
   'valorInvalidoParaFirestore',
+  'canonicalizarValorDiagnostico',
+  'hashEstableDiagnostico',
+  'contarElementosDiagnostico',
   'estadoLocalAgendaParaNube',
   'guardarEstadoNubeAgenda',
   'mensajeErrorGuardadoAgenda',
@@ -65,6 +75,6 @@ const lets = [
   'dbNotas', 'dbHistoricoClientes', 'dbCredenciales', 'lunesActual',
 ];
 
-const parts = [...lets.map(extractLet), ...funciones.map(extractFunction)];
+const parts = [...consts.map(extractSimpleConst), ...lets.map(extractLet), ...funciones.map(extractFunction)];
 fs.writeFileSync(path.join(__dirname, 'availability_extract.js'), parts.join('\n\n'));
 console.log('OK, bloques extraidos:', parts.length);

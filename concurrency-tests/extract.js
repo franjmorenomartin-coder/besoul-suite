@@ -22,11 +22,18 @@ function extractFunction(name) {
   const end = extractBalanced(m.index, '{', '}');
   return html.slice(m.index, end);
 }
+function extractSimpleConst(name) {
+  const re = new RegExp(`const\\s+${name}\\s*=\\s*[^;]+;`);
+  const m = re.exec(html);
+  if (!m) throw new Error(`No se encontró const simple ${name}`);
+  return m[0];
+}
 
 const names = [
   'valorInvalidoParaFirestore', 'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore',
   'guardarEstadoNubeAgenda',
+  'canonicalizarValorDiagnostico', 'hashEstableDiagnostico', 'contarElementosDiagnostico',
 ];
-const parts = names.map(extractFunction);
+const parts = [extractSimpleConst('BS_APP_BUILD_TAG'), ...names.map(extractFunction)];
 fs.writeFileSync(path.join(__dirname, 'concurrency_extract.js'), parts.join('\n\n'));
 console.log('OK, bloques extraidos:', parts.length);

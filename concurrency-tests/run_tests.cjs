@@ -68,19 +68,21 @@ function check(desc, actual, expected) {
   console.log(`${ok ? 'PASS' : 'FAIL'} -- ${desc} :: got=${JSON.stringify(actual)}${ok ? '' : ` expected=${JSON.stringify(expected)}`}`);
 }
 
-function crearSesion({ docRef, dbClientes, dbAgenda, dbPruebasCRM, dbDisponibilidadReservas, dbHistoricoClientes, dbNotas, bsUltimoServidorConocido }) {
+function crearSesion({ docRef, dbClientes, dbAgenda, dbPruebasCRM, dbDisponibilidadReservas, dbHistoricoClientes, dbNotas, bsUltimoServidorConocido, entrenadorVisto = '', rolActivo = 'pt' }) {
   const firebase = { firestore: Object.assign(() => {}, { FieldPath: FieldPathFalso, FieldValue: FieldValueFalso }) };
   const window = { bsAgendaCloudDocRef: docRef, bsAgendaAplicandoNube: false, bsUltimoServidorConocido };
   let publicarLlamado = 0;
   async function publicarReservasPublicas() { publicarLlamado++; }
+  const warnLog = [];
+  const consoleFalso = { ...console, warn: (...args) => { warnLog.push(args); } };
   const fn = new Function(
-    'window', 'firebase', 'entrenadorVisto', 'dbClientes', 'dbAgenda', 'dbPruebasCRM',
+    'window', 'firebase', 'entrenadorVisto', 'rolActivo', 'dbClientes', 'dbAgenda', 'dbPruebasCRM',
     'dbDisponibilidadReservas', 'dbHistoricoClientes', 'dbNotas', 'publicarReservasPublicas', 'console',
     extracted + `
     return { guardarEstadoNubeAgenda };`
   );
-  const M = fn(window, firebase, '', dbClientes, dbAgenda, dbPruebasCRM, dbDisponibilidadReservas, dbHistoricoClientes, dbNotas, publicarReservasPublicas, console);
-  return { ...M, publicarLlamado: () => publicarLlamado };
+  const M = fn(window, firebase, entrenadorVisto, rolActivo, dbClientes, dbAgenda, dbPruebasCRM, dbDisponibilidadReservas, dbHistoricoClientes, dbNotas, publicarReservasPublicas, consoleFalso);
+  return { ...M, publicarLlamado: () => publicarLlamado, warnLog };
 }
 
 async function main() {
@@ -117,14 +119,30 @@ console.log('\n=== ESCENARIO B: CONFLICTO PT/PT (dos pestañas del MISMO entrena
   // Pestaña 1 (esta sesión) NUNCA se enteró de ese cambio -- su bsUltimoServidorConocido sigue
   // siendo el estado base antiguo -- e intenta guardar SU PROPIA edición, que sobrescribiría por
   // completo clientes.a si no se detectara el conflicto.
-  const dbClientes1 = { a: [{ id: 'ca_v1', nombre: 'Editado por pestaña 1, sin saber de la otra' }] };
-  const sesion1 = crearSesion({ docRef: servidor.ref, dbClientes: dbClientes1, dbAgenda: { a: {} }, dbPruebasCRM: { a: {} }, dbDisponibilidadReservas: { a: {} }, dbHistoricoClientes: { a: {} }, dbNotas: {}, bsUltimoServidorConocido });
+  const dbClientes1 = { a: [{ id: 'ca_v1', nombre: 'Editado por pestaña 1, sin saber de la otra', telefono: '699888777', email: 'pii-real@x.com' }] };
+  const sesion1 = crearSesion({ docRef: servidor.ref, dbClientes: dbClientes1, dbAgenda: { a: {} }, dbPruebasCRM: { a: {} }, dbDisponibilidadReservas: { a: {} }, dbHistoricoClientes: { a: {} }, dbNotas: {}, bsUltimoServidorConocido, entrenadorVisto: 'a', rolActivo: 'pt' });
 
   const resultado = await sesion1.guardarEstadoNubeAgenda('a');
   check('conflicto PT/PT: guardado devuelve ok:false', resultado.ok, false);
   check('conflicto PT/PT: código de error = conflict', resultado.err && resultado.err.code, 'conflict');
   check('conflicto PT/PT: el cambio de la OTRA pestaña sigue intacto en el servidor (NO se pisó)', servidor.estadoActual().clientes.a, [{ id: 'ca_v1' }, { id: 'ca_nueva_de_otra_pestana' }]);
   check('conflicto PT/PT: publicarReservasPublicas() NUNCA se llama si el guardado se cancela', sesion1.publicarLlamado(), 0);
+
+  // QA 2026-09-17: [BESOUL CONFLICT DIAG] -- se emite exactamente una vez, con la forma esperada,
+  // y SIN NINGÚN dato personal del payload (nombre/teléfono/email de arriba nunca deben aparecer).
+  check('DIAG: se emite exactamente un [BESOUL CONFLICT DIAG]', sesion1.warnLog.filter(a => a[0] === '[BESOUL CONFLICT DIAG]').length, 1);
+  const diag1 = sesion1.warnLog.find(a => a[0] === '[BESOUL CONFLICT DIAG]')[1];
+  check('DIAG: trainerKeyScope correcto', diag1.trainerKeyScope, 'a');
+  check('DIAG: entrenadorVisto correcto', diag1.entrenadorVisto, 'a');
+  check('DIAG: rolActivo correcto', diag1.rolActivo, 'pt');
+  check('DIAG: appBuild presente', typeof diag1.appBuild === 'string' && diag1.appBuild.length > 0, true);
+  check('DIAG: conflictFields incluye "clientes"', diag1.conflictFields.includes('clientes'), true);
+  check('DIAG: campos.clientes.same === false', diag1.campos.clientes.same, false);
+  check('DIAG: campos.clientes trae hashes cortos, no el contenido', typeof diag1.campos.clientes.baselineHash === 'string' && diag1.campos.clientes.baselineHash.length <= 8, true);
+  const diagStr1 = JSON.stringify(diag1);
+  check('DIAG: NUNCA contiene el nombre real', diagStr1.includes('Editado por pestaña 1'), false);
+  check('DIAG: NUNCA contiene el teléfono real', diagStr1.includes('699888777'), false);
+  check('DIAG: NUNCA contiene el email real', diagStr1.includes('pii-real@x.com'), false);
 }
 
 // ============================================================
@@ -141,11 +159,18 @@ console.log('\n=== ESCENARIO C: CONFLICTO Admin/PT (admin viendo-como + el propi
   // El admin, con "ver como Verónica" abierto desde antes, guarda una edición suya sin haber
   // recibido todavía ese cambio.
   const dbClientesAdmin = { veronica: [{ id: 'cv1', nota: 'Editado por el admin viendo-como Verónica' }] };
-  const sesionAdmin = crearSesion({ docRef: servidor.ref, dbClientes: dbClientesAdmin, dbAgenda: { veronica: {} }, dbPruebasCRM: { veronica: {} }, dbDisponibilidadReservas: { veronica: {} }, dbHistoricoClientes: { veronica: {} }, dbNotas: {}, bsUltimoServidorConocido });
+  const sesionAdmin = crearSesion({ docRef: servidor.ref, dbClientes: dbClientesAdmin, dbAgenda: { veronica: {} }, dbPruebasCRM: { veronica: {} }, dbDisponibilidadReservas: { veronica: {} }, dbHistoricoClientes: { veronica: {} }, dbNotas: {}, bsUltimoServidorConocido, entrenadorVisto: 'veronica', rolActivo: 'admin' });
 
   const resultado = await sesionAdmin.guardarEstadoNubeAgenda('veronica');
   check('conflicto Admin/PT: guardado devuelve ok:false', resultado.ok, false);
   check('conflicto Admin/PT: el cambio real de la PT sigue intacto (NO lo pisa el admin)', servidor.estadoActual().clientes.veronica, [{ id: 'cv1', telefono: '600111222 (actualizado por Verónica)' }]);
+
+  const diag2 = sesionAdmin.warnLog.find(a => a[0] === '[BESOUL CONFLICT DIAG]')[1];
+  check('DIAG (admin): rolActivo === "admin"', diag2.rolActivo, 'admin');
+  check('DIAG (admin): entrenadorVisto === "veronica"', diag2.entrenadorVisto, 'veronica');
+  const diagStr2 = JSON.stringify(diag2);
+  check('DIAG (admin): NUNCA contiene el teléfono real de Verónica', diagStr2.includes('600111222'), false);
+  check('DIAG (admin): NUNCA contiene el texto de la nota del admin', diagStr2.includes('Editado por el admin'), false);
 }
 
 // ============================================================
@@ -179,6 +204,32 @@ console.log('\n=== ESCENARIO E: sin baseline conocido (primer guardado de la ses
 
   const resultado = await sesion.guardarEstadoNubeAgenda('a');
   check('sin baseline: ok:true (no bloquea el primer guardado real)', resultado.ok, true);
+}
+
+// ============================================================
+console.log('\n=== HELPERS de diagnóstico (canonicalizarValorDiagnostico / hashEstableDiagnostico / contarElementosDiagnostico) ===');
+// ============================================================
+{
+  const diagFn = new Function(extracted + `
+    return { canonicalizarValorDiagnostico, hashEstableDiagnostico, contarElementosDiagnostico };
+  `)();
+
+  const objA = { b: 2, a: 1, c: { z: 9, y: 8 } };
+  const objAOtroOrden = { c: { y: 8, z: 9 }, a: 1, b: 2 };
+  check('canonicalizar: mismo objeto con OTRO orden de claves -> mismo resultado canónico', diagFn.canonicalizarValorDiagnostico(objA), diagFn.canonicalizarValorDiagnostico(objAOtroOrden));
+  check('hash: mismo objeto con OTRO orden de claves -> MISMO hash', diagFn.hashEstableDiagnostico(objA), diagFn.hashEstableDiagnostico(objAOtroOrden));
+
+  const arr1 = [{ id: 1 }, { id: 2 }];
+  const arr2 = [{ id: 2 }, { id: 1 }];
+  check('canonicalizar: un array preserva su ORDEN (no se reordena como si fuera un objeto)', JSON.stringify(diagFn.canonicalizarValorDiagnostico(arr1)) === JSON.stringify(diagFn.canonicalizarValorDiagnostico(arr2)), false);
+
+  check('hash: un cambio REAL de contenido -> hash DISTINTO', diagFn.hashEstableDiagnostico({ a: 1 }) === diagFn.hashEstableDiagnostico({ a: 2 }), false);
+  check('hash: null y {} son distintos (no colisionan)', diagFn.hashEstableDiagnostico(null) === diagFn.hashEstableDiagnostico({}), false);
+  check('hash: siempre devuelve un string corto (8 hex), nunca el contenido', /^[0-9a-f]{8}$/.test(diagFn.hashEstableDiagnostico({ nombre: 'Alguien Real', telefono: '600123123' })), true);
+
+  check('contarElementos: array -> length', diagFn.contarElementosDiagnostico([1, 2, 3]), 3);
+  check('contarElementos: objeto -> nº de claves top-level', diagFn.contarElementosDiagnostico({ x: 1, y: 2 }), 2);
+  check('contarElementos: null -> 0', diagFn.contarElementosDiagnostico(null), 0);
 }
 
 console.log(`\n${pass}/${pass + fail} pruebas OK.`);

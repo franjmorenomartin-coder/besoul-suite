@@ -1,3 +1,5 @@
+const BS_APP_BUILD_TAG = 'conflict-diag-v1-2026-09-17';
+
 function valorInvalidoParaFirestore(valor, rutaActual = '', vistos = new Set()) {
             if (valor === undefined) return { ruta: rutaActual || '(raíz)', motivo: 'undefined' };
             if (typeof valor === 'number' && Number.isNaN(valor)) return { ruta: rutaActual || '(raíz)', motivo: 'NaN' };
@@ -162,11 +164,48 @@ function guardarEstadoNubeAgenda(trainerKeyScope) {
                 return docRef.firestore.runTransaction(async tx => {
                     const snap = await tx.get(docRef);
                     const actual = snap.exists ? (snap.data() || {}) : {};
-                    const huboConflicto = conocidoPrevio ? CAMPOS_CONCURRENCIA_COMPARABLES.some(campo => {
-                        const previo = JSON.stringify((conocidoPrevio[campo] || {})[scope] ?? null);
-                        const fresco = JSON.stringify((actual[campo] || {})[scope] ?? null);
-                        return previo !== fresco;
-                    }) : false;
+
+                    // QA 2026-09-17: la DECISIÓN real (qué compara, cómo) es exactamente la misma
+                    // de antes -- JSON.stringify(a) !== JSON.stringify(b) por campo -- sin cambios
+                    // en esta pasada, a propósito, porque todavía no hay evidencia de otra causa.
+                    // Solo se añade diagnóstico: por cada campo comparable, hash/recuento estables
+                    // (nunca el contenido) más una comparación CANÓNICA en paralelo, puramente
+                    // informativa, para poder confirmar o descartar sensibilidad al orden de claves
+                    // la próxima vez que esto ocurra en un navegador real.
+                    let huboConflicto = false;
+                    if (conocidoPrevio) {
+                        const camposDiagnostico = {};
+                        const conflictFields = [];
+                        CAMPOS_CONCURRENCIA_COMPARABLES.forEach(campo => {
+                            const valorPrevio = (conocidoPrevio[campo] || {})[scope] ?? null;
+                            const valorFresco = (actual[campo] || {})[scope] ?? null;
+                            const sameRaw = JSON.stringify(valorPrevio) === JSON.stringify(valorFresco);
+                            camposDiagnostico[campo] = {
+                                same: sameRaw,
+                                sameCanonical: hashEstableDiagnostico(valorPrevio) === hashEstableDiagnostico(valorFresco),
+                                baselineHash: hashEstableDiagnostico(valorPrevio),
+                                serverHash: hashEstableDiagnostico(valorFresco),
+                                baselineCount: contarElementosDiagnostico(valorPrevio),
+                                serverCount: contarElementosDiagnostico(valorFresco),
+                            };
+                            if (!sameRaw) conflictFields.push(campo);
+                        });
+                        huboConflicto = conflictFields.length > 0;
+                        if (huboConflicto) {
+                            // Nunca contenido real: solo booleans, hashes cortos y recuentos.
+                            console.warn('[BESOUL CONFLICT DIAG]', {
+                                appBuild: BS_APP_BUILD_TAG,
+                                trainerKeyScope: scope,
+                                entrenadorVisto,
+                                rolActivo,
+                                baselineExiste: true,
+                                serverExiste: snap.exists,
+                                campos: camposDiagnostico,
+                                conflictFields,
+                            });
+                        }
+                    }
+
                     if (huboConflicto) {
                         const errConflicto = new Error('Conflicto de concurrencia detectado para trainerKey=' + scope);
                         errConflicto.code = 'conflict';
@@ -193,4 +232,33 @@ function guardarEstadoNubeAgenda(trainerKeyScope) {
 
             }
 
+        }
+
+function canonicalizarValorDiagnostico(v) {
+            if (Array.isArray(v)) return v.map(canonicalizarValorDiagnostico);
+            if (v && typeof v === 'object') {
+                if (v instanceof Date) return v.toISOString();
+                if (v._methodName) return `<FieldValue:${v._methodName}>`;
+                const claves = Object.keys(v).sort();
+                const out = {};
+                claves.forEach(k => { out[k] = canonicalizarValorDiagnostico(v[k]); });
+                return out;
+            }
+            return v === undefined ? '<undefined>' : v;
+        }
+
+function hashEstableDiagnostico(valor) {
+            const str = JSON.stringify(canonicalizarValorDiagnostico(valor));
+            let h = 0x811c9dc5;
+            for (let i = 0; i < str.length; i++) {
+                h ^= str.charCodeAt(i);
+                h = Math.imul(h, 0x01000193);
+            }
+            return (h >>> 0).toString(16).padStart(8, '0');
+        }
+
+function contarElementosDiagnostico(v) {
+            if (Array.isArray(v)) return v.length;
+            if (v && typeof v === 'object') return Object.keys(v).length;
+            return v == null ? 0 : 1;
         }

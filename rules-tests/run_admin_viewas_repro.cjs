@@ -35,12 +35,22 @@ function extractFunction(html, name) {
   const end = extractBalanced(html, finParametros, '{', '}');
   return html.slice(m.index, end);
 }
+function extractSimpleConst(html, name) {
+  const re = new RegExp(`const\\s+${name}\\s*=\\s*[^;]+;`);
+  const m = re.exec(html);
+  if (!m) throw new Error(`No se encontró const simple ${name}`);
+  return m[0];
+}
 
 const agendaHtml = fs.readFileSync(AGENDA_HTML_PATH, 'utf8');
 const escrituraExtract = [
-  'valorInvalidoParaFirestore', 'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore',
-  'guardarEstadoNubeAgenda', 'aplicarEstadoNubeAgenda',
-].map(n => extractFunction(agendaHtml, n)).join('\n\n');
+  extractSimpleConst(agendaHtml, 'BS_APP_BUILD_TAG'),
+  ...[
+    'valorInvalidoParaFirestore', 'canonicalizarValorDiagnostico', 'hashEstableDiagnostico',
+    'contarElementosDiagnostico', 'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore',
+    'guardarEstadoNubeAgenda', 'aplicarEstadoNubeAgenda',
+  ].map(n => extractFunction(agendaHtml, n)),
+].join('\n\n');
 // publicarReservasPublicas() y TODA su cadena de dependencias reales -- reutiliza la extracción ya
 // mantenida por portal-slots-p0-tests/extract.js (debe estar regenerada y actualizada; si esta
 // prueba falla por una función ausente, ejecutar `node extract.js` ahí primero).
