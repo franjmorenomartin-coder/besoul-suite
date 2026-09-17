@@ -9143,7 +9143,39 @@ Cancelar = no hacer nada`,
 
 
 
-        function logout() { try { firebase.auth().signOut(); } catch(e) {} window.location.reload(); }
+        // HARDENING-PRE-BASELINE-v3.2.1: besoulSuite/agenda es un documento monolítico -- CUALQUIER
+        // sesión de Agenda carga en memoria, y este caché offline persiste en disco, los datos
+        // COMPLETOS de TODOS los entrenadores (clientes/agenda/credenciales/disponibilidad/
+        // histórico/leads-pruebas-CRM/notas), nunca solo los del usuario que ha iniciado sesión --
+        // ver AGENDA_MONOLITHIC_RISK.md. Sin esto, ese caché sobrevivía indefinidamente en el
+        // dispositivo tras cerrar sesión, disponible en texto plano para cualquiera con acceso
+        // físico/de navegador al mismo dispositivo aunque nunca haya iniciado sesión como esos
+        // otros entrenadores. Borrado SELECTIVO, nunca localStorage.clear() a ciegas: se eliminan
+        // por nombre exacto las claves bs_db_* (datos operativos multi-PT) y por PREFIJO
+        // bs_backup_semana_ (un respaldo por entrenador+semana visitada, cantidad variable) --
+        // bs_modo_agenda_slots_v1 (preferencia de UI, sin PII) se conserva a propósito.
+        const BS_CLAVES_SENSIBLES_EXACTAS = [
+            'bs_db_clientes_v6', 'bs_db_agenda_v6', 'bs_db_credenciales_v6',
+            'bs_db_disponibilidad_reservas_v6', 'bs_db_historico_clientes_v6',
+            'bs_db_leads_pruebas_crm_v6', 'bs_db_notas_v6', 'bs_db_pruebas_crm_v6',
+        ];
+        const BS_PREFIJOS_SENSIBLES = ['bs_backup_semana_'];
+        function limpiarCacheSensibleBesoul() {
+            try {
+                const claves = Object.keys(localStorage);
+                claves.forEach(clave => {
+                    const esSensible = BS_CLAVES_SENSIBLES_EXACTAS.includes(clave)
+                        || BS_PREFIJOS_SENSIBLES.some(prefijo => clave.startsWith(prefijo));
+                    if (esSensible) localStorage.removeItem(clave);
+                });
+            } catch (e) { /* localStorage no disponible (modo privado, etc.) -- nada que limpiar */ }
+        }
+
+        function logout() {
+            limpiarCacheSensibleBesoul();
+            try { firebase.auth().signOut(); } catch(e) {}
+            window.location.reload();
+        }
 
 
         // Registro PWA básico
