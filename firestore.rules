@@ -1,11 +1,13 @@
 rules_version = '2';
 
 // BESOUL Suite — Firestore Security Rules
-// ESTADO: propuesta lista para desplegar. NO se ha aplicado a producción
-// desde este entorno (sin Firebase CLI/credenciales disponibles aquí).
-// Antes de desplegar: revisar contra el emulador de Firestore con casos
-// no-auth / PT propio / PT ajeno / admin, backup previo, y aprobación
-// explícita, tal como exige SECURITY_RULES.md.
+// ESTADO (2026-09-17, HARDENING-PRE-BASELINE-v3.2.1): el resto de este archivo (items 1-6 de
+// abajo, ya vigentes en producción) fue confirmado LIVE por el usuario directamente en Firebase
+// Console antes de este cambio -- coincidía exactamente con este archivo salvo el bloque
+// besoulSuite/agenda, que hasta ahora usaba isActiveUser() sin aislamiento de escritura por
+// trainerKey (item 5). Ese bloque queda descrito arriba, en el propio match /besoulSuite/{docId},
+// como "FASE 2 activada" -- ver ese comentario para el detalle completo, el backup exacto (SHA256)
+// y la evidencia de Emulator Suite que precedió al despliegue.
 //
 // Cambios respecto a las reglas documentadas en SECURITY_RULES.md
 // (última actualización 2026-08-26):
@@ -34,10 +36,10 @@ rules_version = '2';
 //      activo:false conservaba acceso de lectura/escritura al documento
 //      Agenda completo. No rompe ningún flujo real (agenda.html y el único
 //      otro escritor, crm.html/convertirLeadEnCliente, ya exigen perfil
-//      activo a nivel de aplicación antes de dejar operar). El bloque
-//      OPCIONAL/FASE 2 (aislamiento de escritura por trainerKey, ver más
-//      abajo) sigue SIN activar -- este cambio es independiente y no
-//      requiere que FASE 2 esté activa.
+//      activo a nivel de aplicación antes de dejar operar).
+//      ACTUALIZACIÓN (2026-09-17): el bloque FASE 2 (aislamiento de
+//      ESCRITURA por trainerKey) que en esta línea seguía sin activar ya
+//      está activo -- ver el comentario dentro de match /besoulSuite/{docId}.
 //   6. NUEVO (buzón/notificaciones por PT, 2026-09-03): match
 //      /besoulNotifications/{notifId} — colección independiente, fuera del
 //      documento monolítico de agenda. Lectura solo por el propio trainerKey
@@ -124,38 +126,50 @@ service cloud.firestore {
     }
 
     match /besoulSuite/{docId} {
-      // Agenda compartida: cualquier usuario ACTIVO de BESOUL puede leer/escribir agenda.
-      // isActiveUser() (no solo signedIn()) para que un usuario autenticado pero marcado
-      // activo:false en besoulUsers no conserve acceso -- revisión de seguridad 2026-09-02.
-      // No rompe ningún flujo real: tanto agenda.html como el único otro escritor de este
-      // documento (crm.html, convertirLeadEnCliente) ya exigen perfil activo en besoulUsers
-      // antes de dejar operar a nivel de aplicación; esto solo cierra el hueco de que las
-      // Rules por sí solas no lo exigían.
-      allow read, write: if isActiveUser() && docId == 'agenda';
+      // FASE 2 activada (2026-09-17, HARDENING-PRE-BASELINE-v3.2.1): aislamiento de ESCRITURA
+      // por trainerKey dentro del documento monolítico besoulSuite/agenda. Candidata validada
+      // contra el Firebase Emulator Suite antes de desplegar (rules-tests/, 55+ casos, PT
+      // propio ALLOW / PT ajeno DENY por cada uno de los 5 campos anidados por trainer, PT
+      // inactivo/auth sin perfil/anónimo DENY, admin ALLOW sin restricción, y el payload REAL
+      // que ya envía guardarEstadoNubeAgenda() -- FieldPath, dirigido, nunca documento
+      // completo -- sigue permitido sin cambios). Backup exacto de la Rule anterior
+      // (idéntica a esta salvo esta sustitución) en
+      // firestore-rules-LIVE-pre-FASE2-20260917.rules (fuera del repo), SHA256
+      // 669f24fd37a3d5ec6a92f35bea8a413cb2cd647124197e2f84f1710ae322df13.
+      //
+      // Lectura: SIN CAMBIO -- sigue siendo el documento completo. Firestore no tiene lectura
+      // parcial de un documento; ningún ajuste de Rules puede resolver esto mientras
+      // clientes/agenda/etc. de TODOS los entrenadores vivan en un único documento. Ver
+      // AGENDA_MONOLITHIC_RISK.md para la migración futura (agendaByTrainer/{trainerKey}) que
+      // sí lo resolvería -- fuera de alcance de esta fase.
+      allow read: if isActiveUser() && docId == 'agenda';
+      allow write: if docId == 'agenda' && (
+        isAdmin()
+        || (isActiveUser()
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['clientes','agenda','disponibilidadReservas','historicoClientes','pruebasCRM','notas','actualizadoEn','ultimaActualizacionLocal'])
+            && request.resource.data.clientes.diff(resource.data.clientes).affectedKeys().hasOnly([myTrainerKey()])
+            && request.resource.data.agenda.diff(resource.data.agenda).affectedKeys().hasOnly([myTrainerKey()])
+            && request.resource.data.disponibilidadReservas.diff(resource.data.disponibilidadReservas).affectedKeys().hasOnly([myTrainerKey()])
+            && request.resource.data.historicoClientes.diff(resource.data.historicoClientes).affectedKeys().hasOnly([myTrainerKey()])
+            && request.resource.data.pruebasCRM.diff(resource.data.pruebasCRM).affectedKeys().hasOnly([myTrainerKey()])
+           )
+      );
+      // "notas" queda deliberadamente FUERA de la comprobación granular por trainerKey: es un
+      // mapa plano "trainerKey__clave" (nunca anidado por trainerKey), y Firestore Rules
+      // (CEL) no soporta iterar affectedKeys() con un predicado por clave --
+      // request.resource.data.notas.diff(...).affectedKeys().all(k, k.matches(...)) fue
+      // probado directamente contra el Emulator Suite (rules-tests/run_notas_feasibility_probe.cjs)
+      // y falla en tiempo de evaluación con "Function not found error: Name: [all]" -- no es una
+      // suposición, es el resultado real del motor de Rules. Aislarlo exigiría migrar "notas" a
+      // un mapa anidado por trainerKey (cambio de esquema, fuera de alcance de esta fase) o la
+      // migración completa a agendaByTrainer/{trainerKey}. Riesgo residual documentado y
+      // aceptado: un PT activo podría, en teoría, escribir la nota de otro PT llamando
+      // directamente al SDK -- ningún dato de cliente/agenda/disponibilidad/histórico/pruebasCRM
+      // queda expuesto por este hueco.
 
       // Finanzas sigue reservado solo para administración.
       allow read, write: if isAdmin() && docId == 'finanzas';
-
-      // --- OPCIONAL / FASE 2 (no activo por defecto) ---
-      // Sustituir la línea "allow read, write: if isActiveUser() && docId == 'agenda';"
-      // de arriba por lo siguiente SOLO cuando se valide que el código ya
-      // escribe siempre de forma dirigida por trainerKey (merge:true):
-      //
-      // allow read: if isActiveUser() && docId == 'agenda';
-      // allow write: if docId == 'agenda' && (
-      //   isAdmin()
-      //   || (isActiveUser()
-      //       && request.resource.data.diff(resource.data).affectedKeys()
-      //            .hasOnly(['clientes','agenda','disponibilidadReservas','historicoClientes','pruebasCRM','notas','actualizadoEn','ultimaActualizacionLocal'])
-      //       && request.resource.data.clientes.diff(resource.data.clientes).affectedKeys().hasOnly([myTrainerKey()])
-      //       && request.resource.data.agenda.diff(resource.data.agenda).affectedKeys().hasOnly([myTrainerKey()])
-      //       && request.resource.data.disponibilidadReservas.diff(resource.data.disponibilidadReservas).affectedKeys().hasOnly([myTrainerKey()])
-      //       && request.resource.data.historicoClientes.diff(resource.data.historicoClientes).affectedKeys().hasOnly([myTrainerKey()])
-      //       && request.resource.data.pruebasCRM.diff(resource.data.pruebasCRM).affectedKeys().hasOnly([myTrainerKey()])
-      //      )
-      // );
-      // (notas queda fuera de la comprobación estricta: es un mapa plano
-      // "trainerKey__clave", no anidado por trainerKey — ver BESOUL_WORK_STATE.md)
     }
 
     match /besoulLeads/{leadId} {

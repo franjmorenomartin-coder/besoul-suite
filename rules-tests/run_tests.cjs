@@ -83,12 +83,11 @@ async function main() {
   await checkDenied('AUTH SIN PERFIL NO puede leer besoulSuite/agenda', sinPerfil.collection('besoulSuite').doc('agenda').get());
   await checkDenied('ANONIMO NO puede leer besoulSuite/agenda', anon.collection('besoulSuite').doc('agenda').get());
   await checkOk('PT A puede escribir su propia porción (clientes.pta) de besoulSuite/agenda', ptA.collection('besoulSuite').doc('agenda').update({ 'clientes.pta': [{ id: 'ca1', nombre: 'Editado por A' }] }));
-  // NOTA: en la Rule actualmente desplegable (SIN FASE 2 activa), esto se PERMITE -- es
-  // precisamente el hallazgo P0 de la auditoría (sin aislamiento de escritura por trainerKey a
-  // nivel de Firestore). Se deja documentado como comportamiento REAL, no deseado.
-  console.log('  (informativo, no P0 nuevo) PT A escribiendo clientes.ptb (de OTRO PT) -- ver resultado real:');
-  try { await ptA.collection('besoulSuite').doc('agenda').update({ 'clientes.ptb': [{ id: 'hackeado', nombre: 'PT A escribió esto' }] }); console.log('  -> PERMITIDO (esperado con la Rule actual sin FASE 2 -- el hallazgo P0 ya documentado en el informe maestro)'); }
-  catch (e) { console.log('  -> DENEGADO (si ves esto, FASE 2 ya está activa o la Rule cambió -- actualizar el informe maestro)'); }
+  // HARDENING-PRE-BASELINE-v3.2.1 (continuación, FASE 2 activada 2026-09-17): el hallazgo P0 de
+  // la auditoría maestra (PT A podía escribir clientes.<otroTrainerKey>) queda cerrado aquí --
+  // ya no es un test "informativo", es la aserción de seguridad real. Cobertura exhaustiva por
+  // campo/rol en run_fase2_tests.cjs.
+  await checkDenied('PT A YA NO puede escribir clientes.ptb (de OTRO PT) -- hallazgo P0 cerrado por FASE 2', ptA.collection('besoulSuite').doc('agenda').update({ 'clientes.ptb': [{ id: 'hackeado', nombre: 'PT A escribió esto' }] }));
 
   // ============================================================
   console.log('\n=== besoulSuite/finanzas ===');

@@ -64,11 +64,15 @@ console.log('\n=== 3. firebase.json no toca Hosting/Functions/Storage -- el fron
 console.log('\n=== 4. firestore.rules NO se ha modificado por este hotfix ===');
 // ============================================================
 {
-  // Confirma que la regla ya auditada en una fase anterior (cualquier usuario activo puede leer/
-  // escribir besoulSuite/agenda) sigue intacta, byte a byte en su forma relevante -- este hotfix
-  // es de índices, nunca de permisos.
+  // Confirma que la regla de LECTURA de besoulSuite/agenda (cualquier usuario activo) sigue
+  // intacta -- este hotfix es de índices, nunca de permisos. HARDENING-PRE-BASELINE-v3.2.1
+  // (2026-09-17): la línea única "allow read, write: if isActiveUser()..." se sustituyó
+  // DELIBERADAMENTE por "allow read: ..." + "allow write: if ... (aislamiento por trainerKey,
+  // FASE 2)" -- ver firestore.rules y rules-tests/run_fase2_tests.cjs. Se actualiza la cadena
+  // esperada a la mitad que sigue siendo invariante (lectura), no a la de escritura, que
+  // cambió intencionadamente y ya tiene su propia cobertura dedicada.
   const rules = leerTexto('firestore.rules');
-  checkTrue('firestore.rules conserva la regla de acceso a besoulSuite/agenda sin cambios', rules.includes("allow read, write: if isActiveUser() && docId == 'agenda';"));
+  checkTrue('firestore.rules conserva la regla de LECTURA de besoulSuite/agenda sin cambios', rules.includes("allow read: if isActiveUser() && docId == 'agenda';"));
 }
 
 // ============================================================
