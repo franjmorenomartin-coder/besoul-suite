@@ -45,46 +45,107 @@ function crearFirestoreMock(estadoInicial) {
     if (typeof campo === 'string' && campo.includes('.')) { setEnRuta(estado, campo.split('.'), deepClone(valor)); return; }
     estado[campo] = deepClone(valor);
   }
-  return {
-    docRef: {
-      update(...args) {
-        return new Promise((resolve, reject) => {
-          try {
-            if (estado === null) { reject(new Error('NOT_FOUND (update sobre documento inexistente)')); return; }
-            if (fallosPendientes > 0) {
-              fallosPendientes--;
-              const err = new Error('simulated-network-error');
-              err.code = 'unavailable';
-              microtasksPendientes.push(() => reject(err));
-              return;
-            }
-            if (args.length === 1 && args[0] && typeof args[0] === 'object' && !(args[0] instanceof FieldPathFalso)) {
-              Object.keys(args[0]).forEach(clave => aplicarCampo(clave, args[0][clave]));
-            } else {
-              for (let i = 0; i < args.length; i += 2) aplicarCampo(args[i], args[i + 1]);
-            }
-            numeroDeEscrituras++;
-            microtasksPendientes.push(() => { notificar(); resolve(); });
-          } catch (e) { reject(e); }
-        });
-      },
-      onSnapshot(cb, errCb) {
-        listeners.push(cb);
-        microtasksPendientes.push(() => cb({ exists: estado !== null, data: () => deepClone(estado) }));
-        return () => { const i = listeners.indexOf(cb); if (i >= 0) listeners.splice(i, 1); };
-      }
+  const docRef = {
+    update(...args) {
+      return new Promise((resolve, reject) => {
+        try {
+          if (estado === null) { reject(new Error('NOT_FOUND (update sobre documento inexistente)')); return; }
+          if (fallosPendientes > 0) {
+            fallosPendientes--;
+            const err = new Error('simulated-network-error');
+            err.code = 'unavailable';
+            microtasksPendientes.push(() => reject(err));
+            return;
+          }
+          if (args.length === 1 && args[0] && typeof args[0] === 'object' && !(args[0] instanceof FieldPathFalso)) {
+            Object.keys(args[0]).forEach(clave => aplicarCampo(clave, args[0][clave]));
+          } else {
+            for (let i = 0; i < args.length; i += 2) aplicarCampo(args[i], args[i + 1]);
+          }
+          numeroDeEscrituras++;
+          microtasksPendientes.push(() => { notificar(); resolve(); });
+        } catch (e) { reject(e); }
+      });
     },
+    onSnapshot(cb, errCb) {
+      listeners.push(cb);
+      microtasksPendientes.push(() => cb({ exists: estado !== null, data: () => deepClone(estado) }));
+      return () => { const i = listeners.indexOf(cb); if (i >= 0) listeners.splice(i, 1); };
+    }
+  };
+  // HARDENING-PRE-BASELINE-v3.2.1: guardarEstadoNubeAgenda() ahora escribe vía
+  // docRef.firestore.runTransaction() (detección de conflicto de concurrencia same-trainerKey) en
+  // vez de docRef.update() directo. Mismo modelo determinista de microtareas que .update() arriba
+  // (tx.get()/el commit final solo se resuelven cuando flush() drena la cola) -- ver
+  // concurrency-tests/ para las pruebas dedicadas de esa lógica; aquí solo hace falta que el mock
+  // no rompa el resto de esta suite, que no prueba conflictos salvo el escenario MULTI-TAB de abajo.
+  docRef.firestore = {
+    runTransaction(fn) {
+      return new Promise((resolve, reject) => {
+        let escrituraPendiente = null;
+        const tx = {
+          get(ref) {
+            return new Promise((resGet, rejGet) => {
+              if (fallosPendientes > 0) {
+                fallosPendientes--;
+                const err = new Error('simulated-network-error');
+                err.code = 'unavailable';
+                microtasksPendientes.push(() => rejGet(err));
+                return;
+              }
+              microtasksPendientes.push(() => resGet({ exists: estado !== null, data: () => deepClone(estado) }));
+            });
+          },
+          update(ref, ...args) { escrituraPendiente = args; }
+        };
+        fn(tx).then(() => {
+          try {
+            if (escrituraPendiente) {
+              if (escrituraPendiente.length === 1 && escrituraPendiente[0] && typeof escrituraPendiente[0] === 'object' && !(escrituraPendiente[0] instanceof FieldPathFalso)) {
+                Object.keys(escrituraPendiente[0]).forEach(clave => aplicarCampo(clave, escrituraPendiente[0][clave]));
+              } else {
+                for (let i = 0; i < escrituraPendiente.length; i += 2) aplicarCampo(escrituraPendiente[i], escrituraPendiente[i + 1]);
+              }
+              numeroDeEscrituras++;
+            }
+          } catch (e) { microtasksPendientes.push(() => reject(e)); return; }
+          microtasksPendientes.push(() => { notificar(); resolve(); });
+        }).catch(err => { microtasksPendientes.push(() => reject(err)); });
+      });
+    }
+  };
+  return {
+    docRef,
     // Avanza la cola de "microtareas" simuladas (equivalente a awaits reales de red) hasta que no
     // quede ninguna pendiente -- determinista, sin relojes reales.
+    //
+    // HARDENING-PRE-BASELINE-v3.2.1: guardarEstadoNubeAgenda() ahora anida runTransaction(async tx
+    // => { await tx.get(...); ...; tx.update(...); }) -- más saltos de microtarea NATIVA (cada
+    // await/then real de V8, fuera de microtasksPendientes) que el .update() directo de antes. Un
+    // único "respiro" fijo de 10 rondas de setImmediate() al final, como hacía esta función antes,
+    // no bastaba: un reject() dentro de una cadena anidada podía terminar de propagarse (y empujar
+    // su reject(err) final a microtasksPendientes) justo DESPUÉS de que el bucle principal ya
+    // hubiera visto la cola vacía y hubiera salido -- ese ítem quedaba varado hasta el SIGUIENTE
+    // flush() de quien llama, que en varios tests no llega antes de un "await" directo sobre la
+    // promesa -- bloqueo real, detectado con un caso concreto (guardar cliente tras conflicto de
+    // concurrencia). Ahora alterna: drena la cola, respira un tick real, y si ese respiro NO trajo
+    // nada nuevo tras 3 intentos seguidos, se considera drenado de verdad -- así da igual cuántos
+    // saltos nativos anidados tenga cualquier cadena futura.
     async flush(maxIter = 200) {
       let i = 0;
-      while (microtasksPendientes.length && i < maxIter) { const fn = microtasksPendientes.shift(); await fn(); i++; }
+      let rondasEstables = 0;
+      while (i < maxIter && rondasEstables < 3) {
+        if (microtasksPendientes.length) {
+          const fn = microtasksPendientes.shift();
+          await fn();
+          i++;
+          rondasEstables = 0;
+          continue;
+        }
+        await new Promise(r => setImmediate(r));
+        rondasEstables++;
+      }
       if (i >= maxIter) throw new Error('flush(): posible bucle infinito de escrituras (más de ' + maxIter + ' iteraciones) -- ver normalizarCredenciales()/programarGuardadoNubeAgenda()');
-      // Además de drenar la cola propia, deja varias vueltas del bucle de eventos real para que
-      // cadenas .then()/.catch()/await nativas (p.ej. tras un reject()) terminen de propagarse --
-      // reject()/resolve() programan sus continuaciones como microtareas nativas de V8, no en
-      // microtasksPendientes, así que un solo "await fn()" no basta para esperarlas todas.
-      for (let k = 0; k < 10; k++) await new Promise(r => setImmediate(r));
       return i;
     },
     estadoActual() { return deepClone(estado); },

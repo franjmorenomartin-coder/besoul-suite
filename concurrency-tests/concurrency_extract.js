@@ -1,27 +1,3 @@
-let usuarioLogeado = "";
-
-let rolActivo = "";
-
-let entrenadorVisto = "";
-
-let dbClientes = JSON.parse(localStorage.getItem('bs_db_clientes_v6')) || {};
-
-let dbAgenda = JSON.parse(localStorage.getItem('bs_db_agenda_v6')) || {};
-
-let dbPruebasCRM = JSON.parse(localStorage.getItem('bs_db_pruebas_crm_v6')) || {};
-
-let dbDisponibilidadReservas = JSON.parse(localStorage.getItem('bs_db_disponibilidad_reservas_v6')) || {};
-
-let dbNotas = JSON.parse(localStorage.getItem('bs_db_notas_v6')) || {};
-
-let dbHistoricoClientes = JSON.parse(localStorage.getItem('bs_db_historico_clientes_v6')) || {};
-
-let dbCredenciales = sanitizarCredenciales(JSON.parse(localStorage.getItem('bs_db_credenciales_v6')) || CREDENCIALES_BASE);
-
-let avisoMultipleEstados = new Map();
-
-let avisoCanalWhatsAppActivo = true;
-
 function valorInvalidoParaFirestore(valor, rutaActual = '', vistos = new Set()) {
             if (valor === undefined) return { ruta: rutaActual || '(raíz)', motivo: 'undefined' };
             if (typeof valor === 'number' && Number.isNaN(valor)) return { ruta: rutaActual || '(raíz)', motivo: 'NaN' };
@@ -85,6 +61,19 @@ function estadoLocalAgendaParaNube(trainerKeyScope) {
 
             return null;
 
+        }
+
+function payloadParaUpdateFirestore(payload) {
+            const args = [];
+            Object.keys(payload).forEach(key => {
+                const partes = key.split('.');
+                if (partes.length > 1) {
+                    args.push(new firebase.firestore.FieldPath(partes[0], partes.slice(1).join('.')), payload[key]);
+                } else {
+                    args.push(key, payload[key]);
+                }
+            });
+            return args;
         }
 
 function guardarEstadoNubeAgenda(trainerKeyScope) {
@@ -194,237 +183,4 @@ function guardarEstadoNubeAgenda(trainerKeyScope) {
 
             }
 
-        }
-
-function payloadParaUpdateFirestore(payload) {
-            const args = [];
-            Object.keys(payload).forEach(key => {
-                const partes = key.split('.');
-                if (partes.length > 1) {
-                    args.push(new firebase.firestore.FieldPath(partes[0], partes.slice(1).join('.')), payload[key]);
-                } else {
-                    args.push(key, payload[key]);
-                }
-            });
-            return args;
-        }
-
-function programarGuardadoNubeAgenda(trainerKeyScope) {
-
-            if (!window.bsAgendaCloudDocRef || window.bsAgendaAplicandoNube) return;
-
-            const scope = trainerKeyScope || entrenadorVisto;
-
-            clearTimeout(window.bsAgendaCloudTimer);
-
-            window.bsAgendaCloudTimer = setTimeout(() => guardarEstadoNubeAgenda(scope), 350);
-
-        }
-
-function aplicarEstadoNubeAgenda(data) {
-
-            if (!data) return;
-
-            // FIX-PT-AVAILABILITY-PERSISTENCE: a partir de aquí, dbDisponibilidadReservas (y el
-            // resto de dbXxx) refleja de verdad lo que hay en Firestore -- ya es seguro fabricar
-            // un default para un trainerKey sin disponibilidad, porque significa que REALMENTE no
-            // tiene ninguna, no que la respuesta de red aún no ha llegado.
-            window.bsAgendaDisponibilidadCargada = true;
-
-            window.bsAgendaAplicandoNube = true;
-
-            try {
-
-                // Los entrenadores vienen de besoulUsers, no del documento de agenda.
-                // Así evitamos perder el modo admin o el selector si el campo credenciales de agenda quedó antiguo.
-                dbCredenciales = sanitizarCredenciales(dbCredenciales || CREDENCIALES_BASE);
-
-                dbClientes = data.clientes || {};
-
-                dbAgenda = data.agenda || {};
-                dbPruebasCRM = data.pruebasCRM || {};
-                dbDisponibilidadReservas = data.disponibilidadReservas || {};
-                sincronizarPruebasCRMDentroDeAgenda();
-
-                dbNotas = data.notas || {};
-                dbHistoricoClientes = data.historicoClientes || {};
-
-                dbCatalogoActividades = data.catalogoActividades || {};
-                dbTrainerActividades = data.trainerActividades || {};
-                dbTarifasActividadVersiones = data.tarifasActividadVersiones || {};
-                dbRepartoActividadVersiones = data.repartoActividadVersiones || {};
-
-                // HARDENING-PRE-BASELINE-v3.2.1: instantánea de "lo último que esta pestaña sabe
-                // con certeza que hay en el servidor", por trainerKey -- usada únicamente por
-                // guardarEstadoNubeAgenda() para detectar (nunca para fusionar) si otra sesión ha
-                // guardado cambios de ESTE MISMO entrenador entre medias. Ver esa función.
-                // IMPORTANTE: debe ser una copia profunda, NUNCA las mismas referencias que
-                // dbClientes/dbDisponibilidadReservas/etc. -- esos objetos se MUTAN en el sitio en
-                // más de un punto del código (p.ej. guardarDisponibilidadReservas():
-                // "dbDisponibilidadReservas[entrenadorVisto] = nuevoValor" antes de guardar). Si
-                // esta instantánea compartiera referencia, esa mutación optimista contaminaría el
-                // propio "estado conocido" usado como base de comparación, dando un falso conflicto
-                // en TODOS los guardados, incluso sin ninguna otra sesión de por medio.
-                window.bsUltimoServidorConocido = JSON.parse(JSON.stringify({
-                    clientes: dbClientes, agenda: dbAgenda, pruebasCRM: dbPruebasCRM,
-                    disponibilidadReservas: dbDisponibilidadReservas, historicoClientes: dbHistoricoClientes,
-                }));
-
-                localStorage.setItem('bs_db_credenciales_v6', JSON.stringify(dbCredenciales));
-
-                localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
-
-                localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
-                localStorage.setItem('bs_db_pruebas_crm_v6', JSON.stringify(dbPruebasCRM));
-                localStorage.setItem('bs_db_disponibilidad_reservas_v6', JSON.stringify(dbDisponibilidadReservas));
-
-                localStorage.setItem('bs_db_notas_v6', JSON.stringify(dbNotas));
-                localStorage.setItem('bs_db_historico_clientes_v6', JSON.stringify(dbHistoricoClientes));
-
-                normalizarCredenciales();
-
-            } finally {
-
-                window.bsAgendaAplicandoNube = false;
-
-            }
-
-
-
-            const appVisible = document.getElementById('app-content') && !document.getElementById('app-content').classList.contains('hidden');
-
-            if (appVisible) {
-
-                if (!dbCredenciales[entrenadorVisto]) entrenadorVisto = usuarioLogeado || Object.keys(dbCredenciales)[0] || '';
-
-                if (rolActivo === 'admin') configurarSelectorAdmin();
-
-                recalcularKPIs();
-
-                renderClientes();
-
-                renderAgenda();
-
-                actualizarLabelsKPIMes();
-
-            }
-
-        }
-
-function sincronizarPruebasCRMDentroDeAgenda() {
-            // Las pruebas procedentes del CRM se guardan también en pruebasCRM como respaldo.
-            // Para que la Agenda las pinte aunque el mapa principal no se haya fusionado bien,
-            // las inyectamos en dbAgenda solo en memoria/local antes de renderizar.
-            Object.keys(dbPruebasCRM || {}).forEach(trainerKey => {
-                if (!dbAgenda[trainerKey]) dbAgenda[trainerKey] = {};
-                Object.keys(dbPruebasCRM[trainerKey] || {}).forEach(clave => {
-                    const prueba = dbPruebasCRM[trainerKey][clave];
-                    if (prueba && esCitaPruebaCRM(prueba) && !dbAgenda[trainerKey][clave]) {
-                        dbAgenda[trainerKey][clave] = prueba;
-                    }
-                });
-            });
-        }
-
-function normalizarCredenciales() {
-
-            dbCredenciales = sanitizarCredenciales(dbCredenciales || {});
-
-            Object.keys(dbCredenciales).forEach(user => {
-
-                if (!dbCredenciales[user].nombre) dbCredenciales[user].nombre = user.charAt(0).toUpperCase() + user.slice(1);
-
-                if (!dbCredenciales[user].rol) dbCredenciales[user].rol = 'pt';
-
-                if (dbCredenciales[user].pass) delete dbCredenciales[user].pass;
-
-            });
-
-            localStorage.setItem('bs_db_credenciales_v6', JSON.stringify(dbCredenciales));
-
-            programarGuardadoNubeAgenda();
-
-        }
-
-function guardarCredenciales() {
-
-            dbCredenciales = sanitizarCredenciales(dbCredenciales || {});
-
-            localStorage.setItem('bs_db_credenciales_v6', JSON.stringify(dbCredenciales));
-
-            programarGuardadoNubeAgenda();
-
-        }
-
-function sanitizarCredenciales(input) {
-            const salida = {};
-            Object.keys(input || {}).forEach(key => {
-                const raw = input[key] || {};
-                const trainerKey = String(raw.trainerKey || key || '').trim().toLowerCase().replace(/\s+/g, '');
-                if (!trainerKey) return;
-                salida[trainerKey] = {
-                    nombre: raw.nombre || (trainerKey.charAt(0).toUpperCase() + trainerKey.slice(1)),
-                    rol: raw.rol === 'admin' ? 'admin' : 'pt',
-                    email: raw.email || '',
-                    uid: raw.uid || '',
-                    trainerKey,
-                    activo: raw.activo !== false
-                };
-            });
-            return salida;
-        }
-
-function buscarClientePorIdTrainer(trainerKey, id) {
-            const lista = dbClientes[trainerKey] || [];
-            return lista.find(c => c && c.id === id) || null;
-        }
-
-function nombreEntrenador(user) {
-
-            return dbCredenciales[user]?.nombre || user;
-
-        }
-
-function publicarAvisoPortalCliente(id) {
-            const ficha = buscarClientePorIdTrainer(entrenadorVisto, id);
-            const mensaje = document.getElementById('aviso-multiple-mensaje')?.value.trim() || '';
-            const estado = avisoMultipleEstados.get(id) || {};
-            if (!ficha || !mensaje) { estado.portal = 'error'; avisoMultipleEstados.set(id, estado); renderListaEnvioAvisoMultiple(); return; }
-            try {
-                if (!Array.isArray(ficha.avisosPortal)) ficha.avisosPortal = [];
-                ficha.avisosPortal.unshift({
-                    id: `av_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,6)}`,
-                    fecha: new Date().toISOString(),
-                    contenido: mensaje,
-                    remitente: nombreEntrenador(entrenadorVisto),
-                    canales: { portal: true, whatsapp: avisoCanalWhatsAppActivo },
-                    // A6 (addendum): 'manual' siempre hoy -- campo preparado para que un futuro
-                    // generador automático (sesión mañana, bono a punto de agotarse/caducar,
-                    // reserva confirmada...) pueda marcar sus propios avisos como 'sistema' sin
-                    // cambiar el esquema. Ninguna automatización activa en esta fase.
-                    tipo: 'manual'
-                });
-                ficha.avisosPortal = ficha.avisosPortal.slice(0, 20);
-                localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
-                // PORTAL-NOTICES-FIX (2026-09-16): hallazgo real de auditoría -- este aviso nunca
-                // se guardaba en besoulSuite/agenda (solo en localStorage + la proyección pública
-                // besoulPublicClients vía publicarReservasPublicasDebounced()). En cuanto llegaba
-                // CUALQUIER otro snapshot del documento (p.ej. tras guardar disponibilidad, un
-                // cliente, o cualquier otro cambio de cualquier PT), aplicarEstadoNubeAgenda()
-                // sustituye dbClientes por completo con la copia remota -- que nunca tuvo este
-                // aviso -- y el contador/histórico "desaparecían" sin explicación, exactamente lo
-                // reportado ("aparece un 1, luego 'sin avisos enviados'"). Ahora también se
-                // persiste en el documento compartido, igual que el resto de la ficha -- sin
-                // colección ni Rules nuevas (besoulSuite/agenda ya admite escritura de cualquier
-                // usuario activo). Debounced (no directo) porque avisar a varios clientes ejecuta
-                // esta función en bucle -- coalesce en un único guardado real.
-                programarGuardadoNubeAgenda(entrenadorVisto);
-                publicarReservasPublicasDebounced();
-                estado.portal = 'ok';
-            } catch (err) {
-                console.error('[NOTICE-01] Error publicando aviso en Portal:', err);
-                estado.portal = 'error';
-            }
-            avisoMultipleEstados.set(id, estado);
-            renderListaEnvioAvisoMultiple();
         }
