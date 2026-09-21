@@ -55,7 +55,7 @@ const extracted = [
   extractSimpleConst(agendaHtml, 'BS_APP_BUILD_TAG'),
   ...[
     'valorInvalidoParaFirestore', 'canonicalizarValorDiagnostico', 'hashEstableDiagnostico',
-    'contarElementosDiagnostico', 'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore',
+    'contarElementosDiagnostico', 'diffEstructuralDiagnostico', 'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore',
     'guardarEstadoNubeAgenda', 'aplicarEstadoNubeAgenda', 'sincronizarPruebasCRMDentroDeAgenda',
     'esCitaPruebaCRM',
   ].map((n) => extractFunction(agendaHtml, n)),

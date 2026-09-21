@@ -32,7 +32,7 @@ function extractSimpleConst(name) {
 const names = [
   'valorInvalidoParaFirestore', 'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore',
   'guardarEstadoNubeAgenda',
-  'canonicalizarValorDiagnostico', 'hashEstableDiagnostico', 'contarElementosDiagnostico',
+  'canonicalizarValorDiagnostico', 'hashEstableDiagnostico', 'contarElementosDiagnostico', 'diffEstructuralDiagnostico',
 ];
 const parts = [extractSimpleConst('BS_APP_BUILD_TAG'), ...names.map(extractFunction)];
 fs.writeFileSync(path.join(__dirname, 'concurrency_extract.js'), parts.join('\n\n'));

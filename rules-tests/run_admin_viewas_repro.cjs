@@ -47,7 +47,7 @@ const escrituraExtract = [
   extractSimpleConst(agendaHtml, 'BS_APP_BUILD_TAG'),
   ...[
     'valorInvalidoParaFirestore', 'canonicalizarValorDiagnostico', 'hashEstableDiagnostico',
-    'contarElementosDiagnostico', 'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore',
+    'contarElementosDiagnostico', 'diffEstructuralDiagnostico', 'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore',
     'guardarEstadoNubeAgenda', 'aplicarEstadoNubeAgenda',
   ].map(n => extractFunction(agendaHtml, n)),
 ].join('\n\n');

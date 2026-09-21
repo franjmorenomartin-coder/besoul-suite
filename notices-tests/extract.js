@@ -39,7 +39,7 @@ const funciones = [
   'valorInvalidoParaFirestore',
   'canonicalizarValorDiagnostico',
   'hashEstableDiagnostico',
-  'contarElementosDiagnostico',
+  'contarElementosDiagnostico', 'diffEstructuralDiagnostico',
   'estadoLocalAgendaParaNube',
   'guardarEstadoNubeAgenda',
   'payloadParaUpdateFirestore',

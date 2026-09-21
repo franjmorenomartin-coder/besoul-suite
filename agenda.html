@@ -1352,7 +1352,15 @@ miércoles 07:00-09:00"></textarea>
         // servido tal cual desde GitHub Pages), así que no hay forma automática de inyectar el SHA
         // de git en tiempo de carga. Se sube a mano cada vez que este bloque de diagnóstico
         // cambie, para poder confirmar desde consola que el navegador ejecuta la versión nueva.
-        const BS_APP_BUILD_TAG = 'conflict-diag-v1-2026-09-17';
+        // P0 2026-09-21 (segunda ronda -- el fix del 2026-09-21 se desplegó pero el mismo error
+        // se siguió reportando en producción): bump obligatorio + log INCONDICIONAL al cargar la
+        // página (no solo dentro de un conflicto) -- sin esto no había ninguna forma de confirmar
+        // si el navegador que reportaba el fallo estaba siquiera ejecutando el código nuevo
+        // (firestore.rules/indexes no cambiaron, pero agenda.html se sirve con
+        // Cache-Control: max-age=600 vía GitHub Pages -- una recarga normal, no un hard-reload,
+        // dentro de esa ventana puede servir la versión anterior desde caché de CDN/navegador).
+        const BS_APP_BUILD_TAG = 'save-diag-v2-2026-09-21';
+        console.log('[BESOUL BUILD]', BS_APP_BUILD_TAG, '-- si esto NO aparece en tu consola tras recargar, tu navegador está ejecutando una versión antigua cacheada: cierra TODAS las pestañas de la app y vuelve a abrirla, o usa una ventana de incógnito.');
         let slotAccionSeleccionado = '';
         window.bsAgendaDiaMovil = window.bsAgendaDiaMovil ?? null;
 
@@ -1694,6 +1702,50 @@ miércoles 07:00-09:00"></textarea>
             return v == null ? 0 : 1;
         }
 
+        // P0 2026-09-21 (segunda ronda): diagnóstico estructural, PATH POR PATH -- la pregunta
+        // "same:false" del diagnóstico anterior solo decía QUE un campo entero difería (p.ej.
+        // "clientes"), nunca EN QUÉ PUNTO EXACTO dentro de ese campo (p.ej. "clientes.pta[3].notas").
+        // Recorre local/remoto en paralelo y devuelve, para cada punto donde difieren, la RUTA y
+        // metadatos seguros (tipo, si existe, longitud/recuento, hash de 8 hex) -- NUNCA el valor
+        // real. Limitado a un número máximo de rutas para no inundar la consola en un documento
+        // grande con muchas diferencias reales (p.ej. tras un conflicto genuino de verdad).
+        function diffEstructuralDiagnostico(local, remoto, ruta = '', salida = [], limite = 25) {
+            if (salida.length >= limite) return salida;
+            const tipoLocal = local === undefined ? 'undefined' : (local === null ? 'null' : Array.isArray(local) ? 'array' : typeof local);
+            const tipoRemoto = remoto === undefined ? 'undefined' : (remoto === null ? 'null' : Array.isArray(remoto) ? 'array' : typeof remoto);
+
+            if (tipoLocal !== tipoRemoto) {
+                salida.push({ ruta: ruta || '(raíz)', motivo: 'tipo-distinto', tipoLocal, tipoRemoto, hashLocal: hashEstableDiagnostico(local), hashRemoto: hashEstableDiagnostico(remoto) });
+                return salida;
+            }
+            if (tipoLocal === 'array') {
+                if (local.length !== remoto.length) {
+                    salida.push({ ruta: ruta || '(raíz)', motivo: 'longitud-array-distinta', longitudLocal: local.length, longitudRemoto: remoto.length });
+                }
+                const max = Math.min(local.length, remoto.length);
+                for (let i = 0; i < max && salida.length < limite; i++) {
+                    diffEstructuralDiagnostico(local[i], remoto[i], `${ruta}[${i}]`, salida, limite);
+                }
+                return salida;
+            }
+            if (tipoLocal === 'object') {
+                const claves = new Set([...Object.keys(local), ...Object.keys(remoto)]);
+                for (const k of claves) {
+                    if (salida.length >= limite) break;
+                    const subruta = ruta ? `${ruta}.${k}` : k;
+                    if (!(k in local)) { salida.push({ ruta: subruta, motivo: 'solo-en-remoto' }); continue; }
+                    if (!(k in remoto)) { salida.push({ ruta: subruta, motivo: 'solo-en-local' }); continue; }
+                    diffEstructuralDiagnostico(local[k], remoto[k], subruta, salida, limite);
+                }
+                return salida;
+            }
+            // Hoja (string/number/boolean/null/undefined): comparar por HASH, nunca por valor.
+            if (hashEstableDiagnostico(local) !== hashEstableDiagnostico(remoto)) {
+                salida.push({ ruta: ruta || '(raíz)', motivo: 'valor-distinto', tipoLocal, tipoRemoto, hashLocal: hashEstableDiagnostico(local), hashRemoto: hashEstableDiagnostico(remoto) });
+            }
+            return salida;
+        }
+
         function estadoLocalAgendaParaNube(trainerKeyScope) {
 
             // Escritura dirigida: si se conoce el trainerKey afectado, solo se envían
@@ -1778,6 +1830,11 @@ miércoles 07:00-09:00"></textarea>
             try {
 
                 const scope = trainerKeyScope || entrenadorVisto;
+                // P0 2026-09-21: identificador único por INTENTO de guardado (no por sesión), para
+                // poder correlacionar un conflicto concreto con el resto de la actividad de esta
+                // pestaña en consola sin exponer nada sensible -- es solo un contador+azar, nunca
+                // deriva de datos de cliente.
+                const saveAttemptId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
                 // HARDENING-PRE-BASELINE-v3.2.1: sin trainerKey conocido no hay guardado seguro
                 // posible -- estadoLocalAgendaParaNube() devuelve null a propósito en vez del
@@ -1853,28 +1910,55 @@ miércoles 07:00-09:00"></textarea>
                             const valorPrevio = (conocidoPrevio[campo] || {})[scope] ?? null;
                             const valorFresco = (actual[campo] || {})[scope] ?? null;
                             const sameRaw = JSON.stringify(valorPrevio) === JSON.stringify(valorFresco);
+                            const sameCanonical = hashEstableDiagnostico(valorPrevio) === hashEstableDiagnostico(valorFresco);
                             camposDiagnostico[campo] = {
                                 same: sameRaw,
-                                sameCanonical: hashEstableDiagnostico(valorPrevio) === hashEstableDiagnostico(valorFresco),
+                                sameCanonical,
+                                tipoLocal: valorPrevio === null ? 'null' : Array.isArray(valorPrevio) ? 'array' : typeof valorPrevio,
+                                tipoRemoto: valorFresco === null ? 'null' : Array.isArray(valorFresco) ? 'array' : typeof valorFresco,
                                 baselineHash: hashEstableDiagnostico(valorPrevio),
                                 serverHash: hashEstableDiagnostico(valorFresco),
                                 baselineCount: contarElementosDiagnostico(valorPrevio),
                                 serverCount: contarElementosDiagnostico(valorFresco),
+                                // P0 2026-09-21: si same:false pero sameCanonical:true, es sensibilidad
+                                // al orden de claves en JSON.stringify (la comparación RAW real usada
+                                // para decidir el conflicto) -- evidencia directa, no hipótesis.
+                                posibleSensibilidadOrdenClaves: !sameRaw && sameCanonical,
                             };
                             if (!sameRaw) conflictFields.push(campo);
                         });
                         huboConflicto = conflictFields.length > 0;
                         if (huboConflicto) {
-                            // Nunca contenido real: solo booleans, hashes cortos y recuentos.
-                            console.warn('[BESOUL CONFLICT DIAG]', {
-                                appBuild: BS_APP_BUILD_TAG,
-                                trainerKeyScope: scope,
+                            // P0 2026-09-21 (segunda ronda): diagnóstico estructural completo,
+                            // path por path, solo para los campos que SÍ difieren (nunca sobre los
+                            // que coinciden, para no gastar el límite de rutas en ruido). Nunca
+                            // contenido real: solo booleans, tipos, hashes cortos, recuentos y
+                            // RUTAS (p.ej. "clientes.pta[3].notas") -- nunca el valor en esa ruta.
+                            const diffEstructural = {};
+                            conflictFields.forEach(campo => {
+                                const valorPrevio = (conocidoPrevio[campo] || {})[scope] ?? null;
+                                const valorFresco = (actual[campo] || {})[scope] ?? null;
+                                diffEstructural[campo] = diffEstructuralDiagnostico(valorPrevio, valorFresco, `${campo}.${scope}`);
+                            });
+                            console.warn('[BESOUL_SAVE_CONFLICT]', {
+                                buildId: BS_APP_BUILD_TAG,
+                                saveAttemptId,
+                                documentPath: docRef.path,
+                                trainerScope: scope,
+                                authUid: (firebase.auth && firebase.auth().currentUser && firebase.auth().currentUser.uid) || null,
                                 entrenadorVisto,
                                 rolActivo,
                                 baselineExiste: true,
                                 serverExiste: snap.exists,
+                                timestamps: {
+                                    ahoraISO: new Date().toISOString(),
+                                    baselineUltimaActualizacionLocal: conocidoPrevio.ultimaActualizacionLocal || null,
+                                    serverUltimaActualizacionLocal: actual.ultimaActualizacionLocal || null,
+                                    serverActualizadoEn: actual.actualizadoEn ? String(actual.actualizadoEn) : null,
+                                },
                                 campos: camposDiagnostico,
                                 conflictFields,
+                                diffEstructural,
                             });
                         }
                     }

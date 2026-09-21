@@ -47,7 +47,9 @@ function crearServidorFirestore(estadoInicial) {
       return fn(tx);
     },
   };
-  const ref = { firestore: firestoreInstance };
+  // path: real Firestore DocumentReference objects always expose this -- included here so the
+  // mock faithfully matches the real SDK shape (P0 2026-09-21 diagnostic reads docRef.path).
+  const ref = { firestore: firestoreInstance, path: 'besoulSuite/agenda' };
   return {
     ref,
     estadoActual() { return deepClone(estado); },
@@ -128,17 +130,21 @@ console.log('\n=== ESCENARIO B: CONFLICTO PT/PT (dos pestañas del MISMO entrena
   check('conflicto PT/PT: el cambio de la OTRA pestaña sigue intacto en el servidor (NO se pisó)', servidor.estadoActual().clientes.a, [{ id: 'ca_v1' }, { id: 'ca_nueva_de_otra_pestana' }]);
   check('conflicto PT/PT: publicarReservasPublicas() NUNCA se llama si el guardado se cancela', sesion1.publicarLlamado(), 0);
 
-  // QA 2026-09-17: [BESOUL CONFLICT DIAG] -- se emite exactamente una vez, con la forma esperada,
+  // P0 2026-09-21: [BESOUL_SAVE_CONFLICT] -- se emite exactamente una vez, con la forma esperada,
   // y SIN NINGÚN dato personal del payload (nombre/teléfono/email de arriba nunca deben aparecer).
-  check('DIAG: se emite exactamente un [BESOUL CONFLICT DIAG]', sesion1.warnLog.filter(a => a[0] === '[BESOUL CONFLICT DIAG]').length, 1);
-  const diag1 = sesion1.warnLog.find(a => a[0] === '[BESOUL CONFLICT DIAG]')[1];
-  check('DIAG: trainerKeyScope correcto', diag1.trainerKeyScope, 'a');
+  check('DIAG: se emite exactamente un [BESOUL_SAVE_CONFLICT]', sesion1.warnLog.filter(a => a[0] === '[BESOUL_SAVE_CONFLICT]').length, 1);
+  const diag1 = sesion1.warnLog.find(a => a[0] === '[BESOUL_SAVE_CONFLICT]')[1];
+  check('DIAG: trainerScope correcto', diag1.trainerScope, 'a');
   check('DIAG: entrenadorVisto correcto', diag1.entrenadorVisto, 'a');
   check('DIAG: rolActivo correcto', diag1.rolActivo, 'pt');
-  check('DIAG: appBuild presente', typeof diag1.appBuild === 'string' && diag1.appBuild.length > 0, true);
+  check('DIAG: buildId presente', typeof diag1.buildId === 'string' && diag1.buildId.length > 0, true);
+  check('DIAG: saveAttemptId presente y único', typeof diag1.saveAttemptId === 'string' && diag1.saveAttemptId.length > 0, true);
+  check('DIAG: documentPath presente', typeof diag1.documentPath === 'string' && diag1.documentPath.length > 0, true);
   check('DIAG: conflictFields incluye "clientes"', diag1.conflictFields.includes('clientes'), true);
   check('DIAG: campos.clientes.same === false', diag1.campos.clientes.same, false);
   check('DIAG: campos.clientes trae hashes cortos, no el contenido', typeof diag1.campos.clientes.baselineHash === 'string' && diag1.campos.clientes.baselineHash.length <= 8, true);
+  check('DIAG: diffEstructural.clientes es un array de rutas', Array.isArray(diag1.diffEstructural.clientes), true);
+  check('DIAG: diffEstructural incluye al menos una ruta bajo "clientes.a"', diag1.diffEstructural.clientes.some(r => r.ruta.startsWith('clientes.a')), true);
   const diagStr1 = JSON.stringify(diag1);
   check('DIAG: NUNCA contiene el nombre real', diagStr1.includes('Editado por pestaña 1'), false);
   check('DIAG: NUNCA contiene el teléfono real', diagStr1.includes('699888777'), false);
@@ -165,7 +171,7 @@ console.log('\n=== ESCENARIO C: CONFLICTO Admin/PT (admin viendo-como + el propi
   check('conflicto Admin/PT: guardado devuelve ok:false', resultado.ok, false);
   check('conflicto Admin/PT: el cambio real de la PT sigue intacto (NO lo pisa el admin)', servidor.estadoActual().clientes.veronica, [{ id: 'cv1', telefono: '600111222 (actualizado por Verónica)' }]);
 
-  const diag2 = sesionAdmin.warnLog.find(a => a[0] === '[BESOUL CONFLICT DIAG]')[1];
+  const diag2 = sesionAdmin.warnLog.find(a => a[0] === '[BESOUL_SAVE_CONFLICT]')[1];
   check('DIAG (admin): rolActivo === "admin"', diag2.rolActivo, 'admin');
   check('DIAG (admin): entrenadorVisto === "veronica"', diag2.entrenadorVisto, 'veronica');
   const diagStr2 = JSON.stringify(diag2);
