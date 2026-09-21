@@ -59,7 +59,7 @@ const publicacionExtract = fs.readFileSync(PORTAL_SLOTS_EXTRACT_PATH, 'utf8');
 async function main() {
   const testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
-    firestore: { rules: fs.readFileSync(RULES_PATH, 'utf8'), host: '127.0.0.1', port: 8080 },
+    firestore: { rules: fs.readFileSync(RULES_PATH, 'utf8'), host: '127.0.0.1', port: 8085 },
   });
 
   // Escenario realista: 3 trainers con datos (no solo el que el admin está editando), y
