@@ -1886,6 +1886,43 @@ miércoles 07:00-09:00"></textarea>
                     }
                     tx.update(docRef, ...payloadParaUpdateFirestore(payload));
                 })
+                    .then(() => {
+                        // ROOT CAUSE real del P0 "conflicto de otra sesión" reportado en QA
+                        // 2026-09-21 (tercera vez, tras Ctrl+F5 y sin ninguna otra pestaña/usuario
+                        // real de por medio): esta pestaña acaba de escribir con éxito, así que YA
+                        // CONOCE el nuevo estado real del servidor para trainerKey=scope -- pero
+                        // bsUltimoServidorConocido solo se refrescaba en aplicarEstadoNubeAgenda()
+                        // (el listener onSnapshot), que depende de un round-trip de red y NO es
+                        // instantáneo. Un segundo guardado normal e inmediatamente consecutivo, de
+                        // la MISMA sesión (dos ediciones seguidas, cada una disparando su propio
+                        // guardarEstadoNubeAgenda() vía el debounce de programarGuardadoNubeAgenda),
+                        // podía ejecutar su transacción ANTES de que el listener hubiera vuelto a
+                        // disparar -- comparando entonces contra el baseline de ANTES del primer
+                        // guardado, no contra lo que ese primer guardado acababa de escribir.
+                        // Reproducido de forma determinista con las funciones reales extraídas
+                        // contra el Emulator Suite, sin ninguna Rule ni índice involucrados (ver
+                        // rules-tests/run_double_save_race_repro.cjs) -- dos guardados legítimos y
+                        // consecutivos desde una única pestaña, el segundo fallaba con
+                        // code:'conflict' porque comparaba contra un baseline obsoleto, no porque
+                        // hubiera ningún conflicto real. Este bloque cierra esa ventana: actualiza
+                        // SOLO la porción [campo][scope] que esta pestaña acaba de escribir,
+                        // preservando lo que ya se sabía de cualquier OTRO trainerKey. Un conflicto
+                        // REAL de otra sesión sigue detectándose igual que antes: si otra pestaña
+                        // escribe de verdad entre medias, el próximo tx.get() de ESTA pestaña verá
+                        // un valor de servidor que YA NO coincide con lo que ella misma cree haber
+                        // escrito la última vez.
+                        const previo = window.bsUltimoServidorConocido || {};
+                        const actualizado = {};
+                        CAMPOS_CONCURRENCIA_COMPARABLES.forEach(campo => {
+                            actualizado[campo] = { ...(previo[campo] || {}) };
+                            actualizado[campo][scope] = payload[`${campo}.${scope}`];
+                        });
+                        // Copia profunda obligatoria (mismo motivo que la captura inicial en
+                        // aplicarEstadoNubeAgenda(): nunca compartir referencia con dbClientes/
+                        // dbAgenda/etc., que se siguen mutando en el sitio en cuanto el usuario
+                        // edite algo más -- ver el comentario "IMPORTANTE (2)" de esa función).
+                        window.bsUltimoServidorConocido = JSON.parse(JSON.stringify(actualizado));
+                    })
                     .then(() => publicarReservasPublicas())
                     .then(() => ({ ok: true }))
                     .catch(err => {

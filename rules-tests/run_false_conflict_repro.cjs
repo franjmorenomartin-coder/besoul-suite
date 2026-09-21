@@ -59,7 +59,7 @@ const extracted = [
 async function main() {
   const testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
-    firestore: { rules: fs.readFileSync(RULES_PATH, 'utf8'), host: '127.0.0.1', port: 8080 },
+    firestore: { rules: fs.readFileSync(RULES_PATH, 'utf8'), host: '127.0.0.1', port: 8085 },
   });
 
   // Escenario REALISTA de negocio: PT B tiene una "prueba CRM" (valoración/lead agendada) en su

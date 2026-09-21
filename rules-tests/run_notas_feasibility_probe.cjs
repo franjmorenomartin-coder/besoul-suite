@@ -60,7 +60,7 @@ async function main() {
   try {
     testEnv = await initializeTestEnvironment({
       projectId: PROJECT_ID,
-      firestore: { rules: REGLA_CANDIDATA, host: '127.0.0.1', port: 8080 },
+      firestore: { rules: REGLA_CANDIDATA, host: '127.0.0.1', port: 8085 },
     });
   } catch (e) {
     console.log('RESULTADO: la regla candidata NI SIQUIERA COMPILA -- CEL/.all() sobre affectedKeys() no está soportado tal cual.');
