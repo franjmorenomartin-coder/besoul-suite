@@ -46,7 +46,7 @@ const agendaHtml = fs.readFileSync(AGENDA_HTML_PATH, 'utf8');
 const escrituraExtract = [
   extractSimpleConst(agendaHtml, 'BS_APP_BUILD_TAG'),
   ...[
-    'valorInvalidoParaFirestore', 'canonicalizarValorDiagnostico', 'hashEstableDiagnostico',
+    'valorInvalidoParaFirestore', 'canonicalizarValorDiagnostico', 'igualdadCanonica', 'hashEstableDiagnostico',
     'contarElementosDiagnostico', 'diffEstructuralDiagnostico', 'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore',
     'guardarEstadoNubeAgenda', 'aplicarEstadoNubeAgenda',
   ].map(n => extractFunction(agendaHtml, n)),

@@ -1,7 +1,9 @@
 # BESOUL Data Flows
 
 Companion to `BESOUL-SYSTEM-MAP.md` and `BESOUL-FIRESTORE-MAP.md`. Diagrams reflect the real code as
-of `main` commit `72a31ed` (includes the 2026-09-21 save-conflict-race fix).
+of `main` commit `2e768ae` (includes both the 2026-09-21 same-tab-race fix and the
+2026-09-21 canonical-equality fix — see "Why the false conflict happened" below for both root
+causes this incident actually had, found in sequence with real evidence at each step).
 
 ## Trainer save flow (the SAVE INCIDENT flow)
 
@@ -24,7 +26,7 @@ sequenceDiagram
     A->>A: payload = estadoLocalAgendaParaNube(scope)
     A->>F: runTransaction: tx.get(docRef)
     F-->>A: actual (fresh server state)
-    A->>A: compare bsUltimoServidorConocido[campo][scope] vs actual[campo][scope]
+    A->>A: compare bsUltimoServidorConocido[campo][scope] vs actual[campo][scope] via igualdadCanonica()
     alt no conflict
         A->>F: tx.update(docRef, targeted FieldPath payload)
         F-->>A: commit OK
@@ -40,7 +42,13 @@ sequenceDiagram
     L->>A: aplicarEstadoNubeAgenda(data) -- re-syncs bsUltimoServidorConocido again, consistently
 ```
 
-### Why the false conflict happened (before the 2026-09-21 fix)
+### Why the false conflict happened -- TWO independent root causes, found in sequence
+
+This incident had two distinct root causes, each confirmed with real evidence before being fixed --
+neither was assumed, and fixing the first did not fix the second (a real production report after
+the first fix's deploy is what triggered finding the second).
+
+**Root cause #1 (fixed first, 2026-09-21): same-tab timing race.**
 
 ```mermaid
 sequenceDiagram
@@ -57,6 +65,31 @@ sequenceDiagram
     A->>A: compare bsUltimoServidorConocido (v0) vs actual (v1) -> DIFFERENT
     A-->>A: throw code:'conflict' -- but the only writer was THIS SAME TAB
 ```
+
+Fix: `guardarEstadoNubeAgenda()` updates its own baseline right after a successful write (§ save
+flow above), closing the timing window instead of waiting for the listener.
+
+**Root cause #2 (fixed second, same day: real production evidence still showed the same error after
+root cause #1's fix was live): raw JSON serialization is not a valid equality check for concurrency.**
+
+```mermaid
+sequenceDiagram
+    participant A as agenda.html
+    participant F as Firestore
+
+    Note over A,F: bsUltimoServidorConocido and the server's actual value are the SAME DATA<br/>-- no other writer, no real edit -- just built via different code paths
+    A->>A: JSON.stringify(local) = '{"id":"c1","nombre":"X"}'
+    F->>A: JSON.stringify(remote) = '{"nombre":"X","id":"c1"}'
+    Note over A: Same content. Different KEY INSERTION ORDER.<br/>JSON.stringify() is order-sensitive -- these strings are NOT equal.
+    A-->>A: throw code:'conflict' -- but nothing about the DATA actually differs
+```
+
+Fix: the decision now uses `igualdadCanonica(local, remote)` (recursively sorts object keys before
+comparing; never reorders arrays) instead of raw `JSON.stringify` equality. Proven with the exact
+shape captured from real production evidence
+(`rules-tests/run_canonical_equality_regression.cjs`, TEST J) and with the general properties this
+must hold in both directions (TEST A–D: object key order must never matter, array element order
+always must).
 
 ## Admin "ver como PT" flow
 

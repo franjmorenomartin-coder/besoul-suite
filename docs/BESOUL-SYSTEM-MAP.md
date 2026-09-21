@@ -223,21 +223,51 @@ docRef.firestore.runTransaction(async tx => {
     actual = (await tx.get(docRef)).data()         -- FRESH read of besoulSuite/agenda
     compare CAMPOS_CONCURRENCIA_COMPARABLES fields
       window.bsUltimoServidorConocido[campo][scope]  vs  actual[campo][scope]
-      (JSON.stringify equality, per field)
+      via igualdadCanonica() -- see "Concurrency equality" below
     if different  → throw { code: 'conflict' }
     else           → tx.update(docRef, ...payloadParaUpdateFirestore(payload))  -- dotted FieldPath update
 })
   ↓ (on success)
-window.bsUltimoServidorConocido updated for [campo][scope]        -- THE FIX for this incident
+window.bsUltimoServidorConocido updated for [campo][scope]        -- fix for the 2026-09-21 same-tab race
   ↓
 publicarReservasPublicas()                         -- best-effort, doesn't affect the save's own result
   ↓
 { ok: true }
 ```
 
-**On conflict** (`.catch`): logs `[BESOUL CONFLICT DIAG]` (no PII — hashes/counts/booleans only),
-returns `{ ok: false, err: { code: 'conflict', message: '...cambios más recientes de este
-entrenador...' } }` — the exact message this incident is about.
+**On conflict** (`.catch`): logs `[BESOUL_SAVE_CONFLICT]` / `[BESOUL_SAVE_CONFLICT_JSON]` (no PII —
+paths/types/counts/8-hex hashes only), returns `{ ok: false, err: { code: 'conflict', message:
+'...cambios más recientes de este entrenador...' } }` — the exact message this incident is about.
+
+### Concurrency equality: CANONICAL STRUCTURAL EQUALITY, not raw JSON serialization equality
+
+**As of 2026-09-21 (fourth round of this incident), the conflict decision no longer uses
+`JSON.stringify(a) !== JSON.stringify(b)`.** It uses `igualdadCanonica(a, b)` — the *same* primitive
+used by the diagnostic's `canonicalEqual` field and by `diffEstructuralDiagnostico()`'s leaf
+comparison. There is exactly one definition of "equal" in this codebase, not two.
+
+**Why raw JSON serialization equality was wrong as a concurrency signal**: `JSON.stringify()` on a
+plain JS object serializes keys in **insertion order** — an implementation detail of how a
+particular object happened to get built, never a property of the data itself. Two representations
+of the *exact same* client/session/availability/history record can legitimately have different key
+insertion order depending on which code path constructed them (a fresh Firestore read, a locally
+built object from `estadoLocalAgendaParaNube()`, a value that passed through `sincronizarPruebasCRMDentroDeAgenda()`,
+etc.) — none of that reflects a real edit by anyone. Using raw serialization equality to decide
+"did someone else change this" therefore produces **false conflicts on identical data**, and did so
+in production: real evidence captured on 2026-09-21 (buildId `save-diag-v3-2026-09-21`,
+`trainerScope: 'fran'`) showed `rawEqual:false` + `canonicalEqual:true` + `structuralDiff:[]`
+simultaneously across 4 of the 5 comparable fields — proof, not hypothesis.
+
+**Object key order must never be a concurrency signal; array element order still must be.** A
+reordering of an *array's elements* (e.g. two sessions genuinely reordered) is real information a
+concurrency check should catch — arrays are ordered collections, position is meaningful. A
+reordering of an *object's own keys* is not information at all — objects are unordered collections
+of key-value pairs by definition (Firestore's own data model treats maps this way). `igualdadCanonica()`
+(built on `canonicalizarValorDiagnostico()`) recursively sorts object keys before comparing, while
+never touching array order — this is *the* property that makes it the correct equality primitive
+for this decision, verified by dedicated tests (`rules-tests/run_canonical_equality_regression.cjs`,
+TEST A–D prove object-key-order-insensitivity and array-order-sensitivity as two independent,
+explicitly tested properties, not an assumption).
 
 **Where `window.bsUltimoServidorConocido` (the concurrency baseline) is set**:
 1. `aplicarEstadoNubeAgenda(data)` — every time the `onSnapshot` listener on `besoulSuite/agenda`

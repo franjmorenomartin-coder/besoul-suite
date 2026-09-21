@@ -37,7 +37,7 @@ function extractSimpleConst(name) {
 const consts = ['BS_APP_BUILD_TAG'];
 const funciones = [
   'valorInvalidoParaFirestore',
-  'canonicalizarValorDiagnostico',
+  'canonicalizarValorDiagnostico', 'igualdadCanonica',
   'hashEstableDiagnostico',
   'contarElementosDiagnostico', 'diffEstructuralDiagnostico',
   'estadoLocalAgendaParaNube',

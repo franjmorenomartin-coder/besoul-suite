@@ -1669,19 +1669,33 @@ miércoles 07:00-09:00"></textarea>
             return problema;
         }
 
-        // QA 2026-09-17 (diagnóstico de conflicto de concurrencia, SOLO diagnóstico -- no decide
-        // nada por sí mismo): la comparación real que decide code:'conflict' sigue siendo
-        // JSON.stringify(a) !== JSON.stringify(b) (sin cambios en esta pasada, a propósito -- no
-        // hay evidencia todavía de que el problema sea el método de comparación en sí). Estas tres
-        // funciones solo sirven para que [BESOUL CONFLICT DIAG] pueda decir, además del resultado
-        // real, si una comparación CANÓNICA (claves de objeto ordenadas recursivamente, orden de
-        // array preservado) habría dado el mismo resultado -- si algún día difieren, eso confirma
-        // que el problema es sensibilidad al orden de claves; si coinciden, lo descarta.
+        // P0 2026-09-21 (CUARTA ronda -- CAUSA RAÍZ CONFIRMADA CON EVIDENCIA REAL DE PRODUCCIÓN):
+        // el [BESOUL_SAVE_CONFLICT_JSON] capturado en producción (trainerScope='fran') mostró
+        // rawEqual:false + canonicalEqual:true + structuralDiff:[] simultáneamente en 4 de los 5
+        // campos comparables -- la prueba directa de que JSON.stringify(a) !== JSON.stringify(b)
+        // estaba tratando una diferencia de ORDEN DE CLAVES (nunca de contenido real) como si fuera
+        // un conflicto genuino. canonicalizarValorDiagnostico() (claves de objeto ordenadas
+        // recursivamente, orden de ARRAY preservado -- nunca se reordena un array) ya era, desde
+        // que se escribió como diagnóstico puro, exactamente la comparación correcta. Esta pasada
+        // no cambia canonicalizarValorDiagnostico() en absoluto: la conecta a la decisión real.
+        //
+        // igualdadCanonica() es ahora el ÚNICO primitivo de igualdad -- usado por (1) la decisión
+        // real de conflicto en guardarEstadoNubeAgenda(), (2) el diagnóstico (canonicalEqual por
+        // campo), y (3) los tests. Nunca dos definiciones de "igual" por separado.
         function canonicalizarValorDiagnostico(v) {
             if (Array.isArray(v)) return v.map(canonicalizarValorDiagnostico);
             if (v && typeof v === 'object') {
                 if (v instanceof Date) return v.toISOString();
                 if (v._methodName) return `<FieldValue:${v._methodName}>`;
+                // Firestore Timestamp (compat SDK): no es instanceof Date ni una FieldValue sin
+                // resolver -- expone toDate() y seconds/nanoseconds (o _seconds/_nanoseconds según
+                // versión). Ninguno de los 5 campos comparables almacena hoy un Timestamp real (este
+                // proyecto usa siempre ISO strings para fechas de negocio -- confirmado en el código
+                // fuente), pero se normaliza de todos modos por robustez, con el mismo criterio que
+                // Date: a ISO string, nunca comparado por identidad de instancia.
+                if (typeof v.toDate === 'function' && (typeof v.seconds === 'number' || typeof v._seconds === 'number')) {
+                    return v.toDate().toISOString();
+                }
                 const claves = Object.keys(v).sort();
                 const out = {};
                 claves.forEach(k => { out[k] = canonicalizarValorDiagnostico(v[k]); });
@@ -1689,8 +1703,17 @@ miércoles 07:00-09:00"></textarea>
             }
             return v === undefined ? '<undefined>' : v;
         }
-        // Hash NO criptográfico (FNV-1a de 32 bits) -- suficiente para "¿cambió esto?" en un log
-        // de diagnóstico, sin añadir ninguna dependencia ni exponer el contenido real.
+        // Comparación de igualdad REAL (no un hash): dos valores son iguales si su forma canónica
+        // serializa al MISMO string. Se usa JSON.stringify de la forma YA canonicalizada, nunca un
+        // hash, para la decisión de conflicto -- un hash de 32 bits es más que suficiente para un
+        // log de diagnóstico (colisión astronómicamente improbable), pero la decisión que protege
+        // contra pérdida de datos no debe depender ni siquiera de esa probabilidad remota.
+        function igualdadCanonica(a, b) {
+            return JSON.stringify(canonicalizarValorDiagnostico(a)) === JSON.stringify(canonicalizarValorDiagnostico(b));
+        }
+        // Hash NO criptográfico (FNV-1a de 32 bits) -- SOLO para mostrar un identificador corto y
+        // estable en el diagnóstico (localHash/remoteHash); la igualdad real la decide
+        // igualdadCanonica(), nunca la coincidencia de estos hashes.
         function hashEstableDiagnostico(valor) {
             const str = JSON.stringify(canonicalizarValorDiagnostico(valor));
             let h = 0x811c9dc5;
@@ -1743,8 +1766,9 @@ miércoles 07:00-09:00"></textarea>
                 }
                 return salida;
             }
-            // Hoja (string/number/boolean/null/undefined): comparar por HASH, nunca por valor.
-            if (hashEstableDiagnostico(local) !== hashEstableDiagnostico(remoto)) {
+            // Hoja (string/number/boolean/null/undefined): mismo primitivo igualdadCanonica() que
+            // la decisión real -- nunca un segundo criterio de igualdad, ni siquiera para hojas.
+            if (!igualdadCanonica(local, remoto)) {
                 salida.push({ ruta: ruta || '(raíz)', motivo: 'valor-distinto', tipoLocal, tipoRemoto, hashLocal: hashEstableDiagnostico(local), hashRemoto: hashEstableDiagnostico(remoto) });
             }
             return salida;
@@ -1899,13 +1923,22 @@ miércoles 07:00-09:00"></textarea>
                     const snap = await tx.get(docRef);
                     const actual = snap.exists ? (snap.data() || {}) : {};
 
-                    // QA 2026-09-17: la DECISIÓN real (qué compara, cómo) es exactamente la misma
-                    // de antes -- JSON.stringify(a) !== JSON.stringify(b) por campo -- sin cambios
-                    // en esta pasada, a propósito, porque todavía no hay evidencia de otra causa.
-                    // Solo se añade diagnóstico: por cada campo comparable, hash/recuento estables
-                    // (nunca el contenido) más una comparación CANÓNICA en paralelo, puramente
-                    // informativa, para poder confirmar o descartar sensibilidad al orden de claves
-                    // la próxima vez que esto ocurra en un navegador real.
+                    // P0 2026-09-21 (CUARTA ronda -- FIX real, causa raíz confirmada con evidencia
+                    // de producción): la DECISIÓN de conflicto ahora usa igualdadCanonica() --
+                    // claves de objeto ordenadas recursivamente, orden de ARRAY preservado -- en vez
+                    // de JSON.stringify(a) !== JSON.stringify(b) crudo. El diagnóstico capturado en
+                    // producción (trainerScope='fran') mostró rawEqual:false + canonicalEqual:true +
+                    // structuralDiff:[] en 4 de los 5 campos simultáneamente: la comparación cruda
+                    // estaba bloqueando guardados legítimos por una diferencia de ORDEN DE CLAVES,
+                    // nunca de contenido real -- confirmado, no hipótesis. La protección de
+                    // concurrencia SIGUE intacta: un cambio de contenido REAL (cualquier valor,
+                    // cualquier ruta, dentro del campo/scope comparado) sigue produciendo
+                    // canonicalEqual:false y sigue bloqueando el guardado exactamente igual que
+                    // antes -- lo único que deja de contar como conflicto es una reordenación de
+                    // claves sin ningún cambio de valor. El orden de los ARRAYS sigue siendo
+                    // significativo (canonicalizarValorDiagnostico() nunca reordena un array), así
+                    // que una reordenación real de elementos (p.ej. citas reordenadas) sigue
+                    // detectándose como conflicto.
                     let huboConflicto = false;
                     if (conocidoPrevio) {
                         // P0 2026-09-21 (tercera ronda): UNA sola estructura de diagnóstico,
@@ -1920,7 +1953,7 @@ miércoles 07:00-09:00"></textarea>
                             const valorPrevio = (conocidoPrevio[campo] || {})[scope] ?? null;
                             const valorFresco = (actual[campo] || {})[scope] ?? null;
                             const rawEqual = JSON.stringify(valorPrevio) === JSON.stringify(valorFresco);
-                            const canonicalEqual = hashEstableDiagnostico(valorPrevio) === hashEstableDiagnostico(valorFresco);
+                            const canonicalEqual = igualdadCanonica(valorPrevio, valorFresco);
                             return {
                                 field: campo,
                                 localType: valorPrevio === null ? 'null' : Array.isArray(valorPrevio) ? 'array' : typeof valorPrevio,
@@ -1931,22 +1964,27 @@ miércoles 07:00-09:00"></textarea>
                                 remoteHash: hashEstableDiagnostico(valorFresco),
                                 localCount: contarElementosDiagnostico(valorPrevio),
                                 remoteCount: contarElementosDiagnostico(valorFresco),
-                                // Rutas exactas donde difieren (p.ej. "clientes.fran[3].notas") --
-                                // vacío cuando rawEqual es true. Calculado siempre (no solo para
-                                // los campos en conflicto) porque el coste es insignificante frente
-                                // al tamaño real de un solo trainerKey y el pedido explícito es "for
-                                // each CAMPOS_CONCURRENCIA_COMPARABLES".
-                                structuralDiff: rawEqual ? [] : diffEstructuralDiagnostico(valorPrevio, valorFresco, `${campo}.${scope}`),
+                                // Rutas exactas donde difieren DE VERDAD (p.ej.
+                                // "clientes.fran[3].notas") -- vacío cuando canonicalEqual es true
+                                // (rawEqual:false + canonicalEqual:true ya no implica ninguna
+                                // diferencia real que mostrar). Calculado siempre (no solo para los
+                                // campos en conflicto) porque el coste es insignificante frente al
+                                // tamaño real de un solo trainerKey.
+                                structuralDiff: canonicalEqual ? [] : diffEstructuralDiagnostico(valorPrevio, valorFresco, `${campo}.${scope}`),
                             };
                         });
+                        // differingFields: diferencia CRUDA (informativa -- ya NO decide el
+                        // conflicto). canonicalDifferingFields: diferencia REAL -- esto es lo que
+                        // ahora decide si el guardado se bloquea.
                         const differingFields = campos.filter(c => !c.rawEqual).map(c => c.field);
                         const canonicalDifferingFields = campos.filter(c => !c.canonicalEqual).map(c => c.field);
                         // Si un campo es rawEqual:false pero canonicalEqual:true, es sensibilidad al
-                        // orden de claves en JSON.stringify (la comparación RAW real que decide el
-                        // conflicto) -- evidencia directa, no hipótesis, la próxima vez que ocurra.
+                        // orden de claves -- con este fix, YA NO bloquea el guardado (se sigue
+                        // reportando aquí porque sigue siendo información útil: confirma que el fix
+                        // se activó para este intento concreto).
                         const possibleKeyOrderOnlyDifference = campos.some(c => !c.rawEqual && c.canonicalEqual);
-                        huboConflicto = differingFields.length > 0;
-                        if (huboConflicto) {
+                        huboConflicto = canonicalDifferingFields.length > 0;
+                        if (differingFields.length > 0 || huboConflicto) {
                             const safeDiagnosticObject = {
                                 buildId: BS_APP_BUILD_TAG,
                                 saveAttemptId,
@@ -1967,6 +2005,12 @@ miércoles 07:00-09:00"></textarea>
                                 differingFields,
                                 canonicalDifferingFields,
                                 possibleKeyOrderOnlyDifference,
+                                // P0 2026-09-21 (cuarta ronda): el diagnóstico ahora puede emitirse
+                                // SIN bloquear el guardado (diferencia cruda pero no canónica, el
+                                // fix la deja pasar) -- este campo dice explícitamente si ESTE
+                                // intento concreto se bloqueó o se dejó pasar, para poder validar el
+                                // fix en producción sin ambigüedad.
+                                conflictoBloqueado: huboConflicto,
                             };
                             // Forma expandible (DevTools -- útil si quien mira SÍ puede navegar el
                             // objeto) y forma de texto plano de una sola línea, pensada para poder
