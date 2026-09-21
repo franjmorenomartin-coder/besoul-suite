@@ -76,7 +76,10 @@ function crearSesion({ docRef, dbClientes, dbAgenda, dbPruebasCRM, dbDisponibili
   let publicarLlamado = 0;
   async function publicarReservasPublicas() { publicarLlamado++; }
   const warnLog = [];
-  const consoleFalso = { ...console, warn: (...args) => { warnLog.push(args); } };
+  const errorLog = [];
+  // P0 2026-09-21 (tercera ronda): también captura console.error -- [BESOUL_SAVE_CONFLICT_JSON]
+  // se emite por ahí (texto plano de una sola línea, copiable), no por console.warn.
+  const consoleFalso = { ...console, warn: (...args) => { warnLog.push(args); }, error: (...args) => { errorLog.push(args); } };
   const fn = new Function(
     'window', 'firebase', 'entrenadorVisto', 'rolActivo', 'dbClientes', 'dbAgenda', 'dbPruebasCRM',
     'dbDisponibilidadReservas', 'dbHistoricoClientes', 'dbNotas', 'publicarReservasPublicas', 'console',
@@ -84,7 +87,7 @@ function crearSesion({ docRef, dbClientes, dbAgenda, dbPruebasCRM, dbDisponibili
     return { guardarEstadoNubeAgenda };`
   );
   const M = fn(window, firebase, entrenadorVisto, rolActivo, dbClientes, dbAgenda, dbPruebasCRM, dbDisponibilidadReservas, dbHistoricoClientes, dbNotas, publicarReservasPublicas, consoleFalso);
-  return { ...M, publicarLlamado: () => publicarLlamado, warnLog };
+  return { ...M, publicarLlamado: () => publicarLlamado, warnLog, errorLog };
 }
 
 async function main() {
@@ -130,22 +133,32 @@ console.log('\n=== ESCENARIO B: CONFLICTO PT/PT (dos pestañas del MISMO entrena
   check('conflicto PT/PT: el cambio de la OTRA pestaña sigue intacto en el servidor (NO se pisó)', servidor.estadoActual().clientes.a, [{ id: 'ca_v1' }, { id: 'ca_nueva_de_otra_pestana' }]);
   check('conflicto PT/PT: publicarReservasPublicas() NUNCA se llama si el guardado se cancela', sesion1.publicarLlamado(), 0);
 
-  // P0 2026-09-21: [BESOUL_SAVE_CONFLICT] -- se emite exactamente una vez, con la forma esperada,
-  // y SIN NINGÚN dato personal del payload (nombre/teléfono/email de arriba nunca deben aparecer).
+  // P0 2026-09-21 (tercera ronda): [BESOUL_SAVE_CONFLICT] (objeto, DevTools) +
+  // [BESOUL_SAVE_CONFLICT_JSON] (texto plano de una sola línea, copiable) -- misma estructura
+  // reutilizada para ambos, se emite exactamente una vez cada uno, SIN NINGÚN dato personal del
+  // payload (nombre/teléfono/email de arriba nunca deben aparecer).
   check('DIAG: se emite exactamente un [BESOUL_SAVE_CONFLICT]', sesion1.warnLog.filter(a => a[0] === '[BESOUL_SAVE_CONFLICT]').length, 1);
   const diag1 = sesion1.warnLog.find(a => a[0] === '[BESOUL_SAVE_CONFLICT]')[1];
+  const jsonLines1 = sesion1.errorLog.filter(a => typeof a[0] === 'string' && a[0].startsWith('[BESOUL_SAVE_CONFLICT_JSON]'));
+  check('DIAG: se emite exactamente una línea [BESOUL_SAVE_CONFLICT_JSON]', jsonLines1.length, 1);
+  const diag1Json = JSON.parse(jsonLines1[0][0].slice('[BESOUL_SAVE_CONFLICT_JSON] '.length));
+  check('DIAG: la línea de texto plano es el MISMO objeto que el warn (reutilizado, no un segundo sistema)', diag1Json, diag1);
   check('DIAG: trainerScope correcto', diag1.trainerScope, 'a');
   check('DIAG: entrenadorVisto correcto', diag1.entrenadorVisto, 'a');
   check('DIAG: rolActivo correcto', diag1.rolActivo, 'pt');
   check('DIAG: buildId presente', typeof diag1.buildId === 'string' && diag1.buildId.length > 0, true);
   check('DIAG: saveAttemptId presente y único', typeof diag1.saveAttemptId === 'string' && diag1.saveAttemptId.length > 0, true);
   check('DIAG: documentPath presente', typeof diag1.documentPath === 'string' && diag1.documentPath.length > 0, true);
-  check('DIAG: conflictFields incluye "clientes"', diag1.conflictFields.includes('clientes'), true);
-  check('DIAG: campos.clientes.same === false', diag1.campos.clientes.same, false);
-  check('DIAG: campos.clientes trae hashes cortos, no el contenido', typeof diag1.campos.clientes.baselineHash === 'string' && diag1.campos.clientes.baselineHash.length <= 8, true);
-  check('DIAG: diffEstructural.clientes es un array de rutas', Array.isArray(diag1.diffEstructural.clientes), true);
-  check('DIAG: diffEstructural incluye al menos una ruta bajo "clientes.a"', diag1.diffEstructural.clientes.some(r => r.ruta.startsWith('clientes.a')), true);
-  const diagStr1 = JSON.stringify(diag1);
+  check('DIAG: differingFields incluye "clientes"', diag1.differingFields.includes('clientes'), true);
+  check('DIAG: campos trae los 5 campos comparables, uno por entrada', diag1.campos.length, 5);
+  const campoClientes1 = diag1.campos.find(c => c.field === 'clientes');
+  check('DIAG: campos[clientes].rawEqual === false', campoClientes1.rawEqual, false);
+  check('DIAG: campos[clientes] trae hashes cortos, no el contenido', typeof campoClientes1.localHash === 'string' && campoClientes1.localHash.length <= 8, true);
+  check('DIAG: campos[clientes].structuralDiff es un array de rutas', Array.isArray(campoClientes1.structuralDiff), true);
+  check('DIAG: structuralDiff incluye al menos una ruta bajo "clientes.a"', campoClientes1.structuralDiff.some(r => r.ruta.startsWith('clientes.a')), true);
+  const campoAgenda1 = diag1.campos.find(c => c.field === 'agenda');
+  check('DIAG: un campo SIN diferencia trae structuralDiff vacío', campoAgenda1.rawEqual === true && campoAgenda1.structuralDiff.length === 0, true);
+  const diagStr1 = JSON.stringify(diag1) + jsonLines1[0][0];
   check('DIAG: NUNCA contiene el nombre real', diagStr1.includes('Editado por pestaña 1'), false);
   check('DIAG: NUNCA contiene el teléfono real', diagStr1.includes('699888777'), false);
   check('DIAG: NUNCA contiene el email real', diagStr1.includes('pii-real@x.com'), false);

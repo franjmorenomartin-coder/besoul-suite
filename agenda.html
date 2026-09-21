@@ -1359,7 +1359,11 @@ miércoles 07:00-09:00"></textarea>
         // (firestore.rules/indexes no cambiaron, pero agenda.html se sirve con
         // Cache-Control: max-age=600 vía GitHub Pages -- una recarga normal, no un hard-reload,
         // dentro de esa ventana puede servir la versión anterior desde caché de CDN/navegador).
-        const BS_APP_BUILD_TAG = 'save-diag-v2-2026-09-21';
+        // P0 2026-09-21 (tercera ronda): [BESOUL_SAVE_CONFLICT_JSON] añadido -- una única línea de
+        // texto plano, copiable sin depender de ninguna interacción de DevTools más allá de
+        // seleccionar texto (el objeto expandible [BESOUL_SAVE_CONFLICT] no era extraíble de forma
+        // fiable para un usuario sin experiencia en DevTools).
+        const BS_APP_BUILD_TAG = 'save-diag-v3-2026-09-21';
         console.log('[BESOUL BUILD]', BS_APP_BUILD_TAG, '-- si esto NO aparece en tu consola tras recargar, tu navegador está ejecutando una versión antigua cacheada: cierra TODAS las pestañas de la app y vuelve a abrirla, o usa una ventana de incógnito.');
         let slotAccionSeleccionado = '';
         window.bsAgendaDiaMovil = window.bsAgendaDiaMovil ?? null;
@@ -1904,43 +1908,46 @@ miércoles 07:00-09:00"></textarea>
                     // la próxima vez que esto ocurra en un navegador real.
                     let huboConflicto = false;
                     if (conocidoPrevio) {
-                        const camposDiagnostico = {};
-                        const conflictFields = [];
-                        CAMPOS_CONCURRENCIA_COMPARABLES.forEach(campo => {
+                        // P0 2026-09-21 (tercera ronda): UNA sola estructura de diagnóstico,
+                        // reutilizada tanto para el console.warn(objeto) como para la línea de
+                        // texto plano copiable -- nunca dos sistemas de diagnóstico distintos.
+                        // Para CADA campo comparable (coincida o no) se calcula: tipo local/remoto,
+                        // igualdad RAW (la que decide el conflicto de verdad), igualdad CANÓNICA
+                        // (insensible al orden de claves, puramente informativa), hashes cortos, y
+                        // el diff estructural PATH POR PATH (vacío si no hay diferencia). Nunca un
+                        // valor real -- solo rutas, tipos, presencia y hashes de 8 hex.
+                        const campos = CAMPOS_CONCURRENCIA_COMPARABLES.map(campo => {
                             const valorPrevio = (conocidoPrevio[campo] || {})[scope] ?? null;
                             const valorFresco = (actual[campo] || {})[scope] ?? null;
-                            const sameRaw = JSON.stringify(valorPrevio) === JSON.stringify(valorFresco);
-                            const sameCanonical = hashEstableDiagnostico(valorPrevio) === hashEstableDiagnostico(valorFresco);
-                            camposDiagnostico[campo] = {
-                                same: sameRaw,
-                                sameCanonical,
-                                tipoLocal: valorPrevio === null ? 'null' : Array.isArray(valorPrevio) ? 'array' : typeof valorPrevio,
-                                tipoRemoto: valorFresco === null ? 'null' : Array.isArray(valorFresco) ? 'array' : typeof valorFresco,
-                                baselineHash: hashEstableDiagnostico(valorPrevio),
-                                serverHash: hashEstableDiagnostico(valorFresco),
-                                baselineCount: contarElementosDiagnostico(valorPrevio),
-                                serverCount: contarElementosDiagnostico(valorFresco),
-                                // P0 2026-09-21: si same:false pero sameCanonical:true, es sensibilidad
-                                // al orden de claves en JSON.stringify (la comparación RAW real usada
-                                // para decidir el conflicto) -- evidencia directa, no hipótesis.
-                                posibleSensibilidadOrdenClaves: !sameRaw && sameCanonical,
+                            const rawEqual = JSON.stringify(valorPrevio) === JSON.stringify(valorFresco);
+                            const canonicalEqual = hashEstableDiagnostico(valorPrevio) === hashEstableDiagnostico(valorFresco);
+                            return {
+                                field: campo,
+                                localType: valorPrevio === null ? 'null' : Array.isArray(valorPrevio) ? 'array' : typeof valorPrevio,
+                                remoteType: valorFresco === null ? 'null' : Array.isArray(valorFresco) ? 'array' : typeof valorFresco,
+                                rawEqual,
+                                canonicalEqual,
+                                localHash: hashEstableDiagnostico(valorPrevio),
+                                remoteHash: hashEstableDiagnostico(valorFresco),
+                                localCount: contarElementosDiagnostico(valorPrevio),
+                                remoteCount: contarElementosDiagnostico(valorFresco),
+                                // Rutas exactas donde difieren (p.ej. "clientes.fran[3].notas") --
+                                // vacío cuando rawEqual es true. Calculado siempre (no solo para
+                                // los campos en conflicto) porque el coste es insignificante frente
+                                // al tamaño real de un solo trainerKey y el pedido explícito es "for
+                                // each CAMPOS_CONCURRENCIA_COMPARABLES".
+                                structuralDiff: rawEqual ? [] : diffEstructuralDiagnostico(valorPrevio, valorFresco, `${campo}.${scope}`),
                             };
-                            if (!sameRaw) conflictFields.push(campo);
                         });
-                        huboConflicto = conflictFields.length > 0;
+                        const differingFields = campos.filter(c => !c.rawEqual).map(c => c.field);
+                        const canonicalDifferingFields = campos.filter(c => !c.canonicalEqual).map(c => c.field);
+                        // Si un campo es rawEqual:false pero canonicalEqual:true, es sensibilidad al
+                        // orden de claves en JSON.stringify (la comparación RAW real que decide el
+                        // conflicto) -- evidencia directa, no hipótesis, la próxima vez que ocurra.
+                        const possibleKeyOrderOnlyDifference = campos.some(c => !c.rawEqual && c.canonicalEqual);
+                        huboConflicto = differingFields.length > 0;
                         if (huboConflicto) {
-                            // P0 2026-09-21 (segunda ronda): diagnóstico estructural completo,
-                            // path por path, solo para los campos que SÍ difieren (nunca sobre los
-                            // que coinciden, para no gastar el límite de rutas en ruido). Nunca
-                            // contenido real: solo booleans, tipos, hashes cortos, recuentos y
-                            // RUTAS (p.ej. "clientes.pta[3].notas") -- nunca el valor en esa ruta.
-                            const diffEstructural = {};
-                            conflictFields.forEach(campo => {
-                                const valorPrevio = (conocidoPrevio[campo] || {})[scope] ?? null;
-                                const valorFresco = (actual[campo] || {})[scope] ?? null;
-                                diffEstructural[campo] = diffEstructuralDiagnostico(valorPrevio, valorFresco, `${campo}.${scope}`);
-                            });
-                            console.warn('[BESOUL_SAVE_CONFLICT]', {
+                            const safeDiagnosticObject = {
                                 buildId: BS_APP_BUILD_TAG,
                                 saveAttemptId,
                                 documentPath: docRef.path,
@@ -1956,10 +1963,17 @@ miércoles 07:00-09:00"></textarea>
                                     serverUltimaActualizacionLocal: actual.ultimaActualizacionLocal || null,
                                     serverActualizadoEn: actual.actualizadoEn ? String(actual.actualizadoEn) : null,
                                 },
-                                campos: camposDiagnostico,
-                                conflictFields,
-                                diffEstructural,
-                            });
+                                campos,
+                                differingFields,
+                                canonicalDifferingFields,
+                                possibleKeyOrderOnlyDifference,
+                            };
+                            // Forma expandible (DevTools -- útil si quien mira SÍ puede navegar el
+                            // objeto) y forma de texto plano de una sola línea, pensada para poder
+                            // seleccionar/copiar directamente sin depender de "Copy object" ni de
+                            // ninguna interacción de DevTools más allá de seleccionar texto.
+                            console.warn('[BESOUL_SAVE_CONFLICT]', safeDiagnosticObject);
+                            console.error('[BESOUL_SAVE_CONFLICT_JSON] ' + JSON.stringify(safeDiagnosticObject));
                         }
                     }
 
