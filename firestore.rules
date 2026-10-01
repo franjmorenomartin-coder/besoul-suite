@@ -192,7 +192,14 @@ service cloud.firestore {
 
       allow create: if isPublicTrialLead() || isAdmin();
 
-      allow update: if isAdmin();
+      // HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: createdAt es la fecha técnica de registro (auditoría) y
+      // es INMUTABLE, también para admin. La fecha de negocio editable es fechaAltaReal (update
+      // sigue siendo solo admin, así que un PT nunca puede cambiarla). Un documento antiguo sin
+      // createdAt puede seguir actualizándose (compatibilidad), pero no puede "inventarse" uno.
+      allow update: if isAdmin()
+        && (('createdAt' in resource.data)
+              ? (('createdAt' in request.resource.data) && request.resource.data.createdAt == resource.data.createdAt)
+              : !('createdAt' in request.resource.data));
 
       allow delete: if isAdmin();
     }

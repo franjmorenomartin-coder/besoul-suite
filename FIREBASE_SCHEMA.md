@@ -80,6 +80,20 @@ Typical fields:
 - `notasEntrenador`
 - `convertido`
 
+Date fields (HOTFIX-CRM-DUPLICADOS-FECHA-ALTA, see `docs/CRM_FECHAS_Y_DUPLICADOS.md`):
+
+- `createdAt` (ISO UTC) -- when the lead was registered in Besoul. System/audit date,
+  **immutable** (enforced by `firestore.rules`).
+- `fechaAltaReal` (`YYYY-MM-DD`, Madrid calendar) -- "Fecha de alta real": when the person really
+  joined. Admin-editable, every change logged in `historial` (`campo: 'fechaAltaReal'`,
+  `valorAnterior`, `valorNuevo`, `userEmail`, `fecha`). Missing on historical records; readers
+  fall back to the Madrid date of `createdAt` (unchanged behaviour until corrected).
+- `convertedAt` (ISO UTC) + `fechaConversion` (`YYYY-MM-DD`, Madrid) -- when the conversion to an
+  Agenda client was registered.
+
+Lead ids for CRM-created leads are reserved when the "Nuevo lead" form opens and written with a
+transaction, so retries never create a second document.
+
 Important statuses:
 
 - Nuevo lead.

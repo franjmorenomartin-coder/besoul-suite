@@ -314,7 +314,8 @@ function generarTokenReservaCliente() {
 
 function catalogoActividadesVivo() { return { ...DEFAULT_CATALOGO_ACTIVIDADES, ...dbCatalogoActividades }; }
 
-async function guardarCliente() {
+async function guardarCliente(opciones) {
+            opciones = opciones || {};
 
             const name = document.getElementById('cust-name').value.trim();
 
@@ -383,6 +384,21 @@ async function guardarCliente() {
                 const emailInput = document.getElementById('cust-email');
                 if (emailInput) { emailInput.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => emailInput.focus(), 50); }
                 return;
+            }
+
+            // HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: antes de tocar nada del estado local, ¿esta persona ya
+            // existe (por teléfono o email normalizados) en alguna agenda?
+            if (!idFichaEditando && tabFichaActiva !== 'grupo' && !opciones.duplicadoConfirmado) {
+                if (bsComprobandoDuplicadoCliente) return;
+                const coincidencias = BesoulIdentidad.buscarCoincidenciasIdentidad({ telefono: phone, email: emailCliente }, candidatosClientesAgendaDuplicados());
+                if (coincidencias.length) {
+                    bsComprobandoDuplicadoCliente = true;
+                    let decision;
+                    try { decision = await preguntarDuplicadoAgenda(coincidencias); } finally { bsComprobandoDuplicadoCliente = false; }
+                    if (decision === 'crear') return guardarCliente({ ...opciones, duplicadoConfirmado: true });
+                    if (decision && decision.abrir) abrirFichaExistenteAgenda(decision.abrir);
+                    return;
+                }
             }
 
             if(!dbClientes[entrenadorVisto]) dbClientes[entrenadorVisto] = [];

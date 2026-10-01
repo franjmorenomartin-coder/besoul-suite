@@ -97,11 +97,12 @@
 
     <section class="bg-slate-950 px-6 py-4 border-b border-slate-900 space-y-4">
       <div class="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-10 gap-3 text-center text-xs">
-        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Leads mes</span><span id="kpi-leads" class="text-sm font-black text-white font-mono">0</span></div>
+        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Leads periodo</span><span id="kpi-leads" class="text-sm font-black text-white font-mono">0</span></div>
         <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Contactados</span><span id="kpi-contactados" class="text-sm font-black text-cyan-400 font-mono">0</span></div>
         <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Valorac. solicit.</span><span id="kpi-pruebas-sol" class="text-sm font-black text-amber-400 font-mono">0</span></div>
         <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Valorac. real.</span><span id="kpi-pruebas-real" class="text-sm font-black text-blue-400 font-mono">0</span></div>
-        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Convertidos</span><span id="kpi-convertidos" class="text-sm font-black text-emerald-400 font-mono">0</span></div>
+        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block" title="Leads del periodo (por la fecha elegida) que ya son clientes">Convertidos</span><span id="kpi-convertidos" class="text-sm font-black text-emerald-400 font-mono">0</span></div>
+        <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block" title="Conversiones hechas en Besoul dentro del periodo, sea cual sea la fecha de alta real del lead">Conversiones registradas</span><span id="kpi-conversiones-periodo" class="text-sm font-black text-emerald-300 font-mono">0</span></div>
         <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Conversión</span><span id="kpi-conversion" class="text-sm font-black text-emerald-400 font-mono">0%</span></div>
         <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Perdidos</span><span id="kpi-perdidos" class="text-sm font-black text-red-400 font-mono">0</span></div>
         <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Fuente top</span><span id="kpi-fuente" class="text-xs font-black text-white">---</span></div>
@@ -109,10 +110,24 @@
         <div class="bg-slate-900 px-3 py-2 rounded-xl border border-slate-800"><span class="text-slate-400 text-[9px] uppercase font-bold block">Trainer top</span><span id="kpi-trainer" class="text-xs font-black text-white">---</span></div>
       </div>
 
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-6 gap-3 text-xs">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 grid grid-cols-2 md:grid-cols-8 gap-3 text-xs">
+        <!-- HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: rango Desde/Hasta (días naturales de Madrid, ambos
+             incluidos) en vez de un único mes. La pantalla, los KPIs y el CSV usan SIEMPRE el
+             mismo rango y la misma fecha base. -->
         <div>
-          <label for="filter-month" class="text-slate-400 block mb-1">Mes</label>
-          <input type="month" id="filter-month" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+          <label for="filter-desde" class="text-slate-400 block mb-1">Desde</label>
+          <input type="date" id="filter-desde" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+        </div>
+        <div>
+          <label for="filter-hasta" class="text-slate-400 block mb-1">Hasta</label>
+          <input type="date" id="filter-hasta" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+        </div>
+        <div>
+          <label for="filter-base-fecha" class="text-slate-400 block mb-1">Fecha</label>
+          <select id="filter-base-fecha" onchange="aplicarFiltros()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+            <option value="alta">Fecha de alta real</option>
+            <option value="registro">Fecha de registro</option>
+          </select>
         </div>
         <div>
           <label for="filter-center" class="text-slate-400 block mb-1">Centro</label>
@@ -216,6 +231,20 @@
             </div>
           </div>
 
+          <!-- HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: fecha de negocio separada de la fecha técnica de
+               registro. "Registrado en Besoul" es automática e inmutable (auditoría). -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label for="lead-fecha-alta-real" class="text-slate-400 block mb-1">Fecha de alta real *</label>
+              <input type="date" id="lead-fecha-alta-real" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white">
+              <p class="text-[10px] text-slate-500 mt-1">El día en que la persona se apuntó de verdad. Cámbiala si la registras más tarde.</p>
+            </div>
+            <div>
+              <span class="text-slate-400 block mb-1">Registrado en Besoul</span>
+              <p id="lead-registrado-en" class="bg-slate-950/50 border border-slate-800 rounded p-2 text-slate-300">Se rellena al guardar</p>
+            </div>
+          </div>
+
           <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
             <div>
               <label class="text-slate-400 block mb-1">Estado *</label>
@@ -315,11 +344,26 @@
 
       <div class="modal-actions-sticky flex justify-end gap-2 pt-2 border-t border-slate-800">
         <button onclick="cerrarModalLead()" class="bg-slate-800 text-slate-400 px-4 py-2 rounded font-bold hover:text-white transition">Cancelar</button>
-        <button onclick="guardarLead()" class="bg-amber-500 text-slate-950 px-5 py-2 rounded font-bold hover:bg-amber-600 transition">Guardar lead</button>
+        <button id="btn-save-lead" onclick="guardarLead()" class="bg-amber-500 text-slate-950 px-5 py-2 rounded font-bold hover:bg-amber-600 transition disabled:opacity-60 disabled:cursor-wait">Guardar lead</button>
       </div>
     </div>
   </div>
 
+  <!-- HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: aviso de posible duplicado (teléfono/email, nunca el
+       nombre). No bloquea: "Crear igualmente" exige una acción deliberada del administrador. -->
+  <div id="modal-duplicado" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 z-[60]" role="dialog" aria-modal="true" aria-labelledby="dup-title">
+    <div class="bg-slate-900 border border-amber-500/40 rounded-2xl p-5 w-full max-w-lg space-y-3">
+      <h3 id="dup-title" class="text-sm font-bold text-amber-400 uppercase tracking-wider">Posible duplicado</h3>
+      <p id="dup-texto" class="text-xs text-slate-300"></p>
+      <div id="dup-lista" class="space-y-2 max-h-[45vh] overflow-y-auto text-xs"></div>
+      <div class="flex flex-wrap justify-end gap-2 pt-2 border-t border-slate-800">
+        <button id="dup-cancelar" type="button" class="bg-slate-800 text-slate-300 px-4 py-2 rounded font-bold hover:text-white">Cancelar</button>
+        <button id="dup-crear" type="button" class="bg-amber-500/15 text-amber-300 border border-amber-500/40 px-4 py-2 rounded font-bold hover:bg-amber-500/25">Crear igualmente</button>
+      </div>
+    </div>
+  </div>
+
+<script src="./besoul-identidad.js"></script>
 <script>
 const BS_FIREBASE_CONFIG = {
   apiKey: "AIzaSyAHp7l39BYkgHTVNNwPaaa21tTksBQ94Zo",
@@ -380,6 +424,17 @@ let leadsFiltrados = [];
 let unsubscribeLeads = null;
 let leadEditandoId = null;
 let eventosTemporales = [];
+// HOTFIX-CRM-DUPLICADOS-FECHA-ALTA -- idempotencia de "Guardar lead":
+//   leadPendienteId: id de Firestore RESERVADO al abrir un lead nuevo. Todo reintento de la misma
+//     acción de guardado escribe en ESE documento, nunca en uno nuevo (antes: .add() con id
+//     aleatorio en cada pulsación = un lead duplicado por cada doble clic o reintento).
+//   guardandoLead: cerrojo de pulsación mientras hay un guardado en curso.
+//   duplicadoConfirmadoPara: firma (teléfono|email) que el administrador ya decidió crear
+//     igualmente, para no volver a preguntar en el reintento de esa misma acción.
+let leadPendienteId = null;
+let guardandoLead = false;
+let duplicadoConfirmadoPara = null;
+let fechaAltaRealOriginal = '';
 
 function escapeHTML(valor) {
   return String(valor || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
@@ -388,7 +443,11 @@ function normalizarEmail(email) { return String(email || '').trim().toLowerCase(
 function soloDigitosTelefono(v){ return String(v || '').replace(/\D/g,''); }
 function hashFNV1a(str){ let h = 0x811c9dc5; for (let i=0; i<String(str).length; i++) { h ^= String(str).charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); }
 function keyEmailValoracion(email){ const e = normalizarEmail(email); return e ? `email_${hashFNV1a(e)}` : ''; }
-function keyTelefonoValoracion(tel){ const d = soloDigitosTelefono(tel); return d ? `phone_${hashFNV1a(d)}` : ''; }
+// HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: la clave de teléfono usa la forma CANÓNICA compartida
+// (besoul-identidad.js), así 612345678 / +34 612 345 678 / 0034612345678 son la misma persona.
+// Las claves antiguas ("solo dígitos" sin canonizar) siguen siendo reconocidas por
+// valoracion.html (comprueba todas las variantes), así que el registro existente no se rompe.
+function keyTelefonoValoracion(tel){ const d = BesoulIdentidad.normalizarTelefonoIdentidad(tel); return d ? `phone_${hashFNV1a(d)}` : ''; }
 function maskEmail(email){ const [a,b]=String(email||'').split('@'); if(!b) return 'email registrado'; return `${a.slice(0,2)}***@${b}`; }
 function maskTelefono(t){ const d=soloDigitosTelefono(t); return d.length > 4 ? `***${d.slice(-4)}` : 'teléfono registrado'; }
 function esLeadValoracion(l){ const e=String(l?.estado||''); const t=String(l?.tipoPrueba||''); const f=String(l?.fuente||''); return e.includes('Prueba') || e.includes('Valoración') || t.includes('Valoración') || f.includes('QR valoración') || f.includes('QR prueba'); }
@@ -530,7 +589,7 @@ async function iniciarSesionAutenticada(user) {
   document.getElementById('app-content').classList.remove('hidden');
   document.getElementById('lbl-usuario').innerText = nombreUsuarioPerfil();
   document.getElementById('lbl-rol').innerText = esAdmin() ? 'Administrador' : 'Entrenador';
-  document.getElementById('filter-month').value = mesActualInput();
+  { const r = BesoulIdentidad.rangoMesActualMadrid(); document.getElementById('filter-desde').value = r.desde; document.getElementById('filter-hasta').value = r.hasta; }
   // Dashboard/Finanzas son admin-only (bloqueado en su propio login) -- el enlace solo se
   // muestra si el usuario real puede entrar, nunca un permiso visual inventado aparte.
   if (esAdmin()) {
@@ -684,13 +743,16 @@ function programarSincronizacionRegistroValoraciones() {
 async function sincronizarRegistroValoraciones() {
   try {
     if (!esAdmin() || !db) return;
-    const batch = db.batch();
-    let writes = 0;
+    // HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: antes TODO iba en un único batch; Firestore rechaza un
+    // batch con más de 500 escrituras, así que con más de ~250 leads/clientes el registro dejaba
+    // de actualizarse en silencio (solo un console.warn). Ahora se acumulan las operaciones y se
+    // envían en lotes acotados (besoul-identidad.js: trocear, 450 por lote).
+    const operaciones = [];
     const registrar = (kind, value, meta={}) => {
       const key = kind === 'email' ? keyEmailValoracion(value) : keyTelefonoValoracion(value);
       if (!key) return;
       const ref = db.collection('besoulValoracionRegistry').doc(key);
-      batch.set(ref, {
+      operaciones.push([ref, {
         kind,
         masked: kind === 'email' ? maskEmail(value) : maskTelefono(value),
         nombre: meta.nombre || '',
@@ -700,8 +762,7 @@ async function sincronizarRegistroValoraciones() {
         centroNombre: meta.centroNombre || '',
         source: meta.source || 'crm_backfill',
         updatedAt: ahoraISO()
-      }, { merge:true });
-      writes++;
+      }]);
     };
     leads.filter(esLeadValoracion).forEach(l => {
       registrar('email', l.email, { nombre:l.nombre, leadId:l.id, centroId:l.centroId, centroNombre:l.centroNombre, source:'lead_valoracion' });
@@ -717,7 +778,11 @@ async function sincronizarRegistroValoraciones() {
         registrar('phone', c.telefono, { nombre:c.nombre, clientId:c.id, source:'cliente_agenda' });
       });
     });
-    if (writes) await batch.commit();
+    for (const lote of BesoulIdentidad.trocear(operaciones, 450)) {
+      const batch = db.batch();
+      lote.forEach(([ref, datos]) => batch.set(ref, datos, { merge:true }));
+      await batch.commit();
+    }
   } catch(err) {
     console.warn('No se pudo sincronizar el registro de valoraciones únicas:', err);
   }
@@ -739,22 +804,57 @@ function iniciarEscuchaLeads() {
   });
 }
 
-function aplicarFiltros() {
-  const month = document.getElementById('filter-month').value || mesActualInput();
+// HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: rango Desde/Hasta + fecha base, leídos en UN solo sitio para
+// que pantalla, KPIs y CSV no puedan usar criterios distintos.
+//   base 'alta'     -> fechaAltaReal (si falta: fecha de Madrid de createdAt -- histórico intacto)
+//   base 'registro' -> fecha de Madrid de createdAt (cuándo se registró en Besoul)
+// Los días son naturales de Madrid y ambos extremos están incluidos.
+function criterioFechasCRM() {
+  const def = BesoulIdentidad.rangoMesActualMadrid();
+  let desde = document.getElementById('filter-desde').value || def.desde;
+  let hasta = document.getElementById('filter-hasta').value || def.hasta;
+  if (desde > hasta) { const t = desde; desde = hasta; hasta = t; }
+  const base = document.getElementById('filter-base-fecha').value === 'registro' ? 'registro' : 'alta';
+  return { desde, hasta, base };
+}
+function fechaSegunBase(lead, base) {
+  return base === 'registro' ? BesoulIdentidad.fechaRegistroLead(lead) : BesoulIdentidad.fechaNegocioLead(lead);
+}
+// Filtros NO temporales (centro, entrenador, estado, fuente, búsqueda), compartidos por el
+// tablero y por el KPI de conversiones registradas en el periodo.
+function cumpleFiltrosNoTemporales(l) {
   const centro = document.getElementById('filter-center').value;
   const trainer = document.getElementById('filter-trainer').value;
   const estado = document.getElementById('filter-status').value;
   const fuente = document.getElementById('filter-source').value;
   const search = String(document.getElementById('filter-search').value || '').trim().toLowerCase();
-  const { iniISO, finISO } = inicioFinMes(month);
+  if (centro && normalizarCentroId(l.centroId) !== centro) return false;
+  if (trainer && l.trainerKey !== trainer) return false;
+  if (estado && l.estado !== estado) return false;
+  if (fuente && l.fuente !== fuente) return false;
+  if (search) {
+    const blob = [l.nombre,l.telefono,l.email,l.notas,l.objetivo,l.estado,l.fuente,l.captadorNombre].join(' ').toLowerCase();
+    if (!blob.includes(search)) return false;
+  }
+  return true;
+}
+
+function aplicarFiltros() {
+  const { desde, hasta, base } = criterioFechasCRM();
+  const centro = document.getElementById('filter-center').value;
+  const trainer = document.getElementById('filter-trainer').value;
+  const estado = document.getElementById('filter-status').value;
+  const fuente = document.getElementById('filter-source').value;
+  const search = String(document.getElementById('filter-search').value || '').trim().toLowerCase();
 
   leadsFiltrados = leads.filter(l => {
     // Leads dados de baja lógica (eliminarLead) nunca vuelven a aparecer en el tablero activo,
     // igual que un cliente en 'baja' desaparece de Agenda — el documento se conserva en Firestore
     // (con eliminadoEn/eliminadoPor) por si hace falta auditar o recuperar manualmente.
     if (l.estado === 'Eliminado') return false;
-    const created = l.createdAt || l.updatedAt || '';
-    if (created && (created < iniISO || created >= finISO)) return false;
+    // Igual que antes: un lead sin ninguna fecha no se excluye por fecha.
+    const fecha = fechaSegunBase(l, base);
+    if (fecha && !BesoulIdentidad.fechaEnRango(fecha, desde, hasta)) return false;
     if (centro && normalizarCentroId(l.centroId) !== centro) return false;
     if (trainer && l.trainerKey !== trainer) return false;
     if (estado && l.estado !== estado) return false;
@@ -802,6 +902,7 @@ function renderTablaLeads() {
       <td class="py-3 px-3">
         <div class="font-bold text-white">${escapeHTML(l.nombre)}</div>
         <div class="text-[10px] text-slate-500">${escapeHTML(l.telefono)} ${l.email ? '· ' + escapeHTML(l.email) : ''}</div>
+        <div class="text-[10px] text-slate-500">Alta real: ${escapeHTML(BesoulIdentidad.fechaHumana(BesoulIdentidad.fechaNegocioLead(l)) || '---')}</div>
       </td>
       <td class="py-3 px-3">${badgeEstado(l.estado)}</td>
       <td class="py-3 px-3">${escapeHTML(textoCentro(l.centroId))}</td>
@@ -884,6 +985,17 @@ function recalcularKPIs() {
   document.getElementById('kpi-convertidos').innerText = convertidos;
   document.getElementById('kpi-conversion').innerText = total ? `${Math.round((convertidos/total)*100)}%` : '0%';
   document.getElementById('kpi-perdidos').innerText = perdidos;
+  // Semántica (docs/CRM_FECHAS_Y_DUPLICADOS.md): los KPIs de arriba son de COHORTE -- leads cuya
+  // fecha (alta real o registro) cae en el periodo. Este otro es de EVENTO: conversiones hechas en
+  // Besoul dentro del periodo, por la fecha en que se registró la conversión, sea cual sea la
+  // fecha de alta real del lead. Mismos filtros no temporales que el tablero.
+  const { desde, hasta } = criterioFechasCRM();
+  const conversionesPeriodo = leads.filter(l => l.estado !== 'Eliminado'
+    && (l.convertido === true || l.estado === 'Convertido a cliente')
+    && BesoulIdentidad.fechaEnRango(BesoulIdentidad.fechaConversionLead(l), desde, hasta)
+    && cumpleFiltrosNoTemporales(l)).length;
+  const kpiConvPeriodo = document.getElementById('kpi-conversiones-periodo');
+  if (kpiConvPeriodo) kpiConvPeriodo.innerText = conversionesPeriodo;
   document.getElementById('kpi-fuente').innerText = topLabel(leadsFiltrados, 'fuente');
   document.getElementById('kpi-centro').innerText = topLabel(leadsFiltrados, 'centroId', textoCentro);
   document.getElementById('kpi-trainer').innerText = topLabel(leadsFiltrados.filter(l => l.estado === 'Convertido a cliente' || l.convertido === true), 'trainerKey', textoTrainer);
@@ -916,7 +1028,12 @@ function renderAlertas() {
 
 function resetLeadForm() {
   leadEditandoId = null;
+  leadPendienteId = null;
+  duplicadoConfirmadoPara = null;
   eventosTemporales = [];
+  fechaAltaRealOriginal = '';
+  document.getElementById('lead-fecha-alta-real').value = BesoulIdentidad.hoyLocalMadrid();
+  document.getElementById('lead-registrado-en').innerText = 'Se rellena al guardar';
   ['lead-nombre','lead-telefono','lead-email','lead-captador','lead-medio','lead-fecha-prueba','lead-fecha-accion','lead-notas','lead-nota-entrenador','event-text'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('lead-estado').value = 'Nuevo lead';
   document.getElementById('lead-fuente').value = 'Instagram';
@@ -940,7 +1057,10 @@ function abrirModalLead(id=null) {
     if (!lead) return;
     leadEditandoId = id;
     document.getElementById('modal-title').innerText = 'Editar lead';
-    document.getElementById('modal-subtitle').innerText = `Creado: ${formatoFecha(lead.createdAt)} · Actualizado: ${formatoFecha(lead.updatedAt)}`;
+    document.getElementById('modal-subtitle').innerText = `Registrado en Besoul: ${formatoFecha(lead.createdAt)} · Actualizado: ${formatoFecha(lead.updatedAt)}`;
+    fechaAltaRealOriginal = BesoulIdentidad.fechaNegocioLead(lead);
+    document.getElementById('lead-fecha-alta-real').value = fechaAltaRealOriginal;
+    document.getElementById('lead-registrado-en').innerText = BesoulIdentidad.fechaHoraHumana(lead.createdAt || lead.updatedAt) || 'Sin fecha de registro';
     document.getElementById('lead-nombre').value = lead.nombre || '';
     document.getElementById('lead-telefono').value = lead.telefono || '';
     document.getElementById('lead-email').value = lead.email || '';
@@ -964,6 +1084,9 @@ function abrirModalLead(id=null) {
   } else {
     document.getElementById('modal-title').innerText = 'Nuevo lead';
     document.getElementById('modal-subtitle').innerText = 'Registro comercial de captación';
+    // Reserva el id del documento AHORA (operación local, sin red): cualquier reintento de este
+    // mismo alta escribe en este id y nunca crea un segundo lead.
+    leadPendienteId = db ? db.collection('besoulLeads').doc().id : null;
   }
   document.getElementById('btn-delete').className = (leadEditandoId && esAdmin()) ? 'w-full bg-red-500/10 text-red-400 border border-red-500/30 font-bold py-2 rounded' : 'hidden w-full bg-red-500/10 text-red-400 border border-red-500/30 font-bold py-2 rounded';
   document.getElementById('btn-convert').className = (leadEditandoId && esAdmin()) ? 'w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-2 rounded' : 'hidden w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-2 rounded';
@@ -1023,7 +1146,11 @@ function recogerLeadFormulario() {
   if (!estado) enfocarCampoLead('lead-estado', 'El estado comercial es obligatorio.');
   const tKey = document.getElementById('lead-trainer').value || '';
   if (!esAdmin() && tKey !== trainerKeyActual()) throw new Error('Solo puedes asignar leads a tu propio usuario.');
+  const fechaAltaReal = document.getElementById('lead-fecha-alta-real').value;
+  if (!BesoulIdentidad.esFechaNegocioValida(fechaAltaReal)) enfocarCampoLead('lead-fecha-alta-real', 'Indica la fecha de alta real.');
+  if (fechaAltaReal > BesoulIdentidad.hoyLocalMadrid()) enfocarCampoLead('lead-fecha-alta-real', 'La fecha de alta real no puede ser futura.');
   return {
+    fechaAltaReal,
     nombre,
     telefono,
     email,
@@ -1335,9 +1462,133 @@ async function fusionarHistorialConServidor(leadId, historialLocal) {
   }
 }
 
+// ---- HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: duplicados + guardado idempotente -------------------------
+
+/** Clientes de Agenda (todos los entrenadores) como candidatos de identidad. Una lectura puntual,
+ *  solo al crear/convertir -- nunca en cada render. */
+async function cargarClientesAgendaParaDuplicados() {
+  const snap = await db.collection('besoulSuite').doc('agenda').get();
+  const clientes = (snap.exists && (snap.data() || {}).clientes) || {};
+  const out = [];
+  Object.keys(clientes).forEach(trainerKey => (clientes[trainerKey] || []).forEach(c => {
+    if (!c || c.tipo === 'grupo') return;
+    out.push({ id: c.id, tipo: 'cliente', nombre: c.nombre, telefono: c.telefono, email: c.email, trainerKey,
+      estado: c.estadoCliente || 'activo', leadId: c.leadId || '', miembroGrupo: !!c.vinculacion });
+  }));
+  return out;
+}
+function candidatosLeadsParaDuplicados() {
+  return leads.filter(l => l.estado !== 'Eliminado').map(l => ({ id: l.id, tipo: 'lead', nombre: l.nombre, telefono: l.telefono, email: l.email, trainerKey: l.trainerKey, estado: l.estado }));
+}
+function firmaIdentidad(persona) {
+  return `${BesoulIdentidad.normalizarTelefonoIdentidad(persona.telefono)}|${BesoulIdentidad.normalizarEmailIdentidad(persona.email)}`;
+}
+
+/**
+ * Aviso humano de posible duplicado. Resuelve 'crear' (Crear igualmente), 'cancelar', o
+ * { abrir: candidato } (Abrir existente). Nunca fusiona ni borra nada.
+ */
+function preguntarDuplicado(coincidencias, contexto) {
+  return new Promise(resolve => {
+    const modal = document.getElementById('modal-duplicado');
+    const lista = document.getElementById('dup-lista');
+    const porTodo = [...new Set(coincidencias.flatMap(m => m.por))];
+    document.getElementById('dup-texto').innerText = contexto === 'conversion'
+      ? `Ya existe en Agenda una persona con este ${BesoulIdentidad.textoCoincidencia(porTodo)}. Convertir crearía una segunda ficha.`
+      : `Ya existe una persona con este ${BesoulIdentidad.textoCoincidencia(porTodo)}.`;
+    lista.innerHTML = '';
+    coincidencias.forEach(m => {
+      const c = m.candidato;
+      const fila = document.createElement('div');
+      fila.className = 'flex items-center justify-between gap-2 bg-slate-950 border border-slate-800 rounded-xl p-2';
+      const tipo = c.tipo === 'lead' ? `Lead · ${labelEstadoCRM(c.estado)}` : `Cliente de Agenda · ${textoTrainer(c.trainerKey)}${c.miembroGrupo ? ' · miembro de grupo' : ''}`;
+      fila.innerHTML = `<div><b class="text-slate-100">${escapeHTML(c.nombre || 'Sin nombre')}</b><div class="text-[10px] text-slate-400">${escapeHTML(tipo)} · coincide ${escapeHTML(BesoulIdentidad.textoCoincidencia(m.por))}</div></div>`;
+      const abrir = document.createElement('button');
+      abrir.type = 'button';
+      abrir.className = 'shrink-0 bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-3 py-1 rounded font-bold';
+      abrir.innerText = 'Abrir existente';
+      abrir.onclick = () => cerrar({ abrir: c });
+      fila.appendChild(abrir);
+      lista.appendChild(fila);
+    });
+    function cerrar(valor) {
+      modal.classList.add('hidden');
+      document.getElementById('dup-cancelar').onclick = null;
+      document.getElementById('dup-crear').onclick = null;
+      resolve(valor);
+    }
+    document.getElementById('dup-cancelar').onclick = () => cerrar('cancelar');
+    document.getElementById('dup-crear').onclick = () => cerrar('crear');
+    modal.classList.remove('hidden');
+  });
+}
+function abrirCandidatoExistente(candidato) {
+  if (candidato.tipo === 'lead') { cerrarModalLead(); abrirModalLead(candidato.id); return; }
+  // Un cliente vive en Agenda (otra página): se abre allí sin cerrar el trabajo actual.
+  window.open('./agenda.html', '_blank', 'noopener');
+}
+
+function setEstadoBotonGuardarLead(guardando) {
+  const btn = document.getElementById('btn-save-lead');
+  if (!btn) return;
+  btn.disabled = !!guardando;
+  btn.setAttribute('aria-busy', guardando ? 'true' : 'false');
+  btn.innerText = guardando ? 'Guardando…' : 'Guardar lead';
+}
+
+/**
+ * Alta idempotente en el id RESERVADO. Si el documento ya existe (reintento tras un fallo de red
+ * con el commit ya hecho, o una segunda pulsación que llegó antes del cerrojo), se actualiza sin
+ * tocar createdAt/createdBy -- nunca se crea un segundo lead ni se reescribe la fecha de registro.
+ */
+async function crearLeadIdempotente(docId, data) {
+  const ref = db.collection('besoulLeads').doc(docId);
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    if (snap.exists) { tx.set(ref, data, { merge:true }); return; }
+    tx.set(ref, { ...data, createdAt: ahoraISO(), createdByEmail: perfil.email, createdByName: nombreUsuarioPerfil(), convertido: false });
+  });
+}
+
+function eventoFechaAltaReal(anterior, nueva, creando) {
+  const fh = v => BesoulIdentidad.fechaHumana(v) || 'sin fecha';
+  return {
+    tipo: 'Fecha de alta real',
+    texto: creando
+      ? `Registrado el ${fh(BesoulIdentidad.hoyLocalMadrid())} con fecha de alta real ${fh(nueva)}.`
+      : `Fecha de alta real cambiada de ${fh(anterior)} a ${fh(nueva)}.`,
+    campo: 'fechaAltaReal', valorAnterior: anterior || '', valorNuevo: nueva,
+    fecha: ahoraISO(), usuario: nombreUsuarioPerfil(), userEmail: perfil.email,
+  };
+}
+
 async function guardarLead() {
+  // Cerrojo: mientras haya un guardado en curso, más pulsaciones/toques no hacen nada.
+  if (guardandoLead) return;
+  let data;
+  try { data = recogerLeadFormulario(); } catch (err) { alert(err.message || 'Revisa el formulario.'); return; }
+  guardandoLead = true;
+  setEstadoBotonGuardarLead(true);
   try {
-    const data = recogerLeadFormulario();
+    const creando = !leadEditandoId;
+    if (creando) {
+      if (!leadPendienteId) leadPendienteId = db.collection('besoulLeads').doc().id;
+      const firma = firmaIdentidad(data);
+      if (duplicadoConfirmadoPara !== firma) {
+        const candidatos = [...candidatosLeadsParaDuplicados(), ...(await cargarClientesAgendaParaDuplicados())];
+        const coincidencias = BesoulIdentidad.buscarCoincidenciasIdentidad(data, candidatos, { excluirIds: [leadPendienteId] });
+        if (coincidencias.length) {
+          const decision = await preguntarDuplicado(coincidencias, 'lead');
+          if (decision === 'crear') duplicadoConfirmadoPara = firma;
+          else { if (decision && decision.abrir) abrirCandidatoExistente(decision.abrir); return; }
+        }
+      }
+      const yaAnotado = eventosTemporales.some(e => e && e.campo === 'fechaAltaReal' && !e.valorAnterior && e.valorNuevo === data.fechaAltaReal);
+      if (data.fechaAltaReal !== BesoulIdentidad.hoyLocalMadrid() && !yaAnotado) eventosTemporales.unshift(eventoFechaAltaReal('', data.fechaAltaReal, true));
+    } else if (data.fechaAltaReal !== fechaAltaRealOriginal) {
+      eventosTemporales.unshift(eventoFechaAltaReal(fechaAltaRealOriginal, data.fechaAltaReal, false));
+    }
+    data.historial = eventosTemporales;
     if (leadEditandoId) data.historial = await fusionarHistorialConServidor(leadEditandoId, data.historial);
     data.updatedAt = ahoraISO();
     data.updatedByEmail = perfil.email;
@@ -1346,19 +1597,23 @@ async function guardarLead() {
     if (leadEditandoId) {
       await db.collection('besoulLeads').doc(leadEditandoId).set(data, { merge:true });
     } else {
-      data.createdAt = ahoraISO();
-      data.createdByEmail = perfil.email;
-      data.createdByName = nombreUsuarioPerfil();
-      data.convertido = false;
-      const ref = await db.collection('besoulLeads').add(data);
-      docId = ref.id;
+      docId = leadPendienteId;
+      await crearLeadIdempotente(docId, data);
+      // Desde aquí este formulario EDITA ese documento: si algo posterior falla y se vuelve a
+      // pulsar Guardar, se actualiza el mismo lead -- nunca se crea otro.
+      leadEditandoId = docId;
     }
+    fechaAltaRealOriginal = data.fechaAltaReal;
+    eventosTemporales = data.historial;
     if (esLeadValoracion(data)) programarSincronizacionRegistroValoraciones();
     await sincronizarPruebaAgendaDesdeLead(docId, { id: docId, ...data }, true);
     await sincronizarClienteAgendaDesdeLeadConvertido(docId);
     cerrarModalLead();
   } catch (err) {
     alert(err.message || 'No se ha podido guardar el lead.');
+  } finally {
+    guardandoLead = false;
+    setEstadoBotonGuardarLead(false);
   }
 }
 async function eliminarLead() {
@@ -1379,15 +1634,37 @@ async function eliminarLead() {
   cerrarModalLead();
 }
 
+let convirtiendoLead = false;
 async function convertirLeadEnCliente() {
-  if (!leadEditandoId || !esAdmin()) return;
+  if (!leadEditandoId || !esAdmin() || convirtiendoLead) return;
   const lead = leads.find(l => l.id === leadEditandoId);
   if (!lead) return;
   if (lead.convertido === true || lead.estado === 'Convertido a cliente') { alert('Este lead ya figura como convertido.'); return; }
   const trainerKey = document.getElementById('lead-trainer').value || lead.trainerKey;
   if (!trainerKey) { alert('Asigna primero un entrenador para crear la ficha en Agenda.'); return; }
-  if (!confirm(`Crear ficha de cliente en Agenda para ${lead.nombre} bajo el entrenador ${textoTrainer(trainerKey)}?`)) return;
-  const leadActualizado = recogerLeadFormulario();
+  let leadActualizado;
+  try { leadActualizado = recogerLeadFormulario(); } catch (err) { alert(err.message || 'Revisa el formulario.'); return; }
+  convirtiendoLead = true;
+  try {
+    // HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: antes de crear la ficha, ¿esa persona ya está en Agenda
+    // (p. ej. su entrenador la dio de alta a mano tras la valoración)? Se ignora la ficha que ya
+    // esté vinculada a ESTE lead (eso no es un duplicado, es la misma conversión).
+    const clientesAgenda = await cargarClientesAgendaParaDuplicados();
+    const coincidencias = BesoulIdentidad.buscarCoincidenciasIdentidad(leadActualizado, clientesAgenda.filter(c => c.leadId !== leadEditandoId));
+    if (coincidencias.length) {
+      const decision = await preguntarDuplicado(coincidencias, 'conversion');
+      if (decision !== 'crear') { if (decision && decision.abrir) abrirCandidatoExistente(decision.abrir); return; }
+    }
+  } catch (err) {
+    alert('No se ha podido comprobar si el cliente ya existe en Agenda. Revisa tu conexión e inténtalo de nuevo.');
+    return;
+  } finally {
+    convirtiendoLead = false;
+  }
+  if (!confirm(`Crear ficha de cliente en Agenda para ${lead.nombre} bajo el entrenador ${textoTrainer(trainerKey)}, con fecha de alta ${BesoulIdentidad.fechaHumana(leadActualizado.fechaAltaReal)}?`)) return;
+  if (leadActualizado.fechaAltaReal !== fechaAltaRealOriginal) {
+    leadActualizado.historial = [eventoFechaAltaReal(fechaAltaRealOriginal, leadActualizado.fechaAltaReal, false), ...(leadActualizado.historial || [])];
+  }
   const nuevoClienteId = `cli_crm_${leadEditandoId}_${Date.now()}`;
   const nuevoCliente = {
     id: nuevoClienteId,
@@ -1403,8 +1680,11 @@ async function convertirLeadEnCliente() {
     descuentoPct: 0,
     contratoCliente: { firmado:false, nombreArchivo:'', tipoMime:'', contenidoBase64:'', subidaEn:'' },
     estadoCliente: 'activo',
-    fechaAlta: new Date().toISOString().slice(0,10),
-    fechaCambioEstado: new Date().toISOString().slice(0,10),
+    // HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: la "Fecha de alta" del cliente es la fecha de alta REAL
+    // (negocio), no el instante técnico de la conversión. Y se calcula en calendario de Madrid:
+    // antes toISOString().slice(0,10) daba el día ANTERIOR si se convertía entre 00:00 y 02:00.
+    fechaAlta: leadActualizado.fechaAltaReal || BesoulIdentidad.hoyLocalMadrid(),
+    fechaCambioEstado: BesoulIdentidad.hoyLocalMadrid(),
     observacionesEstado: `Creado desde CRM. Fuente: ${leadActualizado.fuente}. Medio: ${leadActualizado.medioCaptacion || 'sin indicar'}. Centro: ${leadActualizado.centroNombre}. Objetivo: ${leadActualizado.objetivo || 'sin indicar'}. Notas comerciales: ${leadActualizado.notas || ''}. Nota entrenador: ${leadActualizado.notaEntrenadorPrueba || ''}`,
     origenCRM: true,
     leadId: leadEditandoId,
@@ -1433,12 +1713,22 @@ async function convertirLeadEnCliente() {
       const agendaRef = db.collection('besoulSuite').doc('agenda');
       const leadRef = db.collection('besoulLeads').doc(leadEditandoId);
       const agendaSnap = await tx.get(agendaRef);
+      // HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: el lead también se lee DENTRO de la transacción (antes
+      // solo la Agenda), y la ficha ya vinculada a este lead se busca en TODOS los entrenadores
+      // (antes solo en el elegido): dos administradores convirtiendo el mismo lead a la vez hacia
+      // entrenadores distintos ya no pueden crear dos fichas.
+      const leadSnapTx = await tx.get(leadRef);
+      const leadServidor = leadSnapTx.exists ? (leadSnapTx.data() || {}) : {};
       const agendaData = agendaSnap.exists ? agendaSnap.data() : {};
       const clientes = agendaData.clientes || {};
       const agenda = agendaData.agenda || {};
       eliminarPruebaAgendaEnObjeto(agenda, leadEditandoId);
       if (!Array.isArray(clientes[trainerKey])) clientes[trainerKey] = [];
-      const existente = clientes[trainerKey].find(c => c.leadId === leadEditandoId);
+      let existente = null;
+      Object.keys(clientes).forEach(k => {
+        if (existente || !Array.isArray(clientes[k])) return;
+        existente = clientes[k].find(c => c && (c.leadId === leadEditandoId || (leadServidor.convertedClientId && c.id === leadServidor.convertedClientId))) || null;
+      });
       if (existente) {
         clienteIdFinal = existente.id;
       } else {
@@ -1456,6 +1746,8 @@ async function convertirLeadEnCliente() {
         estado: 'Convertido a cliente',
         convertido: true,
         convertedAt: ahoraISO(),
+        // Día (Madrid) en que se registró la conversión: KPI "Conversiones registradas".
+        fechaConversion: BesoulIdentidad.hoyLocalMadrid(),
         convertedByEmail: perfil.email,
         convertedByName: nombreUsuarioPerfil(),
         convertedTrainerKey: trainerKey,
@@ -1480,16 +1772,37 @@ async function convertirLeadEnCliente() {
   cerrarModalLead();
 }
 
-function exportarLeadsCSV() {
-  const cols = ['nombre','telefono','email','estado','centroNombre','trainerName','fuente','medioCaptacion','objetivo','horarioPreferido','proximaAccion','fechaProximaAccion','motivoPerdida','notaEntrenadorPrueba','notas'];
-  const rows = [cols.join(';')];
-  leadsFiltrados.forEach(l => {
-    rows.push(cols.map(c => `"${String(l[c] || '').replace(/"/g,'""')}"`).join(';'));
+// HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: CSV del MISMO conjunto que muestra la pantalla (rango
+// Desde/Hasta + fecha base + centro/entrenador/estado/fuente/búsqueda). Las columnas anteriores se
+// conservan con su mismo nombre (no rompe hojas de cálculo existentes) y se añaden las fechas.
+// UTF-8 con BOM para que Excel en español muestre bien á é í ó ú ñ; separador ';'.
+function construirCSVLeads(lista, criterio) {
+  const BI = BesoulIdentidad;
+  const colsBase = ['nombre','telefono','email','estado','centroNombre','trainerName','fuente','medioCaptacion','objetivo','horarioPreferido','proximaAccion','fechaProximaAccion','motivoPerdida','notaEntrenadorPrueba','notas'];
+  const colsFecha = [
+    ['Fecha de alta real', l => BI.fechaHumana(BI.fechaNegocioLead(l))],
+    ['Registrado en Besoul', l => BI.fechaHoraHumana(l.createdAt || l.updatedAt)],
+    ['Fecha valoración', l => BI.fechaHoraHumana(l.fechaPrueba)],
+    ['Fecha conversión', l => BI.fechaHumana(BI.fechaConversionLead(l))],
+  ];
+  const celda = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+  const filas = [[...colsBase, ...colsFecha.map(c => c[0])].map(celda).join(';')];
+  (lista || []).forEach(l => {
+    const base = colsBase.map(c => (c === 'fechaProximaAccion' ? BI.fechaHoraHumana(l[c]) : (l[c] || '')));
+    filas.push([...base, ...colsFecha.map(c => c[1](l))].map(celda).join(';'));
   });
-  const blob = new Blob([rows.join('\n')], { type:'text/csv;charset=utf-8;' });
+  const etiquetaBase = criterio.base === 'registro' ? 'registro' : 'alta-real';
+  return {
+    texto: '﻿' + filas.join('\r\n'),
+    nombre: `besoul_leads_${etiquetaBase}_${criterio.desde}_a_${criterio.hasta}.csv`,
+  };
+}
+function exportarLeadsCSV() {
+  const { texto, nombre } = construirCSVLeads(leadsFiltrados, criterioFechasCRM());
+  const blob = new Blob([texto], { type:'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `besoul_leads_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  a.href = url; a.download = nombre; a.click();
   URL.revokeObjectURL(url);
 }
 
