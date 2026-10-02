@@ -2,7 +2,7 @@
 // Escucha únicamente en 127.0.0.1 (no accesible desde la red) y sirve los ficheros de este
 // repositorio tal cual. "/" redirige al CRM en modo emulador.
 //
-//   node review-local/serve.cjs [puerto=5560]
+//   node .review-local/serve.cjs [puerto=5560]
 'use strict';
 const http = require('http');
 const fs = require('fs');

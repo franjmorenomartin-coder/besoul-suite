@@ -101,9 +101,11 @@ Madrid calendar (fixes the previous-day bug between 00:00 and 02:00).
 
 ## 9. Local review harness
 
-`review-local/` + `besoul-entorno-local.js`: emulator-only visual review with synthetic data.
-Guard and usage in `review-local/README.md` (localhost + http + explicit `?emulador=1`; demo
-project id; production hostname can never activate it).
+`.review-local/` + `besoul-entorno-local.js`: emulator-only visual review with synthetic data.
+Guard and usage in `.review-local/README.md` (localhost + http + explicit `?emulador=1`; demo
+project id; production hostname can never activate it). The folder and its emulator config
+(`.firebase.review-local.json`) start with a dot so GitHub Pages (Jekyll build) does not publish
+them; `besoul-entorno-local.js` itself stays published because the pages load it (inert there).
 
 ## 10. Tests
 

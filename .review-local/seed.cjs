@@ -3,7 +3,7 @@
 // usando su API REST (sin dependencias). Se niega a ejecutarse contra cualquier otro destino.
 // Ninguna persona real: nombres "Ficticio/a", emails @example.test, teléfonos inventados.
 //
-//   node review-local/seed.cjs
+//   node .review-local/seed.cjs
 'use strict';
 
 const PROYECTO = 'demo-besoul-revision';
