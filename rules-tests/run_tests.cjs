@@ -127,6 +127,16 @@ async function main() {
     origenPublico: 'valoracion.html', origenQR: true,
   }));
 
+  // HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: createdAt inmutable; fechaAltaReal solo admin.
+  console.log('\n=== besoulLeads: createdAt inmutable + fechaAltaReal solo admin ===');
+  await checkOk('ADMIN crea un lead con createdAt y fechaAltaReal', admin.collection('besoulLeads').doc('lead_fecha').set({ trainerKey: 'pta', nombre: 'x', estado: 'Nuevo lead', createdAt: '2026-10-01T08:00:00.000Z', fechaAltaReal: '2026-10-01' }));
+  await checkOk('ADMIN corrige fechaAltaReal (merge, createdAt intacto)', admin.collection('besoulLeads').doc('lead_fecha').set({ fechaAltaReal: '2026-09-28', updatedAt: '2026-10-01T09:00:00.000Z' }, { merge: true }));
+  await checkDenied('ADMIN NO puede reescribir createdAt de un lead existente', admin.collection('besoulLeads').doc('lead_fecha').set({ createdAt: '2026-09-28T08:00:00.000Z' }, { merge: true }));
+  await checkDenied('ADMIN NO puede borrar createdAt de un lead existente (set sin merge sin el campo)', admin.collection('besoulLeads').doc('lead_fecha').set({ trainerKey: 'pta', nombre: 'x', estado: 'Nuevo lead', fechaAltaReal: '2026-09-28' }));
+  await checkDenied('PT A NO puede cambiar fechaAltaReal de su propio lead (KPIs de empresa)', ptA.collection('besoulLeads').doc('lead_fecha').set({ fechaAltaReal: '2026-08-01' }, { merge: true }));
+  await checkOk('ADMIN puede seguir editando un lead antiguo SIN createdAt (compatibilidad)', admin.collection('besoulLeads').doc('lead1').set({ fechaAltaReal: '2026-09-15' }, { merge: true }));
+  await checkDenied('ADMIN NO puede "inventar" un createdAt en un lead antiguo que no lo tenía', admin.collection('besoulLeads').doc('lead1').set({ createdAt: '2020-01-01T00:00:00.000Z' }, { merge: true }));
+
   // ============================================================
   console.log('\n=== besoulPublicClients (Portal cliente, capability token) ===');
   // ============================================================

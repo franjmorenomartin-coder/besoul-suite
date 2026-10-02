@@ -16,6 +16,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="./besoul-identidad.js"></script>
+  <script src="./besoul-entorno-local.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
@@ -1067,10 +1069,14 @@ function analizarDisponibilidad(startDate,endDate,centroId,trainerKey){
   return { slots, ocupados:ocupadosN, libres:libresN, ocupacion:slots ? ocupadosN/slots : 0, byHour, byDay, heat, libresLista:libres, ocupadosLista:ocupados };
 }
 
+// HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: el embudo CRM del Dashboard es de COHORTE y usa la misma fecha
+// de negocio que el CRM -- fechaAltaReal, y si falta (histórico) la fecha de Madrid de createdAt,
+// es decir, exactamente el comportamiento anterior para los registros no corregidos. Días
+// naturales de Madrid, ambos extremos incluidos. Finanzas NO se toca en este cambio.
 function analizarLeads(startDate,endDate,centroId,trainerKey){
-  const ini=startDate.getTime(); const fin=endDate.getTime();
+  const desde = BesoulIdentidad.fechaLocalMadrid(startDate); const hasta = BesoulIdentidad.fechaLocalMadrid(endDate);
   const filtrados = leads.filter(l=>{
-    const ts = new Date(l.createdAt || l.updatedAt || '').getTime(); if(Number.isNaN(ts) || ts < ini || ts > fin) return false;
+    const fecha = BesoulIdentidad.fechaNegocioLead(l); if(!fecha || !BesoulIdentidad.fechaEnRango(fecha, desde, hasta)) return false;
     if (centroId && l.centroId !== centroId) return false;
     if (trainerKey && l.trainerKey !== trainerKey) return false;
     return true;

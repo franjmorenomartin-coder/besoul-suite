@@ -16,6 +16,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="./besoul-identidad.js"></script>
   <style>
     :root {
       --bs-bg: #0B0F17;
@@ -165,7 +166,11 @@ function hashFNV1a(str){
   return (h >>> 0).toString(36);
 }
 function keyEmailValoracion(email){ return `email_${hashFNV1a(String(email||'').trim().toLowerCase())}`; }
-function keyTelefonoValoracion(tel){ return `phone_${hashFNV1a(soloDigitosTelefono(tel))}`; }
+// HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: clave por teléfono CANÓNICO (besoul-identidad.js) y, para no
+// romper el registro existente, comprobación de TODAS las variantes antiguas ("solo dígitos" tal
+// como se escribió: 612345678 / 34612345678 / 0034612345678).
+function keyTelefonoValoracion(tel){ return `phone_${hashFNV1a(BesoulIdentidad.normalizarTelefonoIdentidad(tel))}`; }
+function keysTelefonoValoracionVariantes(tel){ return BesoulIdentidad.variantesTelefonoRegistro(tel).map(v => `phone_${hashFNV1a(v)}`); }
 function maskEmail(email){ const [a,b]=String(email||'').split('@'); if(!b) return 'email registrado'; return `${a.slice(0,2)}***@${b}`; }
 function maskTelefono(t){ const d=soloDigitosTelefono(t); return d.length > 4 ? `***${d.slice(-4)}` : 'teléfono registrado'; }
 function normalizarCentroId(v){
@@ -263,11 +268,14 @@ async function registrarValoracionUnica(data){
   const emailRef = db.collection('besoulValoracionRegistry').doc(emailKey);
   const phoneRef = db.collection('besoulValoracionRegistry').doc(phoneKey);
   const leadRef = db.collection('besoulLeads').doc();
+  const phoneVariantRefs = keysTelefonoValoracionVariantes(data.telefono).map(k => db.collection('besoulValoracionRegistry').doc(k));
   await db.runTransaction(async tx => {
     const emailSnap = await tx.get(emailRef);
     if (emailSnap.exists) throw new Error('Ya existe una valoración registrada con este email. Si necesitas modificarla, contacta con BESOUL.');
-    const phoneSnap = await tx.get(phoneRef);
-    if (phoneSnap.exists) throw new Error('Ya existe una valoración registrada con este teléfono. Si necesitas modificarla, contacta con BESOUL.');
+    for (const ref of phoneVariantRefs) {
+      const phoneSnap = await tx.get(ref);
+      if (phoneSnap.exists) throw new Error('Ya existe una valoración registrada con este teléfono. Si necesitas modificarla, contacta con BESOUL.');
+    }
     const payload = { ...data, valoracionUnica: true, leadId: leadRef.id };
     tx.set(leadRef, payload);
     const base = {

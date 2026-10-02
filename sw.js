@@ -1,9 +1,11 @@
-const CACHE_NAME = 'besoul-pwa-icons-v8';
+const CACHE_NAME = 'besoul-pwa-icons-v9';
 const CORE_ASSETS = [
   './',
   './index.html',
   './agenda.html',
   './crm.html',
+  './besoul-identidad.js',
+  './besoul-entorno-local.js',
   './finanzas.html',
   './dashboard.html',
   './portal-cliente.html',

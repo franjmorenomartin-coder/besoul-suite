@@ -40,6 +40,8 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="./besoul-identidad.js"></script>
+<script src="./besoul-entorno-local.js"></script>
 
     <style>
 
@@ -4918,7 +4920,54 @@ function calcularRentabilidadFicha(ficha) {
 
 
 
-        async function guardarCliente() {
+        // HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: aviso de posible duplicado al CREAR una ficha individual
+        // (teléfono/email normalizados con besoul-identidad.js, nunca el nombre). No fusiona nada:
+        // "Crear igualmente" exige una acción deliberada.
+        let bsComprobandoDuplicadoCliente = false;
+        function candidatosClientesAgendaDuplicados() {
+            const out = [];
+            Object.keys(dbClientes || {}).forEach(tk => (dbClientes[tk] || []).forEach(c => {
+                if (!c || c.tipo === 'grupo') return;
+                out.push({ id: c.id, tipo: 'cliente', nombre: c.nombre, telefono: c.telefono, email: c.email, trainerKey: tk, miembroGrupo: !!c.vinculacion });
+            }));
+            return out;
+        }
+        function preguntarDuplicadoAgenda(coincidencias) {
+            return new Promise(resolve => {
+                const capa = document.createElement('div');
+                capa.className = 'fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 z-[80]';
+                capa.setAttribute('role', 'dialog');
+                capa.setAttribute('aria-modal', 'true');
+                const porTodo = [...new Set(coincidencias.flatMap(m => m.por))];
+                const filas = coincidencias.map((m, i) => {
+                    const c = m.candidato;
+                    const nombreEntrenador = (dbCredenciales && dbCredenciales[c.trainerKey] && dbCredenciales[c.trainerKey].nombre) || 'otro entrenador';
+                    const donde = `Agenda de ${escapeHTML(nombreEntrenador)}${c.miembroGrupo ? ' · miembro de grupo' : ''}`;
+                    return `<div class="flex items-center justify-between gap-2 bg-slate-950 border border-slate-800 rounded-xl p-2"><div><b class="text-slate-100">${escapeHTML(c.nombre || 'Sin nombre')}</b><div class="text-[10px] text-slate-400">${donde} · coincide ${escapeHTML(BesoulIdentidad.textoCoincidencia(m.por))}</div></div><button type="button" data-abrir="${i}" class="shrink-0 bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-3 py-1 rounded font-bold text-xs">Abrir existente</button></div>`;
+                }).join('');
+                capa.innerHTML = `<div class="bg-slate-900 border border-amber-500/40 rounded-2xl p-5 w-full max-w-lg space-y-3 text-xs"><h3 class="text-sm font-bold text-amber-400 uppercase tracking-wider">Posible duplicado</h3><p class="text-slate-300">Ya existe una persona con este ${escapeHTML(BesoulIdentidad.textoCoincidencia(porTodo))}.</p><div class="space-y-2 max-h-[45vh] overflow-y-auto">${filas}</div><div class="flex flex-wrap justify-end gap-2 pt-2 border-t border-slate-800"><button type="button" data-accion="cancelar" class="bg-slate-800 text-slate-300 px-4 py-2 rounded font-bold">Cancelar</button><button type="button" data-accion="crear" class="bg-amber-500/15 text-amber-300 border border-amber-500/40 px-4 py-2 rounded font-bold">Crear igualmente</button></div></div>`;
+                const cerrar = valor => { capa.remove(); resolve(valor); };
+                capa.addEventListener('click', ev => {
+                    const b = ev.target.closest('button');
+                    if (!b) return;
+                    if (b.dataset.abrir != null) cerrar({ abrir: coincidencias[Number(b.dataset.abrir)].candidato });
+                    else if (b.dataset.accion === 'crear') cerrar('crear');
+                    else if (b.dataset.accion === 'cancelar') cerrar('cancelar');
+                });
+                document.body.appendChild(capa);
+            });
+        }
+        function abrirFichaExistenteAgenda(candidato) {
+            if (candidato.trainerKey !== entrenadorVisto) {
+                alert('Esa ficha está en la agenda de otro entrenador. Cambia de entrenador para abrirla.');
+                return;
+            }
+            cerrarModal();
+            editarFicha(candidato.id);
+        }
+
+        async function guardarCliente(opciones) {
+            opciones = opciones || {};
 
             const name = document.getElementById('cust-name').value.trim();
 
@@ -4987,6 +5036,21 @@ function calcularRentabilidadFicha(ficha) {
                 const emailInput = document.getElementById('cust-email');
                 if (emailInput) { emailInput.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => emailInput.focus(), 50); }
                 return;
+            }
+
+            // HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: antes de tocar nada del estado local, ¿esta persona ya
+            // existe (por teléfono o email normalizados) en alguna agenda?
+            if (!idFichaEditando && tabFichaActiva !== 'grupo' && !opciones.duplicadoConfirmado) {
+                if (bsComprobandoDuplicadoCliente) return;
+                const coincidencias = BesoulIdentidad.buscarCoincidenciasIdentidad({ telefono: phone, email: emailCliente }, candidatosClientesAgendaDuplicados());
+                if (coincidencias.length) {
+                    bsComprobandoDuplicadoCliente = true;
+                    let decision;
+                    try { decision = await preguntarDuplicadoAgenda(coincidencias); } finally { bsComprobandoDuplicadoCliente = false; }
+                    if (decision === 'crear') return guardarCliente({ ...opciones, duplicadoConfirmado: true });
+                    if (decision && decision.abrir) abrirFichaExistenteAgenda(decision.abrir);
+                    return;
+                }
             }
 
             if(!dbClientes[entrenadorVisto]) dbClientes[entrenadorVisto] = [];
