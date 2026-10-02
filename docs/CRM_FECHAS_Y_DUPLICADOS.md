@@ -99,7 +99,13 @@ Madrid calendar (fixes the previous-day bug between 00:00 and 02:00).
 - `rules-tests/run_notas_feasibility_probe.cjs` reports 2/3 on `main`'s Rules too (pre-existing
   probe about the `notas` map).
 
-## 9. Tests
+## 9. Local review harness
+
+`review-local/` + `besoul-entorno-local.js`: emulator-only visual review with synthetic data.
+Guard and usage in `review-local/README.md` (localhost + http + explicit `?emulador=1`; demo
+project id; production hostname can never activate it).
+
+## 10. Tests
 
 - `node crm-incident-tests/run_tests.cjs` — 111 checks; runs the real page scripts with a
   controllable clock and an in-memory Firestore (latency, errors, lost-ack commits, 500-write

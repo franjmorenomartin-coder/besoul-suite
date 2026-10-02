@@ -1,0 +1,9 @@
+{
+  "__comment": "HOTFIX-CRM-DUPLICADOS-FECHA-ALTA -- configuración SOLO para la revisión local con el Firebase Emulator (proyecto ficticio demo-besoul-revision). Nunca se usa para desplegar: el despliegue usa firebase.json. Las reglas son las de este mismo repositorio (firestore.rules).",
+  "firestore": { "rules": "firestore.rules" },
+  "emulators": {
+    "firestore": { "host": "127.0.0.1", "port": 8085 },
+    "auth": { "host": "127.0.0.1", "port": 9099 },
+    "ui": { "enabled": false }
+  }
+}

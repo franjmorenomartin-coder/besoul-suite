@@ -5,6 +5,7 @@ const CORE_ASSETS = [
   './agenda.html',
   './crm.html',
   './besoul-identidad.js',
+  './besoul-entorno-local.js',
   './finanzas.html',
   './dashboard.html',
   './portal-cliente.html',
