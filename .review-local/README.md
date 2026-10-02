@@ -7,7 +7,11 @@ producción**.
 
 Requisitos: Node 18+ y Java 21+ (lo exige el Firebase Emulator).
 
-    node review-local/start.cjs
+    node .review-local/start.cjs
+
+La carpeta y `.firebase.review-local.json` empiezan por punto a propósito: GitHub Pages (build
+Jekyll) no publica archivos ni carpetas que empiezan por punto, así que esta herramienta local no
+forma parte del sitio de producción.
 
 Abre:
 
@@ -38,10 +42,10 @@ Si se activa, la página usa el proyecto ficticio `demo-besoul-revision` (los id
 existen en Google: aunque fallara la conexión al emulador, nunca podría llegar a `besoul-suite`),
 conecta Auth y Firestore a `127.0.0.1` y muestra la franja "REVISIÓN LOCAL" arriba.
 
-El seed (`review-local/seed.cjs`) solo escribe en `127.0.0.1` y se niega a ejecutarse contra
-cualquier proyecto que no empiece por `demo-`. El servidor (`review-local/serve.cjs`) escucha solo
+El seed (`.review-local/seed.cjs`) solo escribe en `127.0.0.1` y se niega a ejecutarse contra
+cualquier proyecto que no empiece por `demo-`. El servidor (`.review-local/serve.cjs`) escucha solo
 en `127.0.0.1`. `firebase.json` (despliegue) no se ha tocado; el emulador usa
-`firebase.review-local.json` con las reglas de este repositorio.
+`.firebase.review-local.json` con las reglas de este repositorio.
 
 ## Datos ficticios
 

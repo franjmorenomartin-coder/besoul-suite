@@ -66,7 +66,7 @@ console.log('\n=== Las páginas cargan el interruptor después del SDK y antes d
   const sdk = h.indexOf('firebase-app-compat.js'), sw = h.indexOf('besoul-entorno-local.js'), init = h.indexOf('initializeApp(');
   check(`${f}: SDK < interruptor < initializeApp`, sdk > -1 && sw > sdk && init > sw);
 });
-const seed = fs.readFileSync(path.join(__dirname, '..', 'review-local', 'seed.cjs'), 'utf8');
+const seed = fs.readFileSync(path.join(__dirname, '..', '.review-local', 'seed.cjs'), 'utf8');
 check('El seed solo apunta a 127.0.0.1 y a un proyecto demo-*', /const PROYECTO = 'demo-besoul-revision'/.test(seed) && !/besoul-suite\b/.test(seed.replace(/demo-besoul-revision/g, '')) && /127\.0\.0\.1/.test(seed));
 check('firebase.json (despliegue) no se ha modificado para la revisión local', !fs.readFileSync(path.join(__dirname, '..', 'firebase.json'), 'utf8').includes('review'));
 
