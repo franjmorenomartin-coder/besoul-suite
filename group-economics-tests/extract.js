@@ -31,7 +31,7 @@ const names = [
   'normalizarPorcentajeDescuento', 'formatoPorcentajeDescuento', 'obtenerDescuentoFicha',
   'aplicarDescuentoImporte', 'esGrupoAbierto', 'esFichaMiembroGrupo', 'importeEfectivoCliente',
   'fichasMiembrosGrupo', 'calcularFacturacionGrupoTotal', 'calcularFacturacionEstadisticaMiembro',
-  'sesionesContratadasFicha', 'autoCalcularTarifa', 'actualizarPreviewContadorModal'
+  'sesionesContratadasFicha', 'fijarCampoDescuentoFicha', 'descuentoCampoFicha', 'autoCalcularTarifa', 'actualizarPreviewContadorModal'
 ];
 
 const derivBono8 = [...html.matchAll(/TARIFAS_2026\["[^"]+"\]\s*=\s*\{[^}]*\};/g)].map(x => x[0]).join('\n');

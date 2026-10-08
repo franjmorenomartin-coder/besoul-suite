@@ -314,6 +314,23 @@ function generarTokenReservaCliente() {
 
 function catalogoActividadesVivo() { return { ...DEFAULT_CATALOGO_ACTIVIDADES, ...dbCatalogoActividades }; }
 
+function fijarCampoDescuentoFicha(valor) {
+            const input = document.getElementById('cust-discount');
+            if (!input) return;
+            input.value = formatoPorcentajeDescuento(valor || 0);
+            if (!input.dataset) return;
+            input.dataset.descuentoExacto = String(normalizarPorcentajeDescuento(valor || 0));
+            input.dataset.descuentoTexto = input.value;
+        }
+
+function descuentoCampoFicha() {
+            const input = document.getElementById('cust-discount');
+            if (!input) return 0;
+            const ds = input.dataset || {};
+            if (ds.descuentoExacto !== undefined && input.value === ds.descuentoTexto) return normalizarPorcentajeDescuento(ds.descuentoExacto);
+            return normalizarPorcentajeDescuento(input.value || 0);
+        }
+
 async function guardarCliente(opciones) {
             opciones = opciones || {};
 
@@ -331,7 +348,7 @@ async function guardarCliente(opciones) {
             const pDate = document.getElementById('cust-bono-date').value;
 
             const color = document.getElementById('cust-color').value;
-            const descuentoPct = normalizarPorcentajeDescuento(document.getElementById('cust-discount')?.value || 0);
+            const descuentoPct = descuentoCampoFicha();
             const contratoCliente = { ...(contratoTemporalFicha || contratoVacio()), firmado: !!document.getElementById('cust-contract-signed')?.checked };
             const estadoCliente = normalizarEstadoCliente(document.getElementById('cust-status')?.value || 'activo');
             const fechaAlta = document.getElementById('cust-start-date')?.value || '';

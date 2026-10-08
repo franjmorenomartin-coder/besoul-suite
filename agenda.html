@@ -41,6 +41,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="./besoul-identidad.js"></script>
+<script src="./besoul-importacion.js"></script>
 <script src="./besoul-entorno-local.js"></script>
 
     <style>
@@ -490,7 +491,10 @@
 
                     </div>
 
-                    <button onclick="mostrarModalNuevoCliente()" class="bs-btn-primary px-3 py-1.5 rounded-lg text-xs">+ Alta</button>
+                    <div class="flex items-center gap-2">
+                        <button id="btn-importar-excel" type="button" onclick="abrirImportadorExcel()" title="Importar clientes y horarios desde la plantilla Excel oficial" class="bg-slate-800 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-700 transition">Importar Excel</button>
+                        <button onclick="mostrarModalNuevoCliente()" class="bs-btn-primary px-3 py-1.5 rounded-lg text-xs">+ Alta</button>
+                    </div>
 
                 </div>
 
@@ -594,6 +598,50 @@
 
 
     <!-- MODAL POPUP ALTA / EDICIÓN -->
+
+    <!-- IMPORT-V1-EXCEL-CLIENTES-AGENDA: importación inicial/ocasional de clientes y horarios desde la plantilla Excel oficial -->
+    <div id="modal-importacion-excel" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-start justify-center p-2 sm:p-4 z-[60] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="imp-titulo">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl my-2 sm:my-6 text-xs">
+            <div class="flex items-center justify-between gap-2 p-4 border-b border-slate-800">
+                <h3 id="imp-titulo" class="text-sm font-bold text-amber-400 uppercase tracking-wider">Importar clientes y agenda desde Excel</h3>
+                <button type="button" onclick="cerrarImportadorExcel()" class="text-slate-400 hover:text-white text-lg font-bold px-2" aria-label="Cerrar">×</button>
+            </div>
+            <div class="p-4 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-3 space-y-2">
+                        <div class="text-[10px] text-slate-500 font-bold uppercase">1 · Plantilla</div>
+                        <div class="text-slate-300">Agenda de destino: <b id="imp-trainer" class="text-white">-</b></div>
+                        <p id="imp-trainer-nota" class="text-[10px] text-slate-500 leading-relaxed">Para importar en otra agenda, cambia antes el entrenador en el selector superior.</p>
+                        <div class="flex flex-wrap gap-2">
+                            <button type="button" id="imp-btn-plantilla" onclick="descargarPlantillaImportacion(false)" class="bs-btn-primary px-3 py-1.5 rounded-lg text-[11px]">Descargar plantilla oficial</button>
+                            <button type="button" id="imp-btn-ejemplo" onclick="descargarPlantillaImportacion(true)" class="bg-slate-800 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-lg text-[11px] font-bold">Ejemplo ficticio</button>
+                        </div>
+                    </div>
+                    <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-3 space-y-2">
+                        <div class="text-[10px] text-slate-500 font-bold uppercase">2 · Periodo de sesiones</div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="block"><span class="text-slate-400 block mb-1">Desde</span><input type="date" id="imp-desde" onchange="recalcularVistaPreviaImportacion()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></label>
+                            <label class="block"><span class="text-slate-400 block mb-1">Hasta</span><input type="date" id="imp-hasta" onchange="recalcularVistaPreviaImportacion()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white"></label>
+                        </div>
+                        <p class="text-[10px] text-slate-500 leading-relaxed">Los horarios fijos se repiten cada semana dentro de este periodo (máx. 6 meses). Para otro mes, vuelve a importar el mismo Excel: no se duplica nada.</p>
+                    </div>
+                    <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-3 space-y-2">
+                        <div class="text-[10px] text-slate-500 font-bold uppercase">3 · Excel cumplimentado</div>
+                        <input type="file" id="imp-archivo" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onchange="procesarArchivoImportacion(this.files && this.files[0])" class="w-full text-[11px] text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-slate-200">
+                        <p id="imp-archivo-estado" class="text-[10px] text-slate-500">Ningún archivo seleccionado.</p>
+                    </div>
+                </div>
+                <div id="imp-preview" class="space-y-3"></div>
+            </div>
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border-t border-slate-800">
+                <label id="imp-acepto-wrap" class="hidden items-center gap-2 text-slate-300 cursor-pointer"><input type="checkbox" id="imp-acepto-adv" onchange="actualizarBotonConfirmarImportacion()" class="w-4 h-4 accent-amber-500"><span>He revisado las advertencias</span></label>
+                <div class="flex gap-2 sm:ml-auto">
+                    <button type="button" onclick="cerrarImportadorExcel()" class="bg-slate-800 text-slate-300 px-4 py-2 rounded-lg font-bold">Cerrar</button>
+                    <button type="button" id="imp-btn-confirmar" onclick="confirmarImportacionExcel()" disabled class="bs-btn-primary px-4 py-2 rounded-lg font-bold disabled:opacity-40 disabled:cursor-not-allowed">Confirmar importación</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div id="modal-cliente" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 sm:overflow-y-auto">
 
@@ -1365,7 +1413,7 @@ miércoles 07:00-09:00"></textarea>
         // texto plano, copiable sin depender de ninguna interacción de DevTools más allá de
         // seleccionar texto (el objeto expandible [BESOUL_SAVE_CONFLICT] no era extraíble de forma
         // fiable para un usuario sin experiencia en DevTools).
-        const BS_APP_BUILD_TAG = 'agenda-persistencia-p0-2026-10-08';
+        const BS_APP_BUILD_TAG = 'import-excel-clientes-agenda-2026-10-08-r2';
         console.log('[BESOUL BUILD]', BS_APP_BUILD_TAG, '-- si esto NO aparece en tu consola tras recargar, tu navegador está ejecutando una versión antigua cacheada: cierra TODAS las pestañas de la app y vuelve a abrirla, o usa una ventana de incógnito.');
         let slotAccionSeleccionado = '';
         window.bsAgendaDiaMovil = window.bsAgendaDiaMovil ?? null;
@@ -3543,6 +3591,27 @@ miércoles 07:00-09:00"></textarea>
             return normalizarPorcentajeDescuento(valor).toLocaleString('es-ES', { maximumFractionDigits: 2 });
         }
 
+        // IMPORT-V1-EXCEL: un descuento puede guardarse con más de 2 decimales para que Besoul facture
+        // exactamente el precio pactado (p. ej. 190 € sobre 210 € = 9,5238...%). El campo lo muestra con
+        // 2 decimales; si el usuario no lo toca, al guardar se conserva el valor exacto (abrir y guardar
+        // una ficha nunca cambia su importe). Si lo edita, se usa lo que escriba, como siempre.
+        function fijarCampoDescuentoFicha(valor) {
+            const input = document.getElementById('cust-discount');
+            if (!input) return;
+            input.value = formatoPorcentajeDescuento(valor || 0);
+            if (!input.dataset) return;
+            input.dataset.descuentoExacto = String(normalizarPorcentajeDescuento(valor || 0));
+            input.dataset.descuentoTexto = input.value;
+        }
+
+        function descuentoCampoFicha() {
+            const input = document.getElementById('cust-discount');
+            if (!input) return 0;
+            const ds = input.dataset || {};
+            if (ds.descuentoExacto !== undefined && input.value === ds.descuentoTexto) return normalizarPorcentajeDescuento(ds.descuentoExacto);
+            return normalizarPorcentajeDescuento(input.value || 0);
+        }
+
         function normalizarCampoDescuento() {
             const input = document.getElementById('cust-discount');
             if (!input) return;
@@ -4511,6 +4580,23 @@ function calcularRentabilidadFicha(ficha) {
 
 
 
+        // Frecuencias permitidas por modalidad (fuente única: la usan la ficha y el importador Excel).
+        function opcionesFrecuenciaParaModalidad(mod) {
+
+            mod = String(mod || '');
+
+            if(mod.includes("Suelta")) { return [{v:1, t:"1 Sesión Suelta"}]; }
+
+            // PLAN-01: "Bono 8" se comprueba ANTES que el genérico "Bono" -- ambos strings
+            // contienen "Bono", y el genérico debe seguir cubriendo el Bono 10 real sin tocarlo.
+            if(mod.includes("Bono 8")) { return [{v:8, t:"Bono 8 Sesiones"}]; }
+
+            if(mod.includes("Bono")) { return [{v:10, t:"Bono 10 Sesiones"}]; }
+
+            return [{v:1, t:"1 día/sem"}, {v:2, t:"2 días/sem"}, {v:3, t:"3 días/sem"}, {v:4, t:"4 días/sem"}, {v:5, t:"5 días/sem"}];
+
+        }
+
         function actualizarOpcionesFrecuencia() {
 
             const mod = document.getElementById('cust-mod').value;
@@ -4521,17 +4607,7 @@ function calcularRentabilidadFicha(ficha) {
 
 
 
-            let opciones = [];
-
-            if(mod.includes("Suelta")) { opciones = [{v:1, t:"1 Sesión Suelta"}]; }
-
-            // PLAN-01: "Bono 8" se comprueba ANTES que el genérico "Bono" -- ambos strings
-            // contienen "Bono", y el genérico debe seguir cubriendo el Bono 10 real sin tocarlo.
-            else if(mod.includes("Bono 8")) { opciones = [{v:8, t:"Bono 8 Sesiones"}]; }
-
-            else if(mod.includes("Bono")) { opciones = [{v:10, t:"Bono 10 Sesiones"}]; }
-
-            else { opciones = [{v:1, t:"1 día/sem"}, {v:2, t:"2 días/sem"}, {v:3, t:"3 días/sem"}, {v:4, t:"4 días/sem"}, {v:5, t:"5 días/sem"}]; }
+            const opciones = opcionesFrecuenciaParaModalidad(mod);
 
 
 
@@ -4694,7 +4770,7 @@ function calcularRentabilidadFicha(ficha) {
 
             const mod = esMiembroEnEdicion ? (fichaGrupoDelMiembro?.modalidad || '') : document.getElementById('cust-mod').value;
             const factor = esMiembroEnEdicion ? (parseInt(fichaGrupoDelMiembro?.factor) || 1) : (parseInt(document.getElementById('cust-factor').value) || 1);
-            const descuentoPct = normalizarPorcentajeDescuento(document.getElementById('cust-discount')?.value || 0);
+            const descuentoPct = descuentoCampoFicha();
 
             // Personas asumidas por facturación en la matriz
             let multiplicadorPersonas = 1;
@@ -4888,7 +4964,7 @@ function calcularRentabilidadFicha(ficha) {
             document.getElementById('cust-bono-date').value = '';
 
             document.getElementById('cust-color').value = 'amber';
-            if (document.getElementById('cust-discount')) document.getElementById('cust-discount').value = 0;
+            fijarCampoDescuentoFicha(0);
             if (document.getElementById('cust-status')) document.getElementById('cust-status').value = 'activo';
             if (document.getElementById('cust-start-date')) document.getElementById('cust-start-date').value = fechaHoyISO();
             if (document.getElementById('cust-status-date')) document.getElementById('cust-status-date').value = '';
@@ -4973,7 +5049,7 @@ function calcularRentabilidadFicha(ficha) {
             document.getElementById('cust-purchase-type').value = c.tipoCompra;
 
             document.getElementById('cust-bono-date').value = c.fechaCompra || "";
-            document.getElementById('cust-discount').value = formatoPorcentajeDescuento(c.descuentoPct || 0);
+            fijarCampoDescuentoFicha(c.descuentoPct || 0);
             if (document.getElementById('cust-status')) document.getElementById('cust-status').value = estadoClienteFicha(c);
             if (document.getElementById('cust-start-date')) document.getElementById('cust-start-date').value = c.fechaAlta || '';
             if (document.getElementById('cust-status-date')) document.getElementById('cust-status-date').value = c.fechaEstado || '';
@@ -5267,7 +5343,7 @@ function calcularRentabilidadFicha(ficha) {
             const pDate = document.getElementById('cust-bono-date').value;
 
             const color = document.getElementById('cust-color').value;
-            const descuentoPct = normalizarPorcentajeDescuento(document.getElementById('cust-discount')?.value || 0);
+            const descuentoPct = descuentoCampoFicha();
             const contratoCliente = { ...(contratoTemporalFicha || contratoVacio()), firmado: !!document.getElementById('cust-contract-signed')?.checked };
             const estadoCliente = normalizarEstadoCliente(document.getElementById('cust-status')?.value || 'activo');
             const fechaAlta = document.getElementById('cust-start-date')?.value || '';
@@ -6603,6 +6679,10 @@ Cancelar = no hacer nada`,
                 const esPruebaCRM = esCitaPruebaCRM(objOriginal) || esCitaPruebaCRM(obj);
                 const esGrupo = esGrupoAbierto(objOriginal) || esGrupoAbierto(obj);
                 const rent = esGrupo ? calcularRentabilidadGrupoAbierto(objOriginal, entrenadorVisto) : calcularRentabilidadFicha(obj);
+                // IMPORT-V1-EXCEL: franja declarada mayor que la sesión (p. ej. 10:00-11:00): solo
+                // informativa. La sesión real dura 45 min; el resto queda libre y no bloquea nada.
+                const franjaDeclarada = parseInt(objOriginal.bloqueDeclaradoMin, 10) || 0;
+                const franjaHTML = franjaDeclarada > 45 ? `<div class="text-[11px] text-slate-500" title="La sesión real es de 45 min; estos minutos no forman parte de la sesión y no bloquean el hueco.">Franja declarada hasta ${formatoMinutosHorario(minutosInicio + franjaDeclarada)} · ${franjaDeclarada - 45} min libres</div>` : '';
                 const nota = obtenerNotaAgenda(cobertura.claveInicio);
                 const notaHTML = nota ? `<div class="mt-1.5 text-xs text-amber-200/90 truncate">📝 ${escapeHTML(nota)}</div>` : '';
 
@@ -6653,7 +6733,7 @@ Cancelar = no hacer nada`,
                     card.innerHTML = `<div class="flex items-start justify-between gap-2">${horaHTML}<span class="text-base shrink-0">${completo ? '🔴' : '👥'}</span></div>
                         <div class="mt-1.5 text-lg font-black ${completo ? 'text-red-100' : 'text-amber-100'} truncate">${escapeHTML(obj.nombre || 'Grupo abierto')}</div>
                         <div class="text-xs font-semibold ${completo ? 'text-red-300' : 'text-amber-300'}">${completo ? 'Completo' : 'Grupo abierto'} · ${asistentes}/${capacidad} plazas</div>
-                        <div class="text-xs text-slate-500">${rent.toFixed(2)}€</div>${notaHTML}`;
+                        <div class="text-xs text-slate-500">${rent.toFixed(2)}€</div>${franjaHTML}${notaHTML}`;
                     card.onclick = () => {
                         if (fichaSeleccionadaMovilId) {
                             agendarFichaSeleccionadaEnCelda(cobertura.claveInicio);
@@ -6668,7 +6748,7 @@ Cancelar = no hacer nada`,
                 card.title = 'Slot ocupado. Haz clic para ver notas/detalles o arrastra para mover la cita.';
                 card.innerHTML = `${horaHTML}
                     <div class="mt-1.5 text-lg font-black text-white truncate">${escapeHTML(obj.nombre || 'Cliente')}</div>
-                    <div class="text-xs text-slate-500">Individual · ${rent.toFixed(2)}€</div>${notaHTML}`;
+                    <div class="text-xs text-slate-500">Individual · ${rent.toFixed(2)}€</div>${franjaHTML}${notaHTML}`;
                 card.onclick = () => {
                     if (fichaSeleccionadaMovilId) {
                         agendarFichaSeleccionadaEnCelda(cobertura.claveInicio);
@@ -7322,7 +7402,11 @@ Cancelar = no hacer nada`,
                             const recuperacionHTML = esRecuperacionNoFacturable(objOriginal) || esRecuperacionNoFacturable(obj) ? '<div class="absolute bottom-1 right-1 text-[8px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-500/30">RECUP.</div>' : '';
                             const paddingTitulo = recurrenteHTML ? 'pt-3' : '';
                             const grupoAbiertoHTML = esGrupoAbierto(objOriginal) || esGrupoAbierto(obj) ? `<div class="text-[8px] mt-0.5 text-emerald-200">Grupo abierto · ${asistentesGrupoAbierto(objOriginal).length}/${capacidadGrupoAbierto(objOriginal)} plazas</div>` : '';
-                            tdCell.innerHTML = `${iconoNota}${recurrenteHTML}${recuperacionHTML}<div class="text-[11px] text-white uppercase truncate ${paddingTitulo}">${escapeHTML(obj.nombre)}</div><div class="text-[9px] mt-0.5 opacity-90">${rent.toFixed(2)}€</div><div class="text-[8px] mt-0.5 opacity-60">45 min${recurrenteHTML ? ' · semanal' : ''}${recuperacionHTML ? ' · no facturable' : ''}</div>${grupoAbiertoHTML}${resumenNota}`;
+                            // IMPORT-V1-EXCEL: franja declarada mayor que la sesión (p. ej. 10:00-11:00) -- solo
+                            // informativa: la sesión real sigue siendo de 45 min y el resto queda libre.
+                            const franjaDeclarada = parseInt(objOriginal.bloqueDeclaradoMin, 10) || 0;
+                            const franjaHTML = franjaDeclarada > 45 ? ` · franja ${franjaDeclarada} (${franjaDeclarada - 45} libres)` : '';
+                            tdCell.innerHTML = `${iconoNota}${recurrenteHTML}${recuperacionHTML}<div class="text-[11px] text-white uppercase truncate ${paddingTitulo}">${escapeHTML(obj.nombre)}</div><div class="text-[9px] mt-0.5 opacity-90">${rent.toFixed(2)}€</div><div class="text-[8px] mt-0.5 opacity-60">45 min${recurrenteHTML ? ' · semanal' : ''}${recuperacionHTML ? ' · no facturable' : ''}${franjaHTML}</div>${grupoAbiertoHTML}${resumenNota}`;
 
                             tdCell.onclick = () => {
                                 if (fichaSeleccionadaMovilId) {
@@ -9946,6 +10030,351 @@ Cancelar = no hacer nada`,
             window.location.reload();
         }
 
+
+        // =====================================================================================
+        // IMPORT-V1-EXCEL-CLIENTES-AGENDA -- importación de clientes y horarios desde Excel.
+        // La lógica (catálogo, plantilla, validación, plan) vive en besoul-importacion.js y usa
+        // las funciones REALES de esta página (tarifas, descuentos, frecuencias, identidad,
+        // integrantes de grupo, ocupación de huecos). El guardado es el MISMO guardado
+        // transaccional por entrenador del resto de la Agenda (guardarEstadoNubeAgenda, hotfix
+        // P0): todo el lote se escribe de una vez o no se escribe nada.
+        // =====================================================================================
+        const BS_EXCELJS_URL = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+        const BS_EXCELJS_SRI = 'sha384-Pqp51FUN2/qzfxZxBCtF0stpc9ONI6MYZpVqmo8m20SoaQCzf+arZvACkLkirlPz';
+        let bsExcelJSPromesa = null;
+        const bsImportacion = { lectura: null, plan: null, opciones: {}, archivo: '', importando: false, trainerKey: '' };
+
+        function cargarExcelJS() {
+            if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+            if (bsExcelJSPromesa) return bsExcelJSPromesa;
+            bsExcelJSPromesa = new Promise((ok, ko) => {
+                const s = document.createElement('script');
+                s.src = BS_EXCELJS_URL;
+                s.integrity = BS_EXCELJS_SRI;
+                s.crossOrigin = 'anonymous';
+                s.async = true;
+                s.onload = () => window.ExcelJS ? ok(window.ExcelJS) : ko(new Error('El lector de Excel no se ha cargado correctamente.'));
+                s.onerror = () => { bsExcelJSPromesa = null; ko(new Error('No se ha podido cargar el lector de Excel. Comprueba la conexión a internet.')); };
+                document.head.appendChild(s);
+            });
+            return bsExcelJSPromesa;
+        }
+
+        // Solo admin (cualquier agenda) o el propio PT (solo la suya).
+        function puedeImportarExcelEnAgendaVista() {
+            if (!window.BesoulImportacion || !entrenadorVisto) return false;
+            if (rolActivo === 'admin') return true;
+            return rolActivo === 'pt' && !!usuarioLogeado && entrenadorVisto === usuarioLogeado;
+        }
+
+        function depsImportacionExcel() {
+            return {
+                tarifaBaseFicha, multiplicadorFacturacionFicha, normalizarPorcentajeDescuento, aplicarDescuentoImporte,
+                opcionesFrecuenciaParaModalidad,
+                buscarCoincidenciasIdentidad: BesoulIdentidad.buscarCoincidenciasIdentidad,
+                normalizarTelefono: BesoulIdentidad.normalizarTelefonoIdentidad,
+                normalizarEmail: BesoulIdentidad.normalizarEmailIdentidad
+            };
+        }
+
+        function catalogoImportacionExcel() {
+            // Modalidades: las opciones reales del selector de la ficha (fuente única).
+            const modalidades = Array.from(document.querySelectorAll('#cust-mod option')).map(o => ({ key: o.value, label: o.textContent.trim() }));
+            // Una plantilla = la agenda de destino (sin importaciones mixtas entre entrenadores).
+            const entrenadores = [{ key: entrenadorVisto, nombre: nombreEntrenador(entrenadorVisto) }];
+            return BesoulImportacion.construirCatalogo({ modalidades, entrenadores, trainerKey: entrenadorVisto, gruposExistentes: dbClientes[entrenadorVisto] || [], deps: depsImportacionExcel() });
+        }
+
+        function tamanoDocumentoAgendaEstimado() {
+            try {
+                const json = JSON.stringify({ clientes: dbClientes, agenda: dbAgenda, notas: dbNotas, pruebasCRM: dbPruebasCRM, disponibilidadReservas: dbDisponibilidadReservas, historicoClientes: dbHistoricoClientes });
+                return typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(json).length : json.length;
+            } catch (e) { return 0; }
+        }
+
+        function periodoImportacionExcel() {
+            return { desde: document.getElementById('imp-desde')?.value || '', hasta: document.getElementById('imp-hasta')?.value || '' };
+        }
+
+        function entornoImportacionExcel() {
+            return {
+                catalogo: catalogoImportacionExcel(), deps: depsImportacionExcel(), trainerKey: entrenadorVisto,
+                clientesTrainer: dbClientes[entrenadorVisto] || [], candidatosIdentidad: candidatosClientesAgendaDuplicados(),
+                ocupacion: clave => obtenerCoberturaCitaAgenda(clave), periodo: periodoImportacionExcel(),
+                hoyISO: fechaHoyISO(), tamanoDocumentoActual: tamanoDocumentoAgendaEstimado()
+            };
+        }
+
+        function abrirImportadorExcel() {
+            if (!puedeImportarExcelEnAgendaVista()) { alert('Solo un administrador o el propio entrenador pueden importar clientes en esta agenda.'); return; }
+            const hoy = new Date();
+            bsImportacion.lectura = null; bsImportacion.plan = null; bsImportacion.opciones = {}; bsImportacion.archivo = '';
+            bsImportacion.trainerKey = entrenadorVisto;
+            document.getElementById('imp-trainer').innerText = nombreEntrenador(entrenadorVisto);
+            document.getElementById('imp-trainer-nota').classList.toggle('hidden', rolActivo !== 'admin');
+            document.getElementById('imp-desde').value = formatoFechaLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+            document.getElementById('imp-hasta').value = formatoFechaLocal(new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0));
+            document.getElementById('imp-archivo').value = '';
+            document.getElementById('imp-archivo-estado').innerText = 'Ningún archivo seleccionado.';
+            document.getElementById('imp-preview').innerHTML = '';
+            document.getElementById('imp-acepto-adv').checked = false;
+            actualizarBotonConfirmarImportacion();
+            document.getElementById('modal-importacion-excel').classList.remove('hidden');
+        }
+
+        function cerrarImportadorExcel() {
+            if (bsImportacion.importando) return;
+            document.getElementById('modal-importacion-excel').classList.add('hidden');
+        }
+
+        function nombreArchivoImportacion(prefijo) {
+            const base = String(nombreEntrenador(entrenadorVisto) || entrenadorVisto).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
+            return `${prefijo}_${base || 'entrenador'}.xlsx`;
+        }
+
+        async function descargarPlantillaImportacion(ejemplo) {
+            if (!puedeImportarExcelEnAgendaVista()) return;
+            const btn = document.getElementById(ejemplo ? 'imp-btn-ejemplo' : 'imp-btn-plantilla');
+            const textoBtn = btn ? btn.textContent : '';
+            if (btn) { btn.disabled = true; btn.textContent = 'Generando...'; }
+            try {
+                const ExcelJS = await cargarExcelJS();
+                const catalogo = catalogoImportacionExcel();
+                const desde = periodoImportacionExcel().desde || fechaHoyISO();
+                const wb = await BesoulImportacion.generarPlantilla(ExcelJS, catalogo, { ejemplo: ejemplo ? BesoulImportacion.ejemploFicticio(catalogo, desde) : null });
+                const buffer = await wb.xlsx.writeBuffer();
+                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = nombreArchivoImportacion(ejemplo ? 'Ejemplo_ficticio_Besoul' : 'Plantilla_importacion_Besoul');
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
+            } catch (err) {
+                console.error('[BESOUL Importación] No se pudo generar la plantilla:', err);
+                alert(`No se ha podido generar el Excel. ${err?.message || ''}`);
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = textoBtn; }
+            }
+        }
+
+        async function procesarArchivoImportacion(archivo) {
+            if (!archivo || !puedeImportarExcelEnAgendaVista()) return;
+            const estado = document.getElementById('imp-archivo-estado');
+            bsImportacion.lectura = null; bsImportacion.plan = null; bsImportacion.opciones = {};
+            document.getElementById('imp-preview').innerHTML = '';
+            actualizarBotonConfirmarImportacion();
+            if (!/\.xlsx$/i.test(archivo.name)) { estado.innerText = 'Solo se admite la plantilla oficial en formato .xlsx.'; return; }
+            if (archivo.size > 8 * 1024 * 1024) { estado.innerText = 'El archivo es demasiado grande para una plantilla de importación.'; return; }
+            estado.innerText = 'Leyendo y validando...';
+            try {
+                const ExcelJS = await cargarExcelJS();
+                const wb = new ExcelJS.Workbook();
+                await wb.xlsx.load(await archivo.arrayBuffer());
+                bsImportacion.archivo = archivo.name;
+                bsImportacion.trainerKey = entrenadorVisto;
+                bsImportacion.lectura = BesoulImportacion.leerLibro(wb, catalogoImportacionExcel());
+                estado.innerText = `Archivo: ${archivo.name}`;
+                recalcularVistaPreviaImportacion();
+            } catch (err) {
+                console.error('[BESOUL Importación] No se pudo leer el Excel:', err);
+                estado.innerText = 'No se ha podido leer el archivo: ¿es la plantilla oficial en formato .xlsx?';
+            }
+        }
+
+        function recalcularVistaPreviaImportacion() {
+            if (!bsImportacion.lectura) return;
+            if (bsImportacion.trainerKey !== entrenadorVisto) {
+                bsImportacion.plan = null;
+                document.getElementById('imp-preview').innerHTML = '<div class="p-3 rounded-xl border border-red-500/40 bg-red-500/10 text-red-300">Has cambiado de agenda: vuelve a abrir el importador y sube el archivo de nuevo.</div>';
+                actualizarBotonConfirmarImportacion();
+                return;
+            }
+            try {
+                bsImportacion.plan = BesoulImportacion.planificar(bsImportacion.lectura, entornoImportacionExcel(), bsImportacion.opciones);
+            } catch (err) {
+                console.error('[BESOUL Importación] Error al preparar la vista previa:', err);
+                bsImportacion.plan = null;
+                document.getElementById('imp-preview').innerHTML = `<div class="p-3 rounded-xl border border-red-500/40 bg-red-500/10 text-red-300">No se ha podido preparar la vista previa: ${escapeHTML(err?.message || String(err))}</div>`;
+                actualizarBotonConfirmarImportacion();
+                return;
+            }
+            document.getElementById('imp-acepto-adv').checked = false;
+            pintarVistaPreviaImportacion();
+            actualizarBotonConfirmarImportacion();
+        }
+
+        function cambiarOpcionImportacion(tipo, ref, valor) {
+            const o = bsImportacion.opciones;
+            const mapa = tipo === 'resolucion' ? (o.resoluciones = o.resoluciones || {})
+                : tipo === 'actualizar' ? (o.actualizar = o.actualizar || {})
+                : tipo === 'grupo' ? (o.confirmarGrupos = o.confirmarGrupos || {})
+                : (o.aceptarPrecioSuperior = o.aceptarPrecioSuperior || {});
+            if (valor === '' || valor === false) delete mapa[ref]; else mapa[ref] = valor;
+            recalcularVistaPreviaImportacion();
+        }
+
+        function pintarVistaPreviaImportacion() {
+            const plan = bsImportacion.plan;
+            const cont = document.getElementById('imp-preview');
+            if (!plan) { cont.innerHTML = ''; return; }
+            const r = plan.resumen;
+            const fmtE = n => (Number(n) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+            const ubic = x => x.hoja === '-' ? 'General' : `${x.hoja}${x.fila ? ' · fila ' + x.fila : ''}`;
+            const tarjeta = (titulo, valor, color) => `<div class="bg-slate-950 border border-slate-800 rounded-xl p-2"><div class="text-[9px] text-slate-500 uppercase font-bold">${titulo}</div><div class="text-lg font-black ${color}">${valor}</div></div>`;
+            let html = `<div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+                ${tarjeta('Clientes nuevos', r.nuevos, 'text-emerald-400')}${tarjeta('Ya existentes', r.existentes, 'text-slate-200')}
+                ${tarjeta('A actualizar', r.actualizar, 'text-cyan-300')}${tarjeta('Por resolver', plan.pendientes.length, plan.pendientes.length ? 'text-amber-400' : 'text-slate-200')}
+                ${tarjeta('Grupos nuevos', r.gruposNuevos + (r.gruposAmpliados ? ` <span class="text-[10px]">+${r.gruposAmpliados} ampl.</span>` : ''), 'text-emerald-400')}
+                ${tarjeta('Sesiones a crear', r.sesionesCrear + (r.sesionesAsistentes ? ` <span class="text-[10px]">+${r.sesionesAsistentes} asist.</span>` : ''), 'text-emerald-400')}
+                ${tarjeta('Ya en agenda', r.sesionesExisten, 'text-slate-200')}${tarjeta('Conflictos', r.sesionesConflicto, r.sesionesConflicto ? 'text-red-400' : 'text-slate-200')}
+            </div>`;
+            if (plan.errores.length) {
+                html += `<div class="rounded-xl border border-red-500/40 bg-red-500/10 p-3 space-y-1"><div class="font-bold text-red-300 uppercase text-[10px]">Errores (${plan.errores.length}) · corrige el Excel y vuelve a subirlo. No se importará nada mientras haya errores.</div>${plan.errores.slice(0, 200).map(e => `<div class="text-red-200"><span class="text-red-400 font-mono">${escapeHTML(ubic(e))}</span> · ${escapeHTML(e.mensaje)}</div>`).join('')}${plan.errores.length > 200 ? '<div class="text-red-300">...</div>' : ''}</div>`;
+            }
+            if (plan.pendientes.length) {
+                html += `<div class="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 space-y-2"><div class="font-bold text-amber-300 uppercase text-[10px]">Requiere tu decisión antes de importar (${plan.pendientes.length})</div>${plan.pendientes.map(p => {
+                    let control = '';
+                    if (p.tipo === 'duplicado') {
+                        const opcionesVinc = (p.coincidencias || []).filter(m => m.trainerKey === plan.trainerKey).map(m => `<option value="vincular:${escapeHTML(m.id)}">Es la misma persona: usar la ficha de ${escapeHTML(m.nombre || '')}</option>`).join('');
+                        control = `<select data-ref="${escapeHTML(p.ref)}" onchange="cambiarOpcionImportacion('resolucion', this.dataset.ref, this.value)" class="bg-slate-950 border border-slate-700 rounded p-1 text-white max-w-full"><option value="">Elige qué hacer...</option>${opcionesVinc}<option value="nuevo">Es otra persona: crear ficha nueva</option><option value="omitir">Omitir esta fila</option></select>`;
+                    } else if (p.tipo === 'precio-superior') {
+                        control = `<label class="inline-flex items-center gap-1 cursor-pointer"><input type="checkbox" data-ref="${escapeHTML(p.ref)}" onchange="cambiarOpcionImportacion('precio', this.dataset.ref, this.checked)" class="accent-amber-500"> Importar con la tarifa oficial (0 %)</label>`;
+                    } else if (p.tipo === 'grupo-existente') {
+                        control = `<label class="inline-flex items-center gap-1 cursor-pointer"><input type="checkbox" data-ref="${escapeHTML(p.grupoN)}" onchange="cambiarOpcionImportacion('grupo', this.dataset.ref, this.checked)" class="accent-amber-500"> Añadir al grupo</label>`;
+                    }
+                    return `<div class="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-slate-950/70 border border-slate-800 rounded-lg p-2"><div class="text-slate-200"><b>${escapeHTML(p.nombre || '')}</b> <span class="text-slate-500">(fila ${p.fila})</span><div class="text-[10px] text-amber-200">${escapeHTML(p.mensaje)}</div></div><div class="shrink-0">${control}</div></div>`;
+                }).join('')}</div>`;
+            }
+            // Clientes (con su cálculo de tarifa y descuento) y fichas existentes con diferencias.
+            const etiquetaAccion = { nuevo: ['Nuevo', 'text-emerald-300'], existente: ['Existente', 'text-slate-300'], actualizar: ['Actualizar', 'text-cyan-300'], dudoso: ['Por resolver', 'text-amber-300'], omitir: ['Omitido', 'text-slate-500'], 'otro-entrenador': ['Otro entrenador', 'text-slate-500'], error: ['Error', 'text-red-300'] };
+            const filasClientes = plan.clientes.map(c => {
+                const [txt, color] = etiquetaAccion[c.accion] || [c.accion, 'text-slate-300'];
+                const grupo = c.grupo ? `${escapeHTML(c.grupo.nombre)} (${c.grupo.abierto ? 'abierto' : 'cerrado'})` : '';
+                const cambios = c.cambios && c.cambios.length ? `<div class="text-[10px] text-cyan-200">${c.cambios.map(x => `${escapeHTML(x.etiqueta)}: ${escapeHTML(String(x.antes ?? ''))} → ${escapeHTML(String(x.despues ?? ''))}`).join(' · ')}</div><label class="inline-flex items-center gap-1 text-[10px] text-cyan-300 cursor-pointer"><input type="checkbox" ${c.accion === 'actualizar' ? 'checked' : ''} data-ref="${escapeHTML(c.ref)}" onchange="cambiarOpcionImportacion('actualizar', this.dataset.ref, this.checked)" class="accent-cyan-400"> Actualizar ficha con estos datos</label>` : '';
+                const decision = c.resuelto ? `<div class="text-[10px] text-amber-200">Decisión: ${c.resuelto === 'nuevo' ? 'crear ficha nueva' : c.resuelto === 'omitir' ? 'omitir fila' : 'usar ficha existente'} · <button type="button" data-ref="${escapeHTML(c.ref)}" onclick="cambiarOpcionImportacion('resolucion', this.dataset.ref, '')" class="underline">cambiar</button></div>` : '';
+                const precioAceptado = c.precioSuperior && (bsImportacion.opciones.aceptarPrecioSuperior || {})[c.ref] ? `<label class="inline-flex items-center gap-1 text-[10px] text-amber-200 cursor-pointer"><input type="checkbox" checked data-ref="${escapeHTML(c.ref)}" onchange="cambiarOpcionImportacion('precio', this.dataset.ref, this.checked)" class="accent-amber-500"> Precio superior: se importa con la tarifa oficial (0 %)</label>` : '';
+                return `<tr class="border-t border-slate-800 align-top"><td class="p-1 text-slate-500">${c.fila}</td><td class="p-1 text-white">${escapeHTML(c.nombre || '')}${cambios}${decision}${precioAceptado}</td><td class="p-1 ${color} font-bold">${txt}</td><td class="p-1 text-slate-300">${escapeHTML(c.modalidadLabel || (c.esMiembroCerrado ? 'Integrante de grupo' : (c.ficha ? (c.ficha.modalidad || '') : '')))}${c.factor ? ' · ' + c.factor : ''}</td><td class="p-1 text-right font-mono">${c.precio != null ? fmtE(c.precio) : ''}</td><td class="p-1 text-right font-mono">${c.tarifa ? fmtE(c.tarifa) : ''}</td><td class="p-1 text-right font-mono text-amber-300">${c.descuentoPct != null && c.tarifa ? formatoPorcentajeDescuento(c.descuentoPct) + ' %' : ''}</td><td class="p-1 text-right font-mono text-emerald-300">${c.importeResultante != null ? fmtE(c.importeResultante) : ''}</td><td class="p-1 text-slate-400">${grupo}</td></tr>`;
+            }).join('');
+            if (plan.clientes.length) {
+                html += `<details open class="rounded-xl border border-slate-800 bg-slate-950/50"><summary class="cursor-pointer p-2 font-bold text-slate-200">Clientes (${plan.clientes.length})</summary><div class="overflow-x-auto"><table class="w-full text-[11px]"><thead><tr class="text-[9px] uppercase text-slate-500 text-left"><th class="p-1">Fila</th><th class="p-1">Cliente</th><th class="p-1">Acción</th><th class="p-1">Modalidad</th><th class="p-1 text-right">Precio real</th><th class="p-1 text-right">Tarifa oficial</th><th class="p-1 text-right">Descuento</th><th class="p-1 text-right">Importe en Besoul</th><th class="p-1">Grupo</th></tr></thead><tbody>${filasClientes}</tbody></table></div></details>`;
+            }
+            if (plan.grupos.length) {
+                const acc = { crear: 'Nuevo', existente: 'Existente (sin cambios)', ampliar: 'Se añaden integrantes', error: 'Error', 'otro-entrenador': 'Otro entrenador' };
+                html += `<details class="rounded-xl border border-slate-800 bg-slate-950/50"><summary class="cursor-pointer p-2 font-bold text-slate-200">Grupos (${plan.grupos.length})</summary><div class="p-2 space-y-1">${plan.grupos.map(g => `<div class="text-slate-300"><b class="text-white">${escapeHTML(g.nombre)}</b> · ${g.abierto ? 'abierto' : 'cerrado'} · ${acc[g.accion] || g.accion}${g.abierto ? ` · ${g.asistentes.length} asistente(s)` : ` · ${g.miembrosNuevos.length} integrante(s) nuevo(s)`}${!g.abierto && g.tarifaPersona ? ` · tarifa ${fmtE(g.tarifaPersona)}/persona` : ''}${g.accion === 'ampliar' ? ` · <label class="inline-flex items-center gap-1 text-amber-200 cursor-pointer"><input type="checkbox" checked data-ref="${escapeHTML(g.n)}" onchange="cambiarOpcionImportacion('grupo', this.dataset.ref, this.checked)" class="accent-amber-500"> añadir integrantes</label>` : ''}</div>`).join('')}</div></details>`;
+            }
+            if (plan.sesiones.length) {
+                const acc = { crear: ['Crear', 'text-emerald-300'], existe: ['Ya existe', 'text-slate-400'], conflicto: ['Conflicto (se omite)', 'text-red-300'], asistentes: ['Añadir asistentes', 'text-cyan-300'] };
+                const orden = plan.sesiones.slice().sort((a, b) => (a.accion === 'conflicto' ? 0 : 1) - (b.accion === 'conflicto' ? 0 : 1) || String(a.clave).localeCompare(String(b.clave)));
+                const filas = orden.slice(0, 400).map(s => {
+                    const [txt, color] = acc[s.accion] || [s.accion, ''];
+                    const fin = minutosDesdeHorario(s.inicio) + 45;
+                    const franja = s.minutosExtra > 0 ? `<span class="text-slate-500"> (franja declarada hasta ${escapeHTML(s.finDeclarado)}, ${s.minutosExtra} min libres)</span>` : '';
+                    return `<tr class="border-t border-slate-800"><td class="p-1 font-mono">${BesoulImportacion.fechaHumana(s.fecha)}</td><td class="p-1 font-mono">${escapeHTML(s.inicio)}-${formatoMinutosHorario(fin)}${franja}</td><td class="p-1 text-white">${escapeHTML(s.nombre)}</td><td class="p-1 text-slate-400">${s.origen === 'fijo' ? 'Semanal' : 'Puntual'}</td><td class="p-1 ${color} font-bold">${txt}</td><td class="p-1 text-slate-400">${escapeHTML(s.motivo || '')}</td></tr>`;
+                }).join('');
+                html += `<details ${r.sesionesConflicto ? 'open' : ''} class="rounded-xl border border-slate-800 bg-slate-950/50"><summary class="cursor-pointer p-2 font-bold text-slate-200">Sesiones (${plan.sesiones.length}) · periodo ${BesoulImportacion.fechaHumana(plan.periodo.desde)} – ${BesoulImportacion.fechaHumana(plan.periodo.hasta)}</summary><div class="overflow-x-auto max-h-[50vh] overflow-y-auto"><table class="w-full text-[11px]"><thead><tr class="text-[9px] uppercase text-slate-500 text-left"><th class="p-1">Fecha</th><th class="p-1">Sesión real (45 min)</th><th class="p-1">Cliente / grupo</th><th class="p-1">Tipo</th><th class="p-1">Acción</th><th class="p-1">Detalle</th></tr></thead><tbody>${filas}</tbody></table>${orden.length > 400 ? `<div class="p-2 text-slate-500">Se muestran 400 de ${orden.length}.</div>` : ''}</div></details>`;
+            }
+            if (plan.advertencias.length) {
+                html += `<details open class="rounded-xl border border-amber-500/30 bg-amber-500/5"><summary class="cursor-pointer p-2 font-bold text-amber-300">Advertencias (${plan.advertencias.length})</summary><div class="p-2 space-y-1">${plan.advertencias.slice(0, 200).map(a => `<div class="text-amber-100"><span class="text-amber-400 font-mono">${escapeHTML(ubic(a))}</span> · ${escapeHTML(a.mensaje)}</div>`).join('')}</div></details>`;
+            }
+            if (!plan.errores.length && !plan.pendientes.length && !plan.hayAlgoQueGuardar) {
+                html += '<div class="p-3 rounded-xl border border-slate-700 bg-slate-950 text-slate-300">No hay nada nuevo que importar: todo lo del Excel ya está en esta agenda.</div>';
+            }
+            cont.innerHTML = html;
+        }
+
+        function actualizarBotonConfirmarImportacion() {
+            const plan = bsImportacion.plan;
+            const btn = document.getElementById('imp-btn-confirmar');
+            const wrap = document.getElementById('imp-acepto-wrap');
+            const hayAdv = !!(plan && plan.advertencias.length);
+            if (wrap) { wrap.classList.toggle('hidden', !hayAdv); wrap.classList.toggle('flex', hayAdv); }
+            const listo = !!(plan && plan.aplicable && plan.hayAlgoQueGuardar && !bsImportacion.importando && (!hayAdv || document.getElementById('imp-acepto-adv')?.checked));
+            if (btn) btn.disabled = !listo;
+        }
+
+        async function confirmarImportacionExcel() {
+            if (bsImportacion.importando) return;
+            if (!puedeImportarExcelEnAgendaVista()) { alert('No tienes permiso para importar en esta agenda.'); return; }
+            const scope = entrenadorVisto;
+            if (!bsImportacion.lectura || !bsImportacion.plan || bsImportacion.trainerKey !== scope) { alert('Vuelve a subir el archivo: la agenda de destino ha cambiado.'); return; }
+            if (hayCambiosAgendaSinConfirmar()) { alert('Todavía se está guardando un cambio anterior de la Agenda. Espera unos segundos y vuelve a confirmar.'); return; }
+            // Se recalcula el plan contra el estado ACTUAL: si algo cambió desde la vista previa
+            // (otra sesión creó una cita, otro usuario añadió un cliente...), se vuelve a enseñar.
+            let plan;
+            try { plan = BesoulImportacion.planificar(bsImportacion.lectura, entornoImportacionExcel(), bsImportacion.opciones); }
+            catch (err) { alert(`No se ha podido validar la importación: ${err?.message || err}`); return; }
+            if (!plan.aplicable || plan.firma !== bsImportacion.plan.firma) {
+                bsImportacion.plan = plan;
+                pintarVistaPreviaImportacion();
+                actualizarBotonConfirmarImportacion();
+                alert('La agenda ha cambiado mientras revisabas la vista previa. Revísala de nuevo antes de confirmar.');
+                return;
+            }
+            const r = plan.resumen;
+            if (!confirm(`Se importará en la agenda de ${nombreEntrenador(scope)}:\n\n- Clientes nuevos: ${r.nuevos}\n- Fichas actualizadas: ${r.actualizar}\n- Grupos nuevos: ${r.gruposNuevos}${r.gruposAmpliados ? ` (+${r.gruposAmpliados} ampliados)` : ''}\n- Sesiones nuevas: ${r.sesionesCrear}\n- Conflictos que se omiten: ${r.sesionesConflicto}\n\nSe guarda todo de una vez. ¿Continuar?`)) return;
+
+            bsImportacion.importando = true;
+            actualizarBotonConfirmarImportacion();
+            const btn = document.getElementById('imp-btn-confirmar');
+            if (btn) btn.textContent = 'Importando...';
+            const loteId = `imp_${Date.now()}`;
+            let aplicado = null;
+            try {
+                if (!dbClientes[scope]) dbClientes[scope] = [];
+                if (!dbAgenda[scope]) dbAgenda[scope] = {};
+                const idsUsados = new Set();
+                Object.values(dbClientes || {}).forEach(lista => (lista || []).forEach(c => {
+                    if (!c) return;
+                    idsUsados.add(c.id);
+                    (c.integrantesObj || []).forEach(m => m && m.id && idsUsados.add(m.id));
+                }));
+                aplicado = BesoulImportacion.aplicarPlan(plan, {
+                    clientes: dbClientes[scope], agenda: dbAgenda[scope],
+                    notas: { leer: clave => dbNotas[claveNotaAgenda(clave, scope)] || '', fijar: (clave, texto) => fijarNotaAgenda(clave, texto, scope) },
+                    sincronizarIntegrantesGrupo, importeEfectivoCliente, contratoVacio, generarToken: generarTokenReservaCliente,
+                    idsUsados, ahoraISO: new Date().toISOString(), hoyISO: fechaHoyISO(), loteId
+                });
+                if (tamanoDocumentoAgendaEstimado() > BesoulImportacion.LIMITE_DOC_BLOQUEO) {
+                    aplicado.deshacer();
+                    aplicado = null;
+                    throw Object.assign(new Error('La agenda superaría el tamaño máximo que admite Firestore. Importa un periodo más corto.'), { code: 'tamano-documento' });
+                }
+                localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
+                localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
+                localStorage.setItem('bs_db_notas_v6', JSON.stringify(dbNotas));
+                // Mismo guardado transaccional que el resto de la Agenda (todo o nada).
+                const resultado = await guardarEstadoNubeAgenda(scope, { avisoPropio: true });
+                if (!resultado || resultado.ok !== true) {
+                    throw resultado?.err || Object.assign(new Error(resultado?.omitido ? 'El guardado no ha podido empezar.' : 'El guardado no se ha completado.'), { code: resultado?.omitido ? 'omitido' : 'desconocido' });
+                }
+                const a = aplicado.resumen;
+                aplicado = null;
+                bsImportacion.lectura = null; bsImportacion.plan = null;
+                recalcularKPIs(); renderClientes(); renderAgenda();
+                document.getElementById('imp-preview').innerHTML = `<div class="p-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 space-y-1"><div class="font-bold uppercase text-[10px] text-emerald-300">Importación guardada (${escapeHTML(loteId)})</div><div>Clientes creados: <b>${a.clientesCreados}</b> · fichas actualizadas: <b>${a.clientesActualizados}</b> · grupos creados: <b>${a.gruposCreados}</b>${a.gruposAmpliados ? ` · grupos ampliados: <b>${a.gruposAmpliados}</b>` : ''} · sesiones creadas: <b>${a.sesionesCreadas}</b>${a.sesionesConAsistentes ? ` · sesiones con asistentes nuevos: <b>${a.sesionesConAsistentes}</b>` : ''}</div><div>Conflictos omitidos: <b>${r.sesionesConflicto}</b> · advertencias: <b>${plan.advertencias.length}</b></div></div>`;
+                document.getElementById('imp-archivo').value = '';
+                document.getElementById('imp-archivo-estado').innerText = 'Importación terminada. Puedes subir otro archivo o cerrar.';
+            } catch (err) {
+                // Nada a medias: se revierte en memoria exactamente lo que añadió esta importación
+                // (si el guardado falló, el servidor no tiene nada de este lote).
+                if (aplicado) { try { aplicado.deshacer(); } catch (e2) { console.error('[BESOUL Importación] Error al revertir:', e2); } }
+                try {
+                    localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
+                    localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
+                    localStorage.setItem('bs_db_notas_v6', JSON.stringify(dbNotas));
+                } catch (e3) { /* sin almacenamiento local: nada que actualizar */ }
+                recalcularKPIs(); renderClientes(); renderAgenda();
+                console.error(`[BESOUL Importación] Importación NO guardada · trainerKey=${scope} · code=${err?.code || '(sin código)'} · message=${err?.message || err}`, err);
+                alert(`La importación NO se ha guardado (no se ha guardado nada). ${err?.code === 'tamano-documento' ? err.message : mensajeErrorGuardadoAgenda(err)}`);
+                recalcularVistaPreviaImportacion();
+            } finally {
+                bsImportacion.importando = false;
+                if (btn) btn.textContent = 'Confirmar importación';
+                actualizarBotonConfirmarImportacion();
+            }
+        }
 
         // Registro PWA básico
         if ('serviceWorker' in navigator) {

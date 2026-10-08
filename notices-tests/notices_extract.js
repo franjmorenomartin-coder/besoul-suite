@@ -1,4 +1,4 @@
-const BS_APP_BUILD_TAG = 'agenda-persistencia-p0-2026-10-08';
+const BS_APP_BUILD_TAG = 'import-excel-clientes-agenda-2026-10-08-r2';
 
 let usuarioLogeado = "";
 

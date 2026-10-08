@@ -39,7 +39,7 @@ const names = [
   'esGrupoAbierto', 'esFichaMiembroGrupo', 'importeEfectivoCliente', 'fichasMiembrosGrupo',
   'calcularFacturacionGrupoTotal', 'calcularFacturacionEstadisticaMiembro', 'contratoVacio',
   'normalizarReservasBloqueadasTexto', 'sincronizarIntegrantesGrupo', 'generarTokenReservaCliente',
-  'catalogoActividadesVivo', 'guardarCliente', 'valorInvalidoParaFirestore',
+  'catalogoActividadesVivo', 'fijarCampoDescuentoFicha', 'descuentoCampoFicha', 'guardarCliente', 'valorInvalidoParaFirestore',
   'estadoLocalAgendaParaNube'
 ];
 
