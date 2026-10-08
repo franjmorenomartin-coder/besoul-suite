@@ -41,7 +41,7 @@ const funciones = [
   'hashEstableDiagnostico',
   'contarElementosDiagnostico', 'diffEstructuralDiagnostico',
   'estadoLocalAgendaParaNube',
-  'guardarEstadoNubeAgenda',
+  'guardarEstadoNubeAgenda', 'ejecutarGuardadoEstadoNubeAgenda', 'gestionarGuardadoAgendaFallido', 'estadoGuardadoAgenda', 'estadoGuardadoPendienteScope', 'scopeConCambiosSinConfirmar', 'avisarCambioAgendaNoGuardado', 'clonarDatosParaGuardado',
   'payloadParaUpdateFirestore',
   'programarGuardadoNubeAgenda',
   'aplicarEstadoNubeAgenda',

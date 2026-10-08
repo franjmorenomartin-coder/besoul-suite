@@ -31,7 +31,7 @@ function extractSimpleConst(name) {
 
 const names = [
   'valorInvalidoParaFirestore', 'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore',
-  'guardarEstadoNubeAgenda',
+  'guardarEstadoNubeAgenda', 'ejecutarGuardadoEstadoNubeAgenda', 'gestionarGuardadoAgendaFallido', 'estadoGuardadoAgenda', 'estadoGuardadoPendienteScope', 'scopeConCambiosSinConfirmar', 'avisarCambioAgendaNoGuardado', 'clonarDatosParaGuardado',
   'canonicalizarValorDiagnostico', 'igualdadCanonica', 'hashEstableDiagnostico', 'contarElementosDiagnostico', 'diffEstructuralDiagnostico',
 ];
 const parts = [extractSimpleConst('BS_APP_BUILD_TAG'), ...names.map(extractFunction)];

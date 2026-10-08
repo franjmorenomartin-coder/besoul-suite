@@ -1365,7 +1365,7 @@ miércoles 07:00-09:00"></textarea>
         // texto plano, copiable sin depender de ninguna interacción de DevTools más allá de
         // seleccionar texto (el objeto expandible [BESOUL_SAVE_CONFLICT] no era extraíble de forma
         // fiable para un usuario sin experiencia en DevTools).
-        const BS_APP_BUILD_TAG = 'crm-dup-fecha-alta-2026-10-02';
+        const BS_APP_BUILD_TAG = 'agenda-persistencia-p0-2026-10-08';
         console.log('[BESOUL BUILD]', BS_APP_BUILD_TAG, '-- si esto NO aparece en tu consola tras recargar, tu navegador está ejecutando una versión antigua cacheada: cierra TODAS las pestañas de la app y vuelve a abrirla, o usa una ventana de incógnito.');
         let slotAccionSeleccionado = '';
         window.bsAgendaDiaMovil = window.bsAgendaDiaMovil ?? null;
@@ -1623,6 +1623,63 @@ miércoles 07:00-09:00"></textarea>
         // ocultarSlotDisponibilidad()/limpiarBloqueosDisponibilidadSemana().
         window.bsAgendaDisponibilidadCargada = false;
 
+        // HOTFIX-V1-AGENDA-PERSISTENCIA-P0 (2026-10-08): seguimiento de cambios LOCALES todavía no
+        // confirmados por Firestore, por trainerKey. Mientras un trainerKey tenga un guardado
+        // programado (debounce de 350 ms) o en curso, un snapshot que llegue entre medias (p.ej.
+        // porque OTRO entrenador ha guardado lo suyo en el mismo documento) ya no puede borrar
+        // de la memoria ese cambio pendiente: aplicarEstadoNubeAgenda() conserva la copia local
+        // de ese trainerKey y su base de concurrencia ANTERIOR, así que el guardado posterior
+        // sigue detectando igual un cambio real de otra sesión sobre ese mismo trainerKey
+        // (protección de concurrencia intacta) en vez de escribir a ciegas.
+        //   bsAgendaGuardadosPendientes[scope] = { programado: bool, enCola: número }
+        //   bsAgendaColaGuardado[scope]        = promesa del último guardado encolado
+        //   bsAgendaNotasTocadas               = claves de dbNotas cambiadas por esta pestaña y
+        //                                        todavía no confirmadas (se envían una a una)
+        window.bsAgendaGuardadosPendientes = {};
+        window.bsAgendaColaGuardado = {};
+        window.bsAgendaCloudTimers = {};
+        window.bsAgendaNotasTocadas = new Set();
+
+        // Acceso defensivo al estado de guardado (lo crea si falta), para que ninguna ruta dependa
+        // del orden de inicialización del script.
+        function estadoGuardadoAgenda() {
+            if (!window.bsAgendaGuardadosPendientes) window.bsAgendaGuardadosPendientes = {};
+            if (!window.bsAgendaColaGuardado) window.bsAgendaColaGuardado = {};
+            if (!window.bsAgendaCloudTimers) window.bsAgendaCloudTimers = {};
+            if (!window.bsAgendaNotasTocadas) window.bsAgendaNotasTocadas = new Set();
+            return window;
+        }
+
+        function estadoGuardadoPendienteScope(scope) {
+            const w = estadoGuardadoAgenda();
+            if (!w.bsAgendaGuardadosPendientes[scope]) w.bsAgendaGuardadosPendientes[scope] = { programado: false, enCola: 0 };
+            return w.bsAgendaGuardadosPendientes[scope];
+        }
+
+        function scopeConCambiosSinConfirmar(scope) {
+            const estado = (window.bsAgendaGuardadosPendientes || {})[scope];
+            return !!estado && (estado.programado || estado.enCola > 0);
+        }
+
+        function marcarNotaTocada(clave) {
+            if (clave) estadoGuardadoAgenda().bsAgendaNotasTocadas.add(clave);
+        }
+
+        // Aviso visible (nunca solo consola) cuando un cambio de la Agenda NO se ha guardado.
+        // alert() es el mecanismo de aviso que ya usa toda la Agenda; se agrupan los avisos de
+        // una misma ráfaga (varios guardados fallidos seguidos) para no encadenar ventanas.
+        function avisarCambioAgendaNoGuardado(err, scope) {
+            const ahora = Date.now();
+            if (window.bsAgendaUltimoAvisoNoGuardado && ahora - window.bsAgendaUltimoAvisoNoGuardado < 4000) return;
+            window.bsAgendaUltimoAvisoNoGuardado = ahora;
+            const entrenador = scope ? ` (agenda de ${nombreEntrenador(scope)})` : '';
+            const esConflicto = !!err && err.code === 'conflict';
+            const motivo = esConflicto
+                ? 'Otra sesión (otra pestaña, otro dispositivo o administración) ha guardado cambios en esta misma agenda a la vez y, para no borrarlos, tu cambio se ha cancelado. La agenda se ha actualizado con lo que hay guardado ahora mismo: revísala y, si hace falta, repite el cambio.'
+                : mensajeErrorGuardadoAgenda(err);
+            alert(`ATENCIÓN: tu último cambio${entrenador} NO se ha guardado. ${motivo}`);
+        }
+
         // HOTFIX-CLIENT-SAVE-V2 (2026-09-15): defensa adicional ANTES de intentar persistir --
         // detecta recursivamente valores que Firestore .update()/.set() rechaza (undefined, NaN,
         // funciones, referencias circulares) en cualquier profundidad del payload. A propósito
@@ -1669,6 +1726,25 @@ miércoles 07:00-09:00"></textarea>
             }
             vistos.delete(valor);
             return problema;
+        }
+
+        // HOTFIX-V1-AGENDA-PERSISTENCIA-P0 (2026-10-08): copia profunda de los datos que se van a
+        // guardar, tomada en el instante en que se construye el payload. Antes el payload llevaba
+        // REFERENCIAS a los objetos vivos (dbAgenda[trainerKey], dbClientes[trainerKey]...): si el
+        // usuario editaba algo mientras la transacción estaba en curso, la base de concurrencia
+        // tomada al terminar (bsUltimoServidorConocido) incluía esa edición todavía NO escrita, y
+        // el guardado siguiente se cancelaba como "conflicto" contra la propia pestaña
+        // (reproducido en el emulador: dos ediciones seguidas de un único usuario). Solo se
+        // copian arrays y objetos planos; cualquier otra instancia (Date, Timestamp, FieldValue)
+        // se conserva tal cual, para no cambiar nunca el tipo de lo que se escribe.
+        function clonarDatosParaGuardado(valor) {
+            if (Array.isArray(valor)) return valor.map(clonarDatosParaGuardado);
+            if (valor && typeof valor === 'object' && Object.getPrototypeOf(valor) === Object.prototype) {
+                const copia = {};
+                Object.keys(valor).forEach(k => { copia[k] = clonarDatosParaGuardado(valor[k]); });
+                return copia;
+            }
+            return valor;
         }
 
         // P0 2026-09-21 (CUARTA ronda -- CAUSA RAÍZ CONFIRMADA CON EVIDENCIA REAL DE PRODUCCIÓN):
@@ -1783,8 +1859,8 @@ miércoles 07:00-09:00"></textarea>
             // fusione a nivel de campo y nunca pise los datos de otro entrenador que se
             // hayan guardado casi al mismo tiempo (evita "last write wins" sobre el documento
             // completo). "notas" sigue siendo un mapa plano (clave "trainerKey__clave", no
-            // anidado) y por eso se envía entero como excepción documentada — riesgo residual
-            // menor y aceptado, ver BESOUL_WORK_STATE.md.
+            // anidado); desde HOTFIX-V1-AGENDA-PERSISTENCIA-P0 ya no se envía entero, solo las
+            // claves que esta pestaña ha cambiado (ver más abajo).
             //
             // HARDENING-PRE-BASELINE-v3.2.1 (2026-09-17): el fallback legacy que existía aquí
             // ("sin trainerKey conocido, escribe el documento COMPLETO de todos los entrenadores")
@@ -1798,15 +1874,26 @@ miércoles 07:00-09:00"></textarea>
             // documento completo: ver guardarEstadoNubeAgenda(), que ahora trata null como fallo
             // explícito en vez de escribir a ciegas.
             if (trainerKeyScope) {
-                return {
+                const payload = {
                     [`clientes.${trainerKeyScope}`]: dbClientes[trainerKeyScope] || [],
                     [`agenda.${trainerKeyScope}`]: dbAgenda[trainerKeyScope] || {},
                     [`pruebasCRM.${trainerKeyScope}`]: dbPruebasCRM[trainerKeyScope] || {},
                     [`disponibilidadReservas.${trainerKeyScope}`]: dbDisponibilidadReservas[trainerKeyScope] || {},
                     [`historicoClientes.${trainerKeyScope}`]: dbHistoricoClientes[trainerKeyScope] || {},
-                    notas: dbNotas || {},
                     ultimaActualizacionLocal: new Date().toISOString()
                 };
+                // HOTFIX-V1-AGENDA-PERSISTENCIA-P0 (2026-10-08): "notas" ya NO se envía entero. Antes,
+                // cada guardado de CUALQUIER entrenador reescribía el mapa completo con su copia
+                // local, borrando la nota que otro entrenador acabase de guardar y que esta pestaña
+                // todavía no había recibido (reproducido en el emulador). Ahora solo viajan las claves
+                // que ESTA pestaña ha cambiado (bsAgendaNotasTocadas), una a una ("notas.<clave>"):
+                // valor = texto de la nota, null = borrarla (guardarEstadoNubeAgenda() lo convierte en
+                // FieldValue.delete()). Sin notas tocadas, el campo "notas" no se toca en absoluto.
+                const notasTocadas = (typeof window !== 'undefined' && window.bsAgendaNotasTocadas) || new Set();
+                notasTocadas.forEach(clave => {
+                    payload[`notas.${clave}`] = (dbNotas && typeof dbNotas[clave] === 'string' && dbNotas[clave]) ? dbNotas[clave] : null;
+                });
+                return payload;
             }
 
             return null;
@@ -1843,7 +1930,71 @@ miércoles 07:00-09:00"></textarea>
             return args;
         }
 
-        function guardarEstadoNubeAgenda(trainerKeyScope) {
+        // HOTFIX-V1-AGENDA-PERSISTENCIA-P0 (2026-10-08): punto de entrada ÚNICO de todos los
+        // guardados de la Agenda (misma firma y mismo contrato de siempre: la promesa nunca se
+        // rechaza, resuelve {ok:true} o {ok:false, err|omitido}). Añade tres garantías:
+        //  1. COLA por trainerKey: un guardado no empieza hasta que termina el anterior del mismo
+        //     trainerKey en esta pestaña, y construye su payload EN ESE MOMENTO (no al pedirlo).
+        //     Antes, dos ediciones seguidas (p.ej. mover y enseguida crear) lanzaban dos
+        //     transacciones solapadas: la segunda comparaba contra una base que la primera ya
+        //     había cambiado y se cancelaba como "conflicto" contra la propia pestaña.
+        //  2. Cambios pendientes protegidos: mientras haya un guardado en cola para un trainerKey,
+        //     aplicarEstadoNubeAgenda() no borra de la memoria ese cambio (ver allí).
+        //  3. NINGÚN fallo silencioso: si el guardado no llega a Firestore (conflicto, permisos,
+        //     red, payload inválido...), la Agenda se vuelve a pintar con lo que hay de verdad en
+        //     el servidor y se avisa al usuario de que su cambio NO se ha guardado. Antes, para
+        //     todas las llamadas "fire-and-forget" (crear/mover/borrar sesión, notas, slots,
+        //     recurrencias...) el fallo solo iba a la consola y el cambio desaparecía después.
+        //     opciones.avisoPropio = true para quien ya muestra su propio aviso y deshace su
+        //     cambio (guardarCliente, disponibilidad, grupo abierto...), para no avisar dos veces.
+        function guardarEstadoNubeAgenda(trainerKeyScope, opcionesGuardado) {
+            const opciones = opcionesGuardado || {};
+            if (!window.bsAgendaCloudDocRef || window.bsAgendaAplicandoNube) return Promise.resolve({ ok: false, omitido: true });
+            const scope = trainerKeyScope || entrenadorVisto || '';
+            const estado = estadoGuardadoPendienteScope(scope);
+            const cola = estadoGuardadoAgenda().bsAgendaColaGuardado;
+            estado.enCola++;
+            const anterior = cola[scope] || Promise.resolve();
+            const actual = anterior
+                .catch(() => {})
+                .then(() => ejecutarGuardadoEstadoNubeAgenda(scope))
+                .catch(err => ({ ok: false, err }))
+                .then(async resultado => {
+                    if (!resultado || resultado.ok !== true) {
+                        // La gestión del fallo nunca puede romper el contrato de esta función
+                        // (la promesa no se rechaza nunca).
+                        try { await gestionarGuardadoAgendaFallido(scope, resultado, opciones); }
+                        catch (errGestion) { console.error('[BESOUL Agenda] Error gestionando un guardado fallido:', errGestion); }
+                    }
+                    return resultado;
+                })
+                .finally(() => {
+                    estado.enCola = Math.max(0, estado.enCola - 1);
+                    if (cola[scope] === actual) delete cola[scope];
+                });
+            cola[scope] = actual;
+            return actual;
+        }
+
+        async function gestionarGuardadoAgendaFallido(scope, resultado, opcionesFallo) {
+            const opciones = opcionesFallo || {};
+            const err = (resultado && resultado.err) || { code: resultado && resultado.omitido ? 'omitido' : 'desconocido', message: 'El guardado no se ha completado.' };
+            console.error(`[BESOUL Agenda] Cambio NO guardado · trainerKey=${scope} · code=${err.code || '(sin código)'} · message=${err.message || ''}`);
+            // Las notas tocadas formaban parte del cambio que no se ha guardado: se descartan
+            // junto con él, para que la pantalla vuelva a coincidir con el servidor.
+            estadoGuardadoAgenda().bsAgendaNotasTocadas.clear();
+            try {
+                if (window.bsAgendaCloudDocRef && typeof window.bsAgendaCloudDocRef.get === 'function') {
+                    const snap = await window.bsAgendaCloudDocRef.get({ source: 'server' });
+                    if (snap.exists) aplicarEstadoNubeAgenda(snap.data(), { descartarPendientes: [scope] });
+                }
+            } catch (errRelectura) {
+                console.error('[BESOUL Agenda] No se pudo releer la agenda del servidor tras un guardado fallido:', errRelectura);
+            }
+            if (!opciones.avisoPropio) avisarCambioAgendaNoGuardado(err, scope);
+        }
+
+        function ejecutarGuardadoEstadoNubeAgenda(trainerKeyScope) {
 
             // Hallazgo real (hotfix edición de fichas, 2026-09-02): esta función SIEMPRE
             // resolvía en éxito, incluso cuando el guard de abajo omitía el guardado por
@@ -1875,6 +2026,16 @@ miércoles 07:00-09:00"></textarea>
                     return Promise.resolve({ ok: false, err: { code: 'no-trainer-scope', message: 'No se pudo determinar el entrenador afectado; guardado cancelado por seguridad.' } });
                 }
 
+                // HOTFIX-V1-AGENDA-PERSISTENCIA-P0: sin ningún snapshot real aplicado todavía, el
+                // estado local viene de la caché localStorage de este dispositivo (posiblemente de
+                // días atrás) y no hay base con la que detectar conflictos -- escribirlo podría
+                // pisar cambios más recientes hechos desde otro dispositivo. Se bloquea con un
+                // aviso explícito en vez de escribir datos potencialmente antiguos.
+                if (!window.bsUltimoServidorConocido) {
+                    console.error(`[BESOUL Agenda] guardarEstadoNubeAgenda: la agenda aún no se ha cargado del servidor -- guardado BLOQUEADO · trainerKey=${scope}`);
+                    return Promise.resolve({ ok: false, err: { code: 'agenda-no-cargada', message: 'La agenda todavía se está cargando desde el servidor. Espera unos segundos y repite el cambio.' } });
+                }
+
                 const payload = estadoLocalAgendaParaNube(scope);
 
                 // HOTFIX-CLIENT-SAVE-V2: valida ANTES de tocar Firestore -- si algo en el estado
@@ -1886,6 +2047,18 @@ miércoles 07:00-09:00"></textarea>
                     console.error(`[BESOUL Agenda] guardarEstadoNubeAgenda: payload inválido, escritura BLOQUEADA antes de llegar a Firestore · trainerKey=${scope} · ruta=${problemaPayload.ruta} · motivo=${problemaPayload.motivo}`);
                     return Promise.resolve({ ok: false, err: { code: 'invalid-payload', message: `Valor no válido para Firestore en "${problemaPayload.ruta}" (${problemaPayload.motivo}).`, ruta: problemaPayload.ruta } });
                 }
+
+                // HOTFIX-V1-AGENDA-PERSISTENCIA-P0: lo que se escribe (y lo que después se toma como
+                // base de concurrencia) es una copia fija de este instante, nunca los objetos vivos.
+                Object.keys(payload).forEach(k => { payload[k] = clonarDatosParaGuardado(payload[k]); });
+
+                // HOTFIX-V1-AGENDA-PERSISTENCIA-P0: notas enviadas clave a clave; null = borrar.
+                const notasEnviadas = {};
+                Object.keys(payload).forEach(k => {
+                    if (!k.startsWith('notas.')) return;
+                    notasEnviadas[k.slice('notas.'.length)] = payload[k];
+                    if (payload[k] === null) payload[k] = firebase.firestore.FieldValue.delete();
+                });
 
                 payload.actualizadoEn = firebase.firestore.FieldValue.serverTimestamp();
 
@@ -2066,6 +2239,12 @@ miércoles 07:00-09:00"></textarea>
                         // dbAgenda/etc., que se siguen mutando en el sitio en cuanto el usuario
                         // edite algo más -- ver el comentario "IMPORTANTE (2)" de esa función).
                         window.bsUltimoServidorConocido = JSON.parse(JSON.stringify(actualizado));
+                        // HOTFIX-V1-AGENDA-PERSISTENCIA-P0: notas ya confirmadas -- dejan de estar
+                        // pendientes salvo que se hayan vuelto a cambiar mientras se guardaban.
+                        Object.keys(notasEnviadas).forEach(clave => {
+                            const actualLocal = (dbNotas && typeof dbNotas[clave] === 'string' && dbNotas[clave]) ? dbNotas[clave] : null;
+                            if (actualLocal === notasEnviadas[clave]) estadoGuardadoAgenda().bsAgendaNotasTocadas.delete(clave);
+                        });
                     })
                     .then(() => publicarReservasPublicas())
                     .then(() => ({ ok: true }))
@@ -2102,7 +2281,7 @@ miércoles 07:00-09:00"></textarea>
             if (code === 'permission-denied') {
                 return 'Tu sesión no tiene permiso para guardar este cambio ahora mismo. Cierra sesión y vuelve a entrar; si sigue sin funcionar, contacta con administración.';
             }
-            if (code === 'no-trainer-scope' || code === 'invalid-payload') {
+            if (code === 'no-trainer-scope' || code === 'invalid-payload' || code === 'agenda-no-cargada') {
                 return (err && err.message) || 'No se pudo preparar el guardado. Recarga la página e inténtalo de nuevo.';
             }
             if (code === 'unavailable' || code === 'deadline-exceeded' || code === 'cancelled') {
@@ -2115,19 +2294,98 @@ miércoles 07:00-09:00"></textarea>
 
             if (!window.bsAgendaCloudDocRef || window.bsAgendaAplicandoNube) return;
 
-            const scope = trainerKeyScope || entrenadorVisto;
+            const scope = trainerKeyScope || entrenadorVisto || '';
+            const timers = estadoGuardadoAgenda().bsAgendaCloudTimers;
 
-            clearTimeout(window.bsAgendaCloudTimer);
+            // HOTFIX-V1-AGENDA-PERSISTENCIA-P0: un temporizador POR trainerKey. Con el único
+            // temporizador global de antes, si un admin editaba la agenda de un PT y en menos de
+            // 350 ms editaba la de otro, el guardado del primero se cancelaba sin aviso. Además el
+            // trainerKey queda marcado como "con cambios sin confirmar" desde este instante, para
+            // que un snapshot que llegue durante la espera no borre el cambio de la memoria.
+            const estado = estadoGuardadoPendienteScope(scope);
+            estado.programado = true;
+            clearTimeout(timers[scope]);
 
-            window.bsAgendaCloudTimer = setTimeout(() => guardarEstadoNubeAgenda(scope), 350);
+            timers[scope] = setTimeout(() => {
+                delete timers[scope];
+                // guardarEstadoNubeAgenda() incrementa enCola ANTES de que programado vuelva a
+                // false, así que el trainerKey nunca queda "sin pendientes" entre medias.
+                guardarEstadoNubeAgenda(scope);
+                estado.programado = false;
+            }, 350);
 
         }
 
+        // HOTFIX-V1-AGENDA-PERSISTENCIA-P0: salir de la Agenda (ir a CRM/Finanzas/Inicio, recargar,
+        // cerrar la pestaña o la PWA) en los 350 ms de espera, o con la transacción todavía en
+        // curso, mataba el guardado junto con la página: el cambio se perdía sin ningún aviso.
+        // Ahora los guardados en espera se lanzan en el acto al salir o al ocultar la app, y si aún
+        // queda algo sin confirmar el navegador pide confirmación antes de abandonar la página.
+        function hayCambiosAgendaSinConfirmar() {
+            return Object.keys(window.bsAgendaGuardadosPendientes || {}).some(scope => scopeConCambiosSinConfirmar(scope));
+        }
+
+        function lanzarGuardadosProgramadosYa() {
+            const timers = estadoGuardadoAgenda().bsAgendaCloudTimers;
+            Object.keys(timers).forEach(scope => {
+                clearTimeout(timers[scope]);
+                delete timers[scope];
+                const estado = estadoGuardadoPendienteScope(scope);
+                guardarEstadoNubeAgenda(scope);
+                estado.programado = false;
+            });
+        }
+
+        window.addEventListener('beforeunload', event => {
+            if (!hayCambiosAgendaSinConfirmar()) return;
+            lanzarGuardadosProgramadosYa();
+            event.preventDefault();
+            event.returnValue = '';
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') lanzarGuardadosProgramadosYa();
+        });
 
 
-        function aplicarEstadoNubeAgenda(data) {
+
+        function aplicarEstadoNubeAgenda(data, opcionesAplicar) {
+            const opciones = opcionesAplicar || {};
 
             if (!data) return;
+
+            // HOTFIX-V1-AGENDA-PERSISTENCIA-P0 (2026-10-08): antes este snapshot sustituía SIEMPRE
+            // todo el estado local, incluido el de un trainerKey con un cambio todavía sin guardar
+            // (debounce de 350 ms o transacción en curso). Bastaba con que OTRO entrenador guardase
+            // algo en ese intervalo (mismo documento monolítico) para que el cambio desapareciera
+            // de la memoria y el guardado posterior escribiera la copia del servidor sin él --
+            // pérdida silenciosa. Ahora, para cada trainerKey con cambios sin confirmar, se
+            // conserva su copia local y su base de concurrencia ANTERIOR (lo que había en el
+            // servidor cuando se hizo el cambio). Así:
+            //  - si el snapshot trae cambios de OTRO trainerKey, se aplican y el cambio local sigue;
+            //  - si trae cambios de ESTE trainerKey hechos por otra sesión, la transacción del
+            //    guardado los detecta contra esa base anterior (conflicto -> aviso), exactamente
+            //    igual que antes: nunca se sobrescriben a ciegas.
+            // Sin ningún snapshot previo (primera carga) no se conserva nada: lo local vendría de la
+            // caché localStorage y nunca debe prevalecer sobre el servidor.
+            // opciones.descartarPendientes: trainerKeys cuyo cambio local se descarta a propósito
+            // (relectura tras un guardado fallido -- la pantalla debe volver a la verdad del servidor).
+            const descartar = new Set(opciones.descartarPendientes || []);
+            const basePrevia = window.bsUltimoServidorConocido || null;
+            const CAMPOS_POR_TRAINER = ['clientes', 'agenda', 'pruebasCRM', 'disponibilidadReservas', 'historicoClientes'];
+            const pendientesLocales = {};
+            if (basePrevia) {
+                const localActual = { clientes: dbClientes, agenda: dbAgenda, pruebasCRM: dbPruebasCRM, disponibilidadReservas: dbDisponibilidadReservas, historicoClientes: dbHistoricoClientes };
+                Object.keys(window.bsAgendaGuardadosPendientes || {}).forEach(scope => {
+                    if (!scope || descartar.has(scope) || !scopeConCambiosSinConfirmar(scope)) return;
+                    pendientesLocales[scope] = {};
+                    CAMPOS_POR_TRAINER.forEach(campo => { pendientesLocales[scope][campo] = (localActual[campo] || {})[scope]; });
+                });
+            }
+            const notasPendientes = {};
+            if (basePrevia) {
+                (window.bsAgendaNotasTocadas || new Set()).forEach(clave => { notasPendientes[clave] = (dbNotas || {})[clave]; });
+            }
 
             // FIX-PT-AVAILABILITY-PERSISTENCE: a partir de aquí, dbDisponibilidadReservas (y el
             // resto de dbXxx) refleja de verdad lo que hay en Firestore -- ya es seguro fabricar
@@ -2170,6 +2428,15 @@ miércoles 07:00-09:00"></textarea>
                     clientes: data.clientes || {}, agenda: data.agenda || {}, pruebasCRM: data.pruebasCRM || {},
                     disponibilidadReservas: data.disponibilidadReservas || {}, historicoClientes: data.historicoClientes || {},
                 }));
+                // HOTFIX-V1-AGENDA-PERSISTENCIA-P0: trainerKeys con cambios sin confirmar conservan
+                // su base ANTERIOR (ver comentario al inicio de la función).
+                Object.keys(pendientesLocales).forEach(scope => {
+                    CAMPOS_POR_TRAINER.forEach(campo => {
+                        const previo = (basePrevia[campo] || {})[scope];
+                        if (previo === undefined) delete window.bsUltimoServidorConocido[campo][scope];
+                        else window.bsUltimoServidorConocido[campo][scope] = JSON.parse(JSON.stringify(previo));
+                    });
+                });
 
                 // Los entrenadores vienen de besoulUsers, no del documento de agenda.
                 // Así evitamos perder el modo admin o el selector si el campo credenciales de agenda quedó antiguo.
@@ -2180,10 +2447,27 @@ miércoles 07:00-09:00"></textarea>
                 dbAgenda = data.agenda || {};
                 dbPruebasCRM = data.pruebasCRM || {};
                 dbDisponibilidadReservas = data.disponibilidadReservas || {};
-                sincronizarPruebasCRMDentroDeAgenda();
-
                 dbNotas = data.notas || {};
                 dbHistoricoClientes = data.historicoClientes || {};
+
+                // HOTFIX-V1-AGENDA-PERSISTENCIA-P0: se vuelven a poner encima los cambios locales
+                // pendientes (por trainerKey y nota a nota), ANTES de inyectar las pruebas CRM.
+                const nuevoEstado = { clientes: dbClientes, agenda: dbAgenda, pruebasCRM: dbPruebasCRM, disponibilidadReservas: dbDisponibilidadReservas, historicoClientes: dbHistoricoClientes };
+                Object.keys(pendientesLocales).forEach(scope => {
+                    CAMPOS_POR_TRAINER.forEach(campo => {
+                        const valorLocal = pendientesLocales[scope][campo];
+                        if (valorLocal !== undefined) nuevoEstado[campo][scope] = valorLocal;
+                    });
+                });
+                Object.keys(notasPendientes).forEach(clave => {
+                    if (typeof notasPendientes[clave] === 'string' && notasPendientes[clave]) dbNotas[clave] = notasPendientes[clave];
+                    else delete dbNotas[clave];
+                });
+                if (Object.keys(pendientesLocales).length || Object.keys(notasPendientes).length) {
+                    console.info(`[BESOUL Agenda] Snapshot aplicado conservando cambios locales sin confirmar · trainerKeys=${Object.keys(pendientesLocales).join(',') || '-'} · notas=${Object.keys(notasPendientes).length}`);
+                }
+
+                sincronizarPruebasCRMDentroDeAgenda();
 
                 dbCatalogoActividades = data.catalogoActividades || {};
                 dbTrainerActividades = data.trainerActividades || {};
@@ -5275,7 +5559,7 @@ function calcularRentabilidadFicha(ficha) {
 
             try {
 
-                const resultadoGuardado = await guardarEstadoNubeAgenda(scopeGuardado);
+                const resultadoGuardado = await guardarEstadoNubeAgenda(scopeGuardado, { avisoPropio: true });
                 if (!resultadoGuardado || resultadoGuardado.ok !== true) {
                     throw resultadoGuardado?.err || new Error(resultadoGuardado?.omitido ? 'GUARDADO_OMITIDO_REINTENTAR' : 'GUARDADO_FALLIDO');
                 }
@@ -6007,19 +6291,28 @@ Cancelar = no hacer nada`,
             return dbNotas[claveNueva] || dbNotas[clave] || '';
         }
 
-        function fijarNotaAgenda(clave, texto) {
-            const claveNueva = claveNotaAgenda(clave);
+        // entrenadorNota (opcional): trainerKey dueño de la nota. Por defecto entrenadorVisto; se pasa
+        // explícito cuando el cambio es de OTRO entrenador (p.ej. una cancelación de cliente procesada
+        // mientras un admin ve otra agenda), para no tocar nunca la nota de quien está en pantalla.
+        function fijarNotaAgenda(clave, texto, entrenadorNota) {
+            const claveNueva = claveNotaAgenda(clave, entrenadorNota || entrenadorVisto);
+            // HOTFIX-V1-AGENDA-PERSISTENCIA-P0: solo se registran las claves que de verdad cambian;
+            // guardarEstadoNubeAgenda() envía únicamente esas, nunca el mapa de notas entero.
+            if ((dbNotas[claveNueva] || '') !== (texto || '')) marcarNotaTocada(claveNueva);
             if (texto) dbNotas[claveNueva] = texto;
             else delete dbNotas[claveNueva];
-            // Limpieza de formato antiguo para evitar duplicidades.
-            if (dbNotas[clave]) delete dbNotas[clave];
+            // Limpieza de formato antiguo para evitar duplicidades. Una clave antigua (sin prefijo de
+            // entrenador) no indica de quién es: solo se limpia en el caso habitual (agenda en pantalla).
+            if (!entrenadorNota && dbNotas[clave]) { delete dbNotas[clave]; marcarNotaTocada(clave); }
         }
 
         function moverNotaAgenda(claveOrigen, claveDestino) {
             const nota = obtenerNotaAgenda(claveOrigen);
             const origenNueva = claveNotaAgenda(claveOrigen);
             const destinoNueva = claveNotaAgenda(claveDestino);
-            if (nota) dbNotas[destinoNueva] = nota;
+            // HOTFIX-V1-AGENDA-PERSISTENCIA-P0: ver fijarNotaAgenda().
+            [destinoNueva, origenNueva, claveOrigen, claveDestino].forEach(k => { if (k in dbNotas) marcarNotaTocada(k); });
+            if (nota) { dbNotas[destinoNueva] = nota; marcarNotaTocada(destinoNueva); }
             else delete dbNotas[destinoNueva];
             delete dbNotas[origenNueva];
             delete dbNotas[claveOrigen];
@@ -7559,7 +7852,7 @@ Cancelar = no hacer nada`,
             localStorage.setItem('bs_db_disponibilidad_reservas_v6', JSON.stringify(dbDisponibilidadReservas));
             renderAgenda();
 
-            const resultado = await guardarEstadoNubeAgenda();
+            const resultado = await guardarEstadoNubeAgenda(entrenadorVisto, { avisoPropio: true });
             if (!resultado || !resultado.ok) {
                 dbDisponibilidadReservas[entrenadorVisto] = anterior;
                 localStorage.setItem('bs_db_disponibilidad_reservas_v6', JSON.stringify(dbDisponibilidadReservas));
@@ -8617,17 +8910,26 @@ Cancelar = no hacer nada`,
                 dbAgenda[trainer][clave] = { ...cliente, duracionMin: 45, origenReservaCliente: true, solicitudReservaId: id };
             }
             localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
+            // HOTFIX-V1-AGENDA-PERSISTENCIA-P0: primero se GUARDA la sesión en la agenda y solo si
+            // Firestore lo confirma se marca la solicitud como aceptada. Antes era al revés y sin
+            // comprobar el guardado: si éste fallaba (conflicto, red...), el cliente veía su
+            // reserva aceptada pero la sesión desaparecía de la agenda.
+            renderAgenda();
+            const resultadoGuardado = await guardarEstadoNubeAgenda(trainer, { avisoPropio: true });
+            if (!resultadoGuardado || resultadoGuardado.ok !== true) {
+                recalcularKPIs(); renderAgenda(); renderSolicitudesReservas();
+                alert(`No se ha podido guardar la sesión en la agenda, así que la solicitud sigue PENDIENTE (no se ha aceptado). ${mensajeErrorGuardadoAgenda(resultadoGuardado && resultadoGuardado.err)}`);
+                return;
+            }
             try {
                 const fs = firebase.firestore();
                 await fs.collection(BS_RESERVAS_COLLECTION).doc(id).set({ estado:'aceptada', aceptadaEn: firebase.firestore.FieldValue.serverTimestamp(), aceptadaPor: usuarioLogeado }, { merge:true });
             } catch(e) {
                 console.error(e);
-                alert('La sesión se agendó localmente, pero no se pudo marcar la solicitud como aceptada en el servidor. No se ofrecerá WhatsApp hasta confirmarlo (reintenta).');
-                guardarEstadoNubeAgenda(trainer);
+                alert('La sesión SÍ se ha guardado en la agenda, pero no se pudo marcar la solicitud como aceptada en el servidor. No se ofrecerá WhatsApp hasta confirmarlo (reintenta).');
                 recalcularKPIs(); renderAgenda(); renderSolicitudesReservas();
                 return;
             }
-            guardarEstadoNubeAgenda(trainer);
             publicarReservasPublicas();
             recalcularKPIs(); renderAgenda(); renderSolicitudesReservas();
             // Aviso opcional tras aceptar: solo después de guardar con éxito (ver arriba), nunca antes.
@@ -8748,13 +9050,22 @@ Cancelar = no hacer nada`,
                 if (dentroDePlazo) {
                     // >= plazo mínimo: la sesión queda liberada, igual que cualquier borrado normal.
                     delete dbAgenda[trainerKey][clave];
-                    fijarNotaAgenda(clave, '');
+                    fijarNotaAgenda(clave, '', trainerKey);
                 } else {
                     // < plazo mínimo: NUNCA se borra -- se marca y sigue consumiendo la sesión.
                     dbAgenda[trainerKey][clave] = { ...cita, estadoCancelacion: 'cancelada_fuera_plazo', canceladaEn: new Date().toISOString() };
                 }
                 localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
-                await guardarEstadoNubeAgenda();
+                // HOTFIX-V1-AGENDA-PERSISTENCIA-P0: antes guardaba la agenda de entrenadorVisto (no
+                // la del trainerKey de la cancelación) e ignoraba el resultado: con un admin viendo
+                // otro entrenador, la cancelación quedaba "procesada" sin haberse guardado nunca y
+                // la sesión reaparecía. Ahora guarda el trainerKey correcto y, si no se guarda, NO
+                // se marca como procesada (queda pendiente para volver a procesarse).
+                const resultadoGuardado = await guardarEstadoNubeAgenda(trainerKey, { avisoPropio: true });
+                if (!resultadoGuardado || resultadoGuardado.ok !== true) {
+                    console.error(`[BESOUL Agenda] Cancelación de cliente ${id} NO aplicada: el guardado de la agenda de ${trainerKey} ha fallado; queda pendiente.`, resultadoGuardado && resultadoGuardado.err);
+                    return;
+                }
                 await ref.set({ estado: 'procesada', dentroDePlazoAplicado: dentroDePlazo, procesadaEn: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
                 if (trainerKey === entrenadorVisto) { recalcularKPIs(); renderClientes(); renderAgenda(); }
             } catch(err) {
@@ -8771,6 +9082,10 @@ Cancelar = no hacer nada`,
             return `${formatoFechaLocal(fecha)}_${formatoMinutosHorario(min)}`;
         }
 
+        // HOTFIX-V1-AGENDA-PERSISTENCIA-P0: debe seguir siendo SÍNCRONA hasta su único await final
+        // (batch.commit()) -- publicarReservasPublicas() le presta los datos frescos del servidor
+        // solo durante esa parte síncrona. Un await antes de terminar de leer dbClientes/dbAgenda/
+        // dbDisponibilidadReservas leería el estado vivo de la Agenda en vez del del servidor.
         async function publicarReservasPublicasParaTrainer(trainerKey, { fs, claveMesReal }) {
             if (!dbClientes[trainerKey]) return;
             const disp = dbDisponibilidadReservas[trainerKey] || disponibilidadReservasPorDefecto();
@@ -8894,12 +9209,31 @@ Cancelar = no hacer nada`,
                 // `new Date().toISOString()` en ese instante, coincidencia confirmada exactamente
                 // así en producción. Fix: releer el documento real directamente del servidor (nunca
                 // de caché local) inmediatamente antes de publicar.
+                //
+                // HOTFIX-V1-AGENDA-PERSISTENCIA-P0 (2026-10-08): CAUSA RAÍZ del "el cambio aparece y
+                // luego desaparece", reproducida contra el Firebase Emulator con la página real (ver
+                // .review-local/agenda-persistencia/). Esta relectura SUSTITUÍA dbClientes/dbAgenda/
+                // dbDisponibilidadReservas, el estado VIVO de la Agenda en memoria, por la copia del
+                // servidor. Esta función se dispara tras CADA guardado correcto, con cada snapshot de
+                // solicitudes de reserva (incluido el del inicio de sesión) y tras habilitar/ocultar
+                // slots, así que cualquier edición hecha entre medias y todavía sin guardar (p.ej. una
+                // sesión recién creada, en su espera de 350 ms) desaparecía de la memoria sin ningún
+                // aviso. El guardado diferido escribía después esa copia del servidor SIN el cambio,
+                // devolvía ok:true, y el cambio se esfumaba de la pantalla en el siguiente render.
+                // Ahora los datos frescos se usan SOLO para publicar: se colocan en las variables
+                // globales durante la parte SÍNCRONA de la publicación (lo que leen
+                // publicarReservasPublicasParaTrainer() y sus helpers, todos síncronos hasta su único
+                // await final, batch.commit()) y se restauran en el finally antes de cualquier await,
+                // así que ninguna otra parte de la app puede ver nunca el estado sustituido.
+                let datosPublicacion = null;
                 if (window.bsAgendaCloudDocRef) {
                     const snapshotFresco = await window.bsAgendaCloudDocRef.get({ source: 'server' });
                     const datosFrescos = snapshotFresco.data() || {};
-                    dbClientes = datosFrescos.clientes || {};
-                    dbAgenda = datosFrescos.agenda || {};
-                    dbDisponibilidadReservas = datosFrescos.disponibilidadReservas || {};
+                    datosPublicacion = {
+                        clientes: datosFrescos.clientes || {},
+                        agenda: datosFrescos.agenda || {},
+                        disponibilidadReservas: datosFrescos.disponibilidadReservas || {},
+                    };
                 }
                 const hoy = new Date(); hoy.setHours(0,0,0,0);
                 // PORTAL-02 (2026-09-05): hallazgo real -- calcularContadorClases(ficha) usa por
@@ -8923,13 +9257,26 @@ Cancelar = no hacer nada`,
                 // trainerKeys a publicar se deriva de la propia fuente fresca ya releída
                 // (disponibilidadReservas ∪ clientes), nunca de dbCredenciales -- ninguna sesión
                 // parcial puede limitar a quién se publica. Sin trainerKeys hardcodeados.
-                const trainerKeysAPublicar = Array.from(new Set([
-                    ...Object.keys(dbDisponibilidadReservas || {}),
-                    ...Object.keys(dbClientes || {})
-                ]));
-                const resultados = await Promise.allSettled(
-                    trainerKeysAPublicar.map(trainerKey => publicarReservasPublicasParaTrainer(trainerKey, { fs, claveMesReal }))
-                );
+                const estadoVivoAgenda = { dbClientes, dbAgenda, dbDisponibilidadReservas };
+                let trainerKeysAPublicar = [];
+                let publicaciones = [];
+                try {
+                    if (datosPublicacion) {
+                        dbClientes = datosPublicacion.clientes;
+                        dbAgenda = datosPublicacion.agenda;
+                        dbDisponibilidadReservas = datosPublicacion.disponibilidadReservas;
+                    }
+                    trainerKeysAPublicar = Array.from(new Set([
+                        ...Object.keys(dbDisponibilidadReservas || {}),
+                        ...Object.keys(dbClientes || {})
+                    ]));
+                    publicaciones = trainerKeysAPublicar.map(trainerKey => publicarReservasPublicasParaTrainer(trainerKey, { fs, claveMesReal }));
+                } finally {
+                    dbClientes = estadoVivoAgenda.dbClientes;
+                    dbAgenda = estadoVivoAgenda.dbAgenda;
+                    dbDisponibilidadReservas = estadoVivoAgenda.dbDisponibilidadReservas;
+                }
+                const resultados = await Promise.allSettled(publicaciones);
                 resultados.forEach((r, i) => {
                     if (r.status === 'rejected') {
                         console.warn('No se pudo publicar reservas para un trainerKey concreto (el resto de PT SÍ se publicaron):', trainerKeysAPublicar[i], r.reason);
@@ -9212,7 +9559,7 @@ Cancelar = no hacer nada`,
             // .update()). Aquí se espera el resultado real y se deshace el cambio local si el
             // guardado falla, para que el panel nunca muestre un asistente que en realidad no
             // se guardó.
-            const resultadoGuardado = await guardarEstadoNubeAgenda(scopeGuardado);
+            const resultadoGuardado = await guardarEstadoNubeAgenda(scopeGuardado, { avisoPropio: true });
             if (!resultadoGuardado || resultadoGuardado.ok !== true) {
                 if (anterior) dbAgenda[scopeGuardado][clave] = anterior; else delete dbAgenda[scopeGuardado][clave];
                 localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
