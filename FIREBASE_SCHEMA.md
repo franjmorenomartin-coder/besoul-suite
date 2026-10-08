@@ -39,6 +39,16 @@ Important rules:
 - One session blocks 3 slots.
 - Trial sessions from CRM are visible but not billable.
 
+Write semantics from `agenda.html` (HOTFIX-V1-AGENDA-PERSISTENCIA-P0, 2026-10-08; document shape unchanged):
+
+- Each save is a transaction that updates only the affected trainer's sub-maps
+  (`clientes.<trainerKey>`, `agenda.<trainerKey>`, `pruebasCRM.<trainerKey>`,
+  `disponibilidadReservas.<trainerKey>`, `historicoClientes.<trainerKey>`). It is cancelled
+  (conflict) if another session changed that same trainer's data in the meantime.
+- `notas` is still a flat map (`<trainerKey>__<slotKey>` → text), but it is no longer rewritten
+  whole. Only the keys changed by the session are written (`notas.<key>`), and a deleted note is
+  removed with `FieldValue.delete()`.
+
 ## `besoulSuite/finanzas`
 
 Main finance document.

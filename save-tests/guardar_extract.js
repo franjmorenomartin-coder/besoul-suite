@@ -623,7 +623,7 @@ async function guardarCliente(opciones) {
 
             try {
 
-                const resultadoGuardado = await guardarEstadoNubeAgenda(scopeGuardado);
+                const resultadoGuardado = await guardarEstadoNubeAgenda(scopeGuardado, { avisoPropio: true });
                 if (!resultadoGuardado || resultadoGuardado.ok !== true) {
                     throw resultadoGuardado?.err || new Error(resultadoGuardado?.omitido ? 'GUARDADO_OMITIDO_REINTENTAR' : 'GUARDADO_FALLIDO');
                 }
@@ -706,8 +706,8 @@ function estadoLocalAgendaParaNube(trainerKeyScope) {
             // fusione a nivel de campo y nunca pise los datos de otro entrenador que se
             // hayan guardado casi al mismo tiempo (evita "last write wins" sobre el documento
             // completo). "notas" sigue siendo un mapa plano (clave "trainerKey__clave", no
-            // anidado) y por eso se envía entero como excepción documentada — riesgo residual
-            // menor y aceptado, ver BESOUL_WORK_STATE.md.
+            // anidado); desde HOTFIX-V1-AGENDA-PERSISTENCIA-P0 ya no se envía entero, solo las
+            // claves que esta pestaña ha cambiado (ver más abajo).
             //
             // HARDENING-PRE-BASELINE-v3.2.1 (2026-09-17): el fallback legacy que existía aquí
             // ("sin trainerKey conocido, escribe el documento COMPLETO de todos los entrenadores")
@@ -721,15 +721,26 @@ function estadoLocalAgendaParaNube(trainerKeyScope) {
             // documento completo: ver guardarEstadoNubeAgenda(), que ahora trata null como fallo
             // explícito en vez de escribir a ciegas.
             if (trainerKeyScope) {
-                return {
+                const payload = {
                     [`clientes.${trainerKeyScope}`]: dbClientes[trainerKeyScope] || [],
                     [`agenda.${trainerKeyScope}`]: dbAgenda[trainerKeyScope] || {},
                     [`pruebasCRM.${trainerKeyScope}`]: dbPruebasCRM[trainerKeyScope] || {},
                     [`disponibilidadReservas.${trainerKeyScope}`]: dbDisponibilidadReservas[trainerKeyScope] || {},
                     [`historicoClientes.${trainerKeyScope}`]: dbHistoricoClientes[trainerKeyScope] || {},
-                    notas: dbNotas || {},
                     ultimaActualizacionLocal: new Date().toISOString()
                 };
+                // HOTFIX-V1-AGENDA-PERSISTENCIA-P0 (2026-10-08): "notas" ya NO se envía entero. Antes,
+                // cada guardado de CUALQUIER entrenador reescribía el mapa completo con su copia
+                // local, borrando la nota que otro entrenador acabase de guardar y que esta pestaña
+                // todavía no había recibido (reproducido en el emulador). Ahora solo viajan las claves
+                // que ESTA pestaña ha cambiado (bsAgendaNotasTocadas), una a una ("notas.<clave>"):
+                // valor = texto de la nota, null = borrarla (guardarEstadoNubeAgenda() lo convierte en
+                // FieldValue.delete()). Sin notas tocadas, el campo "notas" no se toca en absoluto.
+                const notasTocadas = (typeof window !== 'undefined' && window.bsAgendaNotasTocadas) || new Set();
+                notasTocadas.forEach(clave => {
+                    payload[`notas.${clave}`] = (dbNotas && typeof dbNotas[clave] === 'string' && dbNotas[clave]) ? dbNotas[clave] : null;
+                });
+                return payload;
             }
 
             return null;

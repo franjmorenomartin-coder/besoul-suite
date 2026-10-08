@@ -230,12 +230,31 @@ async function publicarReservasPublicas() {
                 // `new Date().toISOString()` en ese instante, coincidencia confirmada exactamente
                 // así en producción. Fix: releer el documento real directamente del servidor (nunca
                 // de caché local) inmediatamente antes de publicar.
+                //
+                // HOTFIX-V1-AGENDA-PERSISTENCIA-P0 (2026-10-08): CAUSA RAÍZ del "el cambio aparece y
+                // luego desaparece", reproducida contra el Firebase Emulator con la página real (ver
+                // .review-local/agenda-persistencia/). Esta relectura SUSTITUÍA dbClientes/dbAgenda/
+                // dbDisponibilidadReservas, el estado VIVO de la Agenda en memoria, por la copia del
+                // servidor. Esta función se dispara tras CADA guardado correcto, con cada snapshot de
+                // solicitudes de reserva (incluido el del inicio de sesión) y tras habilitar/ocultar
+                // slots, así que cualquier edición hecha entre medias y todavía sin guardar (p.ej. una
+                // sesión recién creada, en su espera de 350 ms) desaparecía de la memoria sin ningún
+                // aviso. El guardado diferido escribía después esa copia del servidor SIN el cambio,
+                // devolvía ok:true, y el cambio se esfumaba de la pantalla en el siguiente render.
+                // Ahora los datos frescos se usan SOLO para publicar: se colocan en las variables
+                // globales durante la parte SÍNCRONA de la publicación (lo que leen
+                // publicarReservasPublicasParaTrainer() y sus helpers, todos síncronos hasta su único
+                // await final, batch.commit()) y se restauran en el finally antes de cualquier await,
+                // así que ninguna otra parte de la app puede ver nunca el estado sustituido.
+                let datosPublicacion = null;
                 if (window.bsAgendaCloudDocRef) {
                     const snapshotFresco = await window.bsAgendaCloudDocRef.get({ source: 'server' });
                     const datosFrescos = snapshotFresco.data() || {};
-                    dbClientes = datosFrescos.clientes || {};
-                    dbAgenda = datosFrescos.agenda || {};
-                    dbDisponibilidadReservas = datosFrescos.disponibilidadReservas || {};
+                    datosPublicacion = {
+                        clientes: datosFrescos.clientes || {},
+                        agenda: datosFrescos.agenda || {},
+                        disponibilidadReservas: datosFrescos.disponibilidadReservas || {},
+                    };
                 }
                 const hoy = new Date(); hoy.setHours(0,0,0,0);
                 // PORTAL-02 (2026-09-05): hallazgo real -- calcularContadorClases(ficha) usa por
@@ -259,13 +278,26 @@ async function publicarReservasPublicas() {
                 // trainerKeys a publicar se deriva de la propia fuente fresca ya releída
                 // (disponibilidadReservas ∪ clientes), nunca de dbCredenciales -- ninguna sesión
                 // parcial puede limitar a quién se publica. Sin trainerKeys hardcodeados.
-                const trainerKeysAPublicar = Array.from(new Set([
-                    ...Object.keys(dbDisponibilidadReservas || {}),
-                    ...Object.keys(dbClientes || {})
-                ]));
-                const resultados = await Promise.allSettled(
-                    trainerKeysAPublicar.map(trainerKey => publicarReservasPublicasParaTrainer(trainerKey, { fs, claveMesReal }))
-                );
+                const estadoVivoAgenda = { dbClientes, dbAgenda, dbDisponibilidadReservas };
+                let trainerKeysAPublicar = [];
+                let publicaciones = [];
+                try {
+                    if (datosPublicacion) {
+                        dbClientes = datosPublicacion.clientes;
+                        dbAgenda = datosPublicacion.agenda;
+                        dbDisponibilidadReservas = datosPublicacion.disponibilidadReservas;
+                    }
+                    trainerKeysAPublicar = Array.from(new Set([
+                        ...Object.keys(dbDisponibilidadReservas || {}),
+                        ...Object.keys(dbClientes || {})
+                    ]));
+                    publicaciones = trainerKeysAPublicar.map(trainerKey => publicarReservasPublicasParaTrainer(trainerKey, { fs, claveMesReal }));
+                } finally {
+                    dbClientes = estadoVivoAgenda.dbClientes;
+                    dbAgenda = estadoVivoAgenda.dbAgenda;
+                    dbDisponibilidadReservas = estadoVivoAgenda.dbDisponibilidadReservas;
+                }
+                const resultados = await Promise.allSettled(publicaciones);
                 resultados.forEach((r, i) => {
                     if (r.status === 'rejected') {
                         console.warn('No se pudo publicar reservas para un trainerKey concreto (el resto de PT SÍ se publicaron):', trainerKeysAPublicar[i], r.reason);

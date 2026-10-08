@@ -213,8 +213,12 @@ console.log('\n=== ESCENARIO D: un cambio en OTRO trainerKey NUNCA provoca un fa
 }
 
 // ============================================================
-console.log('\n=== ESCENARIO E: sin baseline conocido (primer guardado de la sesión) -- no bloquea, comportamiento previo ===');
+console.log('\n=== ESCENARIO E: sin baseline conocido (ningún snapshot aplicado todavía) -- BLOQUEA con aviso ===');
 // ============================================================
+// HOTFIX-V1-AGENDA-PERSISTENCIA-P0 (2026-10-08): antes este caso guardaba (ok:true) sin ninguna
+// comprobación de conflicto. Sin snapshot aplicado, el estado local viene de la caché localStorage
+// del dispositivo (posiblemente antigua): escribirlo podía pisar cambios más recientes hechos desde
+// otro dispositivo. Ahora se bloquea con un código explícito y el servidor no se toca.
 {
   const estadoBase = { clientes: { a: [{ id: 'ca1' }] }, agenda: { a: {} }, pruebasCRM: { a: {} }, disponibilidadReservas: { a: {} }, historicoClientes: { a: {} } };
   const servidor = crearServidorFirestore(estadoBase);
@@ -222,7 +226,9 @@ console.log('\n=== ESCENARIO E: sin baseline conocido (primer guardado de la ses
   const sesion = crearSesion({ docRef: servidor.ref, dbClientes, dbAgenda: { a: {} }, dbPruebasCRM: { a: {} }, dbDisponibilidadReservas: { a: {} }, dbHistoricoClientes: { a: {} }, dbNotas: {}, bsUltimoServidorConocido: undefined });
 
   const resultado = await sesion.guardarEstadoNubeAgenda('a');
-  check('sin baseline: ok:true (no bloquea el primer guardado real)', resultado.ok, true);
+  check('sin baseline: ok:false (no escribe datos de caché sin poder detectar conflictos)', resultado.ok, false);
+  check('sin baseline: código agenda-no-cargada', resultado.err && resultado.err.code, 'agenda-no-cargada');
+  check('sin baseline: el servidor NO se ha tocado', servidor.estadoActual().clientes.a, [{ id: 'ca1' }]);
 }
 
 // ============================================================

@@ -59,7 +59,7 @@ const agendaHtml = fs.readFileSync(AGENDA_HTML_PATH, 'utf8');
 const FN_NAMES = [
   'valorInvalidoParaFirestore', 'canonicalizarValorDiagnostico', 'igualdadCanonica',
   'hashEstableDiagnostico', 'contarElementosDiagnostico', 'diffEstructuralDiagnostico',
-  'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore', 'guardarEstadoNubeAgenda',
+  'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore', 'guardarEstadoNubeAgenda', 'ejecutarGuardadoEstadoNubeAgenda', 'gestionarGuardadoAgendaFallido', 'estadoGuardadoAgenda', 'estadoGuardadoPendienteScope', 'scopeConCambiosSinConfirmar', 'avisarCambioAgendaNoGuardado', 'clonarDatosParaGuardado',
   'aplicarEstadoNubeAgenda', 'sincronizarPruebasCRMDentroDeAgenda', 'esCitaPruebaCRM',
 ];
 const extracted = [

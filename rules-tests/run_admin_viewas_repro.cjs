@@ -48,7 +48,7 @@ const escrituraExtract = [
   ...[
     'valorInvalidoParaFirestore', 'canonicalizarValorDiagnostico', 'igualdadCanonica', 'hashEstableDiagnostico',
     'contarElementosDiagnostico', 'diffEstructuralDiagnostico', 'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore',
-    'guardarEstadoNubeAgenda', 'aplicarEstadoNubeAgenda',
+    'guardarEstadoNubeAgenda', 'ejecutarGuardadoEstadoNubeAgenda', 'gestionarGuardadoAgendaFallido', 'estadoGuardadoAgenda', 'estadoGuardadoPendienteScope', 'scopeConCambiosSinConfirmar', 'avisarCambioAgendaNoGuardado', 'clonarDatosParaGuardado', 'aplicarEstadoNubeAgenda',
   ].map(n => extractFunction(agendaHtml, n)),
 ].join('\n\n');
 // publicarReservasPublicas() y TODA su cadena de dependencias reales -- reutiliza la extracción ya
