@@ -52,15 +52,17 @@ function crearScopeFalso(caches) {
   const self = {
     addEventListener(tipo, cb) { listeners[tipo] = cb; },
     skipWaiting() {}, clients: { claim() {} },
+    // HOTFIX-V1-AGENDA-SYNC-P0: un ServiceWorkerGlobalScope real siempre expone location y URL.
+    location: { origin: 'https://app.besoulfitness.com' },
   };
-  const contexto = { self, caches, fetch: () => Promise.reject(new Error('offline (simulado)')) };
+  const contexto = { self, caches, URL, fetch: () => Promise.reject(new Error('offline (simulado)')) };
   vm.createContext(contexto);
   vm.runInContext(swSource, contexto);
   return { listeners, self };
 }
 
-async function simularFetchOffline(listeners, url) {
-  const req = { method: 'GET', url };
+async function simularFetchOffline(listeners, url, destination = 'document') {
+  const req = { method: 'GET', url, destination };
   let resultado;
   const event = {
     request: req,
@@ -133,6 +135,20 @@ async function simularFetchOffline(listeners, url) {
     check('cadena vacía -> null (nunca se persistiría)', sandbox.normalizarToken(''), null);
     check('basura/XSS-like -> null', sandbox.normalizarToken('<script>alert(1)</script>'), null);
     check('token de OTRO formato (p.ej. un UUID cualquiera) -> null', sandbox.normalizarToken('123e4567-e89b-12d3-a456-426614174000'), null);
+  }
+
+  console.log('\n=== HOTFIX-V1-AGENDA-SYNC-P0: el tráfico de datos (Firestore/Auth) nunca pasa por la caché ===');
+  {
+    const caches = crearCachesFalso(['./index.html']);
+    const { listeners } = crearScopeFalso(caches);
+    const listen = await simularFetchOffline(listeners, 'https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&RID=1', '');
+    check('canal en tiempo real de Firestore: el SW NO lo intercepta (va directo a la red)', listen, undefined);
+    const auth = await simularFetchOffline(listeners, 'https://securetoken.googleapis.com/v1/token?key=x', '');
+    check('renovación de token de Firebase Auth: el SW NO la intercepta', auth, undefined);
+    const sdk = await simularFetchOffline(listeners, 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js', 'script');
+    check('librería externa (script): se sigue gestionando como antes', sdk !== undefined, true);
+    const propia = await simularFetchOffline(listeners, 'https://app.besoulfitness.com/agenda.html', 'document');
+    check('página propia: se sigue gestionando como antes', propia !== undefined, true);
   }
 
   console.log(`\n${pass}/${pass + fail} pruebas OK.`);

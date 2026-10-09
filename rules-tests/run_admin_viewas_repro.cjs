@@ -44,11 +44,11 @@ function extractSimpleConst(html, name) {
 
 const agendaHtml = fs.readFileSync(AGENDA_HTML_PATH, 'utf8');
 const escrituraExtract = [
-  extractSimpleConst(agendaHtml, 'BS_APP_BUILD_TAG'),
+  extractSimpleConst(agendaHtml, 'BS_APP_BUILD_TAG'), extractSimpleConst(agendaHtml, 'BS_AGENDA_GUARDADO_TIMEOUT_MS'), extractSimpleConst(agendaHtml, 'BS_CAMPOS_AGENDA_POR_TRAINER'), extractSimpleConst(agendaHtml, 'BS_DISP_SUBMAPAS'), extractSimpleConst(agendaHtml, 'BS_DISP_METADATOS'),
   ...[
     'valorInvalidoParaFirestore', 'canonicalizarValorDiagnostico', 'igualdadCanonica', 'hashEstableDiagnostico',
     'contarElementosDiagnostico', 'diffEstructuralDiagnostico', 'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore',
-    'guardarEstadoNubeAgenda', 'ejecutarGuardadoEstadoNubeAgenda', 'gestionarGuardadoAgendaFallido', 'estadoGuardadoAgenda', 'estadoGuardadoPendienteScope', 'scopeConCambiosSinConfirmar', 'avisarCambioAgendaNoGuardado', 'clonarDatosParaGuardado', 'aplicarEstadoNubeAgenda',
+    'actualizarIndicadorGuardadoAgenda', 'elementoIndicadorGuardadoAgenda', 'reintentarGuardadosAgenda', 'errorGuardadoAgendaReintentable', 'referenciaMemoriaCampoAgenda', 'guardarMemoriaAgendaEnLocalStorage', 'repintarAgendaSiVisible', 'rebasarMemoriaScopeAgenda', 'descartarCambiosLocalesScopeAgenda', 'avisarCambioAgendaSinConfirmar', 'esObjetoPlanoAgenda', 'elementosCampoAgenda', 'recomponerCampoAgenda', 'valorVacioCampoAgenda', 'fusionarCampoTresVias', 'describirElementoAgenda', 'clavesBloqueSesion', 'claveDesdeFechaYMinutos', 'minutosDesdeHorario', 'formatoMinutosHorario', 'publicarReservasPublicasDebounced', 'guardarEstadoNubeAgenda', 'ejecutarGuardadoEstadoNubeAgenda', 'gestionarGuardadoAgendaFallido', 'estadoGuardadoAgenda', 'estadoGuardadoPendienteScope', 'scopeConCambiosSinConfirmar', 'avisarCambioAgendaNoGuardado', 'clonarDatosParaGuardado', 'aplicarEstadoNubeAgenda',
   ].map(n => extractFunction(agendaHtml, n)),
 ].join('\n\n');
 // publicarReservasPublicas() y TODA su cadena de dependencias reales -- reutiliza la extracción ya
@@ -135,6 +135,9 @@ async function main() {
 
   console.log('\n=== REPRO COMPLETA: ADMIN, ver-como PT B, edita cliente de B, guarda (guardarEstadoNubeAgenda + publicarReservasPublicas REAL, sin stub) ===');
   const resultado = await M.guardarEstadoNubeAgenda('ptb');
+  // HOTFIX-V1-AGENDA-SYNC-P0: la publicación del portal ya no va dentro de la cola de guardado (se
+  // lanza aparte, con espera); aquí se ejecuta explícitamente para seguir probando la publicación real.
+  await M.publicarReservasPublicas();
 
   console.log('resultado de guardarEstadoNubeAgenda():', JSON.stringify(resultado));
   if (resultado && resultado.ok === true) {

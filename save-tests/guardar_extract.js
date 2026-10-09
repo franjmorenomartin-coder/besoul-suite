@@ -591,6 +591,25 @@ async function guardarCliente(opciones) {
                     return;
                 }
 
+                // HOTFIX-V1-AGENDA-SYNC-P0 (2026-10-09): la ficha se construía con TODOS los campos del
+                // formulario tal como estaban al abrirlo. Si mientras tanto otra persona había cambiado
+                // un campo (p.ej. el PT el teléfono), guardar la ficha abierta lo devolvía al valor
+                // viejo sin ningún aviso (reproducido: sync.cjs S12). Ahora se fusiona campo a campo
+                // contra la ficha tal como estaba al abrir el formulario: lo que el usuario no ha
+                // tocado conserva el valor actual, y si ambos han cambiado el MISMO campo no se guarda
+                // y se le explica cuál.
+                const baseFormularioFicha = window.bsFichaFormularioBase;
+                if (baseFormularioFicha && baseFormularioFicha.id === idFichaEditando && baseFormularioFicha.scope === scopeGuardado) {
+                    const fusionFicha = fusionarFichaFormulario(baseFormularioFicha.valor, ficha, dbClientes[scopeGuardado][idxEditado]);
+                    if (fusionFicha.conflictos.length) {
+                        if (filaRosterMirror && filaRosterAnterior) Object.assign(filaRosterMirror, filaRosterAnterior);
+                        alert(`La ficha de ${ficha.nombre || 'este cliente'} ha sido modificada por otra persona mientras la editabas (${fusionFicha.conflictos.map(etiquetaCampoFicha).join(', ')}). Para no borrar ese cambio, la ficha NO se ha guardado. Cierra la ficha y vuelve a abrirla para ver la versión actual.`);
+                        return;
+                    }
+                    ficha = fusionFicha.valor;
+                    if (fusionFicha.tomadosActuales.length && Object.prototype.hasOwnProperty.call(ficha, 'facturacionEstadistica')) ficha.facturacionEstadistica = importeEfectivoCliente(ficha);
+                }
+
                 dbClientes[scopeGuardado][idxEditado] = ficha;
 
             } else {
@@ -634,19 +653,12 @@ async function guardarCliente(opciones) {
 
             } catch (err) {
 
-                // Deshace la mutación local: sin esto, dbClientes/localStorage seguirían
-                // mostrando el valor nuevo aunque Firestore no lo tenga -- exactamente el
-                // "falso éxito" que se pidió eliminar.
-                // Busca por id en vez de reutilizar el índice capturado antes del await: si
-                // llegó un snapshot de otro PT mientras se esperaba, dbClientes[scopeGuardado]
-                // puede ser un array distinto (reemplazado entero por aplicarEstadoNubeAgenda).
-                const idxActual = (dbClientes[scopeGuardado] || []).findIndex(c => c.id === ficha.id);
-                if (idFichaEditando) {
-                    if (fichaAnterior && idxActual !== -1) dbClientes[scopeGuardado][idxActual] = fichaAnterior;
-                } else if (idxActual !== -1) {
-                    dbClientes[scopeGuardado].splice(idxActual, 1);
-                }
-                if (filaRosterMirror && filaRosterAnterior) Object.assign(filaRosterMirror, filaRosterAnterior);
+                // HOTFIX-V1-AGENDA-SYNC-P0 (2026-10-09): la mutación local YA está deshecha:
+                // guardarEstadoNubeAgenda() devuelve la memoria de este entrenador a lo que hay en el
+                // servidor antes de resolver. Antes se volvía a poner aquí "fichaAnterior" (copia
+                // tomada ANTES del guardado) DESPUÉS de esa relectura: si otra sesión había cambiado
+                // algo de esa ficha o de su grupo, la pantalla volvía a la copia vieja y el siguiente
+                // guardado de cualquier cosa la escribía encima del cambio ajeno, sin aviso.
                 localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
                 renderClientes();
 

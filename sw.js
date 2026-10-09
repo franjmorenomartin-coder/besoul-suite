@@ -1,4 +1,4 @@
-const CACHE_NAME = 'besoul-pwa-icons-v9';
+const CACHE_NAME = 'besoul-pwa-icons-v10';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -45,6 +45,14 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.method !== 'GET') return;
+  // HOTFIX-V1-AGENDA-SYNC-P0 (2026-10-09): el tráfico de DATOS nunca pasa por la caché. Antes el
+  // service worker interceptaba y guardaba en caché también las peticiones a otros dominios,
+  // incluido el canal en tiempo real de Firestore (Listen/channel; comprobado en el emulador: ~17
+  // respuestas guardadas en segundos, cada una con una URL distinta, sin límite) y, si la red
+  // fallaba, podía responder con una de esas copias viejas (caches.match con ignoreSearch). Ahora,
+  // de otros dominios solo se cachean librerías, estilos, fuentes e imágenes (como antes); las
+  // peticiones de Firestore / Firebase Auth (XHR/fetch de datos) van siempre directas a la red.
+  if (new URL(req.url).origin !== self.location.origin && !['script', 'style', 'font', 'image'].includes(req.destination)) return;
 
   event.respondWith(
     fetch(req)

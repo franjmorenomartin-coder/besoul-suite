@@ -52,11 +52,11 @@ function extractSimpleConst(html, name) {
 
 const agendaHtml = fs.readFileSync(AGENDA_HTML_PATH, 'utf8');
 const extracted = [
-  extractSimpleConst(agendaHtml, 'BS_APP_BUILD_TAG'),
+  extractSimpleConst(agendaHtml, 'BS_APP_BUILD_TAG'), extractSimpleConst(agendaHtml, 'BS_AGENDA_GUARDADO_TIMEOUT_MS'), extractSimpleConst(agendaHtml, 'BS_CAMPOS_AGENDA_POR_TRAINER'), extractSimpleConst(agendaHtml, 'BS_DISP_SUBMAPAS'), extractSimpleConst(agendaHtml, 'BS_DISP_METADATOS'),
   ...[
     'valorInvalidoParaFirestore', 'canonicalizarValorDiagnostico', 'igualdadCanonica', 'hashEstableDiagnostico',
     'contarElementosDiagnostico', 'diffEstructuralDiagnostico', 'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore',
-    'guardarEstadoNubeAgenda', 'ejecutarGuardadoEstadoNubeAgenda', 'gestionarGuardadoAgendaFallido', 'estadoGuardadoAgenda', 'estadoGuardadoPendienteScope', 'scopeConCambiosSinConfirmar', 'avisarCambioAgendaNoGuardado', 'clonarDatosParaGuardado', 'aplicarEstadoNubeAgenda', 'sincronizarPruebasCRMDentroDeAgenda',
+    'actualizarIndicadorGuardadoAgenda', 'elementoIndicadorGuardadoAgenda', 'reintentarGuardadosAgenda', 'errorGuardadoAgendaReintentable', 'referenciaMemoriaCampoAgenda', 'guardarMemoriaAgendaEnLocalStorage', 'repintarAgendaSiVisible', 'rebasarMemoriaScopeAgenda', 'descartarCambiosLocalesScopeAgenda', 'avisarCambioAgendaSinConfirmar', 'esObjetoPlanoAgenda', 'elementosCampoAgenda', 'recomponerCampoAgenda', 'valorVacioCampoAgenda', 'fusionarCampoTresVias', 'describirElementoAgenda', 'clavesBloqueSesion', 'claveDesdeFechaYMinutos', 'minutosDesdeHorario', 'formatoMinutosHorario', 'publicarReservasPublicasDebounced', 'guardarEstadoNubeAgenda', 'ejecutarGuardadoEstadoNubeAgenda', 'gestionarGuardadoAgendaFallido', 'estadoGuardadoAgenda', 'estadoGuardadoPendienteScope', 'scopeConCambiosSinConfirmar', 'avisarCambioAgendaNoGuardado', 'clonarDatosParaGuardado', 'aplicarEstadoNubeAgenda', 'sincronizarPruebasCRMDentroDeAgenda',
     'esCitaPruebaCRM',
   ].map((n) => extractFunction(agendaHtml, n)),
 ].join('\n\n');

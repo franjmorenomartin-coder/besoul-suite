@@ -32,9 +32,50 @@
  * against this machine failing.
  */
 
-const admin = require('firebase-admin');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+
+// HOTFIX-V1-AGENDA-SYNC-P0 (2026-10-09): respaldo VERIFICABLE antes de desplegar. Cada copia lleva un
+// manifest.json con el SHA-256 de cada archivo, el nº de documentos y, para besoulSuite/agenda, un
+// resumen por entrenador (fichas, sesiones, días bloqueados, slots ocultos) y su updateTime real.
+//   node backup-firestore.js                       -> crea la copia (solo LEE de Firestore)
+//   node backup-firestore.js --verificar <carpeta> -> comprueba los SHA-256 (sin credenciales)
+const sha256 = buf => crypto.createHash('sha256').update(buf).digest('hex');
+function escribirConHash(outDir, nombre, contenido, manifest) {
+  const buf = Buffer.from(contenido, 'utf8');
+  fs.writeFileSync(path.join(outDir, nombre), buf);
+  manifest.archivos[nombre] = { sha256: sha256(buf), bytes: buf.length };
+}
+function resumenAgenda(data) {
+  const r = {};
+  const trainers = new Set([...Object.keys(data.clientes || {}), ...Object.keys(data.agenda || {}), ...Object.keys(data.disponibilidadReservas || {})]);
+  trainers.forEach(t => {
+    const disp = (data.disponibilidadReservas || {})[t] || {};
+    r[t] = {
+      fichas: Array.isArray((data.clientes || {})[t]) ? data.clientes[t].length : 0,
+      sesiones: Object.keys((data.agenda || {})[t] || {}).length,
+      diasConExcepcion: Object.keys(disp.excepciones || {}).length,
+      diasBloqueados: Object.values(disp.excepciones || {}).filter(e => e && e.activo === false).length,
+      diasConSlotsOcultos: Object.keys(disp.bloqueos || {}).length,
+    };
+  });
+  return r;
+}
+if (process.argv[2] === '--verificar') {
+  const dir = process.argv[3];
+  const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
+  let ok = true;
+  Object.entries(manifest.archivos).forEach(([nombre, info]) => {
+    const bien = sha256(fs.readFileSync(path.join(dir, nombre))) === info.sha256;
+    ok = ok && bien;
+    console.log(`${bien ? 'OK  ' : 'MAL '} ${nombre}`);
+  });
+  console.log(ok ? '\nCopia íntegra.' : '\nLA COPIA NO ES ÍNTEGRA.');
+  process.exit(ok ? 0 : 1);
+}
+
+const admin = require('firebase-admin');
 
 // Every top-level collection this app actually uses (see agenda.html,
 // finanzas.html, crm.html's Firestore calls). besoulSuite is a collection
@@ -63,11 +104,13 @@ async function main() {
   fs.mkdirSync(outDir, { recursive: true });
 
   let totalDocs = 0;
+  const manifest = { creadoEn: new Date().toISOString(), archivos: {}, documentos: {}, agenda: null };
 
   for (const name of SIMPLE_COLLECTIONS) {
     const snap = await db.collection(name).get();
     const rows = snap.docs.map(d => ({ id: d.id, data: d.data() }));
-    fs.writeFileSync(path.join(outDir, `${name}.json`), JSON.stringify(rows, null, 2));
+    escribirConHash(outDir, `${name}.json`, JSON.stringify(rows, null, 2), manifest);
+    manifest.documentos[name] = rows.length;
     totalDocs += rows.length;
     console.log(`${name}: ${rows.length} documento(s)`);
   }
@@ -76,13 +119,24 @@ async function main() {
   for (const docId of BESOUL_SUITE_DOCS) {
     const snap = await db.collection('besoulSuite').doc(docId).get();
     if (snap.exists) suiteRows.push({ id: docId, data: snap.data() });
+    if (snap.exists && docId === 'agenda') {
+      manifest.agenda = {
+        updateTime: snap.updateTime ? snap.updateTime.toDate().toISOString() : null,
+        bytesAprox: Buffer.byteLength(JSON.stringify(snap.data())),
+        porEntrenador: resumenAgenda(snap.data()),
+      };
+    }
   }
-  fs.writeFileSync(path.join(outDir, 'besoulSuite.json'), JSON.stringify(suiteRows, null, 2));
+  escribirConHash(outDir, 'besoulSuite.json', JSON.stringify(suiteRows, null, 2), manifest);
+  manifest.documentos.besoulSuite = suiteRows.length;
   totalDocs += suiteRows.length;
   console.log(`besoulSuite: ${suiteRows.length} documento(s) (agenda/finanzas)`);
 
+  fs.writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
   console.log(`\nBackup completo: ${totalDocs} documentos en total.`);
+  if (manifest.agenda) console.log('Agenda por entrenador:', JSON.stringify(manifest.agenda.porEntrenador));
   console.log(`Carpeta: ${outDir}`);
+  console.log(`Verificar la copia: node backup-firestore.js --verificar "${outDir}"`);
 }
 
 main().catch(err => {

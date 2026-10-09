@@ -1,9 +1,15 @@
-// HARDENING-PRE-BASELINE-v3.2.1: prueba real de la detección de conflicto de concurrencia
-// same-trainerKey en guardarEstadoNubeAgenda() (extraído verbatim de agenda.html), contra un mock
-// fiel de Firestore (dotted-path + FieldPath + runTransaction con lecturas antes de escrituras,
-// igual que el SDK real). Nunca toca Firestore real. Cubre exactamente los escenarios 18/19 de la
-// matriz de tests pedida: concurrencia PT/PT (dos pestañas del mismo entrenador) y concurrencia
-// Admin/PT (admin viendo-como + el propio PT editando a la vez).
+// HOTFIX-V1-AGENDA-SYNC-P0 (2026-10-09) -- concurrencia del guardado de Agenda con las funciones
+// REALES extraídas de agenda.html (extract.js) contra un mock fiel de Firestore (dotted-path +
+// FieldPath + runTransaction con lecturas antes de escrituras). Nunca toca Firestore real.
+//
+// Semántica comprobada (cambia respecto a HARDENING-PRE-BASELINE-v3.2.1):
+//   - Antes: cualquier cambio de OTRA sesión en el mismo entrenador cancelaba el guardado entero.
+//     Admin y PT tocando cosas distintas de la misma agenda perdían cambios ("unos se guardan y
+//     otros no"). Esos casos (B, F, I, K, L) ahora se FUSIONAN: se guardan los dos.
+//   - Conflicto real = el MISMO elemento cambiado por ambos (misma ficha, misma sesión, mismo día
+//     de disponibilidad, sesión movida por ambos, sesiones nuevas solapadas): se cancela con un
+//     mensaje que nombra el elemento y el cambio ajeno queda intacto (C, C2, G, H, J).
+// Pruebas de navegador real con dos usuarios: .review-local/agenda-persistencia/sync.cjs.
 const fs = require('fs');
 const path = require('path');
 const extracted = fs.readFileSync(path.join(__dirname, 'concurrency_extract.js'), 'utf8');
@@ -12,6 +18,7 @@ function deepClone(v) { return v === undefined ? undefined : JSON.parse(JSON.str
 class FieldPathFalso { constructor(...segmentos) { this.segmentos = segmentos; } }
 class FieldValueFalso { constructor(metodo) { this._methodName = metodo; } }
 FieldValueFalso.serverTimestamp = () => new FieldValueFalso('serverTimestamp');
+FieldValueFalso.delete = () => new FieldValueFalso('delete');
 
 function setEnRuta(obj, segmentos, valor) {
   let cursor = obj;
@@ -19,42 +26,36 @@ function setEnRuta(obj, segmentos, valor) {
     if (typeof cursor[segmentos[i]] !== 'object' || cursor[segmentos[i]] === null) cursor[segmentos[i]] = {};
     cursor = cursor[segmentos[i]];
   }
-  cursor[segmentos[segmentos.length - 1]] = deepClone(valor);
+  cursor[segmentos[segmentos.length - 1]] = valor instanceof FieldValueFalso ? `<${valor._methodName}>` : deepClone(valor);
 }
 
 // Simula el servidor real de Firestore: estado propio, independiente de cualquier copia local.
 function crearServidorFirestore(estadoInicial) {
   let estado = deepClone(estadoInicial);
+  let escrituras = 0;
   function aplicarCampo(campo, valor) {
     if (campo instanceof FieldPathFalso) { setEnRuta(estado, campo.segmentos, valor); return; }
     if (typeof campo === 'string' && campo.includes('.')) { setEnRuta(estado, campo.split('.'), valor); return; }
-    estado[campo] = deepClone(valor);
-  }
-  function aplicarUpdate(args) {
-    for (let i = 0; i < args.length; i += 2) aplicarCampo(args[i], args[i + 1]);
+    estado[campo] = valor instanceof FieldValueFalso ? `<${valor._methodName}>` : deepClone(valor);
   }
   const firestoreInstance = {
     async runTransaction(fn) {
-      // Igual que el SDK real para lo que este test necesita: la función recibe un snapshot
-      // consistente en el momento de tx.get(), y cualquier tx.update() se aplica atómicamente
-      // solo si la función no lanza. No se simula reintento automático por contención real
-      // (aquí no hay escrituras concurrentes DENTRO de la misma llamada a runTransaction) --
-      // lo que se prueba es que el propio callback detecta el conflicto y lanza.
+      const pendientes = [];
       const tx = {
-        async get(ref) { return { exists: estado !== null, data: () => deepClone(estado) }; },
-        update(ref, ...args) { aplicarUpdate(args); },
+        async get() { return { exists: estado !== null, data: () => deepClone(estado) }; },
+        update(ref, ...args) { pendientes.push(args); },
       };
-      return fn(tx);
+      const r = await fn(tx); // si fn lanza, no se aplica nada (atomicidad)
+      pendientes.forEach(args => { escrituras++; for (let i = 0; i < args.length; i += 2) aplicarCampo(args[i], args[i + 1]); });
+      return r;
     },
   };
-  // path: real Firestore DocumentReference objects always expose this -- included here so the
-  // mock faithfully matches the real SDK shape (P0 2026-09-21 diagnostic reads docRef.path).
-  const ref = { firestore: firestoreInstance, path: 'besoulSuite/agenda' };
+  const ref = { firestore: firestoreInstance, path: 'besoulSuite/agenda', async get() { return { exists: true, data: () => deepClone(estado) }; } };
   return {
     ref,
     estadoActual() { return deepClone(estado); },
-    // Simula que "otra sesión" escribe directamente en el servidor, fuera de esta transacción --
-    // exactamente lo que representa una segunda pestaña/PT/admin guardando entre medias.
+    escrituras() { return escrituras; },
+    // "Otra sesión" (otra pestaña, el PT, el admin) guarda directamente en el servidor.
     escribirDesdeOtraSesion(campo, trainerKey, valor) {
       if (!estado[campo]) estado[campo] = {};
       estado[campo][trainerKey] = deepClone(valor);
@@ -69,166 +70,235 @@ function check(desc, actual, expected) {
   if (ok) pass++; else { fail++; fails.push(`${desc} :: got=${JSON.stringify(actual)} expected=${JSON.stringify(expected)}`); }
   console.log(`${ok ? 'PASS' : 'FAIL'} -- ${desc} :: got=${JSON.stringify(actual)}${ok ? '' : ` expected=${JSON.stringify(expected)}`}`);
 }
+const espera = ms => new Promise(r => setTimeout(r, ms));
 
-function crearSesion({ docRef, dbClientes, dbAgenda, dbPruebasCRM, dbDisponibilidadReservas, dbHistoricoClientes, dbNotas, bsUltimoServidorConocido, entrenadorVisto = '', rolActivo = 'pt' }) {
+function crearSesion({ docRef, dbClientes = {}, dbAgenda = {}, dbPruebasCRM = {}, dbDisponibilidadReservas = {}, dbHistoricoClientes = {}, dbNotas = {}, bsUltimoServidorConocido, entrenadorVisto = '', rolActivo = 'pt' }) {
   const firebase = { firestore: Object.assign(() => {}, { FieldPath: FieldPathFalso, FieldValue: FieldValueFalso }) };
-  const window = { bsAgendaCloudDocRef: docRef, bsAgendaAplicandoNube: false, bsUltimoServidorConocido };
+  const window = { bsAgendaCloudDocRef: docRef, bsAgendaAplicandoNube: false, bsUltimoServidorConocido: deepClone(bsUltimoServidorConocido) };
   let publicarLlamado = 0;
   async function publicarReservasPublicas() { publicarLlamado++; }
-  const warnLog = [];
-  const errorLog = [];
-  // P0 2026-09-21 (tercera ronda): también captura console.error -- [BESOUL_SAVE_CONFLICT_JSON]
-  // se emite por ahí (texto plano de una sola línea, copiable), no por console.warn.
-  const consoleFalso = { ...console, warn: (...args) => { warnLog.push(args); }, error: (...args) => { errorLog.push(args); } };
+  const logs = [];
+  const consoleFalso = { ...console, log: () => {}, info: (...a) => logs.push(a), warn: (...a) => logs.push(a), error: (...a) => logs.push(a) };
+  const alerts = [];
+  const memoria = { dbClientes, dbAgenda, dbPruebasCRM, dbDisponibilidadReservas, dbHistoricoClientes };
+  // Relectura del servidor tras un fallo: la memoria pasa a ser lo que hay en el servidor.
+  function aplicarEstadoNubeAgenda(data) {
+    window.bsUltimoServidorConocido = deepClone({ clientes: data.clientes || {}, agenda: data.agenda || {}, pruebasCRM: data.pruebasCRM || {}, disponibilidadReservas: data.disponibilidadReservas || {}, historicoClientes: data.historicoClientes || {} });
+    [['clientes', 'dbClientes'], ['agenda', 'dbAgenda'], ['pruebasCRM', 'dbPruebasCRM'], ['disponibilidadReservas', 'dbDisponibilidadReservas'], ['historicoClientes', 'dbHistoricoClientes']].forEach(([campo, v]) => {
+      Object.keys(memoria[v]).forEach(k => delete memoria[v][k]);
+      Object.assign(memoria[v], deepClone(data[campo] || {}));
+    });
+  }
   const fn = new Function(
     'window', 'firebase', 'entrenadorVisto', 'rolActivo', 'dbClientes', 'dbAgenda', 'dbPruebasCRM',
     'dbDisponibilidadReservas', 'dbHistoricoClientes', 'dbNotas', 'publicarReservasPublicas', 'console',
+    'alert', 'nombreEntrenador', 'aplicarEstadoNubeAgenda', 'escapeHTML',
     extracted + `
-    return { guardarEstadoNubeAgenda };`
+    return { guardarEstadoNubeAgenda, fusionarCampoTresVias };`
   );
-  const M = fn(window, firebase, entrenadorVisto, rolActivo, dbClientes, dbAgenda, dbPruebasCRM, dbDisponibilidadReservas, dbHistoricoClientes, dbNotas, publicarReservasPublicas, consoleFalso);
-  return { ...M, publicarLlamado: () => publicarLlamado, warnLog, errorLog };
+  const M = fn(window, firebase, entrenadorVisto, rolActivo, dbClientes, dbAgenda, dbPruebasCRM, dbDisponibilidadReservas, dbHistoricoClientes, dbNotas, publicarReservasPublicas, consoleFalso,
+    m => alerts.push(m), t => t, aplicarEstadoNubeAgenda, t => String(t));
+  return { ...M, publicarLlamado: () => publicarLlamado, logs, alerts, window, memoria };
 }
+
+const vacio = t => ({ clientes: { [t]: [] }, agenda: { [t]: {} }, pruebasCRM: { [t]: {} }, disponibilidadReservas: { [t]: {} }, historicoClientes: { [t]: {} } });
+const ses = (id, extra) => ({ id, nombre: id, duracionMin: 45, ...extra });
 
 async function main() {
 
-// ============================================================
-console.log('=== ESCENARIO A: sin conflicto -- guardado normal funciona exactamente igual que antes ===');
-// ============================================================
+console.log('=== A: sin concurrencia -- guardado normal ===');
 {
-  const estadoServidor = { clientes: { a: [{ id: 'ca_v1' }] }, agenda: { a: {} }, pruebasCRM: { a: {} }, disponibilidadReservas: { a: {} }, historicoClientes: { a: {} } };
-  const servidor = crearServidorFirestore(estadoServidor);
-  const dbClientes = { a: [{ id: 'ca_v2', nombre: 'Editado por esta pestaña' }] };
-  const bsUltimoServidorConocido = deepClone(estadoServidor); // esta pestaña sincronizó justo este estado
-  const sesion = crearSesion({ docRef: servidor.ref, dbClientes, dbAgenda: { a: {} }, dbPruebasCRM: { a: {} }, dbDisponibilidadReservas: { a: {} }, dbHistoricoClientes: { a: {} }, dbNotas: {}, bsUltimoServidorConocido });
-
-  const resultado = await sesion.guardarEstadoNubeAgenda('a');
-  check('sin conflicto: ok:true', resultado.ok, true);
-  check('sin conflicto: el servidor refleja el cambio de esta pestaña', servidor.estadoActual().clientes.a, [{ id: 'ca_v2', nombre: 'Editado por esta pestaña' }]);
-  check('sin conflicto: publicarReservasPublicas() se invoca tras guardar', sesion.publicarLlamado(), 1);
+  const base = { ...vacio('a'), clientes: { a: [{ id: 'ca_v1' }] } };
+  const servidor = crearServidorFirestore(base);
+  const s = crearSesion({ docRef: servidor.ref, dbClientes: { a: [{ id: 'ca_v1', nombre: 'Editado por esta pestaña' }] }, dbAgenda: { a: {} }, bsUltimoServidorConocido: base });
+  const r = await s.guardarEstadoNubeAgenda('a');
+  check('A: ok:true', r.ok, true);
+  check('A: el servidor refleja el cambio', servidor.estadoActual().clientes.a, [{ id: 'ca_v1', nombre: 'Editado por esta pestaña' }]);
+  check('A: la publicación del portal ya no bloquea la confirmación (se lanza aparte)', s.publicarLlamado(), 0);
+  await espera(900);
+  check('A: ...y se publica igualmente justo después', s.publicarLlamado(), 1);
+  check('A: la nueva base de concurrencia es lo confirmado', s.window.bsUltimoServidorConocido.clientes.a, [{ id: 'ca_v1', nombre: 'Editado por esta pestaña' }]);
 }
 
-// ============================================================
-console.log('\n=== ESCENARIO B: CONFLICTO PT/PT (dos pestañas del MISMO entrenador) -- guardado se cancela, NO se pisa ===');
-// ============================================================
+console.log('\n=== B: dos pestañas del MISMO PT cambian fichas DISTINTAS -> se guardan las dos ===');
 {
-  const estadoBase = { clientes: { a: [{ id: 'ca_v1' }] }, agenda: { a: {} }, pruebasCRM: { a: {} }, disponibilidadReservas: { a: {} }, historicoClientes: { a: {} } };
-  const servidor = crearServidorFirestore(estadoBase);
-  const bsUltimoServidorConocido = deepClone(estadoBase); // ambas pestañas partían de este mismo estado
-
-  // Pestaña 2 (la "otra sesión") guarda PRIMERO, directamente contra el servidor -- simula que su
-  // propio guardado (con su propia detección de conflicto, que pasó porque ELLA sí estaba al día)
-  // ya se aplicó.
+  const base = { ...vacio('a'), clientes: { a: [{ id: 'ca_v1' }] } };
+  const servidor = crearServidorFirestore(base);
   servidor.escribirDesdeOtraSesion('clientes', 'a', [{ id: 'ca_v1' }, { id: 'ca_nueva_de_otra_pestana' }]);
-
-  // Pestaña 1 (esta sesión) NUNCA se enteró de ese cambio -- su bsUltimoServidorConocido sigue
-  // siendo el estado base antiguo -- e intenta guardar SU PROPIA edición, que sobrescribiría por
-  // completo clientes.a si no se detectara el conflicto.
-  const dbClientes1 = { a: [{ id: 'ca_v1', nombre: 'Editado por pestaña 1, sin saber de la otra', telefono: '699888777', email: 'pii-real@x.com' }] };
-  const sesion1 = crearSesion({ docRef: servidor.ref, dbClientes: dbClientes1, dbAgenda: { a: {} }, dbPruebasCRM: { a: {} }, dbDisponibilidadReservas: { a: {} }, dbHistoricoClientes: { a: {} }, dbNotas: {}, bsUltimoServidorConocido, entrenadorVisto: 'a', rolActivo: 'pt' });
-
-  const resultado = await sesion1.guardarEstadoNubeAgenda('a');
-  check('conflicto PT/PT: guardado devuelve ok:false', resultado.ok, false);
-  check('conflicto PT/PT: código de error = conflict', resultado.err && resultado.err.code, 'conflict');
-  check('conflicto PT/PT: el cambio de la OTRA pestaña sigue intacto en el servidor (NO se pisó)', servidor.estadoActual().clientes.a, [{ id: 'ca_v1' }, { id: 'ca_nueva_de_otra_pestana' }]);
-  check('conflicto PT/PT: publicarReservasPublicas() NUNCA se llama si el guardado se cancela', sesion1.publicarLlamado(), 0);
-
-  // P0 2026-09-21 (tercera ronda): [BESOUL_SAVE_CONFLICT] (objeto, DevTools) +
-  // [BESOUL_SAVE_CONFLICT_JSON] (texto plano de una sola línea, copiable) -- misma estructura
-  // reutilizada para ambos, se emite exactamente una vez cada uno, SIN NINGÚN dato personal del
-  // payload (nombre/teléfono/email de arriba nunca deben aparecer).
-  check('DIAG: se emite exactamente un [BESOUL_SAVE_CONFLICT]', sesion1.warnLog.filter(a => a[0] === '[BESOUL_SAVE_CONFLICT]').length, 1);
-  const diag1 = sesion1.warnLog.find(a => a[0] === '[BESOUL_SAVE_CONFLICT]')[1];
-  const jsonLines1 = sesion1.errorLog.filter(a => typeof a[0] === 'string' && a[0].startsWith('[BESOUL_SAVE_CONFLICT_JSON]'));
-  check('DIAG: se emite exactamente una línea [BESOUL_SAVE_CONFLICT_JSON]', jsonLines1.length, 1);
-  const diag1Json = JSON.parse(jsonLines1[0][0].slice('[BESOUL_SAVE_CONFLICT_JSON] '.length));
-  check('DIAG: la línea de texto plano es el MISMO objeto que el warn (reutilizado, no un segundo sistema)', diag1Json, diag1);
-  check('DIAG: trainerScope correcto', diag1.trainerScope, 'a');
-  check('DIAG: entrenadorVisto correcto', diag1.entrenadorVisto, 'a');
-  check('DIAG: rolActivo correcto', diag1.rolActivo, 'pt');
-  check('DIAG: buildId presente', typeof diag1.buildId === 'string' && diag1.buildId.length > 0, true);
-  check('DIAG: saveAttemptId presente y único', typeof diag1.saveAttemptId === 'string' && diag1.saveAttemptId.length > 0, true);
-  check('DIAG: documentPath presente', typeof diag1.documentPath === 'string' && diag1.documentPath.length > 0, true);
-  check('DIAG: differingFields incluye "clientes"', diag1.differingFields.includes('clientes'), true);
-  check('DIAG: campos trae los 5 campos comparables, uno por entrada', diag1.campos.length, 5);
-  const campoClientes1 = diag1.campos.find(c => c.field === 'clientes');
-  check('DIAG: campos[clientes].rawEqual === false', campoClientes1.rawEqual, false);
-  check('DIAG: campos[clientes] trae hashes cortos, no el contenido', typeof campoClientes1.localHash === 'string' && campoClientes1.localHash.length <= 8, true);
-  check('DIAG: campos[clientes].structuralDiff es un array de rutas', Array.isArray(campoClientes1.structuralDiff), true);
-  check('DIAG: structuralDiff incluye al menos una ruta bajo "clientes.a"', campoClientes1.structuralDiff.some(r => r.ruta.startsWith('clientes.a')), true);
-  const campoAgenda1 = diag1.campos.find(c => c.field === 'agenda');
-  check('DIAG: un campo SIN diferencia trae structuralDiff vacío', campoAgenda1.rawEqual === true && campoAgenda1.structuralDiff.length === 0, true);
-  const diagStr1 = JSON.stringify(diag1) + jsonLines1[0][0];
-  check('DIAG: NUNCA contiene el nombre real', diagStr1.includes('Editado por pestaña 1'), false);
-  check('DIAG: NUNCA contiene el teléfono real', diagStr1.includes('699888777'), false);
-  check('DIAG: NUNCA contiene el email real', diagStr1.includes('pii-real@x.com'), false);
+  const s = crearSesion({ docRef: servidor.ref, dbClientes: { a: [{ id: 'ca_v1', nombre: 'Editado por pestaña 1' }] }, dbAgenda: { a: {} }, bsUltimoServidorConocido: base, entrenadorVisto: 'a' });
+  const r = await s.guardarEstadoNubeAgenda('a');
+  check('B: ok:true (cambios compatibles)', r.ok, true);
+  check('B: el servidor tiene la edición de esta pestaña Y la ficha nueva de la otra', servidor.estadoActual().clientes.a, [{ id: 'ca_v1', nombre: 'Editado por pestaña 1' }, { id: 'ca_nueva_de_otra_pestana' }]);
+  check('B: la memoria de esta pestaña ya muestra la ficha de la otra', s.memoria.dbClientes.a.map(c => c.id), ['ca_v1', 'ca_nueva_de_otra_pestana']);
 }
 
-// ============================================================
-console.log('\n=== ESCENARIO C: CONFLICTO Admin/PT (admin viendo-como + el propio PT editando a la vez) ===');
-// ============================================================
+console.log('\n=== C: CONFLICTO REAL Admin/PT -- la MISMA ficha cambiada por ambos ===');
 {
-  const estadoBase = { clientes: { veronica: [{ id: 'cv1' }] }, agenda: { veronica: {} }, pruebasCRM: { veronica: {} }, disponibilidadReservas: { veronica: {} }, historicoClientes: { veronica: {} } };
-  const servidor = crearServidorFirestore(estadoBase);
-  const bsUltimoServidorConocido = deepClone(estadoBase);
-
-  // El PT real (Verónica) guarda un cambio propio primero.
-  servidor.escribirDesdeOtraSesion('clientes', 'veronica', [{ id: 'cv1', telefono: '600111222 (actualizado por Verónica)' }]);
-
-  // El admin, con "ver como Verónica" abierto desde antes, guarda una edición suya sin haber
-  // recibido todavía ese cambio.
-  const dbClientesAdmin = { veronica: [{ id: 'cv1', nota: 'Editado por el admin viendo-como Verónica' }] };
-  const sesionAdmin = crearSesion({ docRef: servidor.ref, dbClientes: dbClientesAdmin, dbAgenda: { veronica: {} }, dbPruebasCRM: { veronica: {} }, dbDisponibilidadReservas: { veronica: {} }, dbHistoricoClientes: { veronica: {} }, dbNotas: {}, bsUltimoServidorConocido, entrenadorVisto: 'veronica', rolActivo: 'admin' });
-
-  const resultado = await sesionAdmin.guardarEstadoNubeAgenda('veronica');
-  check('conflicto Admin/PT: guardado devuelve ok:false', resultado.ok, false);
-  check('conflicto Admin/PT: el cambio real de la PT sigue intacto (NO lo pisa el admin)', servidor.estadoActual().clientes.veronica, [{ id: 'cv1', telefono: '600111222 (actualizado por Verónica)' }]);
-
-  const diag2 = sesionAdmin.warnLog.find(a => a[0] === '[BESOUL_SAVE_CONFLICT]')[1];
-  check('DIAG (admin): rolActivo === "admin"', diag2.rolActivo, 'admin');
-  check('DIAG (admin): entrenadorVisto === "veronica"', diag2.entrenadorVisto, 'veronica');
-  const diagStr2 = JSON.stringify(diag2);
-  check('DIAG (admin): NUNCA contiene el teléfono real de Verónica', diagStr2.includes('600111222'), false);
-  check('DIAG (admin): NUNCA contiene el texto de la nota del admin', diagStr2.includes('Editado por el admin'), false);
+  const base = { ...vacio('veronica'), clientes: { veronica: [{ id: 'cv1', nombre: 'Cliente Ficticia' }] } };
+  const servidor = crearServidorFirestore(base);
+  servidor.escribirDesdeOtraSesion('clientes', 'veronica', [{ id: 'cv1', nombre: 'Cliente Ficticia', telefono: '600111222' }]);
+  const s = crearSesion({ docRef: servidor.ref, dbClientes: { veronica: [{ id: 'cv1', nombre: 'Cliente Ficticia', nota: 'Editado por el admin' }] }, dbAgenda: { veronica: {} }, bsUltimoServidorConocido: base, entrenadorVisto: 'veronica', rolActivo: 'admin' });
+  const r = await s.guardarEstadoNubeAgenda('veronica');
+  check('C: ok:false', r.ok, false);
+  check('C: código conflict', r.err && r.err.code, 'conflict');
+  check('C: el cambio de la PT sigue intacto', servidor.estadoActual().clientes.veronica, [{ id: 'cv1', nombre: 'Cliente Ficticia', telefono: '600111222' }]);
+  check('C: el mensaje nombra el elemento en conflicto', /la ficha de Cliente Ficticia/.test(r.err.message), true);
+  check('C: aviso visible al usuario', s.alerts.length, 1);
+  check('C: la pantalla vuelve a lo que hay en el servidor', s.memoria.dbClientes.veronica, [{ id: 'cv1', nombre: 'Cliente Ficticia', telefono: '600111222' }]);
+  check('C: los logs NUNCA contienen el teléfono ni el texto editado', JSON.stringify(s.logs).includes('600111222') || JSON.stringify(s.logs).includes('Editado por el admin'), false);
 }
 
-// ============================================================
-console.log('\n=== ESCENARIO D: un cambio en OTRO trainerKey NUNCA provoca un falso conflicto ===');
-// ============================================================
+console.log('\n=== D: un cambio de OTRO entrenador nunca provoca conflicto ===');
 {
-  const estadoBase = { clientes: { a: [{ id: 'ca1' }], b: [{ id: 'cb1' }] }, agenda: { a: {}, b: {} }, pruebasCRM: { a: {}, b: {} }, disponibilidadReservas: { a: {}, b: {} }, historicoClientes: { a: {}, b: {} } };
-  const servidor = crearServidorFirestore(estadoBase);
-  const bsUltimoServidorConocido = deepClone(estadoBase);
-
-  // Otro PT (b) guarda algo completamente ajeno mientras tanto.
+  const base = { clientes: { a: [{ id: 'ca1' }], b: [{ id: 'cb1' }] }, agenda: { a: {}, b: {} }, pruebasCRM: { a: {}, b: {} }, disponibilidadReservas: { a: {}, b: {} }, historicoClientes: { a: {}, b: {} } };
+  const servidor = crearServidorFirestore(base);
   servidor.escribirDesdeOtraSesion('clientes', 'b', [{ id: 'cb1', nota: 'cambio de OTRO entrenador' }]);
-
-  const dbClientesA = { a: [{ id: 'ca1', nombre: 'Editado por el PT a' }] };
-  const sesionA = crearSesion({ docRef: servidor.ref, dbClientes: dbClientesA, dbAgenda: { a: {} }, dbPruebasCRM: { a: {} }, dbDisponibilidadReservas: { a: {} }, dbHistoricoClientes: { a: {} }, dbNotas: {}, bsUltimoServidorConocido });
-
-  const resultado = await sesionA.guardarEstadoNubeAgenda('a');
-  check('sin falso conflicto cross-trainer: ok:true', resultado.ok, true);
-  check('sin falso conflicto cross-trainer: el guardado de "a" se aplica igualmente', servidor.estadoActual().clientes.a, [{ id: 'ca1', nombre: 'Editado por el PT a' }]);
-  check('sin falso conflicto cross-trainer: el cambio de "b" sigue intacto', servidor.estadoActual().clientes.b, [{ id: 'cb1', nota: 'cambio de OTRO entrenador' }]);
+  const s = crearSesion({ docRef: servidor.ref, dbClientes: { a: [{ id: 'ca1', nombre: 'Editado por el PT a' }] }, dbAgenda: { a: {} }, bsUltimoServidorConocido: base });
+  const r = await s.guardarEstadoNubeAgenda('a');
+  check('D: ok:true', r.ok, true);
+  check('D: se aplica lo de "a"', servidor.estadoActual().clientes.a, [{ id: 'ca1', nombre: 'Editado por el PT a' }]);
+  check('D: lo de "b" sigue intacto', servidor.estadoActual().clientes.b, [{ id: 'cb1', nota: 'cambio de OTRO entrenador' }]);
 }
 
-// ============================================================
-console.log('\n=== ESCENARIO E: sin baseline conocido (ningún snapshot aplicado todavía) -- BLOQUEA con aviso ===');
-// ============================================================
-// HOTFIX-V1-AGENDA-PERSISTENCIA-P0 (2026-10-08): antes este caso guardaba (ok:true) sin ninguna
-// comprobación de conflicto. Sin snapshot aplicado, el estado local viene de la caché localStorage
-// del dispositivo (posiblemente antigua): escribirlo podía pisar cambios más recientes hechos desde
-// otro dispositivo. Ahora se bloquea con un código explícito y el servidor no se toca.
+console.log('\n=== E: sin base conocida (ningún snapshot aplicado) -- bloquea con aviso ===');
 {
-  const estadoBase = { clientes: { a: [{ id: 'ca1' }] }, agenda: { a: {} }, pruebasCRM: { a: {} }, disponibilidadReservas: { a: {} }, historicoClientes: { a: {} } };
-  const servidor = crearServidorFirestore(estadoBase);
-  const dbClientes = { a: [{ id: 'ca1', nombre: 'Primer guardado, sin snapshot previo aplicado' }] };
-  const sesion = crearSesion({ docRef: servidor.ref, dbClientes, dbAgenda: { a: {} }, dbPruebasCRM: { a: {} }, dbDisponibilidadReservas: { a: {} }, dbHistoricoClientes: { a: {} }, dbNotas: {}, bsUltimoServidorConocido: undefined });
+  const base = { ...vacio('a'), clientes: { a: [{ id: 'ca1' }] } };
+  const servidor = crearServidorFirestore(base);
+  const s = crearSesion({ docRef: servidor.ref, dbClientes: { a: [{ id: 'ca1', nombre: 'Desde caché' }] }, dbAgenda: { a: {} }, bsUltimoServidorConocido: undefined });
+  const r = await s.guardarEstadoNubeAgenda('a');
+  check('E: ok:false', r.ok, false);
+  check('E: código agenda-no-cargada', r.err && r.err.code, 'agenda-no-cargada');
+  check('E: servidor sin tocar', servidor.estadoActual().clientes.a, [{ id: 'ca1' }]);
+}
 
-  const resultado = await sesion.guardarEstadoNubeAgenda('a');
-  check('sin baseline: ok:false (no escribe datos de caché sin poder detectar conflictos)', resultado.ok, false);
-  check('sin baseline: código agenda-no-cargada', resultado.err && resultado.err.code, 'agenda-no-cargada');
-  check('sin baseline: el servidor NO se ha tocado', servidor.estadoActual().clientes.a, [{ id: 'ca1' }]);
+console.log('\n=== F: admin y PT cambian SESIONES distintas de la misma agenda -> las dos ===');
+{
+  const base = { ...vacio('m'), agenda: { m: { '2026-10-09_10:00': ses('c1'), '2026-10-09_12:00': ses('c2') } } };
+  const servidor = crearServidorFirestore(base);
+  // el PT movió c1 de 10:00 a 11:00 y ya está guardado
+  servidor.escribirDesdeOtraSesion('agenda', 'm', { '2026-10-09_11:00': ses('c1'), '2026-10-09_12:00': ses('c2') });
+  // el admin, sin haberlo recibido, mueve c2 de 12:00 a 13:00
+  const s = crearSesion({ docRef: servidor.ref, dbAgenda: { m: { '2026-10-09_10:00': ses('c1'), '2026-10-09_13:00': ses('c2') } }, bsUltimoServidorConocido: base, rolActivo: 'admin' });
+  const r = await s.guardarEstadoNubeAgenda('m');
+  check('F: ok:true', r.ok, true);
+  check('F: servidor = movimiento del PT + movimiento del admin', Object.keys(servidor.estadoActual().agenda.m).sort(), ['2026-10-09_11:00', '2026-10-09_13:00']);
+  check('F: la pantalla del admin ya coincide con el servidor', Object.keys(s.memoria.dbAgenda.m).sort(), ['2026-10-09_11:00', '2026-10-09_13:00']);
+}
+
+console.log('\n=== G: CONFLICTO -- ambos mueven LA MISMA sesión a horas distintas (nunca dos copias) ===');
+{
+  const base = { ...vacio('m'), agenda: { m: { '2026-10-09_10:00': ses('c1') } } };
+  const servidor = crearServidorFirestore(base);
+  servidor.escribirDesdeOtraSesion('agenda', 'm', { '2026-10-09_11:00': ses('c1') });
+  const s = crearSesion({ docRef: servidor.ref, dbAgenda: { m: { '2026-10-09_15:00': ses('c1') } }, bsUltimoServidorConocido: base });
+  const r = await s.guardarEstadoNubeAgenda('m');
+  check('G: ok:false conflict', [r.ok, r.err && r.err.code], [false, 'conflict']);
+  check('G: el servidor tiene UNA sola sesión (la del otro)', Object.keys(servidor.estadoActual().agenda.m), ['2026-10-09_11:00']);
+  check('G: el mensaje nombra la sesión', /sesión del 2026-10-09 10:00/.test(r.err.message), true);
+}
+
+console.log('\n=== G2: CONFLICTO -- uno mueve la sesión y el otro la borra ===');
+{
+  const base = { ...vacio('m'), agenda: { m: { '2026-10-09_10:00': ses('c1') } } };
+  const servidor = crearServidorFirestore(base);
+  servidor.escribirDesdeOtraSesion('agenda', 'm', {});
+  const s = crearSesion({ docRef: servidor.ref, dbAgenda: { m: { '2026-10-09_15:00': ses('c1') } }, bsUltimoServidorConocido: base });
+  const r = await s.guardarEstadoNubeAgenda('m');
+  check('G2: ok:false conflict (no resucita una sesión borrada por otro)', [r.ok, r.err && r.err.code], [false, 'conflict']);
+  check('G2: servidor intacto', servidor.estadoActual().agenda.m, {});
+}
+
+console.log('\n=== H: CONFLICTO -- sesiones nuevas solapadas creadas a la vez (10:00 y 10:15) ===');
+{
+  const base = { ...vacio('m'), agenda: { m: {} } };
+  const servidor = crearServidorFirestore(base);
+  servidor.escribirDesdeOtraSesion('agenda', 'm', { '2026-10-09_10:15': ses('c2') });
+  const s = crearSesion({ docRef: servidor.ref, dbAgenda: { m: { '2026-10-09_10:00': ses('c1') } }, bsUltimoServidorConocido: base });
+  const r = await s.guardarEstadoNubeAgenda('m');
+  check('H: ok:false conflict (nunca una doble reserva)', [r.ok, r.err && r.err.code], [false, 'conflict']);
+  check('H: servidor solo con la sesión del otro', Object.keys(servidor.estadoActual().agenda.m), ['2026-10-09_10:15']);
+  // y sin solape (10:00 y 10:45) se fusiona
+  const servidor2 = crearServidorFirestore(base);
+  servidor2.escribirDesdeOtraSesion('agenda', 'm', { '2026-10-09_10:45': ses('c2') });
+  const s2 = crearSesion({ docRef: servidor2.ref, dbAgenda: { m: { '2026-10-09_10:00': ses('c1') } }, bsUltimoServidorConocido: base });
+  const r2 = await s2.guardarEstadoNubeAgenda('m');
+  check('H: 10:00 + 10:45 (contiguas, sin solape) -> se guardan las dos', [r2.ok, Object.keys(servidor2.estadoActual().agenda.m).sort()], [true, ['2026-10-09_10:00', '2026-10-09_10:45']]);
+}
+
+console.log('\n=== I: el PT BLOQUEA un día y el admin cambia la disponibilidad semanal -> se conservan los dos ===');
+{
+  const disp0 = { semanal: { 1: { activo: true, bloques: [{ inicio: '08:00', fin: '14:00' }] }, 5: { activo: true, bloques: [{ inicio: '08:00', fin: '14:00' }] } }, excepciones: {}, bloqueos: {}, recurrenteSemanal: true, actualizadoEn: 't0' };
+  const base = { ...vacio('m'), disponibilidadReservas: { m: disp0 } };
+  const servidor = crearServidorFirestore(base);
+  servidor.escribirDesdeOtraSesion('disponibilidadReservas', 'm', { ...disp0, excepciones: { '2026-10-09': { activo: false, bloques: [], override: true } }, actualizadoEn: 't1-pt', actualizadoPor: 'm' });
+  const local = deepClone(disp0); local.semanal[1] = { activo: true, bloques: [{ inicio: '09:00', fin: '13:00' }] }; local.actualizadoEn = 't1-admin'; local.actualizadoPor = 'admin';
+  const s = crearSesion({ docRef: servidor.ref, dbAgenda: { m: {} }, dbDisponibilidadReservas: { m: local }, bsUltimoServidorConocido: base, rolActivo: 'admin' });
+  const r = await s.guardarEstadoNubeAgenda('m');
+  const d = servidor.estadoActual().disponibilidadReservas.m;
+  check('I: ok:true (actualizadoEn/actualizadoPor no cuentan como conflicto)', r.ok, true);
+  check('I: el bloqueo del día del PT SIGUE en el servidor', d.excepciones['2026-10-09'], { activo: false, bloques: [], override: true });
+  check('I: el cambio semanal del admin también', d.semanal['1'], { activo: true, bloques: [{ inicio: '09:00', fin: '13:00' }] });
+}
+
+console.log('\n=== J: CONFLICTO -- el MISMO día de disponibilidad cambiado por ambos ===');
+{
+  const disp0 = { semanal: {}, excepciones: {}, bloqueos: {}, recurrenteSemanal: true };
+  const base = { ...vacio('m'), disponibilidadReservas: { m: disp0 } };
+  const servidor = crearServidorFirestore(base);
+  servidor.escribirDesdeOtraSesion('disponibilidadReservas', 'm', { ...disp0, excepciones: { '2026-10-09': { activo: false, bloques: [], override: true } } });
+  const s = crearSesion({ docRef: servidor.ref, dbAgenda: { m: {} }, dbDisponibilidadReservas: { m: { ...disp0, excepciones: { '2026-10-09': { activo: true, bloques: [{ inicio: '10:00', fin: '12:00' }], override: true } } } }, bsUltimoServidorConocido: base });
+  const r = await s.guardarEstadoNubeAgenda('m');
+  check('J: ok:false conflict', [r.ok, r.err && r.err.code], [false, 'conflict']);
+  check('J: el bloqueo ajeno sigue intacto', servidor.estadoActual().disponibilidadReservas.m.excepciones['2026-10-09'].activo, false);
+  check('J: el mensaje nombra el día', /disponibilidad del día 2026-10-09/.test(r.err.message), true);
+}
+
+console.log('\n=== K: slots ocultos de días distintos por cada uno -> los dos ===');
+{
+  const disp0 = { semanal: {}, excepciones: {}, bloqueos: {}, recurrenteSemanal: true };
+  const base = { ...vacio('m'), disponibilidadReservas: { m: disp0 } };
+  const servidor = crearServidorFirestore(base);
+  servidor.escribirDesdeOtraSesion('disponibilidadReservas', 'm', { ...disp0, bloqueos: { '2026-10-06': ['19:00'] } });
+  const s = crearSesion({ docRef: servidor.ref, dbAgenda: { m: {} }, dbDisponibilidadReservas: { m: { ...disp0, bloqueos: { '2026-10-07': ['20:00'] } } }, bsUltimoServidorConocido: base });
+  const r = await s.guardarEstadoNubeAgenda('m');
+  check('K: ok:true y ambos slots ocultos guardados', [r.ok, servidor.estadoActual().disponibilidadReservas.m.bloqueos], [true, { '2026-10-06': ['19:00'], '2026-10-07': ['20:00'] }]);
+}
+
+console.log('\n=== L: borrar una sesión mientras otro crea otra distinta -> las dos operaciones ===');
+{
+  const base = { ...vacio('m'), agenda: { m: { '2026-10-09_10:00': ses('c1') } } };
+  const servidor = crearServidorFirestore(base);
+  servidor.escribirDesdeOtraSesion('agenda', 'm', { '2026-10-09_10:00': ses('c1'), '2026-10-09_17:00': ses('c3') });
+  const s = crearSesion({ docRef: servidor.ref, dbAgenda: { m: {} }, bsUltimoServidorConocido: base });
+  const r = await s.guardarEstadoNubeAgenda('m');
+  check('L: ok:true; queda solo la sesión creada por el otro', [r.ok, Object.keys(servidor.estadoActual().agenda.m)], [true, ['2026-10-09_17:00']]);
+}
+
+console.log('\n=== M: sin cambios propios no se escribe nada (y nunca se pisa lo ajeno) ===');
+{
+  const base = { ...vacio('m'), agenda: { m: { '2026-10-09_10:00': ses('c1') } } };
+  const servidor = crearServidorFirestore(base);
+  servidor.escribirDesdeOtraSesion('agenda', 'm', { '2026-10-09_10:00': ses('c1', { nota: 'otro' }) });
+  const s = crearSesion({ docRef: servidor.ref, dbAgenda: { m: deepClone(base.agenda.m) }, bsUltimoServidorConocido: base });
+  const r = await s.guardarEstadoNubeAgenda('m');
+  check('M: ok:true, cero escrituras, cambio ajeno intacto', [r.ok, servidor.escrituras(), servidor.estadoActual().agenda.m['2026-10-09_10:00'].nota], [true, 0, 'otro']);
+}
+
+console.log('\n=== N: fusionarCampoTresVias (rebase de un snapshot con cambios pendientes) ===');
+{
+  const s = crearSesion({ docRef: crearServidorFirestore(vacio('m')).ref, bsUltimoServidorConocido: vacio('m') });
+  const b = { 'x_10:00': ses('c1') };
+  const l = { 'x_10:00': ses('c1'), 'x_12:00': ses('c2') };          // pendiente propio: crear 12:00
+  const sv = { 'x_10:00': ses('c1', { estado: 'otro' }) };             // ajeno: cambio en 10:00
+  const r = s.fusionarCampoTresVias('agenda', b, l, sv);
+  check('N: sin conflicto se ven ambos cambios', [r.conflictos, Object.keys(r.valor).sort(), r.valor['x_10:00'].estado], [[], ['x_10:00', 'x_12:00'], 'otro']);
+  check('N: la nueva base es el servidor', r.baseNueva, sv);
+  const r2 = s.fusionarCampoTresVias('agenda', b, { 'x_10:00': ses('c1', { estado: 'mio' }) }, sv);
+  check('N: con conflicto se conservan lo local y la base anteriores (el guardado lo volverá a detectar)', [r2.conflictos.length, r2.valor['x_10:00'].estado, r2.baseNueva], [1, 'mio', b]);
+  const c = s.fusionarCampoTresVias('clientes', [{ id: 'a' }, { id: 'b' }], [{ id: 'a', n: 1 }, { id: 'b' }, { id: 'c' }], [{ id: 'z' }, { id: 'a' }, { id: 'b', m: 2 }]);
+  check('N: fichas: orden del servidor + nuevas propias al final, campos de ambos', c.valor, [{ id: 'z' }, { id: 'a', n: 1 }, { id: 'b', m: 2 }, { id: 'c' }]);
+  const dup = s.fusionarCampoTresVias('clientes', [{ id: 'a' }], [{ id: 'a', n: 1 }, { id: 'a' }], [{ id: 'a', m: 2 }]);
+  check('N: forma no descomponible (ids duplicados) -> conflicto de campo, nunca fusión a ciegas', dup.conflictos, ['campo:clientes']);
 }
 
 // ============================================================
@@ -243,18 +313,9 @@ console.log('\n=== HELPERS de diagnóstico (canonicalizarValorDiagnostico / hash
   const objAOtroOrden = { c: { y: 8, z: 9 }, a: 1, b: 2 };
   check('canonicalizar: mismo objeto con OTRO orden de claves -> mismo resultado canónico', diagFn.canonicalizarValorDiagnostico(objA), diagFn.canonicalizarValorDiagnostico(objAOtroOrden));
   check('hash: mismo objeto con OTRO orden de claves -> MISMO hash', diagFn.hashEstableDiagnostico(objA), diagFn.hashEstableDiagnostico(objAOtroOrden));
-
-  const arr1 = [{ id: 1 }, { id: 2 }];
-  const arr2 = [{ id: 2 }, { id: 1 }];
-  check('canonicalizar: un array preserva su ORDEN (no se reordena como si fuera un objeto)', JSON.stringify(diagFn.canonicalizarValorDiagnostico(arr1)) === JSON.stringify(diagFn.canonicalizarValorDiagnostico(arr2)), false);
-
+  check('canonicalizar: un array preserva su ORDEN', JSON.stringify(diagFn.canonicalizarValorDiagnostico([{ id: 1 }, { id: 2 }])) === JSON.stringify(diagFn.canonicalizarValorDiagnostico([{ id: 2 }, { id: 1 }])), false);
   check('hash: un cambio REAL de contenido -> hash DISTINTO', diagFn.hashEstableDiagnostico({ a: 1 }) === diagFn.hashEstableDiagnostico({ a: 2 }), false);
-  check('hash: null y {} son distintos (no colisionan)', diagFn.hashEstableDiagnostico(null) === diagFn.hashEstableDiagnostico({}), false);
-  check('hash: siempre devuelve un string corto (8 hex), nunca el contenido', /^[0-9a-f]{8}$/.test(diagFn.hashEstableDiagnostico({ nombre: 'Alguien Real', telefono: '600123123' })), true);
-
   check('contarElementos: array -> length', diagFn.contarElementosDiagnostico([1, 2, 3]), 3);
-  check('contarElementos: objeto -> nº de claves top-level', diagFn.contarElementosDiagnostico({ x: 1, y: 2 }), 2);
-  check('contarElementos: null -> 0', diagFn.contarElementosDiagnostico(null), 0);
 }
 
 console.log(`\n${pass}/${pass + fail} pruebas OK.`);

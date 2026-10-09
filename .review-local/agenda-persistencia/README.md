@@ -48,3 +48,31 @@ para comparar antes/después).
 
 En los conflictos reales (E4, E5), el resultado correcto es que el segundo cambio NO pise al
 primero, que su autor reciba un aviso visible y que su pantalla vuelva a coincidir con el servidor.
+
+## Sincronización multiusuario (HOTFIX-V1-AGENDA-SYNC-P0)
+
+`sync.cjs` abre la Agenda como PT (Laura Ficticia, en el papel del entrenador del caso real) y como
+admin viendo esa misma agenda, en contextos de navegador y sesiones Auth distintos. Comprueba
+siempre el estado final leyendo Firestore directamente.
+
+```
+node sync.cjs              # S1-S17
+node sync.cjs S10 S13      # solo esos prefijos
+BASE=http://127.0.0.1:5561 node sync.cjs   # contra otra copia servida (p.ej. la versión anterior)
+```
+
+| Id | Qué prueba |
+|---|---|
+| S1 | El PT bloquea un día y oculta un slot; el admin lo ve sin recargar |
+| S2–S5 | Cambios distintos y casi simultáneos de ambos (sesiones, disponibilidad, ráfagas) |
+| S6/S7 | Recargar y cerrar/reabrir ambas sesiones |
+| S8, S14 | Desconexión corta y larga (más que el plazo de confirmación de 20 s) |
+| S9 | El admin alterna entre agendas de distintos PT |
+| S10a–c | El bloqueo del PT sobrevive a guardados fallidos, formularios viejos y otras operaciones |
+| S11 | Cambio del PT mientras termina un guardado del admin |
+| S12 | Ficha abierta desactualizada |
+| S13, S16 | Conflictos reales: misma sesión movida por ambos, sesiones nuevas solapadas |
+| S15 | Tiempo hasta la confirmación del servidor |
+| S17 | El aviso de éxito/WhatsApp solo aparece tras la confirmación |
+
+No ejecutes dos scripts a la vez contra el mismo emulador: ambos reinician el mismo documento.
