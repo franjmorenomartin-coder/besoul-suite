@@ -1,4 +1,12 @@
-const BS_APP_BUILD_TAG = 'agenda-persistencia-p0-2026-10-08';
+const BS_APP_BUILD_TAG = 'agenda-sync-p0-2026-10-09';
+
+const BS_AGENDA_GUARDADO_TIMEOUT_MS = 20000;
+
+const BS_CAMPOS_AGENDA_POR_TRAINER = ['clientes', 'agenda', 'pruebasCRM', 'disponibilidadReservas', 'historicoClientes'];
+
+const BS_DISP_SUBMAPAS = ['semanal', 'excepciones', 'bloqueos'];
+
+const BS_DISP_METADATOS = ['actualizadoEn', 'actualizadoPor'];
 
 function valorInvalidoParaFirestore(valor, rutaActual = '', vistos = new Set()) {
             if (valor === undefined) return { ruta: rutaActual || '(raíz)', motivo: 'undefined' };
@@ -99,6 +107,312 @@ function payloadParaUpdateFirestore(payload) {
             return args;
         }
 
+function actualizarIndicadorGuardadoAgenda() {
+            const el = elementoIndicadorGuardadoAgenda();
+            if (!el) return;
+            const app = document.getElementById('app-content');
+            if (!app || app.classList.contains('hidden')) { el.style.display = 'none'; return; }
+            const estados = Object.values(window.bsAgendaGuardadosPendientes || {});
+            const sinGuardar = estados.some(e => e && e.reintentar);
+            const guardando = estados.some(e => e && (e.programado || e.enCola > 0));
+            const sinConexion = window.bsAgendaSincronizacion === 'error' || window.bsAgendaSincronizacion === 'cache';
+            let texto, colores, boton = '';
+            if (sinGuardar) {
+                texto = guardando ? 'Reintentando guardar... Hay cambios SIN GUARDAR en el servidor' : 'Cambios SIN GUARDAR en el servidor (sin conexión). No cierres la página.';
+                colores = ['#450a0a', '#fca5a5', '#ef4444'];
+                if (!guardando) boton = '<button type="button" onclick="reintentarGuardadosAgenda()" style="background:#ef4444;color:#fff;border:0;border-radius:999px;padding:2px 8px;font:inherit;cursor:pointer">Reintentar</button>';
+            } else if (guardando) {
+                texto = 'Guardando en el servidor...';
+                colores = ['#422006', '#fcd34d', '#f59e0b'];
+            } else if (sinConexion) {
+                texto = window.bsAgendaSincronizacion === 'error' ? 'Sin conexión con el servidor: reconectando. La agenda puede no estar al día.' : 'Sin conexión con el servidor: la agenda puede no estar al día.';
+                colores = ['#450a0a', '#fca5a5', '#ef4444'];
+            } else if (window.bsAgendaUltimoGuardadoOk) {
+                const h = new Date(window.bsAgendaUltimoGuardadoOk);
+                texto = `Guardado en el servidor · ${String(h.getHours()).padStart(2, '0')}:${String(h.getMinutes()).padStart(2, '0')}:${String(h.getSeconds()).padStart(2, '0')}`;
+                colores = ['#052e16', '#86efac', '#22c55e'];
+            } else {
+                el.style.display = 'none';
+                return;
+            }
+            el.style.display = 'flex';
+            el.style.background = colores[0]; el.style.color = colores[1]; el.style.borderColor = colores[2];
+            el.title = `Versión ${typeof BS_APP_BUILD_TAG !== 'undefined' ? BS_APP_BUILD_TAG : ''}`;
+            el.innerHTML = `<span>${escapeHTML(texto)}</span>${boton}`;
+        }
+
+function elementoIndicadorGuardadoAgenda() {
+            if (typeof document === 'undefined' || !document.body) return null;
+            let el = document.getElementById('bs-estado-guardado');
+            if (el) return el;
+            el = document.createElement('div');
+            el.id = 'bs-estado-guardado';
+            el.setAttribute('role', 'status');
+            el.setAttribute('aria-live', 'polite');
+            el.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:40;max-width:calc(100vw - 24px);font:600 11px/1.3 system-ui,sans-serif;padding:6px 10px;border-radius:999px;border:1px solid;display:none;align-items:center;gap:8px;box-shadow:0 4px 14px rgba(0,0,0,.35)';
+            document.body.appendChild(el);
+            return el;
+        }
+
+function reintentarGuardadosAgenda() {
+            Object.keys(window.bsAgendaGuardadosPendientes || {}).forEach(scope => {
+                const estado = window.bsAgendaGuardadosPendientes[scope];
+                if (estado && estado.reintentar && !estado.programado && !(estado.enCola > 0)) guardarEstadoNubeAgenda(scope);
+            });
+            actualizarIndicadorGuardadoAgenda();
+        }
+
+function errorGuardadoAgendaReintentable(err) {
+            const code = (err && err.code) || '';
+            return ['unavailable', 'deadline-exceeded', 'aborted', 'resource-exhausted'].includes(code)
+                || /client is offline|network|Failed to fetch/i.test((err && err.message) || '');
+        }
+
+function referenciaMemoriaCampoAgenda(campo) {
+            return { clientes: dbClientes, agenda: dbAgenda, pruebasCRM: dbPruebasCRM, disponibilidadReservas: dbDisponibilidadReservas, historicoClientes: dbHistoricoClientes }[campo];
+        }
+
+function guardarMemoriaAgendaEnLocalStorage() {
+            try {
+                localStorage.setItem('bs_db_clientes_v6', JSON.stringify(dbClientes));
+                localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
+                localStorage.setItem('bs_db_pruebas_crm_v6', JSON.stringify(dbPruebasCRM));
+                localStorage.setItem('bs_db_disponibilidad_reservas_v6', JSON.stringify(dbDisponibilidadReservas));
+                localStorage.setItem('bs_db_historico_clientes_v6', JSON.stringify(dbHistoricoClientes));
+            } catch (e) { console.warn('[BESOUL Agenda] No se pudo actualizar la copia local:', e); }
+        }
+
+function repintarAgendaSiVisible(scope) {
+            if (typeof document === 'undefined') return;
+            const app = document.getElementById('app-content');
+            if (!app || app.classList.contains('hidden') || (scope && scope !== entrenadorVisto)) return;
+            recalcularKPIs(); renderClientes(); renderAgenda();
+        }
+
+function rebasarMemoriaScopeAgenda(scope, payloadEnviado, escritoPorCampo) {
+            let cambioVisible = false;
+            BS_CAMPOS_AGENDA_POR_TRAINER.forEach(campo => {
+                const mapa = referenciaMemoriaCampoAgenda(campo);
+                if (!mapa) return;
+                const memoria = mapa[scope];
+                const confirmado = escritoPorCampo[campo];
+                if (igualdadCanonica(memoria === undefined ? null : memoria, confirmado === undefined ? null : confirmado)) return;
+                const r = fusionarCampoTresVias(campo, payloadEnviado[`${campo}.${scope}`], memoria, confirmado);
+                if (igualdadCanonica(r.valor, memoria === undefined ? null : memoria)) return;
+                mapa[scope] = JSON.parse(JSON.stringify(r.valor));
+                cambioVisible = true;
+            });
+            if (cambioVisible) {
+                if (typeof sincronizarPruebasCRMDentroDeAgenda === 'function') sincronizarPruebasCRMDentroDeAgenda();
+                guardarMemoriaAgendaEnLocalStorage();
+                repintarAgendaSiVisible(scope);
+            }
+        }
+
+function descartarCambiosLocalesScopeAgenda(scope) {
+            const base = window.bsUltimoServidorConocido;
+            if (!base) return;
+            BS_CAMPOS_AGENDA_POR_TRAINER.forEach(campo => {
+                const mapa = referenciaMemoriaCampoAgenda(campo);
+                if (!mapa) return;
+                const valor = (base[campo] || {})[scope];
+                if (valor === undefined) delete mapa[scope];
+                else mapa[scope] = JSON.parse(JSON.stringify(valor));
+            });
+            if (typeof sincronizarPruebasCRMDentroDeAgenda === 'function') sincronizarPruebasCRMDentroDeAgenda();
+            guardarMemoriaAgendaEnLocalStorage();
+            repintarAgendaSiVisible(scope);
+        }
+
+function avisarCambioAgendaSinConfirmar(scope) {
+            const entrenador = scope ? ` en la agenda de ${nombreEntrenador(scope)}` : '';
+            alert(`ATENCIÓN: no hay conexión con el servidor y tus últimos cambios${entrenador} TODAVÍA NO ESTÁN GUARDADOS.\n\nSe conservan en esta pantalla y se guardarán al recuperar la conexión (o pulsa «Reintentar» en el aviso rojo de abajo). No cierres ni recargues la página hasta que veas «Guardado en el servidor».`);
+        }
+
+function esObjetoPlanoAgenda(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+
+function elementosCampoAgenda(campo, valor) {
+            const salida = new Map();
+            if (valor === undefined || valor === null) return salida;
+            if (campo === 'clientes') {
+                if (!Array.isArray(valor)) return null;
+                for (const ficha of valor) {
+                    const id = ficha && ficha.id;
+                    if (!id || salida.has(`id:${id}`)) return null;
+                    salida.set(`id:${id}`, ficha);
+                }
+                return salida;
+            }
+            if (!esObjetoPlanoAgenda(valor)) return null;
+            if (campo === 'disponibilidadReservas') {
+                for (const k of Object.keys(valor)) {
+                    if (BS_DISP_SUBMAPAS.includes(k) && esObjetoPlanoAgenda(valor[k])) {
+                        salida.set(`sub:${k}`, true);
+                        Object.keys(valor[k]).forEach(sk => salida.set(`${k}:${sk}`, valor[k][sk]));
+                    } else {
+                        salida.set(`top:${k}`, valor[k]);
+                    }
+                }
+                return salida;
+            }
+            Object.keys(valor).forEach(k => salida.set(`k:${k}`, valor[k]));
+            return salida;
+        }
+
+function recomponerCampoAgenda(campo, entradas) {
+            if (campo === 'clientes') return entradas.map(([, v]) => v);
+            const out = {};
+            if (campo === 'disponibilidadReservas') {
+                entradas.forEach(([clave, v]) => {
+                    const sep = clave.indexOf(':');
+                    const tipo = clave.slice(0, sep), resto = clave.slice(sep + 1);
+                    if (tipo === 'top') out[resto] = v;
+                    else if (tipo === 'sub') { if (!out[resto]) out[resto] = {}; }
+                    else { if (!out[tipo]) out[tipo] = {}; out[tipo][resto] = v; }
+                });
+                return out;
+            }
+            entradas.forEach(([clave, v]) => { out[clave.slice(2)] = v; });
+            return out;
+        }
+
+function valorVacioCampoAgenda(campo) { return campo === 'clientes' ? [] : {}; }
+
+function fusionarCampoTresVias(campo, base, local, servidor) {
+            const b = base === undefined ? null : base;
+            const l = local === undefined ? null : local;
+            const s = servidor === undefined ? null : servidor;
+            // Atajos (el caso normal): nadie más ha tocado este entrenador, o esta pestaña no ha tocado nada.
+            if (igualdadCanonica(b, s)) return { valor: l === null ? valorVacioCampoAgenda(campo) : l, baseNueva: s, conflictos: [], cambiado: !igualdadCanonica(l, s) };
+            if (igualdadCanonica(l, b) || igualdadCanonica(l, s)) return { valor: s === null ? valorVacioCampoAgenda(campo) : s, baseNueva: s, conflictos: [], cambiado: false };
+
+            const eb = elementosCampoAgenda(campo, b), el = elementosCampoAgenda(campo, l), es = elementosCampoAgenda(campo, s);
+            if (!eb || !el || !es) {
+                // Forma no descomponible y cambios de ambos lados: conflicto de campo completo.
+                return { valor: l, baseNueva: b, conflictos: [`campo:${campo}`], cambiado: true };
+            }
+            // Orden: el del servidor, y después lo nuevo de esta pestaña en su orden local.
+            const orden = [...es.keys()];
+            el.forEach((_, k) => { if (!es.has(k)) orden.push(k); });
+            eb.forEach((_, k) => { if (!es.has(k) && !el.has(k)) orden.push(k); });
+            // Mover una sesión = quitarla de su hueco y crearla en otro. Si las dos sesiones la quitan
+            // del MISMO hueco y la llevan a destinos distintos (o una la mueve y la otra la borra),
+            // fusionar por hueco dejaría dos copias (o resucitaría una borrada): es el mismo
+            // elemento cambiado por ambos -> conflicto real (reproducido: sync.cjs S13).
+            const movidasEnConflicto = new Set();
+            if (campo === 'agenda' || campo === 'pruebasCRM') {
+                const idDe = v => (v && typeof v === 'object' ? String(v.id || v.leadId || '') : '');
+                const nuevasL = [...el.keys()].filter(c => !eb.has(c));
+                const nuevasS = [...es.keys()].filter(c => !eb.has(c));
+                eb.forEach((vb, clave) => {
+                    if (el.has(clave) || es.has(clave)) return;
+                    const id = idDe(vb);
+                    if (!id) return;
+                    const destinosL = nuevasL.filter(c => idDe(el.get(c)) === id).sort();
+                    const destinosS = nuevasS.filter(c => idDe(es.get(c)) === id).sort();
+                    if ((destinosL.length || destinosS.length) && JSON.stringify(destinosL) !== JSON.stringify(destinosS)) movidasEnConflicto.add(clave);
+                });
+            }
+            // Una sesión dura 45 min (3 tramos): dos sesiones NUEVAS en huecos distintos pero
+            // solapados (una de cada sesión de usuario) serían una doble reserva -> conflicto.
+            if (campo === 'agenda') {
+                const esHueco = c => /^\d{4}-\d{2}-\d{2}_\d{2}:\d{2}$/.test(c);
+                const tramos = (c, v) => new Set(clavesBloqueSesion(c, (v && v.duracionMin) || 45));
+                const nuevasL = [...el.keys()].filter(c => !eb.has(c) && !es.has(c) && esHueco(c.slice(2)));
+                const nuevasS = [...es.keys()].filter(c => !eb.has(c) && !el.has(c) && esHueco(c.slice(2)));
+                nuevasL.forEach(cl => {
+                    const tl = tramos(cl.slice(2), el.get(cl));
+                    if (nuevasS.some(cs => [...tramos(cs.slice(2), es.get(cs))].some(t => tl.has(t)))) movidasEnConflicto.add(cl);
+                });
+            }
+            const resultado = [], baseResultado = [], conflictos = [];
+            orden.forEach(clave => {
+                const vb = eb.has(clave) ? eb.get(clave) : undefined;
+                const vl = el.has(clave) ? el.get(clave) : undefined;
+                const vs = es.has(clave) ? es.get(clave) : undefined;
+                let r = vs, rb = vs;
+                if (movidasEnConflicto.has(clave)) { r = vl; rb = vb; conflictos.push(clave); }
+                else if (igualdadCanonica(vl, vb)) { r = vs; }
+                else if (igualdadCanonica(vs, vb) || igualdadCanonica(vl, vs)) { r = vl; }
+                else if (campo === 'disponibilidadReservas' && BS_DISP_METADATOS.includes(clave.slice(4))) { r = vl; }
+                else { r = vl; rb = vb; conflictos.push(clave); }
+                if (r !== undefined) resultado.push([clave, r]);
+                if (rb !== undefined) baseResultado.push([clave, rb]);
+            });
+            // Con un conflicto real no se fusiona NADA de ese campo: se conserva lo local y la base
+            // anterior completas, de modo que el guardado vuelve a ver exactamente el mismo conflicto
+            // (si se absorbiera en la base lo ajeno, p.ej. una sesión solapada, dejaría de detectarse).
+            if (conflictos.length) return { valor: l, baseNueva: b, conflictos, cambiado: true };
+            const valor = recomponerCampoAgenda(campo, resultado);
+            return { valor, baseNueva: recomponerCampoAgenda(campo, baseResultado), conflictos, cambiado: !igualdadCanonica(valor, s) };
+        }
+
+function describirElementoAgenda(campo, clave, trainerKey) {
+            const sep = clave.indexOf(':');
+            const tipo = clave.slice(0, sep), resto = clave.slice(sep + 1);
+            const fechaHora = txt => { const p = String(txt).split('_'); return p.length > 1 ? `${p[0]} ${p[1]}` : txt; };
+            if (tipo === 'campo') return `todos los datos de "${resto}"`;
+            if (campo === 'agenda') return `la sesión del ${fechaHora(resto)}`;
+            if (campo === 'pruebasCRM') return `la prueba CRM del ${fechaHora(resto)}`;
+            if (campo === 'historicoClientes') return `el histórico ${resto}`;
+            if (campo === 'clientes') {
+                const ficha = (dbClientes[trainerKey] || []).find(c => c && c.id === resto);
+                return `la ficha de ${ficha && ficha.nombre ? ficha.nombre : resto}`;
+            }
+            if (campo === 'disponibilidadReservas') {
+                if (tipo === 'semanal') return `la disponibilidad semanal del ${['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'][Number(resto)] || resto}`;
+                if (tipo === 'excepciones') return `la disponibilidad del día ${resto}`;
+                if (tipo === 'bloqueos') return `los slots ocultos del día ${resto}`;
+                return 'la configuración de disponibilidad';
+            }
+            return `${campo} ${resto}`;
+        }
+
+function clavesBloqueSesion(clave, duracionMin = 45) {
+            const partes = String(clave || '').split('_');
+            if (partes.length < 2) return [];
+            const fechaISO = partes[0];
+            const inicio = minutosDesdeHorario(partes[1]);
+            if (Number.isNaN(inicio)) return [];
+            const paso = 15;
+            const finAgenda = 22 * 60;
+            const duracion = parseInt(duracionMin, 10) || 45;
+            if (inicio + duracion > finAgenda) return [];
+            const claves = [];
+            for (let m = inicio; m < inicio + duracion; m += paso) {
+                claves.push(claveDesdeFechaYMinutos(fechaISO, m));
+            }
+            return claves;
+        }
+
+function claveDesdeFechaYMinutos(fechaISO, minutos) {
+            return `${fechaISO}_${formatoMinutosHorario(minutos)}`;
+        }
+
+function minutosDesdeHorario(hora) {
+            const partes = String(hora || '').split(':');
+            if (partes.length !== 2) return NaN;
+            const h = parseInt(partes[0], 10);
+            const m = parseInt(partes[1], 10);
+            if (Number.isNaN(h) || Number.isNaN(m)) return NaN;
+            return h * 60 + m;
+        }
+
+function formatoMinutosHorario(totalMinutos) {
+
+            const horas = Math.floor(totalMinutos / 60);
+
+            const minutos = totalMinutos % 60;
+
+            return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
+
+        }
+
+function publicarReservasPublicasDebounced() {
+            clearTimeout(window.bsReservasPublishTimer);
+            window.bsReservasPublishTimer = setTimeout(publicarReservasPublicas, 800);
+        }
+
 function guardarEstadoNubeAgenda(trainerKeyScope, opcionesGuardado) {
             const opciones = opcionesGuardado || {};
             if (!window.bsAgendaCloudDocRef || window.bsAgendaAplicandoNube) return Promise.resolve({ ok: false, omitido: true });
@@ -106,13 +420,21 @@ function guardarEstadoNubeAgenda(trainerKeyScope, opcionesGuardado) {
             const estado = estadoGuardadoPendienteScope(scope);
             const cola = estadoGuardadoAgenda().bsAgendaColaGuardado;
             estado.enCola++;
+            actualizarIndicadorGuardadoAgenda();
             const anterior = cola[scope] || Promise.resolve();
             const actual = anterior
                 .catch(() => {})
                 .then(() => ejecutarGuardadoEstadoNubeAgenda(scope))
                 .catch(err => ({ ok: false, err }))
                 .then(async resultado => {
-                    if (!resultado || resultado.ok !== true) {
+                    if (resultado && resultado.ok === true) {
+                        // HOTFIX-V1-AGENDA-SYNC-P0: confirmado por el servidor -- solo ahora se
+                        // muestra "Guardado" y se olvida un posible reintento pendiente.
+                        estado.reintentar = false;
+                        estado.ultimoOk = true;
+                        window.bsAgendaUltimoGuardadoOk = Date.now();
+                    } else {
+                        estado.ultimoOk = false;
                         // La gestión del fallo nunca puede romper el contrato de esta función
                         // (la promesa no se rechaza nunca).
                         try { await gestionarGuardadoAgendaFallido(scope, resultado, opciones); }
@@ -123,6 +445,7 @@ function guardarEstadoNubeAgenda(trainerKeyScope, opcionesGuardado) {
                 .finally(() => {
                     estado.enCola = Math.max(0, estado.enCola - 1);
                     if (cola[scope] === actual) delete cola[scope];
+                    actualizarIndicadorGuardadoAgenda();
                 });
             cola[scope] = actual;
             return actual;
@@ -224,168 +547,91 @@ function ejecutarGuardadoEstadoNubeAgenda(trainerKeyScope) {
                 // Comportamiento en el caso común (sin conflicto): idéntico a antes. En el caso de
                 // conflicto real: el guardado se cancela con un error claro en vez de perder el
                 // cambio ajeno silenciosamente -- objetivo explícito de esta fase.
-                const CAMPOS_CONCURRENCIA_COMPARABLES = ['clientes', 'agenda', 'pruebasCRM', 'disponibilidadReservas', 'historicoClientes'];
-                const conocidoPrevio = window.bsUltimoServidorConocido;
+                // HOTFIX-V1-AGENDA-SYNC-P0 (2026-10-09): la transacción ya no cancela el guardado por
+                // CUALQUIER cambio ajeno en este entrenador; FUSIONA por elemento (ver
+                // fusionarCampoTresVias) y solo cancela si otra sesión cambió el MISMO elemento
+                // (conflicto real, explicado al usuario con el nombre del elemento). Lo que se escribe
+                // es siempre "servidor actual + cambios de esta pestaña", calculado dentro de la
+                // transacción: un cambio ajeno ya confirmado nunca se sobrescribe.
+                const baseConocida = window.bsUltimoServidorConocido;
                 const docRef = window.bsAgendaCloudDocRef;
+                let escritoPorCampo = null;
 
-                return docRef.firestore.runTransaction(async tx => {
+                const transaccion = docRef.firestore.runTransaction(async tx => {
                     const snap = await tx.get(docRef);
                     const actual = snap.exists ? (snap.data() || {}) : {};
-
-                    // P0 2026-09-21 (CUARTA ronda -- FIX real, causa raíz confirmada con evidencia
-                    // de producción): la DECISIÓN de conflicto ahora usa igualdadCanonica() --
-                    // claves de objeto ordenadas recursivamente, orden de ARRAY preservado -- en vez
-                    // de JSON.stringify(a) !== JSON.stringify(b) crudo. El diagnóstico capturado en
-                    // producción (trainerScope='fran') mostró rawEqual:false + canonicalEqual:true +
-                    // structuralDiff:[] en 4 de los 5 campos simultáneamente: la comparación cruda
-                    // estaba bloqueando guardados legítimos por una diferencia de ORDEN DE CLAVES,
-                    // nunca de contenido real -- confirmado, no hipótesis. La protección de
-                    // concurrencia SIGUE intacta: un cambio de contenido REAL (cualquier valor,
-                    // cualquier ruta, dentro del campo/scope comparado) sigue produciendo
-                    // canonicalEqual:false y sigue bloqueando el guardado exactamente igual que
-                    // antes -- lo único que deja de contar como conflicto es una reordenación de
-                    // claves sin ningún cambio de valor. El orden de los ARRAYS sigue siendo
-                    // significativo (canonicalizarValorDiagnostico() nunca reordena un array), así
-                    // que una reordenación real de elementos (p.ej. citas reordenadas) sigue
-                    // detectándose como conflicto.
-                    let huboConflicto = false;
-                    if (conocidoPrevio) {
-                        // P0 2026-09-21 (tercera ronda): UNA sola estructura de diagnóstico,
-                        // reutilizada tanto para el console.warn(objeto) como para la línea de
-                        // texto plano copiable -- nunca dos sistemas de diagnóstico distintos.
-                        // Para CADA campo comparable (coincida o no) se calcula: tipo local/remoto,
-                        // igualdad RAW (la que decide el conflicto de verdad), igualdad CANÓNICA
-                        // (insensible al orden de claves, puramente informativa), hashes cortos, y
-                        // el diff estructural PATH POR PATH (vacío si no hay diferencia). Nunca un
-                        // valor real -- solo rutas, tipos, presencia y hashes de 8 hex.
-                        const campos = CAMPOS_CONCURRENCIA_COMPARABLES.map(campo => {
-                            const valorPrevio = (conocidoPrevio[campo] || {})[scope] ?? null;
-                            const valorFresco = (actual[campo] || {})[scope] ?? null;
-                            const rawEqual = JSON.stringify(valorPrevio) === JSON.stringify(valorFresco);
-                            const canonicalEqual = igualdadCanonica(valorPrevio, valorFresco);
-                            return {
-                                field: campo,
-                                localType: valorPrevio === null ? 'null' : Array.isArray(valorPrevio) ? 'array' : typeof valorPrevio,
-                                remoteType: valorFresco === null ? 'null' : Array.isArray(valorFresco) ? 'array' : typeof valorFresco,
-                                rawEqual,
-                                canonicalEqual,
-                                localHash: hashEstableDiagnostico(valorPrevio),
-                                remoteHash: hashEstableDiagnostico(valorFresco),
-                                localCount: contarElementosDiagnostico(valorPrevio),
-                                remoteCount: contarElementosDiagnostico(valorFresco),
-                                // Rutas exactas donde difieren DE VERDAD (p.ej.
-                                // "clientes.fran[3].notas") -- vacío cuando canonicalEqual es true
-                                // (rawEqual:false + canonicalEqual:true ya no implica ninguna
-                                // diferencia real que mostrar). Calculado siempre (no solo para los
-                                // campos en conflicto) porque el coste es insignificante frente al
-                                // tamaño real de un solo trainerKey.
-                                structuralDiff: canonicalEqual ? [] : diffEstructuralDiagnostico(valorPrevio, valorFresco, `${campo}.${scope}`),
-                            };
-                        });
-                        // differingFields: diferencia CRUDA (informativa -- ya NO decide el
-                        // conflicto). canonicalDifferingFields: diferencia REAL -- esto es lo que
-                        // ahora decide si el guardado se bloquea.
-                        const differingFields = campos.filter(c => !c.rawEqual).map(c => c.field);
-                        const canonicalDifferingFields = campos.filter(c => !c.canonicalEqual).map(c => c.field);
-                        // Si un campo es rawEqual:false pero canonicalEqual:true, es sensibilidad al
-                        // orden de claves -- con este fix, YA NO bloquea el guardado (se sigue
-                        // reportando aquí porque sigue siendo información útil: confirma que el fix
-                        // se activó para este intento concreto).
-                        const possibleKeyOrderOnlyDifference = campos.some(c => !c.rawEqual && c.canonicalEqual);
-                        huboConflicto = canonicalDifferingFields.length > 0;
-                        if (differingFields.length > 0 || huboConflicto) {
-                            const safeDiagnosticObject = {
-                                buildId: BS_APP_BUILD_TAG,
-                                saveAttemptId,
-                                documentPath: docRef.path,
-                                trainerScope: scope,
-                                authUid: (firebase.auth && firebase.auth().currentUser && firebase.auth().currentUser.uid) || null,
-                                entrenadorVisto,
-                                rolActivo,
-                                baselineExiste: true,
-                                serverExiste: snap.exists,
-                                timestamps: {
-                                    ahoraISO: new Date().toISOString(),
-                                    baselineUltimaActualizacionLocal: conocidoPrevio.ultimaActualizacionLocal || null,
-                                    serverUltimaActualizacionLocal: actual.ultimaActualizacionLocal || null,
-                                    serverActualizadoEn: actual.actualizadoEn ? String(actual.actualizadoEn) : null,
-                                },
-                                campos,
-                                differingFields,
-                                canonicalDifferingFields,
-                                possibleKeyOrderOnlyDifference,
-                                // P0 2026-09-21 (cuarta ronda): el diagnóstico ahora puede emitirse
-                                // SIN bloquear el guardado (diferencia cruda pero no canónica, el
-                                // fix la deja pasar) -- este campo dice explícitamente si ESTE
-                                // intento concreto se bloqueó o se dejó pasar, para poder validar el
-                                // fix en producción sin ambigüedad.
-                                conflictoBloqueado: huboConflicto,
-                            };
-                            // Forma expandible (DevTools -- útil si quien mira SÍ puede navegar el
-                            // objeto) y forma de texto plano de una sola línea, pensada para poder
-                            // seleccionar/copiar directamente sin depender de "Copy object" ni de
-                            // ninguna interacción de DevTools más allá de seleccionar texto.
-                            console.warn('[BESOUL_SAVE_CONFLICT]', safeDiagnosticObject);
-                            console.error('[BESOUL_SAVE_CONFLICT_JSON] ' + JSON.stringify(safeDiagnosticObject));
-                        }
-                    }
-
-                    if (huboConflicto) {
+                    const escritura = {};
+                    const conflictos = [];
+                    const escrito = {};
+                    BS_CAMPOS_AGENDA_POR_TRAINER.forEach(campo => {
+                        const ruta = `${campo}.${scope}`;
+                        const servidorCampo = (actual[campo] || {})[scope];
+                        const r = fusionarCampoTresVias(campo, (baseConocida[campo] || {})[scope], payload[ruta], servidorCampo);
+                        r.conflictos.forEach(clave => conflictos.push({ campo, clave }));
+                        escrito[campo] = r.valor;
+                        if (r.cambiado) escritura[ruta] = r.valor;
+                    });
+                    if (conflictos.length) {
                         const errConflicto = new Error('Conflicto de concurrencia detectado para trainerKey=' + scope);
                         errConflicto.code = 'conflict';
+                        errConflicto.conflictos = conflictos;
                         throw errConflicto;
                     }
-                    tx.update(docRef, ...payloadParaUpdateFirestore(payload));
-                })
+                    Object.keys(payload).forEach(k => { if (k.startsWith('notas.')) escritura[k] = payload[k]; });
+                    if (Object.keys(escritura).length) {
+                        escritura.ultimaActualizacionLocal = payload.ultimaActualizacionLocal;
+                        escritura.actualizadoEn = payload.actualizadoEn;
+                        tx.update(docRef, ...payloadParaUpdateFirestore(escritura));
+                    }
+                    escritoPorCampo = escrito;
+                });
+
+                // Nunca un "Guardando..." indefinido: si el servidor no confirma en este plazo, el
+                // guardado se da por NO confirmado (los cambios se conservan; ver
+                // gestionarGuardadoAgendaFallido). Si la transacción llegara a confirmarse después, el
+                // reintento lo detecta (fusión: el elemento ya está igual en el servidor).
+                let temporizador = null;
+                const limite = new Promise((_, rechazar) => {
+                    temporizador = setTimeout(() => {
+                        const errTiempo = new Error('El servidor no ha confirmado el guardado a tiempo.');
+                        errTiempo.code = 'deadline-exceeded';
+                        rechazar(errTiempo);
+                    }, BS_AGENDA_GUARDADO_TIMEOUT_MS);
+                });
+
+                return Promise.race([transaccion, limite])
+                    .finally(() => clearTimeout(temporizador))
                     .then(() => {
-                        // ROOT CAUSE real del P0 "conflicto de otra sesión" reportado en QA
-                        // 2026-09-21 (tercera vez, tras Ctrl+F5 y sin ninguna otra pestaña/usuario
-                        // real de por medio): esta pestaña acaba de escribir con éxito, así que YA
-                        // CONOCE el nuevo estado real del servidor para trainerKey=scope -- pero
-                        // bsUltimoServidorConocido solo se refrescaba en aplicarEstadoNubeAgenda()
-                        // (el listener onSnapshot), que depende de un round-trip de red y NO es
-                        // instantáneo. Un segundo guardado normal e inmediatamente consecutivo, de
-                        // la MISMA sesión (dos ediciones seguidas, cada una disparando su propio
-                        // guardarEstadoNubeAgenda() vía el debounce de programarGuardadoNubeAgenda),
-                        // podía ejecutar su transacción ANTES de que el listener hubiera vuelto a
-                        // disparar -- comparando entonces contra el baseline de ANTES del primer
-                        // guardado, no contra lo que ese primer guardado acababa de escribir.
-                        // Reproducido de forma determinista con las funciones reales extraídas
-                        // contra el Emulator Suite, sin ninguna Rule ni índice involucrados (ver
-                        // rules-tests/run_double_save_race_repro.cjs) -- dos guardados legítimos y
-                        // consecutivos desde una única pestaña, el segundo fallaba con
-                        // code:'conflict' porque comparaba contra un baseline obsoleto, no porque
-                        // hubiera ningún conflicto real. Este bloque cierra esa ventana: actualiza
-                        // SOLO la porción [campo][scope] que esta pestaña acaba de escribir,
-                        // preservando lo que ya se sabía de cualquier OTRO trainerKey. Un conflicto
-                        // REAL de otra sesión sigue detectándose igual que antes: si otra pestaña
-                        // escribe de verdad entre medias, el próximo tx.get() de ESTA pestaña verá
-                        // un valor de servidor que YA NO coincide con lo que ella misma cree haber
-                        // escrito la última vez.
+                        // Nueva base de concurrencia de este entrenador = lo que se acaba de confirmar.
                         const previo = window.bsUltimoServidorConocido || {};
                         const actualizado = {};
-                        CAMPOS_CONCURRENCIA_COMPARABLES.forEach(campo => {
+                        BS_CAMPOS_AGENDA_POR_TRAINER.forEach(campo => {
                             actualizado[campo] = { ...(previo[campo] || {}) };
-                            actualizado[campo][scope] = payload[`${campo}.${scope}`];
+                            actualizado[campo][scope] = escritoPorCampo[campo];
                         });
-                        // Copia profunda obligatoria (mismo motivo que la captura inicial en
-                        // aplicarEstadoNubeAgenda(): nunca compartir referencia con dbClientes/
-                        // dbAgenda/etc., que se siguen mutando en el sitio en cuanto el usuario
-                        // edite algo más -- ver el comentario "IMPORTANTE (2)" de esa función).
                         window.bsUltimoServidorConocido = JSON.parse(JSON.stringify(actualizado));
-                        // HOTFIX-V1-AGENDA-PERSISTENCIA-P0: notas ya confirmadas -- dejan de estar
-                        // pendientes salvo que se hayan vuelto a cambiar mientras se guardaban.
+                        // La memoria pasa a ser lo confirmado (que ya incluye los cambios ajenos
+                        // fusionados) + lo que el usuario haya cambiado DESPUÉS de construir este
+                        // guardado (eso lo enviará el siguiente guardado de la cola).
+                        rebasarMemoriaScopeAgenda(scope, payload, escritoPorCampo);
                         Object.keys(notasEnviadas).forEach(clave => {
                             const actualLocal = (dbNotas && typeof dbNotas[clave] === 'string' && dbNotas[clave]) ? dbNotas[clave] : null;
                             if (actualLocal === notasEnviadas[clave]) estadoGuardadoAgenda().bsAgendaNotasTocadas.delete(clave);
                         });
+                        // El portal público se publica aparte (con espera), fuera de la cola de
+                        // guardado: antes cada guardado esperaba a releer el documento entero y a
+                        // publicar los datos de TODOS los entrenadores antes de confirmarse, y los
+                        // guardados siguientes esperaban detrás (lentitud reportada).
+                        publicarReservasPublicasDebounced();
+                        return { ok: true };
                     })
-                    .then(() => publicarReservasPublicas())
-                    .then(() => ({ ok: true }))
                     .catch(err => {
                         if (err && err.code === 'conflict') {
-                            console.error(`[BESOUL Agenda] guardarEstadoNubeAgenda: CONFLICTO de concurrencia para trainerKey=${scope} -- otra sesión guardó cambios de este entrenador que esta pestaña aún no había recibido. Guardado cancelado para no sobrescribirlos.`);
-                            return { ok: false, err: { code: 'conflict', message: 'Se han detectado cambios más recientes de este entrenador guardados desde otra sesión/pestaña. Recarga la página antes de volver a guardar para no perder esos cambios.' } };
+                            const elementos = (err.conflictos || []).map(c => describirElementoAgenda(c.campo, c.clave, scope));
+                            const unicos = Array.from(new Set(elementos));
+                            console.error(`[BESOUL Agenda] guardarEstadoNubeAgenda: CONFLICTO real para trainerKey=${scope} -- otra sesión cambió los mismos elementos: ${(err.conflictos || []).map(c => `${c.campo}/${c.clave}`).join(', ')}`);
+                            const lista = unicos.slice(0, 5).join(', ') + (unicos.length > 5 ? ` y ${unicos.length - 5} más` : '');
+                            return { ok: false, err: { code: 'conflict', conflictos: err.conflictos || [], message: `Otra persona (otra sesión, otro dispositivo o administración) ha modificado a la vez ${lista || 'los mismos datos'}. Para no borrar su cambio, el tuyo NO se ha guardado. La agenda muestra ya lo que hay guardado en el servidor: revísalo y, si hace falta, repite tu cambio.` } };
                         }
                         console.error('Error guardando agenda en Firebase:', err);
                         return { ok: false, err };
@@ -404,18 +650,43 @@ function ejecutarGuardadoEstadoNubeAgenda(trainerKeyScope) {
 async function gestionarGuardadoAgendaFallido(scope, resultado, opcionesFallo) {
             const opciones = opcionesFallo || {};
             const err = (resultado && resultado.err) || { code: resultado && resultado.omitido ? 'omitido' : 'desconocido', message: 'El guardado no se ha completado.' };
+            const estado = estadoGuardadoPendienteScope(scope);
             console.error(`[BESOUL Agenda] Cambio NO guardado · trainerKey=${scope} · code=${err.code || '(sin código)'} · message=${err.message || ''}`);
+
+            // HOTFIX-V1-AGENDA-SYNC-P0: sin respuesta del servidor (sin conexión, tiempo agotado,
+            // contención) el cambio sigue siendo válido: se CONSERVA en esta pantalla, marcado como
+            // "sin guardar", y se reintenta al volver la conexión o con el botón "Reintentar". El
+            // reintento es seguro: fusiona contra lo que haya entonces en el servidor y nunca pisa
+            // lo que otros hayan guardado mientras tanto. Solo en guardados con su propio formulario
+            // abierto (avisoPropio) se descarta, porque el formulario sigue abierto para repetirlo.
+            if (!opciones.avisoPropio && errorGuardadoAgendaReintentable(err) && window.bsUltimoServidorConocido) {
+                const yaAvisado = estado.reintentar === true;
+                estado.reintentar = true;
+                actualizarIndicadorGuardadoAgenda();
+                if (!yaAvisado) avisarCambioAgendaSinConfirmar(scope);
+                return;
+            }
+            estado.reintentar = false;
+
             // Las notas tocadas formaban parte del cambio que no se ha guardado: se descartan
             // junto con él, para que la pantalla vuelva a coincidir con el servidor.
             estadoGuardadoAgenda().bsAgendaNotasTocadas.clear();
+            let releido = false;
             try {
                 if (window.bsAgendaCloudDocRef && typeof window.bsAgendaCloudDocRef.get === 'function') {
-                    const snap = await window.bsAgendaCloudDocRef.get({ source: 'server' });
-                    if (snap.exists) aplicarEstadoNubeAgenda(snap.data(), { descartarPendientes: [scope] });
+                    let temporizador = null;
+                    const snap = await Promise.race([
+                        window.bsAgendaCloudDocRef.get({ source: 'server' }),
+                        new Promise((_, rechazar) => { temporizador = setTimeout(() => rechazar(new Error('relectura sin respuesta')), 8000); }),
+                    ]).finally(() => clearTimeout(temporizador));
+                    if (snap.exists) { aplicarEstadoNubeAgenda(snap.data(), { descartarPendientes: [scope] }); releido = true; }
                 }
             } catch (errRelectura) {
                 console.error('[BESOUL Agenda] No se pudo releer la agenda del servidor tras un guardado fallido:', errRelectura);
             }
+            // Sin relectura posible, se vuelve a lo último confirmado por el servidor (nunca a una
+            // copia anterior guardada por la función que hizo el cambio).
+            if (!releido) descartarCambiosLocalesScopeAgenda(scope);
             if (!opciones.avisoPropio) avisarCambioAgendaNoGuardado(err, scope);
         }
 
@@ -429,13 +700,13 @@ function estadoGuardadoAgenda() {
 
 function estadoGuardadoPendienteScope(scope) {
             const w = estadoGuardadoAgenda();
-            if (!w.bsAgendaGuardadosPendientes[scope]) w.bsAgendaGuardadosPendientes[scope] = { programado: false, enCola: 0 };
+            if (!w.bsAgendaGuardadosPendientes[scope]) w.bsAgendaGuardadosPendientes[scope] = { programado: false, enCola: 0, reintentar: false };
             return w.bsAgendaGuardadosPendientes[scope];
         }
 
 function scopeConCambiosSinConfirmar(scope) {
             const estado = (window.bsAgendaGuardadosPendientes || {})[scope];
-            return !!estado && (estado.programado || estado.enCola > 0);
+            return !!estado && (estado.programado || estado.enCola > 0 || estado.reintentar === true);
         }
 
 function avisarCambioAgendaNoGuardado(err, scope) {
@@ -444,7 +715,9 @@ function avisarCambioAgendaNoGuardado(err, scope) {
             window.bsAgendaUltimoAvisoNoGuardado = ahora;
             const entrenador = scope ? ` (agenda de ${nombreEntrenador(scope)})` : '';
             const esConflicto = !!err && err.code === 'conflict';
-            const motivo = esConflicto
+            const motivo = esConflicto && Array.isArray(err.conflictos)
+                ? err.message
+                : esConflicto
                 ? 'Otra sesión (otra pestaña, otro dispositivo o administración) ha guardado cambios en esta misma agenda a la vez y, para no borrarlos, tu cambio se ha cancelado. La agenda se ha actualizado con lo que hay guardado ahora mismo: revísala y, si hace falta, repite el cambio.'
                 : mensajeErrorGuardadoAgenda(err);
             alert(`ATENCIÓN: tu último cambio${entrenador} NO se ha guardado. ${motivo}`);

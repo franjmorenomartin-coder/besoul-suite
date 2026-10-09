@@ -202,6 +202,9 @@ function nuevaSesion(firestoreMock, { domValores = {}, credencialesIniciales = {
     function publicarReservasPublicas(){ return Promise.resolve(); }
     function publicarReservasPublicasDebounced(){}
     function cerrarModalDisponibilidadReservas(){}
+    // HOTFIX-V1-AGENDA-SYNC-P0: repintar el formulario abierto tras un fallo (UI, sin DOM real aquí).
+    function renderDisponibilidadReservasForm(){}
+    function capturarBaseFormularioDisponibilidad(){}
   `;
   const fn = new Function('localStorage', 'document', 'window', 'firebase', 'alert', 'setTimeout', 'clearTimeout',
     preamble + extracted + `

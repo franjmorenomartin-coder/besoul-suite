@@ -59,11 +59,11 @@ const agendaHtml = fs.readFileSync(AGENDA_HTML_PATH, 'utf8');
 const FN_NAMES = [
   'valorInvalidoParaFirestore', 'canonicalizarValorDiagnostico', 'igualdadCanonica',
   'hashEstableDiagnostico', 'contarElementosDiagnostico', 'diffEstructuralDiagnostico',
-  'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore', 'guardarEstadoNubeAgenda', 'ejecutarGuardadoEstadoNubeAgenda', 'gestionarGuardadoAgendaFallido', 'estadoGuardadoAgenda', 'estadoGuardadoPendienteScope', 'scopeConCambiosSinConfirmar', 'avisarCambioAgendaNoGuardado', 'clonarDatosParaGuardado',
+  'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore', 'actualizarIndicadorGuardadoAgenda', 'elementoIndicadorGuardadoAgenda', 'reintentarGuardadosAgenda', 'errorGuardadoAgendaReintentable', 'referenciaMemoriaCampoAgenda', 'guardarMemoriaAgendaEnLocalStorage', 'repintarAgendaSiVisible', 'rebasarMemoriaScopeAgenda', 'descartarCambiosLocalesScopeAgenda', 'avisarCambioAgendaSinConfirmar', 'esObjetoPlanoAgenda', 'elementosCampoAgenda', 'recomponerCampoAgenda', 'valorVacioCampoAgenda', 'fusionarCampoTresVias', 'describirElementoAgenda', 'clavesBloqueSesion', 'claveDesdeFechaYMinutos', 'minutosDesdeHorario', 'formatoMinutosHorario', 'publicarReservasPublicasDebounced', 'guardarEstadoNubeAgenda', 'ejecutarGuardadoEstadoNubeAgenda', 'gestionarGuardadoAgendaFallido', 'estadoGuardadoAgenda', 'estadoGuardadoPendienteScope', 'scopeConCambiosSinConfirmar', 'avisarCambioAgendaNoGuardado', 'clonarDatosParaGuardado',
   'aplicarEstadoNubeAgenda', 'sincronizarPruebasCRMDentroDeAgenda', 'esCitaPruebaCRM',
 ];
 const extracted = [
-  extractSimpleConst(agendaHtml, 'BS_APP_BUILD_TAG'),
+  extractSimpleConst(agendaHtml, 'BS_APP_BUILD_TAG'), extractSimpleConst(agendaHtml, 'BS_AGENDA_GUARDADO_TIMEOUT_MS'), extractSimpleConst(agendaHtml, 'BS_CAMPOS_AGENDA_POR_TRAINER'), extractSimpleConst(agendaHtml, 'BS_DISP_SUBMAPAS'), extractSimpleConst(agendaHtml, 'BS_DISP_METADATOS'),
   ...FN_NAMES.map((n) => extractFunction(agendaHtml, n)),
 ].join('\n\n');
 
@@ -216,7 +216,11 @@ async function main() {
       await ctx.firestore().collection('besoulSuite').doc('agenda').update({ 'agenda.pta': { '2026-10-01_10:00': { id: 'ca1', nombre: 'Cliente A1' } } });
     });
     const rB = await B.guardarEstadoNubeAgenda('pta');
-    check('TEST F: B, sobre "agenda" ya cambiada de verdad -> CONFLICT', rB.ok === false && rB.err && rB.err.code === 'conflict');
+    // HOTFIX-V1-AGENDA-SYNC-P0 (2026-10-09): B no ha tocado "agenda" (su copia local es igual a su
+    // base), así que ya no es un conflicto: antes se cancelaba el guardado entero de B. Lo que
+    // importa -- que la cita real de A NO se pierda -- se comprueba ahora directamente en el servidor.
+    const agendaTrasB = (await docRefA.get()).data().agenda.pta;
+    check('TEST F: B, sin cambios propios en "agenda" ya cambiada por A -> guarda sin pisar la cita de A', rB.ok === true && !!agendaTrasB['2026-10-01_10:00']);
   }
 
   // ============================================================

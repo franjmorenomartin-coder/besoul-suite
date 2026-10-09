@@ -49,6 +49,22 @@ Write semantics from `agenda.html` (HOTFIX-V1-AGENDA-PERSISTENCIA-P0, 2026-10-08
   whole. Only the keys changed by the session are written (`notas.<key>`), and a deleted note is
   removed with `FieldValue.delete()`.
 
+Concurrency (HOTFIX-V1-AGENDA-SYNC-P0, 2026-10-09; document shape unchanged, rules unchanged; see
+`docs/AGENDA_SYNC_P0.md`):
+
+- Inside the transaction, each trainer sub-map is merged **per element** (three-way: what the tab
+  last saw from the server / what the tab has now / what the server has now). Elements are: session
+  by slot key (`agenda`, `pruebasCRM`), client card by `id` (`clientes`), `semanal.<day>`,
+  `excepciones.<date>` and `bloqueos.<date>` (`disponibilidadReservas`), and history key
+  (`historicoClientes`).
+- Changes by different users to different elements of the same trainer are both kept (before, the
+  whole save was cancelled). The value written is always "server now + this tab's changes".
+- Real conflict = the same element changed by both, the same session moved or deleted by both in
+  different ways, or two new overlapping sessions (45-minute block). Then nothing is written, and
+  the user is told which element conflicts.
+- A sub-map is only written if its merged value differs from the server; with no changes, nothing
+  is written.
+
 ## `besoulSuite/finanzas`
 
 Main finance document.
