@@ -347,6 +347,21 @@ const ESCENARIOS = {
     r.OK = r.modalSinConexion === false && r.guardado && r.modalTrasConfirmar === true;
     registrar(r);
   },
+  // S18: el PT guarda una ficha desde MÓVIL (390 px) y el admin guarda otra ficha del PT; ambos
+  // confirmados, botón restaurado, sesiones guardadas sin copias de portal/contrato.
+  async S18_fichas_PT_movil_y_admin() {
+    const { pt, admin } = await abrirPar({ laura: { [k('10:00')]: sesion('cli_rosa', 'Rosa Ficticia') } });
+    await pt.setViewportSize({ width: 390, height: 844 });
+    await pt.evaluate(async () => { editarFicha('cli_ana'); document.getElementById('cust-phone').value = '622333444'; await guardarCliente(); });
+    await admin.evaluate(async () => { editarFicha('cli_eva'); document.getElementById('cust-email').value = 'eva.nueva@example.test'; await guardarCliente(); });
+    await crear(pt, k('12:00'), 'cli_ana');
+    await L.espera(3000);
+    const doc = await L.leerDoc();
+    const f = id => doc.clientes.laura.find(c => c.id === id);
+    const r = { nombre: 'S18 ficha PT (móvil) + ficha admin + sesión', telAna: f('cli_ana').telefono, emailEva: f('cli_eva').email, botonPT: await pt.evaluate(() => document.getElementById('btn-save-client').textContent), botonAdmin: await admin.evaluate(() => document.getElementById('btn-save-client').textContent), dialogos: [...pt.__logs, ...admin.__logs].filter(l => /DIALOG/.test(l)), camposSesion: Object.keys(doc.agenda.laura[k('12:00')] || {}).filter(x => /reservaToken|contratoCliente|restriccionesReservas/.test(x)), tokenEnFicha: !!f('cli_ana').reservaToken };
+    r.OK = r.telAna === '622333444' && r.emailEva === 'eva.nueva@example.test' && r.botonPT === 'Guardar Ficha' && r.botonAdmin === 'Guardar Ficha' && r.camposSesion.length === 0 && !!doc.agenda.laura[k('12:00')] && r.tokenEnFicha;
+    registrar(r);
+  },
   // S15: tiempos: cuánto tarda en confirmarse cada guardado (acción -> confirmación del servidor).
   async S15_tiempos_de_guardado() {
     const { pt } = await abrirPar({ laura: { [k('08:00')]: sesion('cli_rosa', 'Rosa Ficticia') } });

@@ -37,14 +37,14 @@ function extractSimpleConst(name) {
   return m[0];
 }
 
-const consts = ['BS_APP_BUILD_TAG', 'BS_AGENDA_GUARDADO_TIMEOUT_MS', 'BS_CAMPOS_AGENDA_POR_TRAINER', 'BS_DISP_SUBMAPAS', 'BS_DISP_METADATOS'];
+const consts = ['BS_APP_BUILD_TAG', 'BS_AGENDA_GUARDADO_TIMEOUT_MS', 'BS_CAMPOS_AGENDA_POR_TRAINER', 'BS_DISP_SUBMAPAS', 'BS_DISP_METADATOS', 'BS_CAMPOS_FICHA_NO_SESION'];
 const funciones = [
   'valorInvalidoParaFirestore',
   'canonicalizarValorDiagnostico', 'igualdadCanonica',
   'hashEstableDiagnostico',
   'contarElementosDiagnostico', 'diffEstructuralDiagnostico',
   'estadoLocalAgendaParaNube',
-  'actualizarIndicadorGuardadoAgenda', 'elementoIndicadorGuardadoAgenda', 'reintentarGuardadosAgenda', 'errorGuardadoAgendaReintentable', 'referenciaMemoriaCampoAgenda', 'guardarMemoriaAgendaEnLocalStorage', 'repintarAgendaSiVisible', 'rebasarMemoriaScopeAgenda', 'descartarCambiosLocalesScopeAgenda', 'avisarCambioAgendaSinConfirmar', 'esObjetoPlanoAgenda', 'elementosCampoAgenda', 'recomponerCampoAgenda', 'valorVacioCampoAgenda', 'fusionarCampoTresVias', 'describirElementoAgenda', 'clavesBloqueSesion', 'claveDesdeFechaYMinutos', 'minutosDesdeHorario', 'formatoMinutosHorario', 'publicarReservasPublicasDebounced', 'guardarEstadoNubeAgenda', 'ejecutarGuardadoEstadoNubeAgenda', 'gestionarGuardadoAgendaFallido', 'estadoGuardadoAgenda', 'estadoGuardadoPendienteScope', 'scopeConCambiosSinConfirmar', 'avisarCambioAgendaNoGuardado', 'clonarDatosParaGuardado',
+  'actualizarIndicadorGuardadoAgenda', 'elementoIndicadorGuardadoAgenda', 'reintentarGuardadosAgenda', 'errorGuardadoAgendaReintentable', 'referenciaMemoriaCampoAgenda', 'guardarMemoriaAgendaEnLocalStorage', 'repintarAgendaSiVisible', 'rebasarMemoriaScopeAgenda', 'descartarCambiosLocalesScopeAgenda', 'avisarCambioAgendaSinConfirmar', 'esObjetoPlanoAgenda', 'elementosCampoAgenda', 'recomponerCampoAgenda', 'valorVacioCampoAgenda', 'fusionarCampoTresVias', 'quitarCopiasFichaDeSesiones', 'describirElementoAgenda', 'clavesBloqueSesion', 'claveDesdeFechaYMinutos', 'minutosDesdeHorario', 'formatoMinutosHorario', 'publicarReservasPublicasDebounced', 'guardarEstadoNubeAgenda', 'ejecutarGuardadoEstadoNubeAgenda', 'gestionarGuardadoAgendaFallido', 'estadoGuardadoAgenda', 'estadoGuardadoPendienteScope', 'scopeConCambiosSinConfirmar', 'avisarCambioAgendaNoGuardado', 'clonarDatosParaGuardado',
   'mensajeErrorGuardadoAgenda',
   'payloadParaUpdateFirestore',
   'programarGuardadoNubeAgenda',

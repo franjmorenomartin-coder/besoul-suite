@@ -8,6 +8,8 @@ const BS_DISP_SUBMAPAS = ['semanal', 'excepciones', 'bloqueos'];
 
 const BS_DISP_METADATOS = ['actualizadoEn', 'actualizadoPor'];
 
+const BS_CAMPOS_FICHA_NO_SESION = ['contratoCliente', 'restriccionesReservas', 'reservaToken', 'reservasBloqueadasTexto', 'reservasOnlineActivas'];
+
 function valorInvalidoParaFirestore(valor, rutaActual = '', vistos = new Set()) {
             if (valor === undefined) return { ruta: rutaActual || '(raíz)', motivo: 'undefined' };
             if (typeof valor === 'number' && Number.isNaN(valor)) return { ruta: rutaActual || '(raíz)', motivo: 'NaN' };
@@ -347,6 +349,19 @@ function fusionarCampoTresVias(campo, base, local, servidor) {
             return { valor, baseNueva: recomponerCampoAgenda(campo, baseResultado), conflictos, cambiado: !igualdadCanonica(valor, s) };
         }
 
+function quitarCopiasFichaDeSesiones(mapaAgenda) {
+            if (!esObjetoPlanoAgenda(mapaAgenda)) return mapaAgenda;
+            const salida = {};
+            Object.keys(mapaAgenda).forEach(clave => {
+                const sesion = mapaAgenda[clave];
+                if (!esObjetoPlanoAgenda(sesion)) { salida[clave] = sesion; return; }
+                const limpia = { ...sesion };
+                BS_CAMPOS_FICHA_NO_SESION.forEach(campo => { delete limpia[campo]; });
+                salida[clave] = limpia;
+            });
+            return salida;
+        }
+
 function describirElementoAgenda(campo, clave, trainerKey) {
             const sep = clave.indexOf(':');
             const tipo = clave.slice(0, sep), resto = clave.slice(sep + 1);
@@ -566,7 +581,8 @@ function ejecutarGuardadoEstadoNubeAgenda(trainerKeyScope) {
                     BS_CAMPOS_AGENDA_POR_TRAINER.forEach(campo => {
                         const ruta = `${campo}.${scope}`;
                         const servidorCampo = (actual[campo] || {})[scope];
-                        const r = fusionarCampoTresVias(campo, (baseConocida[campo] || {})[scope], payload[ruta], servidorCampo);
+                        const limpiar = campo === 'agenda' ? quitarCopiasFichaDeSesiones : (v => v);
+                        const r = fusionarCampoTresVias(campo, limpiar((baseConocida[campo] || {})[scope]), limpiar(payload[ruta]), limpiar(servidorCampo));
                         r.conflictos.forEach(clave => conflictos.push({ campo, clave }));
                         escrito[campo] = r.valor;
                         if (r.cambiado) escritura[ruta] = r.valor;

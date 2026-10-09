@@ -1905,6 +1905,27 @@ miércoles 07:00-09:00"></textarea>
 
         function esObjetoPlanoAgenda(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
 
+        // HOTFIX-V1-AGENDA-SYNC-P0 (2026-10-09) -- TAMAÑO DEL DOCUMENTO. Medido en producción (solo
+        // lectura): besoulSuite/agenda ocupaba 1.031.061 bytes de un máximo de 1.048.576 (quedaban
+        // 17 KB, unas 25 sesiones nuevas en TODO el gimnasio). Al superarlo, Firestore rechaza
+        // cualquier guardado (invalid-argument -> "error inesperado"). Cada sesión copia la ficha
+        // completa del cliente; estos campos de portal/contrato nunca se leen desde una sesión
+        // (siempre desde la ficha, que los conserva) y suponían ~229 KB del documento. Se dejan de
+        // escribir en las sesiones: cada entrenador recupera su espacio en su siguiente guardado.
+        const BS_CAMPOS_FICHA_NO_SESION = ['contratoCliente', 'restriccionesReservas', 'reservaToken', 'reservasBloqueadasTexto', 'reservasOnlineActivas'];
+        function quitarCopiasFichaDeSesiones(mapaAgenda) {
+            if (!esObjetoPlanoAgenda(mapaAgenda)) return mapaAgenda;
+            const salida = {};
+            Object.keys(mapaAgenda).forEach(clave => {
+                const sesion = mapaAgenda[clave];
+                if (!esObjetoPlanoAgenda(sesion)) { salida[clave] = sesion; return; }
+                const limpia = { ...sesion };
+                BS_CAMPOS_FICHA_NO_SESION.forEach(campo => { delete limpia[campo]; });
+                salida[clave] = limpia;
+            });
+            return salida;
+        }
+
         // Descompone el valor de un campo en elementos {clave -> valor}, o null si no se puede (forma
         // inesperada: entonces se compara el campo entero, como antes).
         function elementosCampoAgenda(campo, valor) {
@@ -2451,7 +2472,8 @@ miércoles 07:00-09:00"></textarea>
                     BS_CAMPOS_AGENDA_POR_TRAINER.forEach(campo => {
                         const ruta = `${campo}.${scope}`;
                         const servidorCampo = (actual[campo] || {})[scope];
-                        const r = fusionarCampoTresVias(campo, (baseConocida[campo] || {})[scope], payload[ruta], servidorCampo);
+                        const limpiar = campo === 'agenda' ? quitarCopiasFichaDeSesiones : (v => v);
+                        const r = fusionarCampoTresVias(campo, limpiar((baseConocida[campo] || {})[scope]), limpiar(payload[ruta]), limpiar(servidorCampo));
                         r.conflictos.forEach(clave => conflictos.push({ campo, clave }));
                         escrito[campo] = r.valor;
                         if (r.cambiado) escritura[ruta] = r.valor;
@@ -2548,6 +2570,9 @@ miércoles 07:00-09:00"></textarea>
             }
             if (code === 'no-trainer-scope' || code === 'invalid-payload' || code === 'agenda-no-cargada') {
                 return (err && err.message) || 'No se pudo preparar el guardado. Recarga la página e inténtalo de nuevo.';
+            }
+            if (code === 'invalid-argument' && /size|exceeds|too large|tamaño/i.test((err && err.message) || '')) {
+                return 'La agenda ha alcanzado el tamaño máximo que admite el servidor y el cambio NO se ha guardado. Avisa a administración inmediatamente.';
             }
             if (code === 'unavailable' || code === 'deadline-exceeded' || code === 'cancelled') {
                 return 'No hay conexión con el servidor ahora mismo. Revisa tu conexión e inténtalo de nuevo.';
