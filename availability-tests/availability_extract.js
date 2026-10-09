@@ -8,6 +8,8 @@ const BS_DISP_SUBMAPAS = ['semanal', 'excepciones', 'bloqueos'];
 
 const BS_DISP_METADATOS = ['actualizadoEn', 'actualizadoPor'];
 
+const BS_CAMPOS_FICHA_NO_SESION = ['contratoCliente', 'restriccionesReservas', 'reservaToken', 'reservasBloqueadasTexto', 'reservasOnlineActivas'];
+
 let usuarioLogeado = "";
 
 let rolActivo = "";
@@ -436,6 +438,19 @@ function fusionarCampoTresVias(campo, base, local, servidor) {
             return { valor, baseNueva: recomponerCampoAgenda(campo, baseResultado), conflictos, cambiado: !igualdadCanonica(valor, s) };
         }
 
+function quitarCopiasFichaDeSesiones(mapaAgenda) {
+            if (!esObjetoPlanoAgenda(mapaAgenda)) return mapaAgenda;
+            const salida = {};
+            Object.keys(mapaAgenda).forEach(clave => {
+                const sesion = mapaAgenda[clave];
+                if (!esObjetoPlanoAgenda(sesion)) { salida[clave] = sesion; return; }
+                const limpia = { ...sesion };
+                BS_CAMPOS_FICHA_NO_SESION.forEach(campo => { delete limpia[campo]; });
+                salida[clave] = limpia;
+            });
+            return salida;
+        }
+
 function describirElementoAgenda(campo, clave, trainerKey) {
             const sep = clave.indexOf(':');
             const tipo = clave.slice(0, sep), resto = clave.slice(sep + 1);
@@ -655,7 +670,8 @@ function ejecutarGuardadoEstadoNubeAgenda(trainerKeyScope) {
                     BS_CAMPOS_AGENDA_POR_TRAINER.forEach(campo => {
                         const ruta = `${campo}.${scope}`;
                         const servidorCampo = (actual[campo] || {})[scope];
-                        const r = fusionarCampoTresVias(campo, (baseConocida[campo] || {})[scope], payload[ruta], servidorCampo);
+                        const limpiar = campo === 'agenda' ? quitarCopiasFichaDeSesiones : (v => v);
+                        const r = fusionarCampoTresVias(campo, limpiar((baseConocida[campo] || {})[scope]), limpiar(payload[ruta]), limpiar(servidorCampo));
                         r.conflictos.forEach(clave => conflictos.push({ campo, clave }));
                         escrito[campo] = r.valor;
                         if (r.cambiado) escritura[ruta] = r.valor;
@@ -832,6 +848,9 @@ function mensajeErrorGuardadoAgenda(err) {
             }
             if (code === 'no-trainer-scope' || code === 'invalid-payload' || code === 'agenda-no-cargada') {
                 return (err && err.message) || 'No se pudo preparar el guardado. Recarga la página e inténtalo de nuevo.';
+            }
+            if (code === 'invalid-argument' && /size|exceeds|too large|tamaño/i.test((err && err.message) || '')) {
+                return 'La agenda ha alcanzado el tamaño máximo que admite el servidor y el cambio NO se ha guardado. Avisa a administración inmediatamente.';
             }
             if (code === 'unavailable' || code === 'deadline-exceeded' || code === 'cancelled') {
                 return 'No hay conexión con el servidor ahora mismo. Revisa tu conexión e inténtalo de nuevo.';

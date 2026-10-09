@@ -284,6 +284,26 @@ console.log('\n=== M: sin cambios propios no se escribe nada (y nunca se pisa lo
   check('M: ok:true, cero escrituras, cambio ajeno intacto', [r.ok, servidor.escrituras(), servidor.estadoActual().agenda.m['2026-10-09_10:00'].nota], [true, 0, 'otro']);
 }
 
+console.log('\n=== O: TAMAÑO -- las sesiones se guardan sin las copias de portal/contrato de la ficha ===');
+{
+  const sesionGorda = { id: 'c1', nombre: 'C1', duracionMin: 45, contratoCliente: { firmado: false, nombreArchivo: '', tipoMime: '', contenidoBase64: '', subidaEn: '' }, restriccionesReservas: { modo: 'bloquear', bloquesTexto: '' }, reservaToken: 'res_x', reservasBloqueadasTexto: '', reservasOnlineActivas: true };
+  const fichaC1 = { id: 'c1', nombre: 'C1', reservaToken: 'res_x', contratoCliente: { firmado: true } };
+  const base = { ...vacio('m'), clientes: { m: [fichaC1] }, agenda: { m: { '2026-10-09_10:00': sesionGorda } }, otros: 1 };
+  base.agenda.otro = { '2026-10-09_10:00': sesionGorda };
+  const servidor = crearServidorFirestore(base);
+  const s = crearSesion({ docRef: servidor.ref, dbClientes: { m: [fichaC1] }, dbAgenda: { m: { '2026-10-09_10:00': sesionGorda, '2026-10-09_12:00': { ...sesionGorda } } }, bsUltimoServidorConocido: base });
+  const r = await s.guardarEstadoNubeAgenda('m');
+  const st = servidor.estadoActual();
+  check('O: ok:true', r.ok, true);
+  check('O: las sesiones (existente y nueva) se guardan sin las copias', Object.values(st.agenda.m).map(x => Object.keys(x).sort()), [['duracionMin', 'id', 'nombre'], ['duracionMin', 'id', 'nombre']]);
+  check('O: la ficha conserva token y contrato', st.clientes.m[0], fichaC1);
+  check('O: la agenda de otro entrenador no se toca', st.agenda.otro['2026-10-09_10:00'].reservaToken, 'res_x');
+  const servidor2 = crearServidorFirestore(base);
+  const s2 = crearSesion({ docRef: servidor2.ref, dbClientes: { m: [fichaC1] }, dbAgenda: { m: { '2026-10-09_10:00': sesionGorda } }, bsUltimoServidorConocido: base });
+  await s2.guardarEstadoNubeAgenda('m');
+  check('O: sin cambios reales no se escribe nada', servidor2.escrituras(), 0);
+}
+
 console.log('\n=== N: fusionarCampoTresVias (rebase de un snapshot con cambios pendientes) ===');
 {
   const s = crearSesion({ docRef: crearServidorFirestore(vacio('m')).ref, bsUltimoServidorConocido: vacio('m') });
