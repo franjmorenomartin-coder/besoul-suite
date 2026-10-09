@@ -148,23 +148,6 @@ function sesionesContratadasFicha(ficha) {
 
         }
 
-function fijarCampoDescuentoFicha(valor) {
-            const input = document.getElementById('cust-discount');
-            if (!input) return;
-            input.value = formatoPorcentajeDescuento(valor || 0);
-            if (!input.dataset) return;
-            input.dataset.descuentoExacto = String(normalizarPorcentajeDescuento(valor || 0));
-            input.dataset.descuentoTexto = input.value;
-        }
-
-function descuentoCampoFicha() {
-            const input = document.getElementById('cust-discount');
-            if (!input) return 0;
-            const ds = input.dataset || {};
-            if (ds.descuentoExacto !== undefined && input.value === ds.descuentoTexto) return normalizarPorcentajeDescuento(ds.descuentoExacto);
-            return normalizarPorcentajeDescuento(input.value || 0);
-        }
-
 function autoCalcularTarifa() {
             // FIX-GROUP-MEMBER-ECONOMICS (2026-09-15): al editar un integrante de grupo,
             // cust-mod/cust-factor están deshabilitados (CLIENT-08) y su <select> NUNCA tuvo una
@@ -184,7 +167,7 @@ function autoCalcularTarifa() {
 
             const mod = esMiembroEnEdicion ? (fichaGrupoDelMiembro?.modalidad || '') : document.getElementById('cust-mod').value;
             const factor = esMiembroEnEdicion ? (parseInt(fichaGrupoDelMiembro?.factor) || 1) : (parseInt(document.getElementById('cust-factor').value) || 1);
-            const descuentoPct = descuentoCampoFicha();
+            const descuentoPct = normalizarPorcentajeDescuento(document.getElementById('cust-discount')?.value || 0);
 
             // Personas asumidas por facturación en la matriz
             let multiplicadorPersonas = 1;

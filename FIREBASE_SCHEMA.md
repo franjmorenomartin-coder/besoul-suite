@@ -49,16 +49,6 @@ Write semantics from `agenda.html` (HOTFIX-V1-AGENDA-PERSISTENCIA-P0, 2026-10-08
   whole. Only the keys changed by the session are written (`notas.<key>`), and a deleted note is
   removed with `FieldValue.delete()`.
 
-Excel import (IMPORT-V1-EXCEL-CLIENTES-AGENDA, 2026-10-08; see `docs/IMPORTACION_EXCEL_V1.md`). No new collections and no
-shape change. The import writes the same client cards and sessions as the manual forms, through the
-same per-trainer transactional save (all or nothing). It adds only these optional, informative fields:
-
-- `importacionExcelId` (`imp_<timestamp>`): on client cards and sessions created by an import, and on
-  open-group attendees added by one. Audit only; no logic reads it.
-- `bloqueDeclaradoMin` (number > 45): on sessions imported from a declared block longer than the real
-  session (e.g. 10:00-11:00 → 60). Display only. The session still lasts `duracionMin: 45` and blocks
-  exactly 3 slots; the extra minutes are not reserved and never count as a conflict.
-
 ## `besoulSuite/finanzas`
 
 Main finance document.
