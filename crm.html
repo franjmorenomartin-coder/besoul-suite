@@ -737,7 +737,16 @@ function poblarSelectsBase() {
 
 
 let bsValoracionRegistryTimer = null;
+// ARQ-V1-MIGRACION-IMPL (2026-10-13): DESACTIVADA. Cada apertura del CRM intentaba CREAR registros
+// de valoración con la sesión de admin, pero las reglas solo permiten crearlos al formulario público
+// (request.auth == null): el lote se rechazaba SIEMPRE (producción: los 4 registros existentes son de
+// "valoracion_publica"; esta sincronización nunca ha escrito nada). Solo generaba rechazos de reglas y,
+// en el emulador, demostrado que un rechazo deja en error la evaluación de get(perfil) de la escritura
+// siguiente del mismo cliente (causa del fallo intermitente del migrador). Para habilitarla hace falta
+// una decisión explícita sobre la regla de creación de besoulValoracionRegistry.
+const BS_SINCRONIZAR_REGISTRO_VALORACIONES = false;
 function programarSincronizacionRegistroValoraciones() {
+  if (!BS_SINCRONIZAR_REGISTRO_VALORACIONES) return;
   if (!esAdmin() || !db) return;
   clearTimeout(bsValoracionRegistryTimer);
   bsValoracionRegistryTimer = setTimeout(sincronizarRegistroValoraciones, 1200);

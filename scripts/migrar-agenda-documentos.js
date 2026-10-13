@@ -59,6 +59,22 @@
     };
   }
 
+  // Diagnóstico de la sesión en el momento de un rechazo: usuario, email del TOKEN que ven las
+  // reglas y perfil besoulUsers/{email} tal y como está en el SERVIDOR (las reglas lo usan).
+  async function diagnosticoSesion() {
+    const u = firebase.auth().currentUser;
+    if (!u) return 'sesión: CERRADA';
+    let token = null, perfil = null;
+    try { token = (await u.getIdTokenResult()).claims; } catch (e) { token = { error: e.code }; }
+    try { const p = await fs.collection('besoulUsers').doc(u.email).get({ source: 'server' }); perfil = p.exists ? { rol: p.data().rol, activo: p.data().activo } : 'NO EXISTE'; } catch (e) { perfil = 'ERROR ' + e.code; }
+    const probar = async (nombre, fn) => { try { await fn(); return `${nombre}=OK`; } catch (e) { return `${nombre}=${e.code}`; } };
+    const pruebas = await Promise.all([
+      probar('leerLegado(isAdmin)', () => fs.collection(D.COL.legado).doc('raiz').get({ source: 'server' })),
+      probar('leerConfig(isActiveUser)', () => fs.collection(D.COL.config).doc('global').get({ source: 'server' })),
+      probar('leerAgendaOriginal(isAdmin)', () => agendaRef.get({ source: 'server' })),
+    ]);
+    return `sesión: ${u.email} · uid: ${u.uid} · email del token: ${token && token.email} · perfil: ${JSON.stringify(perfil)} · ${pruebas.join(' · ')}`;
+  }
   window.migrarAgendaBesoul = async function ({ ejecutar = false } = {}) {
     const t0 = Date.now();
     const snap = await agendaRef.get({ source: 'server' });
@@ -111,7 +127,7 @@
         if (!escrito) {
           for (const d of lote) {
             try { await fs.collection(D.COL[d.col]).doc(d.id).set(contenido(d)); }
-            catch (e2) { throw Object.assign(new Error(`Migración DETENIDA: ${d.col}/${d.id} rechazado (${e2.code}; sesión: ${(firebase.auth().currentUser || {}).email || "CERRADA"}): ${String(e2.message).slice(0, 400)}. Lo ya escrito es idéntico al original y se puede reanudar.`), { informe }); }
+            catch (e2) { throw Object.assign(new Error(`Migración DETENIDA: ${d.col}/${d.id} rechazado (${e2.code}; ${await diagnosticoSesion()}): ${String(e2.message).slice(0, 400)}. Lo ya escrito es idéntico al original y se puede reanudar.`), { informe }); }
           }
         }
         console.log(`[MIGRACIÓN] escritos ${Math.min(i + 100, pendientes.length)}/${pendientes.length}`);

@@ -53,13 +53,13 @@ async function reglas(archivo) {
 const huella = v => crypto.createHash('sha256').update(JSON.stringify(D.canon(v))).digest('hex');
 
 let browser;
-async function abrir(base, email) {
+async function abrir(base, email, pagina = 'agenda.html') {
   if (!browser) browser = await chromium.launch({ executablePath: process.env.BS_NAVEGADOR || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
   const page = await (await browser.newContext()).newPage();
   page.__dialogos = []; page.__errores = [];
   page.on('dialog', d => { page.__dialogos.push(d.message().slice(0, 160)); (d.type() === 'beforeunload' ? d.dismiss() : d.accept()).catch(() => {}); });
   page.on('pageerror', e => page.__errores.push(String(e.message).slice(0, 160)));
-  await page.goto(`${base}/agenda.html?emulador=1`);
+  await page.goto(`${base}/${pagina}?emulador=1`);
   await page.waitForSelector('#login-user, #app-content', { timeout: 30000 });
   if (await page.isVisible('#login-user').catch(() => false)) { await page.fill('#login-user', email); await page.fill('#login-pass', 'RevisionLocal2026!'); await page.click('button[onclick="ejecutarLogin()"]'); }
   await page.waitForFunction(() => window.bsUltimoServidorConocido && !document.getElementById('app-content').classList.contains('hidden'), null, { timeout: 30000 });
@@ -115,6 +115,15 @@ const guardado = p => p.waitForFunction(() => /Guardado en el servidor/.test((do
   const cont = await leer('besoulSuite/agendaContingencia');
   check('R6 la app anterior guarda en agendaContingencia (sesión Y y cambio de ficha)', !!cont.agenda.laura[Y] && cont.clientes.laura.find(c => c.id === 'cli_rosa_ficticia').telefono === '611000999');
   check('R7 el documento original NO ha cambiado', huella(await leer('besoulSuite/agenda')) === huellaOriginal);
+  // Consulta del HISTÓRICO COMPLETO durante la contingencia: app nueva en /consulta/ (solo lectura).
+  const consulta = await abrir(ANTERIOR, 'laura.revision@example.test', 'consulta/agenda.html');
+  const vistaConsulta = await consulta.evaluate(([viejo, x]) => ({ modo: window.BS_MODO_CONSULTA === true, franja: !!document.getElementById('bs-franja-consulta'), viejo: !!((dbAgenda || {}).laura || {})[viejo], x: !!((dbAgenda || {}).laura || {})[x], fichas: ((dbClientes || {}).laura || []).length }), [`${dia(-40)}_10:00`, X]);
+  check('R7b en contingencia, /consulta/ muestra el histórico COMPLETO (sesión de hace 40 días, anterior a "desde") y lo hecho tras el corte', vistaConsulta.modo && vistaConsulta.franja && vistaConsulta.viejo && vistaConsulta.x && vistaConsulta.fichas > 0, vistaConsulta);
+  const antesConsulta = huella(await vistaNueva());
+  await consulta.evaluate(([c, i]) => soltarFichaEnCelda(c, i), [`${dia(8)}_10:00`, 'cli_rosa_ficticia']); await espera(2500);
+  check('R7c /consulta/ es de solo lectura: un intento de guardar no escribe nada y avisa', huella(await vistaNueva()) === antesConsulta && consulta.__dialogos.some(m => /Modo consulta|no se ha guardado|NO se ha guardado/i.test(m)), consulta.__dialogos.slice(-2));
+  const dashConsulta = await (async () => { const p = await (await browser.newContext()).newPage(); p.on('dialog', d => d.accept().catch(() => {})); await p.goto(`${ANTERIOR}/consulta/dashboard.html?emulador=1`); await p.waitForFunction(() => window.firebase && firebase.apps.length, null, { timeout: 30000 }); await p.evaluate(() => firebase.auth().signInWithEmailAndPassword('admin.revision@example.test', 'RevisionLocal2026!')); await p.waitForFunction(() => typeof agendaData !== 'undefined' && agendaData && agendaData.agenda && Object.keys(agendaData.agenda.laura || {}).length > 0, null, { timeout: 30000 }); return p.evaluate(v => !!agendaData.agenda.laura[v], `${dia(-40)}_10:00`); })();
+  check('R7d el Dashboard de consulta (admin) ve el histórico completo durante la contingencia', dashConsulta === true);
 
   // ---- 3) VUELTA ----
   await reglas(path.join(RAIZ, 'firestore.rules'));

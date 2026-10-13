@@ -20,7 +20,9 @@ function check(desc, ok, det) { ok ? pass++ : fail++; console.log(`${ok ? 'PASS'
   const page = await (await browser.newContext()).newPage();
   const dialogos = []; page.on('dialog', d => { dialogos.push(d.message()); d.accept().catch(() => {}); });
   // Página antigua equivalente: CRM (carga Firebase en modo emulador). Se pegan los dos scripts como en el corte.
-  await page.goto(`${BASE}/crm.html?emulador=1`);
+  const PAGINA = process.env.PAGINA || 'crm.html';
+  await page.goto(`${BASE}/${PAGINA}?emulador=1`);
+  if (process.env.SIN_REGISTRO) await page.evaluate(() => { window.sincronizarRegistroValoraciones = async () => {}; try { sincronizarRegistroValoraciones = async () => {}; } catch (e) {} });
   await page.waitForFunction(() => window.firebase && firebase.apps.length, null, { timeout: 30000 });
   await page.evaluate(() => firebase.auth().signInWithEmailAndPassword('admin.revision@example.test', 'RevisionLocal2026!'));
   await page.waitForFunction(() => firebase.auth().currentUser, null, { timeout: 30000 });

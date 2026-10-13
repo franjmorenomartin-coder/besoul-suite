@@ -1829,6 +1829,7 @@
       return args;
     }
     function guardarCatalogoActividadesNube(payload){
+      if (window.BS_MODO_CONSULTA) { alert('Modo consulta: solo lectura. Los cambios se hacen en Finanzas principal.'); return; }
       if (!firestore) return;
       // ARQ-V1-MIGRACION-IMPL: actividades por entrenador -> besoulTrainers/{tk}.actividades y
       // catálogo -> besoulAgendaConfig/global, en transacción con control de versión.
@@ -2058,6 +2059,7 @@
     // la cola es también el último en llegar al servidor, y siempre lleva el estado más reciente.
     let bsGuardadoFinanzasEnCurso = Promise.resolve();
     function guardarConfigFinanzas(opts){
+      if (window.BS_MODO_CONSULTA) { alert('Modo consulta: solo lectura. Los cambios se hacen en Finanzas principal.'); return Promise.resolve({ ok:false, omitido:true }); }
       const silencioso = !!(opts && opts.silencioso);
       if(!finanzasRef) return Promise.resolve({ ok:false, omitido:true });
       const p = bsGuardadoFinanzasEnCurso
