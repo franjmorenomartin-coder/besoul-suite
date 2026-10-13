@@ -46,7 +46,7 @@ const funciones = [
   'estadoLocalAgendaParaNube',
   'actualizarIndicadorGuardadoAgenda', 'elementoIndicadorGuardadoAgenda', 'reintentarGuardadosAgenda', 'errorGuardadoAgendaReintentable', 'referenciaMemoriaCampoAgenda', 'guardarMemoriaAgendaEnLocalStorage', 'repintarAgendaSiVisible', 'rebasarMemoriaScopeAgenda', 'descartarCambiosLocalesScopeAgenda', 'avisarCambioAgendaSinConfirmar', 'esObjetoPlanoAgenda', 'elementosCampoAgenda', 'recomponerCampoAgenda', 'valorVacioCampoAgenda', 'fusionarCampoTresVias', 'quitarCopiasFichaDeSesiones', 'describirElementoAgenda', 'clavesBloqueSesion', 'claveDesdeFechaYMinutos', 'minutosDesdeHorario', 'formatoMinutosHorario', 'publicarReservasPublicasDebounced', 'guardarEstadoNubeAgenda', 'ejecutarGuardadoEstadoNubeAgenda', 'gestionarGuardadoAgendaFallido', 'estadoGuardadoAgenda', 'estadoGuardadoPendienteScope', 'scopeConCambiosSinConfirmar', 'avisarCambioAgendaNoGuardado', 'clonarDatosParaGuardado',
   'mensajeErrorGuardadoAgenda',
-  'payloadParaUpdateFirestore',
+  'payloadParaUpdateFirestore', 'partesScopeAgenda',
   'programarGuardadoNubeAgenda',
   'aplicarEstadoNubeAgenda',
   'sincronizarPruebasCRMDentroDeAgenda',

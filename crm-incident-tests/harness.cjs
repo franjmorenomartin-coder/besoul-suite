@@ -18,6 +18,9 @@ function deepClone(v) { return v === undefined ? undefined : JSON.parse(JSON.str
 // ---------------------------------------------------------------- Firestore en memoria ----------
 class FieldPathFalso { constructor(...s) { this.segmentos = s; } }
 class FieldValueFalso { constructor(m) { this._methodName = m; } }
+class TimestampFalso { constructor(ms) { this.ms = ms; } toMillis() { return this.ms; } static fromMillis(ms) { return new TimestampFalso(ms); } }
+// ARQ-V1-MIGRACION-IMPL: la agenda vive en documentos independientes (besoul-datos.js).
+const BesoulDatos = require('../besoul-datos.js');
 
 function crearFirestore(opts = {}) {
   const store = new Map(); // "col/id" -> data
@@ -81,15 +84,27 @@ function crearFirestore(opts = {}) {
         if (f === 'perderRespuesta') throw Object.assign(new Error('deadline-exceeded (commit hecho, respuesta perdida)'), { code: 'deadline-exceeded' });
       },
       async update(...args) { await esperar(); aplicarUpdate(ruta, args); },
+      onSnapshot(a, b) { const cb = typeof a === 'function' ? a : b; setTimeout(() => cb({ ...snapshot(ruta), metadata: { fromCache: false } }), 0); return () => {}; },
     };
   }
-  function colRef(col) {
+  // Consultas con filtros reales (==, array-contains; ">=" sobre actualizadoEn se acepta siempre:
+  // el mock no modela la hora del servidor) y listeners que entregan un primer snapshot.
+  function colRef(col, filtros = []) {
+    const coincide = data => filtros.every(([campo, op, valor]) => {
+      const v = data[campo];
+      if (op === '==') return v === valor;
+      if (op === 'array-contains') return Array.isArray(v) && v.includes(valor);
+      return true;
+    });
+    const resultados = () => [...store.keys()].filter(k => k.startsWith(col + '/') && k.indexOf('/', col.length + 1) < 0 && coincide(store.get(k))).map(k => ({ id: k.split('/').pop(), data: () => deepClone(store.get(k)) }));
+    const snap = docs => ({ docs, size: docs.length, empty: !docs.length, forEach: fn => docs.forEach(fn), metadata: { fromCache: false }, docChanges: () => docs.map(doc => ({ type: 'added', doc })) });
     return {
       doc(id) { return docRef(col, id || `auto_${(++idSeq).toString(36)}_${Math.random().toString(36).slice(2, 8)}`); },
       async add(data) { const ref = this.doc(); await ref.set(data); return ref; },
-      where() { return this; },
-      onSnapshot() { return () => {}; },
-      async get() { await esperar(); const docs = [...store.keys()].filter(k => k.startsWith(col + '/')).map(k => ({ id: k.split('/').pop(), data: () => deepClone(store.get(k)) })); return { docs, forEach: fn => docs.forEach(fn) }; },
+      where(campo, op, valor) { return colRef(col, [...filtros, [campo, op, valor]]); },
+      orderBy() { return this; }, limit() { return this; },
+      onSnapshot(a, b) { const cb = typeof a === 'function' ? a : b; setTimeout(() => cb(snap(resultados())), 0); return () => {}; },
+      async get() { await esperar(); return snap(resultados()); },
     };
   }
   const db = {
@@ -129,8 +144,20 @@ function crearFirestore(opts = {}) {
     setLatencia(ms) { latenciaMs = ms; },
     fallar(op, tipo, veces = 1, filtro = () => true) { fallos.push({ coincide: (o, r) => o === op && filtro(r), tipo, veces }); },
     docs(col) { return [...store.keys()].filter(k => k.startsWith(col + '/')).map(k => ({ id: k.split('/').pop(), ...deepClone(store.get(k)) })); },
-    put(col, id, data) { store.set(`${col}/${id}`, deepClone(data)); },
-    get(col, id) { return deepClone(store.get(`${col}/${id}`)); },
+    put(col, id, data) {
+      store.set(`${col}/${id}`, deepClone(data));
+      // El documento clásico de una prueba se reparte también en los documentos nuevos (como el migrador).
+      if (col === 'besoulSuite' && id === 'agenda') BesoulDatos.docsDesdeLegado(deepClone(data)).docs.forEach(d => store.set(`${BesoulDatos.COL[d.col]}/${d.id}`, { ...deepClone(d.data), rev: 1, actualizadoEn: '__serverTimestamp__' }));
+    },
+    get(col, id) {
+      // Vista clásica de la agenda reconstruida desde los documentos nuevos (lo que ve la app).
+      if (col === 'besoulSuite' && id === 'agenda') {
+        const g = { semanas: {}, clientes: {}, trainers: {}, historico: {}, notas: {}, legado: {}, config: {} };
+        Object.keys(BesoulDatos.COL).forEach(c => [...store.keys()].filter(k => k.startsWith(BesoulDatos.COL[c] + '/')).forEach(k => { g[c][k.split('/').pop()] = deepClone(store.get(k)); }));
+        return BesoulDatos.legadoDesdeDocs(g);
+      }
+      return deepClone(store.get(`${col}/${id}`));
+    },
   };
 }
 
@@ -178,7 +205,8 @@ function cargarCRM({ ahoraISO = '2026-10-01T08:00:00.000Z', perfil = { email: 'a
     static now() { return ahora; }
   }
   const firebase = {
-    firestore: Object.assign(() => mock.db, { FieldValue: { serverTimestamp: () => new FieldValueFalso('serverTimestamp'), delete: () => new FieldValueFalso('delete') }, FieldPath: FieldPathFalso }),
+    firestore: Object.assign(() => mock.db, { FieldValue: { serverTimestamp: () => new FieldValueFalso('serverTimestamp'), delete: () => new FieldValueFalso('delete') }, FieldPath: FieldPathFalso, Timestamp: TimestampFalso }),
+    auth: () => ({ currentUser: { email: perfil.email } }),
   };
   const ctx = {
     console: { log() {}, warn() {}, error() {}, info() {} },
@@ -195,6 +223,7 @@ function cargarCRM({ ahoraISO = '2026-10-01T08:00:00.000Z', perfil = { email: 'a
   ctx.globalThis = ctx;
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'besoul-identidad.js'), 'utf8'), ctx, { filename: 'besoul-identidad.js' });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'besoul-datos.js'), 'utf8'), ctx, { filename: 'besoul-datos.js' });
   const html = fs.readFileSync(path.join(ROOT, 'crm.html'), 'utf8');
   const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
   const principal = scripts.find(s => s.includes('function guardarLead'));

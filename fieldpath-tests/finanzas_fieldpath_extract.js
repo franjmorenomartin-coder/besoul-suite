@@ -9,7 +9,11 @@ function payloadParaUpdateFirestoreFinanzas(payload){
     }
 
 function guardarCatalogoActividadesNube(payload){
-      if (!agendaRef) return;
+      if (!firestore) return;
+      // ARQ-V1-MIGRACION-IMPL: actividades por entrenador -> besoulTrainers/{tk}.actividades y
+      // catálogo -> besoulAgendaConfig/global, en transacción con control de versión.
+      return BesoulDatos.actualizarCamposRaiz({ firestore, FieldValue: firebase.firestore.FieldValue, payload, actor: usuarioFinanzasEmail || '' })
+        .catch(err => { console.error(err); alert('Error guardando el catálogo de actividades. Revisa permisos/reglas.'); });
       // Hallazgo real (confirmado contra el código fuente del SDK de Firestore, mismo bug ya
       // corregido en agenda.html/guardarEstadoNubeAgenda): set(payload,{merge:true}) trata una
       // clave con punto DENTRO del objeto (p.ej. "trainerActividades.veronica") como un nombre
@@ -18,5 +22,4 @@ function guardarCatalogoActividadesNube(payload){
       // trainerActividades.<key> que lee actividadesAutorizadasTrainer() nunca se llegaba a
       // tocar. update() sí interpreta las claves con punto del objeto como ruta anidada real.
       // Mismo payload dirigido de siempre, solo cambia el método de escritura.
-      agendaRef.update(...payloadParaUpdateFirestoreFinanzas(payload)).catch(err => { console.error(err); alert('Error guardando el catálogo de actividades. Revisa permisos/reglas.'); });
     }

@@ -64,72 +64,50 @@ function check(desc, actual, expected) {
 }
 
 async function main() {
+// ARQ-V1-MIGRACION-IMPL: con documentos independientes, el trainerKey va en el ID del documento y
+// en un campo, nunca dentro de una ruta de campo con puntos: el riesgo original desaparece. Se
+// comprueba con las funciones REALES que hoy escriben esos datos (besoul-datos.js), contra el
+// servidor falso de documentos, para un trainerKey con punto real ("fran.jmorenomartin").
+const D = require('../besoul-datos.js');
+const { crearServidorDocumentos } = require('../concurrency-tests/almacen_documentos.cjs');
+const FV = { serverTimestamp: () => ({ _methodName: 'serverTimestamp' }) };
+const tkPunto = 'fran.jmorenomartin';
 
-// ============================================================
-console.log('=== finanzas.html: guardarCatalogoActividadesNube() -- trainerKey con punto ===');
-// ============================================================
+console.log('=== Finanzas: actividades autorizadas de un trainerKey con punto ===');
 {
-  const extracted = fs.readFileSync(path.join(__dirname, 'finanzas_fieldpath_extract.js'), 'utf8');
-  const mockDb = crearFirestoreMock({ trainerActividades: {}, catalogoActividades: {} });
-  const refReal = mockDb.collection('besoulSuite').doc('agenda');
-  const firebase = { firestore: { FieldPath: FieldPathFalso, FieldValue: FieldValueFalso } };
-  const alerts = [];
-  const fn = new Function('agendaRef', 'firebase', 'alert', extracted + `
-    return { guardarCatalogoActividadesNube };`);
-  const M = fn(refReal, firebase, (m) => alerts.push(m));
-
-  const trainerKeyConPunto = 'fran.jmorenomartin';
-  M.guardarCatalogoActividadesNube({ [`trainerActividades.${trainerKeyConPunto}`]: ['ciclo_indoor', 'pilates_maquina'] });
-  await new Promise(r => setImmediate(r));
-
-  check('sin alerta de error', alerts, []);
-  check('trainerActividades["fran.jmorenomartin"] queda como clave PLANA (no anidada en 2 niveles)', mockDb.estadoActual().trainerActividades[trainerKeyConPunto], ['ciclo_indoor', 'pilates_maquina']);
-  check('"fran" NO se ha convertido en un mapa anidado fantasma', mockDb.estadoActual().trainerActividades.fran, undefined);
+  const srv = crearServidorDocumentos({ clientes: {}, agenda: {}, trainerActividades: {} });
+  await D.actualizarCamposRaiz({ firestore: srv.ref.firestore, FieldValue: FV, payload: { [`trainerActividades.${tkPunto}`]: ['pilates_maquina'] }, actor: 'test' });
+  const estado = srv.estadoActual();
+  check('trainerActividades["fran.jmorenomartin"] queda como clave PLANA', estado.trainerActividades[tkPunto], ['pilates_maquina']);
+  check('"fran" NO se ha convertido en un mapa anidado fantasma', estado.trainerActividades.fran, undefined);
+  check('el documento es besoulTrainers/fran.jmorenomartin', Object.keys(srv.documentos().trainers), [tkPunto]);
 }
 
-// ============================================================
-console.log('\n=== crm.html: sincronizarPruebaAgendaDesdeLead() -- trainerKey con punto no se parte ===');
-// ============================================================
+console.log('\n=== CRM: prueba de un lead para un trainerKey con punto ===');
 {
-  const extracted = fs.readFileSync(path.join(__dirname, 'crm_fieldpath_extract.js'), 'utf8');
-  const mockDb = crearFirestoreMock({ agenda: {}, pruebasCRM: {} });
-  const firebase = { firestore: { FieldPath: FieldPathFalso, FieldValue: FieldValueFalso } };
-  const preamble = `
-    function textoTrainer(k){ return k || ''; }
-    function textoCentro(k){ return k || ''; }
-  `;
-  const fn = new Function('db', 'firebase', preamble + extracted + `
-    return { sincronizarPruebaAgendaDesdeLead };`);
-  const M = fn(mockDb, firebase);
-
-  const trainerKeyConPunto = 'fran.jmorenomartin';
-  const leadData = { estado: 'Prueba agendada', fechaPrueba: new Date('2026-10-05T10:00:00').toISOString(), trainerKey: trainerKeyConPunto, nombre: 'Lead de prueba' };
-  const resultado = await M.sincronizarPruebaAgendaDesdeLead('lead1', leadData, false);
-
-  check('la prueba se marca como visible en Agenda', resultado.visible, true);
-  const remoto = mockDb.estadoActual();
-  check('agenda["fran.jmorenomartin"] existe como clave PLANA (2 niveles: agenda -> trainerKey -> clave)', typeof remoto.agenda[trainerKeyConPunto], 'object');
-  check('la cita se guardó bajo agenda["fran.jmorenomartin"][clave], no en un mapa "fran" anidado', remoto.agenda.fran, undefined);
-  check('pruebasCRM["fran.jmorenomartin"] también queda plano', remoto.pruebasCRM.fran, undefined);
-  check('la clave real de la cita coincide con la calculada', Object.keys(remoto.agenda[trainerKeyConPunto] || {})[0], resultado.clave);
-
-  // Control: un trainerKey normal (sin puntos) sigue funcionando exactamente igual que antes.
-  const mockDb2 = crearFirestoreMock({ agenda: {}, pruebasCRM: {} });
-  const fn2 = new Function('db', 'firebase', preamble + extracted + `
-    return { sincronizarPruebaAgendaDesdeLead };`);
-  const M2 = fn2(mockDb2, firebase);
-  const resultado2 = await M2.sincronizarPruebaAgendaDesdeLead('lead2', { estado: 'Prueba agendada', fechaPrueba: new Date('2026-10-06T11:00:00').toISOString(), trainerKey: 'carmen', nombre: 'Lead normal' }, false);
-  check('trainerKey normal (sin puntos) sigue funcionando igual', resultado2.visible, true);
-  check('...con su clave bajo agenda.carmen directamente', typeof mockDb2.estadoActual().agenda.carmen, 'object');
-
-  // Borrado: si se re-sincroniza el MISMO lead con una fecha distinta, la cita anterior (bajo el
-  // trainerKey con punto) debe borrarse limpiamente sin dejar residuo en un mapa mal anidado.
-  const leadData2 = { ...leadData, fechaPrueba: new Date('2026-10-07T12:00:00').toISOString() };
-  const resultado3 = await M.sincronizarPruebaAgendaDesdeLead('lead1', leadData2, false);
-  const remoto2 = mockDb.estadoActual();
-  check('al re-sincronizar, la cita antigua bajo el trainerKey con punto se borra de verdad', Object.keys(remoto2.agenda[trainerKeyConPunto] || {}).length, 1);
-  check('...y es la nueva clave, no la antigua', Object.keys(remoto2.agenda[trainerKeyConPunto])[0], resultado3.clave);
+  const srv = crearServidorDocumentos({ clientes: {}, agenda: {}, pruebasCRM: {} });
+  const clave = '2026-10-21_10:00';
+  const cita = { id: 'crm_trial_L1', tipoCita: 'pruebaCRM', esPruebaCRM: true, leadId: 'L1', nombre: 'Lead' };
+  await D.transaccionLegado({ firestore: srv.ref.firestore, FieldValue: FV, actor: 'test', semanas: [{ tk: tkPunto, lunes: D.lunesDe('2026-10-21') }], mutar: ag => {
+    ag.agenda[tkPunto] = { [clave]: cita }; ag.pruebasCRM[tkPunto] = { [clave]: cita };
+  } });
+  const estado = srv.estadoActual();
+  check('agenda["fran.jmorenomartin"][clave] existe como clave PLANA', !!(estado.agenda[tkPunto] || {})[clave], true);
+  check('la cita no está en un mapa "fran" anidado', estado.agenda.fran, undefined);
+  check('pruebasCRM["fran.jmorenomartin"] también queda plano', !!(estado.pruebasCRM[tkPunto] || {})[clave], true);
+  check('el documento de semana lleva el trainerKey completo en su ID', Object.keys(srv.documentos().semanas), [`${tkPunto}__2026-10-19`]);
+  check('la semana queda indexada por el lead (CRM la encuentra sin descargar agendas)', Object.values(srv.documentos().semanas).filter(s => (s.leadsPrueba || []).includes('L1')).length, 1);
+  // Re-sincronizar: la prueba antigua se borra de verdad (antes set({merge:true}) la dejaba).
+  await D.transaccionLegado({ firestore: srv.ref.firestore, FieldValue: FV, actor: 'test', semanas: [{ tk: tkPunto, lunes: '2026-10-19' }], mutar: ag => {
+    delete ag.agenda[tkPunto][clave]; delete ag.pruebasCRM[tkPunto][clave];
+  } });
+  const fin = srv.estadoActual();
+  check('al quitar la prueba, desaparece de verdad de la agenda y de pruebasCRM', [Object.keys(fin.agenda[tkPunto] || {}).length, Object.keys(fin.pruebasCRM[tkPunto] || {}).length], [0, 0]);
+  let errorNoDeclarada = null;
+  try { await D.transaccionLegado({ firestore: srv.ref.firestore, FieldValue: FV, semanas: [], mutar: ag => { ag.agenda[tkPunto] = { '2026-11-02_10:00': cita }; } }); } catch (e) { errorNoDeclarada = e.code; }
+  check('escribir en una semana no leída en la transacción se rechaza (nunca se sobrescribe a ciegas)', errorNoDeclarada, 'semana-no-leida');
 }
+
 
 // ============================================================
 console.log('\n=== HARDENING-PRE-BASELINE-v3.2.1: crearEntrenador() rechaza el punto SOLO para claves NUEVAS ===');

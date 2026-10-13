@@ -30,7 +30,12 @@ function setEnRuta(obj, segmentos, valor) {
 }
 
 // Simula el servidor real de Firestore: estado propio, independiente de cualquier copia local.
-function crearServidorFirestore(estadoInicial) {
+// ARQ-V1-MIGRACION-IMPL: los escenarios se ejecutan contra un servidor de DOCUMENTOS
+// INDEPENDIENTES (almacen_documentos.cjs) con el guardado nuevo (besoul-datos.js). El servidor de
+// documento único anterior se conserva abajo solo como referencia histórica.
+const BesoulDatos = require('../besoul-datos.js');
+function crearServidorFirestore(estadoInicial) { return require('./almacen_documentos.cjs').crearServidorDocumentos(estadoInicial); }
+function crearServidorFirestoreMonoliticoAnterior(estadoInicial) {
   let estado = deepClone(estadoInicial);
   let escrituras = 0;
   function aplicarCampo(campo, valor) {
@@ -73,8 +78,8 @@ function check(desc, actual, expected) {
 const espera = ms => new Promise(r => setTimeout(r, ms));
 
 function crearSesion({ docRef, dbClientes = {}, dbAgenda = {}, dbPruebasCRM = {}, dbDisponibilidadReservas = {}, dbHistoricoClientes = {}, dbNotas = {}, bsUltimoServidorConocido, entrenadorVisto = '', rolActivo = 'pt' }) {
-  const firebase = { firestore: Object.assign(() => {}, { FieldPath: FieldPathFalso, FieldValue: FieldValueFalso }) };
-  const window = { bsAgendaCloudDocRef: docRef, bsAgendaAplicandoNube: false, bsUltimoServidorConocido: deepClone(bsUltimoServidorConocido) };
+  const firebase = { firestore: Object.assign(() => docRef.firestore, { FieldPath: FieldPathFalso, FieldValue: FieldValueFalso }) };
+  const window = { bsAgendaCloudDocRef: docRef, bsAgendaSincronizador: docRef.sincronizador, bsAgendaAplicandoNube: false, bsUltimoServidorConocido: deepClone(bsUltimoServidorConocido) };
   let publicarLlamado = 0;
   async function publicarReservasPublicas() { publicarLlamado++; }
   const logs = [];
@@ -92,13 +97,13 @@ function crearSesion({ docRef, dbClientes = {}, dbAgenda = {}, dbPruebasCRM = {}
   const fn = new Function(
     'window', 'firebase', 'entrenadorVisto', 'rolActivo', 'dbClientes', 'dbAgenda', 'dbPruebasCRM',
     'dbDisponibilidadReservas', 'dbHistoricoClientes', 'dbNotas', 'publicarReservasPublicas', 'console',
-    'alert', 'nombreEntrenador', 'aplicarEstadoNubeAgenda', 'escapeHTML',
+    'alert', 'nombreEntrenador', 'aplicarEstadoNubeAgenda', 'escapeHTML', 'BesoulDatos', 'usuarioLogeado',
     extracted + `
     return { guardarEstadoNubeAgenda, fusionarCampoTresVias };`
   );
   const M = fn(window, firebase, entrenadorVisto, rolActivo, dbClientes, dbAgenda, dbPruebasCRM, dbDisponibilidadReservas, dbHistoricoClientes, dbNotas, publicarReservasPublicas, consoleFalso,
-    m => alerts.push(m), t => t, aplicarEstadoNubeAgenda, t => String(t));
-  return { ...M, publicarLlamado: () => publicarLlamado, logs, alerts, window, memoria };
+    m => alerts.push(m), t => t, aplicarEstadoNubeAgenda, t => String(t), BesoulDatos, entrenadorVisto || "test");
+  return { ...M, publicarLlamado: () => publicarLlamado, logs, alerts, window, memoria, aplicarEstadoNubeAgenda };
 }
 
 const vacio = t => ({ clientes: { [t]: [] }, agenda: { [t]: {} }, pruebasCRM: { [t]: {} }, disponibilidadReservas: { [t]: {} }, historicoClientes: { [t]: {} } });
@@ -129,7 +134,12 @@ console.log('\n=== B: dos pestañas del MISMO PT cambian fichas DISTINTAS -> se 
   const r = await s.guardarEstadoNubeAgenda('a');
   check('B: ok:true (cambios compatibles)', r.ok, true);
   check('B: el servidor tiene la edición de esta pestaña Y la ficha nueva de la otra', servidor.estadoActual().clientes.a, [{ id: 'ca_v1', nombre: 'Editado por pestaña 1' }, { id: 'ca_nueva_de_otra_pestana' }]);
-  check('B: la memoria de esta pestaña ya muestra la ficha de la otra', s.memoria.dbClientes.a.map(c => c.id), ['ca_v1', 'ca_nueva_de_otra_pestana']);
+  // ARQ-V1-MIGRACION-IMPL: con documentos independientes, el guardado solo relee los documentos
+  // que ÉL cambia; la ficha nueva de la otra pestaña llega por la sincronización en tiempo real
+  // (aplicarEstadoNubeAgenda con lo que trae el listener). Nunca se pierde; aparece al sincronizar.
+  check('B: la ficha propia editada sigue en memoria tras confirmar', s.memoria.dbClientes.a.map(c => c.id).includes('ca_v1'), true);
+  s.aplicarEstadoNubeAgenda(servidor.estadoActual());
+  check('B: tras la sincronización, la memoria de esta pestaña muestra también la ficha de la otra', s.memoria.dbClientes.a.map(c => c.id), ['ca_v1', 'ca_nueva_de_otra_pestana']);
 }
 
 console.log('\n=== C: CONFLICTO REAL Admin/PT -- la MISMA ficha cambiada por ambos ===');

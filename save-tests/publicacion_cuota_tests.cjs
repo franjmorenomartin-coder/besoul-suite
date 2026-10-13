@@ -19,7 +19,7 @@ function crearEntorno({ rolActivo, usuarioLogeado, entrenadorVisto, servidor }) 
     collection: col => ({ doc: id => ({ path: `${col}/${id}` }) }),
     batch: () => { const ops = []; return { set: (ref, datos) => ops.push(ref.path), commit: async () => { commits.n++; escrituras.push(...ops); } }; },
   };
-  const window = { firebase: true, bsAgendaCloudDocRef: { get: async () => ({ data: () => JSON.parse(JSON.stringify(servidor)) }) } };
+  const window = { firebase: true, bsUltimoServidorConocido: servidor };
   const firebase = { apps: [1], firestore: Object.assign(() => fsFalso, { FieldValue: { serverTimestamp: () => ({ _methodName: 'serverTimestamp' }) } }) };
   const codigo = ['publicarReservasPublicasParaTrainer', 'encolarPublicacionSiCambia', 'publicarReservasPublicas'].map(extraerFuncion).join('\n');
   const vivos = { dbClientes: { vivo: [] }, dbAgenda: {}, dbDisponibilidadReservas: {} };

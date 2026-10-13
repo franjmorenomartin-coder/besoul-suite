@@ -1,4 +1,4 @@
-const BS_APP_BUILD_TAG = 'agenda-publicacion-cuota-p0-2026-10-13';
+const BS_APP_BUILD_TAG = 'agenda-arq-documentos-2026-10-13';
 
 const BS_AGENDA_GUARDADO_TIMEOUT_MS = 20000;
 
@@ -107,6 +107,15 @@ function payloadParaUpdateFirestore(payload) {
                 }
             });
             return args;
+        }
+
+function partesScopeAgenda(fuente, scope, esPayload) {
+            const partes = {};
+            BS_CAMPOS_AGENDA_POR_TRAINER.forEach(campo => {
+                const valor = esPayload ? (fuente || {})[`${campo}.${scope}`] : ((fuente || {})[campo] || {})[scope];
+                partes[campo] = valor === undefined ? undefined : JSON.parse(JSON.stringify(valor));
+            });
+            return partes;
         }
 
 function actualizarIndicadorGuardadoAgenda() {
@@ -575,38 +584,26 @@ function ejecutarGuardadoEstadoNubeAgenda(trainerKeyScope) {
                 // es siempre "servidor actual + cambios de esta pestaña", calculado dentro de la
                 // transacción: un cambio ajeno ya confirmado nunca se sobrescribe.
                 const baseConocida = window.bsUltimoServidorConocido;
-                const docRef = window.bsAgendaCloudDocRef;
                 let escritoPorCampo = null;
 
-                const transaccion = docRef.firestore.runTransaction(async tx => {
-                    const snap = await tx.get(docRef);
-                    const actual = snap.exists ? (snap.data() || {}) : {};
-                    const escritura = {};
-                    const conflictos = [];
-                    const escrito = {};
-                    BS_CAMPOS_AGENDA_POR_TRAINER.forEach(campo => {
-                        const ruta = `${campo}.${scope}`;
-                        const servidorCampo = (actual[campo] || {})[scope];
-                        const limpiar = campo === 'agenda' ? quitarCopiasFichaDeSesiones : (v => v);
-                        const r = fusionarCampoTresVias(campo, limpiar((baseConocida[campo] || {})[scope]), limpiar(payload[ruta]), limpiar(servidorCampo));
-                        r.conflictos.forEach(clave => conflictos.push({ campo, clave }));
-                        escrito[campo] = r.valor;
-                        if (r.cambiado) escritura[ruta] = r.valor;
-                    });
-                    if (conflictos.length) {
-                        const errConflicto = new Error('Conflicto de concurrencia detectado para trainerKey=' + scope);
-                        errConflicto.code = 'conflict';
-                        errConflicto.conflictos = conflictos;
-                        throw errConflicto;
-                    }
-                    Object.keys(payload).forEach(k => { if (k.startsWith('notas.')) escritura[k] = payload[k]; });
-                    if (Object.keys(escritura).length) {
-                        escritura.ultimaActualizacionLocal = payload.ultimaActualizacionLocal;
-                        escritura.actualizadoEn = payload.actualizadoEn;
-                        tx.update(docRef, ...payloadParaUpdateFirestore(escritura));
-                    }
-                    escritoPorCampo = escrito;
-                });
+                // ARQ-V1-MIGRACION-IMPL: misma fusión a tres vías por elemento, pero sobre documentos
+                // independientes (semana, ficha, histórico, entrenador, nota). Dentro de la transacción
+                // se releen SOLO los documentos que este cambio afecta; se escriben solo los que cambian
+                // (rev+1, hora del servidor) y se rechaza cualquier sesión nueva o movida que se solape
+                // con otra del mismo día. Ver besoul-datos.js guardarScope().
+                const transaccion = BesoulDatos.guardarScope({
+                    firestore: firebase.firestore(),
+                    FieldValue: firebase.firestore.FieldValue,
+                    tk: scope,
+                    base: partesScopeAgenda(baseConocida, scope, false),
+                    local: partesScopeAgenda(payload, scope, true),
+                    notas: { base: window.bsUltimasNotasServidor || {}, local: notasEnviadas },
+                    notasTocadas: Object.keys(notasEnviadas),
+                    fusionar: fusionarCampoTresVias,
+                    limpiarAgenda: quitarCopiasFichaDeSesiones,
+                    bloqueSesion: clavesBloqueSesion,
+                    actor: (firebase.auth && firebase.auth().currentUser && firebase.auth().currentUser.email) || usuarioLogeado || '',
+                }).then(r => { escritoPorCampo = r.escrito; });
 
                 // Nunca un "Guardando..." indefinido: si el servidor no confirma en este plazo, el
                 // guardado se da por NO confirmado (los cambios se conservan; ver
@@ -636,6 +633,11 @@ function ejecutarGuardadoEstadoNubeAgenda(trainerKeyScope) {
                         // fusionados) + lo que el usuario haya cambiado DESPUÉS de construir este
                         // guardado (eso lo enviará el siguiente guardado de la cola).
                         rebasarMemoriaScopeAgenda(scope, payload, escritoPorCampo);
+                        if (!window.bsUltimasNotasServidor) window.bsUltimasNotasServidor = {};
+                        Object.keys(notasEnviadas).forEach(clave => {
+                            if (notasEnviadas[clave]) window.bsUltimasNotasServidor[clave] = notasEnviadas[clave];
+                            else delete window.bsUltimasNotasServidor[clave];
+                        });
                         Object.keys(notasEnviadas).forEach(clave => {
                             const actualLocal = (dbNotas && typeof dbNotas[clave] === 'string' && dbNotas[clave]) ? dbNotas[clave] : null;
                             if (actualLocal === notasEnviadas[clave]) estadoGuardadoAgenda().bsAgendaNotasTocadas.delete(clave);
@@ -695,14 +697,10 @@ async function gestionarGuardadoAgendaFallido(scope, resultado, opcionesFallo) {
             estadoGuardadoAgenda().bsAgendaNotasTocadas.clear();
             let releido = false;
             try {
-                if (window.bsAgendaCloudDocRef && typeof window.bsAgendaCloudDocRef.get === 'function') {
-                    let temporizador = null;
-                    const snap = await Promise.race([
-                        window.bsAgendaCloudDocRef.get({ source: 'server' }),
-                        new Promise((_, rechazar) => { temporizador = setTimeout(() => rechazar(new Error('relectura sin respuesta')), 8000); }),
-                    ]).finally(() => clearTimeout(temporizador));
-                    if (snap.exists) { aplicarEstadoNubeAgenda(snap.data(), { descartarPendientes: [scope] }); releido = true; }
-                }
+                // ARQ-V1-MIGRACION-IMPL: la verdad del servidor es lo que mantienen al día los listeners
+                // de la sincronización (solo datos recibidos del servidor), sin releer nada.
+                const sinc = window.bsAgendaSincronizador;
+                if (sinc && sinc.listo()) { aplicarEstadoNubeAgenda(BesoulDatos.legadoDesdeDocs(sinc.docs()), { descartarPendientes: [scope] }); releido = true; }
             } catch (errRelectura) {
                 console.error('[BESOUL Agenda] No se pudo releer la agenda del servidor tras un guardado fallido:', errRelectura);
             }

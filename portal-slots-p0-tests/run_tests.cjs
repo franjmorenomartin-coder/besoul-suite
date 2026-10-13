@@ -86,6 +86,10 @@ function crearSesionAgenda({ dbCredenciales, dbClientes, dbAgenda, dbDisponibili
     if (!windowFalso.bsAgendaCloudDocRef) conTokens(dbClientes);
     let servidor = null;
     if (windowFalso.bsAgendaCloudDocRef) { servidor = (await windowFalso.bsAgendaCloudDocRef.get({ source: 'server' })).data() || {}; }
+    // ARQ-V1-MIGRACION-IMPL: la publicación usa lo último CONFIRMADO por el servidor
+    // (window.bsUltimoServidorConocido, que mantienen los listeners). El arnés lo rellena con la
+    // copia del servidor de la prueba o, si no la hay, con los datos de la sesión.
+    windowFalso.bsUltimoServidorConocido = servidor || { clientes: dbClientes, agenda: dbAgenda, disponibilidadReservas: dbDisponibilidadReservas };
     const todos = Array.from(new Set([...Object.keys(dbClientes || {}), ...Object.keys(dbDisponibilidadReservas || {}), ...Object.keys((servidor && servidor.clientes) || {}), ...Object.keys((servidor && servidor.disponibilidadReservas) || {})]));
     return publicarOriginal(todos);
   };

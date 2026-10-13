@@ -30,7 +30,7 @@ function extractSimpleConst(name) {
 }
 
 const names = [
-  'valorInvalidoParaFirestore', 'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore',
+  'valorInvalidoParaFirestore', 'estadoLocalAgendaParaNube', 'payloadParaUpdateFirestore', 'partesScopeAgenda',
   'actualizarIndicadorGuardadoAgenda', 'elementoIndicadorGuardadoAgenda', 'reintentarGuardadosAgenda', 'errorGuardadoAgendaReintentable', 'referenciaMemoriaCampoAgenda', 'guardarMemoriaAgendaEnLocalStorage', 'repintarAgendaSiVisible', 'rebasarMemoriaScopeAgenda', 'descartarCambiosLocalesScopeAgenda', 'avisarCambioAgendaSinConfirmar', 'esObjetoPlanoAgenda', 'elementosCampoAgenda', 'recomponerCampoAgenda', 'valorVacioCampoAgenda', 'fusionarCampoTresVias', 'quitarCopiasFichaDeSesiones', 'describirElementoAgenda', 'clavesBloqueSesion', 'claveDesdeFechaYMinutos', 'minutosDesdeHorario', 'formatoMinutosHorario', 'publicarReservasPublicasDebounced', 'guardarEstadoNubeAgenda', 'ejecutarGuardadoEstadoNubeAgenda', 'gestionarGuardadoAgendaFallido', 'estadoGuardadoAgenda', 'estadoGuardadoPendienteScope', 'scopeConCambiosSinConfirmar', 'avisarCambioAgendaNoGuardado', 'clonarDatosParaGuardado',
   'canonicalizarValorDiagnostico', 'igualdadCanonica', 'hashEstableDiagnostico', 'contarElementosDiagnostico', 'diffEstructuralDiagnostico',
 ];

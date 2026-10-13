@@ -73,19 +73,24 @@ function objetoPruebaAgendaCRM(leadId, leadData, claveInfo) {
 async function sincronizarPruebaAgendaDesdeLead(leadId, leadData, avisar = true) {
   if (!leadId || !db) return { visible:false };
 
-  const agendaRef = db.collection('besoulSuite').doc('agenda');
   const borrados = {};
   const resultado = { visible:false, clave:'', trainerKey:leadData.trainerKey || '', error:'' };
 
   try {
-    await db.runTransaction(async tx => {
-      const snap = await tx.get(agendaRef);
-      const agendaData = snap.exists ? snap.data() : {};
-      const agenda = agendaData.agenda || {};
-      const pruebasCRM = agendaData.pruebasCRM || {};
-      const camposSimples = {
-        ultimaActualizacionLocal: ahoraISO(),
-        actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+    // ARQ-V1-MIGRACION-IMPL: se leen solo las semanas donde este lead tiene pruebas (índice
+    // leadsPrueba) y la semana de destino; la lógica de colocación es la de siempre.
+    const semanas = await BesoulDatos.semanasConPrueba(db, leadId);
+    const infoDestino = debeVersePruebaEnAgenda(leadData) ? claveAgendaDesdeFechaPrueba(leadData.fechaPrueba) : null;
+    if (infoDestino && infoDestino.ok) semanas.push({ tk: leadData.trainerKey, lunes: BesoulDatos.lunesDe(infoDestino.clave.split('_')[0]) });
+    await BesoulDatos.transaccionLegado({ ...opcionesTransaccionCRM(), semanas, mutar: (agendaData) => {
+      const agenda = agendaData.agenda || (agendaData.agenda = {});
+      const pruebasCRM = agendaData.pruebasCRM || (agendaData.pruebasCRM = {});
+      const BORRAR = { borrar: true };
+      const fijar = (campo, segmentos, valor) => {
+        const [, tk, clave] = segmentos;
+        const mapa = campo === 'agenda' ? agenda : pruebasCRM;
+        if (valor === BORRAR) { if (mapa[tk]) delete mapa[tk][clave]; }
+        else { if (!mapa[tk]) mapa[tk] = {}; mapa[tk][clave] = valor; }
       };
       // FIX-PT-AVAILABILITY-PERSISTENCE-V2 (mismo hallazgo aplicado aquí): un trainerKey puede
       // legítimamente contener un punto (causa raíz real ya confirmada en agenda.html con
@@ -105,7 +110,7 @@ async function sincronizarPruebaAgendaDesdeLead(leadId, leadData, avisar = true)
         Object.keys(agendaTrainer).forEach(clave => {
           const cita = agendaTrainer[clave];
           if (cita && cita.esPruebaCRM === true && cita.leadId === leadId) {
-            rutasAnidadas.push({ segmentos: ['agenda', trainerKey, clave], valor: firebase.firestore.FieldValue.delete() });
+            rutasAnidadas.push({ segmentos: ['agenda', trainerKey, clave], valor: BORRAR });
             if (!borrados[trainerKey]) borrados[trainerKey] = {};
             borrados[trainerKey][clave] = true;
           }
@@ -117,7 +122,7 @@ async function sincronizarPruebaAgendaDesdeLead(leadId, leadData, avisar = true)
         Object.keys(agendaTrainer).forEach(clave => {
           const cita = agendaTrainer[clave];
           if (cita && cita.leadId === leadId) {
-            rutasAnidadas.push({ segmentos: ['pruebasCRM', trainerKey, clave], valor: firebase.firestore.FieldValue.delete() });
+            rutasAnidadas.push({ segmentos: ['pruebasCRM', trainerKey, clave], valor: BORRAR });
             if (!borrados[trainerKey]) borrados[trainerKey] = {};
             borrados[trainerKey][clave] = true;
           }
@@ -162,11 +167,8 @@ async function sincronizarPruebaAgendaDesdeLead(leadId, leadData, avisar = true)
       // niveles reales, algo que ya no podemos garantizar si trainerKey contiene un punto (ver
       // rutasAnidadas arriba). Se pasa cada ruta como FieldPath explícito (forma varargs) en vez
       // de reconstruir el string, para que un trainerKey con punto nunca se parta de más.
-      const argsUpdate = [];
-      Object.keys(camposSimples).forEach(k => argsUpdate.push(k, camposSimples[k]));
-      rutasAnidadas.forEach(r => argsUpdate.push(new firebase.firestore.FieldPath(...r.segmentos), r.valor));
-      tx.update(agendaRef, ...argsUpdate);
-    });
+      rutasAnidadas.forEach(r => fijar(r.segmentos[0], r.segmentos, r.valor));
+    } });
 
     await db.collection('besoulLeads').doc(leadId).set({
       agendaPruebaVisible: resultado.visible,

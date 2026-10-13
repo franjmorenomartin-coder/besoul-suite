@@ -79,41 +79,8 @@ function crearFirestoreMock(estadoInicial) {
   // (tx.get()/el commit final solo se resuelven cuando flush() drena la cola) -- ver
   // concurrency-tests/ para las pruebas dedicadas de esa lógica; aquí solo hace falta que el mock
   // no rompa el resto de esta suite, que no prueba conflictos salvo el escenario MULTI-TAB de abajo.
-  docRef.firestore = {
-    runTransaction(fn) {
-      return new Promise((resolve, reject) => {
-        let escrituraPendiente = null;
-        const tx = {
-          get(ref) {
-            return new Promise((resGet, rejGet) => {
-              if (fallosPendientes > 0) {
-                fallosPendientes--;
-                const err = new Error('simulated-network-error');
-                err.code = 'unavailable';
-                microtasksPendientes.push(() => rejGet(err));
-                return;
-              }
-              microtasksPendientes.push(() => resGet({ exists: estado !== null, data: () => deepClone(estado) }));
-            });
-          },
-          update(ref, ...args) { escrituraPendiente = args; }
-        };
-        fn(tx).then(() => {
-          try {
-            if (escrituraPendiente) {
-              if (escrituraPendiente.length === 1 && escrituraPendiente[0] && typeof escrituraPendiente[0] === 'object' && !(escrituraPendiente[0] instanceof FieldPathFalso)) {
-                Object.keys(escrituraPendiente[0]).forEach(clave => aplicarCampo(clave, escrituraPendiente[0][clave]));
-              } else {
-                for (let i = 0; i < escrituraPendiente.length; i += 2) aplicarCampo(escrituraPendiente[i], escrituraPendiente[i + 1]);
-              }
-              numeroDeEscrituras++;
-            }
-          } catch (e) { microtasksPendientes.push(() => reject(e)); return; }
-          microtasksPendientes.push(() => { notificar(); resolve(); });
-        }).catch(err => { microtasksPendientes.push(() => reject(err)); });
-      });
-    }
-  };
+  // ARQ-V1-MIGRACION-IMPL: transacciones sobre documentos independientes (ver adaptador).
+  docRef.firestore = require('../concurrency-tests/adaptador_documentos.cjs').firestoreDeDocumentos(() => estado, nuevo => { estado = nuevo; }, fn => microtasksPendientes.push(fn), notificar, () => { if (fallosPendientes > 0) { fallosPendientes--; return true; } return false; });
   return {
     docRef,
     // Avanza la cola de "microtareas" simuladas (equivalente a awaits reales de red) hasta que no
@@ -206,7 +173,7 @@ function nuevaSesion(firestoreMock, { domValores = {}, credencialesIniciales = {
     function renderDisponibilidadReservasForm(){}
     function capturarBaseFormularioDisponibilidad(){}
   `;
-  const fn = new Function('localStorage', 'document', 'window', 'firebase', 'alert', 'setTimeout', 'clearTimeout',
+  const fn = new Function('localStorage', 'document', 'window', 'firebase', 'alert', 'setTimeout', 'clearTimeout', 'BesoulDatos',
     preamble + extracted + `
     return {
       get entrenadorVisto() { return entrenadorVisto; }, set entrenadorVisto(v) { entrenadorVisto = v; },
@@ -222,9 +189,9 @@ function nuevaSesion(firestoreMock, { domValores = {}, credencialesIniciales = {
     };`);
   const windowFalso = { bsAgendaCloudDocRef: firestoreMock.docRef, bsAgendaAplicandoNube: false, bsAgendaCloudTimer: null };
   class FieldValueFalso { constructor(nombre) { this._methodName = nombre; } }
-  const firebaseFalso = { firestore: { FieldValue: FieldValueFalso, FieldPath: FieldPathFalso } };
+  const firebaseFalso = { firestore: Object.assign(() => firestoreMock.docRef.firestore, { FieldValue: FieldValueFalso, FieldPath: FieldPathFalso }) };
   firebaseFalso.firestore.FieldValue.serverTimestamp = () => new FieldValueFalso('serverTimestamp');
-  const M = fn(localStorageFalso, document, windowFalso, firebaseFalso, (msg) => alerts.push(msg), reloj.setTimeout, reloj.clearTimeout);
+  const M = fn(localStorageFalso, document, windowFalso, firebaseFalso, (msg) => alerts.push(msg), reloj.setTimeout, reloj.clearTimeout, require('../besoul-datos.js'));
   M.window = windowFalso;
   M.reloj = reloj;
   M.alerts = alerts;

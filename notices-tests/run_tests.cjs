@@ -54,33 +54,8 @@ function crearFirestoreMock(estadoInicial) {
   // HARDENING-PRE-BASELINE-v3.2.1: guardarEstadoNubeAgenda() ahora escribe vía
   // docRef.firestore.runTransaction() (detección de conflicto de concurrencia same-trainerKey) --
   // ver availability-tests/README y concurrency-tests/README para el detalle completo.
-  docRef.firestore = {
-    runTransaction(fn) {
-      return new Promise((resolve, reject) => {
-        let escrituraPendiente = null;
-        const tx = {
-          get(ref) {
-            return new Promise((resGet) => {
-              microtasksPendientes.push(() => resGet({ exists: estado !== null, data: () => deepClone(estado) }));
-            });
-          },
-          update(ref, ...args) { escrituraPendiente = args; }
-        };
-        fn(tx).then(() => {
-          try {
-            if (escrituraPendiente) {
-              if (escrituraPendiente.length === 1 && escrituraPendiente[0] && typeof escrituraPendiente[0] === 'object' && !(escrituraPendiente[0] instanceof FieldPathFalso)) {
-                Object.keys(escrituraPendiente[0]).forEach(clave => aplicarCampo(clave, escrituraPendiente[0][clave]));
-              } else {
-                for (let i = 0; i < escrituraPendiente.length; i += 2) aplicarCampo(escrituraPendiente[i], escrituraPendiente[i + 1]);
-              }
-            }
-          } catch (e) { microtasksPendientes.push(() => reject(e)); return; }
-          microtasksPendientes.push(() => { notificar(); resolve(); });
-        }).catch(err => { microtasksPendientes.push(() => reject(err)); });
-      });
-    }
-  };
+  // ARQ-V1-MIGRACION-IMPL: transacciones sobre documentos independientes (ver adaptador).
+  docRef.firestore = require('../concurrency-tests/adaptador_documentos.cjs').firestoreDeDocumentos(() => estado, nuevo => { estado = nuevo; }, fn => microtasksPendientes.push(fn), notificar);
   return {
     docRef,
     // Alterna drenar la cola con un respiro real del bucle de eventos (setImmediate) hasta 3
@@ -136,7 +111,7 @@ function nuevaSesion(firestoreMock, { credencialesIniciales = {}, mensaje = '' }
     function publicarReservasPublicasDebounced(){}
     function recalcularKPIs(){} function renderClientes(){} function renderAgenda(){} function actualizarLabelsKPIMes(){} function configurarSelectorAdmin(){}
   `;
-  const fn = new Function('localStorage', 'document', 'window', 'firebase', 'alert', 'setTimeout', 'clearTimeout',
+  const fn = new Function('localStorage', 'document', 'window', 'firebase', 'alert', 'setTimeout', 'clearTimeout', 'BesoulDatos',
     preamble + extracted + `
     return {
       get entrenadorVisto() { return entrenadorVisto; }, set entrenadorVisto(v) { entrenadorVisto = v; },
@@ -146,9 +121,9 @@ function nuevaSesion(firestoreMock, { credencialesIniciales = {}, mensaje = '' }
     };`);
   const windowFalso = { bsAgendaCloudDocRef: firestoreMock.docRef, bsAgendaAplicandoNube: false, bsAgendaCloudTimer: null, bsAgendaDisponibilidadCargada: true };
   class FieldValueFalso { constructor(nombre) { this._methodName = nombre; } }
-  const firebaseFalso = { firestore: { FieldValue: FieldValueFalso, FieldPath: FieldPathFalso } };
+  const firebaseFalso = { firestore: Object.assign(() => firestoreMock.docRef.firestore, { FieldValue: FieldValueFalso, FieldPath: FieldPathFalso }) };
   firebaseFalso.firestore.FieldValue.serverTimestamp = () => new FieldValueFalso('serverTimestamp');
-  const M = fn(localStorageFalso, document, windowFalso, firebaseFalso, (msg) => alerts.push(msg), reloj.setTimeout, reloj.clearTimeout);
+  const M = fn(localStorageFalso, document, windowFalso, firebaseFalso, (msg) => alerts.push(msg), reloj.setTimeout, reloj.clearTimeout, require('../besoul-datos.js'));
   M.reloj = reloj;
   M.alerts = alerts;
   firestoreMock.docRef.onSnapshot(snap => { if (snap.exists) M.aplicarEstadoNubeAgenda(snap.data()); });

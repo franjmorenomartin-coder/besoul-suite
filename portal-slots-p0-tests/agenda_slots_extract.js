@@ -263,9 +263,11 @@ async function publicarReservasPublicas(trainerKeysPedidos) {
                 // await final, batch.commit()) y se restauran en el finally antes de cualquier await,
                 // así que ninguna otra parte de la app puede ver nunca el estado sustituido.
                 let datosPublicacion = null;
-                if (window.bsAgendaCloudDocRef) {
-                    const snapshotFresco = await window.bsAgendaCloudDocRef.get({ source: 'server' });
-                    const datosFrescos = snapshotFresco.data() || {};
+                // ARQ-V1-MIGRACION-IMPL: lo último CONFIRMADO por el servidor (listeners + guardados
+                // confirmados), sin releer nada. Sin datos confirmados todavía, no se publica.
+                if (!window.bsUltimoServidorConocido) return;
+                {
+                    const datosFrescos = JSON.parse(JSON.stringify(window.bsUltimoServidorConocido));
                     datosPublicacion = {
                         clientes: datosFrescos.clientes || {},
                         agenda: datosFrescos.agenda || {},

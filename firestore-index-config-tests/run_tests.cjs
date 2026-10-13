@@ -72,14 +72,26 @@ console.log('\n=== 4. firestore.rules NO se ha modificado por este hotfix ===');
   // esperada a la mitad que sigue siendo invariante (lectura), no a la de escritura, que
   // cambió intencionadamente y ya tiene su propia cobertura dedicada.
   const rules = leerTexto('firestore.rules');
-  checkTrue('firestore.rules conserva la regla de LECTURA de besoulSuite/agenda sin cambios', rules.includes("allow read: if isActiveUser() && docId == 'agenda';"));
+  // ARQ-V1-MIGRACION-IMPL: tras el corte, besoulSuite/agenda queda congelado (solo lectura admin).
+  checkTrue('firestore.rules: besoulSuite/agenda solo lo lee administración tras el corte', rules.includes("allow read: if isAdmin() && docId == 'agenda';"));
+  checkTrue('firestore.rules: besoulSuite/agenda no admite ninguna escritura tras el corte', rules.includes("allow write: if false && docId == 'agenda';"));
 }
 
 // ============================================================
 console.log('\n=== 5. Sin índices compuestos inventados -- no hacían falta (cero queries sobre besoulSuite) ===');
 // ============================================================
 {
-  check('"indexes" (compuestos) está vacío -- no se ha creado ningún índice compuesto nuevo', indexesConfig.indexes, []);
+  // ARQ-V1-MIGRACION-IMPL: cada índice compuesto corresponde a una consulta REAL del código nuevo
+  // (sincronización incremental por entrenador y listeners acotados). Ninguno sobre besoulSuite.
+  const esperados = [
+    'besoulAgendaSemanas:trainerKey+actualizadoEn', 'besoulClientes:trainerKey+actualizadoEn', 'besoulTrainers:trainerKey+actualizadoEn',
+    'besoulHistoricoClientes:trainerKey+actualizadoEn', 'besoulNotas:trainerKey+actualizadoEn',
+    'besoulNotifications:audience+createdAt', 'besoulNotifications:audience+trainerKey+createdAt', 'besoulReservas:trainerKey+createdAt',
+    'besoulSolicitudesEliminacion:trainerKey+solicitadoEn', 'besoulLeads:trainerKey+estado',
+  ];
+  const reales = (indexesConfig.indexes || []).map(i => `${i.collectionGroup}:${i.fields.map(x => x.fieldPath).join('+')}`).sort();
+  check('los índices compuestos son exactamente los que necesitan las consultas reales', reales, esperados.slice().sort());
+  check('ningún índice compuesto sobre besoulSuite', (indexesConfig.indexes || []).some(i => i.collectionGroup === 'besoulSuite'), false);
 }
 
 // ============================================================
@@ -134,7 +146,10 @@ console.log('\n=== 13. Las colecciones que SÍ necesitan sus propios índices no
   const colectionesConQueryReal = ['besoulLeads', 'besoulNotifications', 'besoulReservas', 'besoulSolicitudesEliminacion', 'besoulCancelacionesCliente'];
   const tocadas = overrides.filter(o => colectionesConQueryReal.includes(o.collectionGroup));
   check('ninguna fieldOverride toca una colección que SÍ tiene queries reales', tocadas, []);
-  check('todas las fieldOverrides de este archivo son exclusivamente para "besoulSuite"', overrides.every(o => o.collectionGroup === 'besoulSuite'), true);
+  const nuevas = ['besoulAgendaSemanas', 'besoulClientes', 'besoulTrainers', 'besoulHistoricoClientes', 'besoulNotas', 'besoulAgendaConfig'];
+  check('las fieldOverrides son solo para besoulSuite o las colecciones nuevas de la Agenda', overrides.every(o => o.collectionGroup === 'besoulSuite' || nuevas.includes(o.collectionGroup)), true);
+  const consultados = ['trainerKey', 'actualizadoEn', 'leadsPrueba', 'leadId', 'semana', 'clienteId', 'mes', 'eliminado'];
+  check('ninguna exención de índice toca un campo que se consulta', overrides.filter(o => nuevas.includes(o.collectionGroup) && consultados.includes(o.fieldPath)).map(o => o.fieldPath), []);
 }
 
 console.log(`\n${pass}/${pass + fail} pruebas OK.`);
