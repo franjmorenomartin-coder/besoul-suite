@@ -25,7 +25,7 @@ function crearFirestoreMock() {
     return {
       doc(id) {
         return {
-          _coleccion: nombre, _id: id,
+          _coleccion: nombre, _id: id, path: `${nombre}/${id}`,
           async get() { return { exists: id in colecciones[nombre], data: () => deepClone(colecciones[nombre][id]) }; }
         };
       }
@@ -62,13 +62,34 @@ function crearSesionAgenda({ dbCredenciales, dbClientes, dbAgenda, dbDisponibili
     let dbHistoricoClientes = {};
     let lunesActual = new Date();
     let entrenadorVisto = '';
+    let rolActivo = 'admin';
+    let usuarioLogeado = 'admin';
     function generarTokenReservaCliente(){ return 'res_test_' + Math.random().toString(36).slice(2); }
     function escapeHTML(v){ return String(v||''); }
   `;
   const fn = new Function('dbCredenciales', 'dbClientes', 'dbAgenda', 'dbDisponibilidadReservas', 'window', 'firebase', 'usuarioFirebaseActual', 'localStorage',
     preamble + agendaExtracted + `
     return { publicarReservasPublicas, construirAuditoriaTrainerKey, normalizarTrainerKey, calcularContadorClases };`);
-  return fn(dbCredenciales, dbClientes, dbAgenda, dbDisponibilidadReservas, windowFalso, firebaseFalso, { uid: 'test' }, localStorageFalso);
+  const api = fn(dbCredenciales, dbClientes, dbAgenda, dbDisponibilidadReservas, windowFalso, firebaseFalso, { uid: 'test' }, localStorageFalso);
+  // HOTFIX-V1-PUBLICACION-CUOTA-P0: la publicación ya no inventa tokens (el token se crea y se guarda al
+  // guardar la ficha) ni publica por defecto a todos los entrenadores. El arnés simula ambas cosas: da
+  // a cada ficha individual un token estable (en memoria y en la copia del servidor) y pide
+  // explícitamente todos los entrenadores presentes, como haría un admin.
+  const tokenDe = (tk, c) => `res_test_${tk}_${c.id}`;
+  const conTokens = mapa => { Object.keys(mapa || {}).forEach(tk => (mapa[tk] || []).forEach(c => { if (c && c.tipo === 'individual' && !c.reservaToken) c.reservaToken = tokenDe(tk, c); })); return mapa; };
+  if (windowFalso.bsAgendaCloudDocRef) {
+    const getOriginal = windowFalso.bsAgendaCloudDocRef.get.bind(windowFalso.bsAgendaCloudDocRef);
+    windowFalso.bsAgendaCloudDocRef.get = async (...a) => { const snap = await getOriginal(...a); const original = snap.data(); const datos = original ? JSON.parse(JSON.stringify(original)) : original; if (datos) conTokens(datos.clientes); return { ...snap, data: () => datos }; };
+  }
+  const publicarOriginal = api.publicarReservasPublicas;
+  api.publicarReservasPublicas = async () => {
+    if (!windowFalso.bsAgendaCloudDocRef) conTokens(dbClientes);
+    let servidor = null;
+    if (windowFalso.bsAgendaCloudDocRef) { servidor = (await windowFalso.bsAgendaCloudDocRef.get({ source: 'server' })).data() || {}; }
+    const todos = Array.from(new Set([...Object.keys(dbClientes || {}), ...Object.keys(dbDisponibilidadReservas || {}), ...Object.keys((servidor && servidor.clientes) || {}), ...Object.keys((servidor && servidor.disponibilidadReservas) || {})]));
+    return publicarOriginal(todos);
+  };
+  return api;
 }
 
 function crearSesionPortal(clientData, scheduleData) {

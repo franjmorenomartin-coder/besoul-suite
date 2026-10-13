@@ -1,4 +1,4 @@
-const BS_APP_BUILD_TAG = 'agenda-sesiones-ficha-p0-2026-10-13';
+const BS_APP_BUILD_TAG = 'agenda-publicacion-cuota-p0-2026-10-13';
 
 const BS_AGENDA_GUARDADO_TIMEOUT_MS = 20000;
 
@@ -512,9 +512,15 @@ function formatoMinutosHorario(totalMinutos) {
 
         }
 
-function publicarReservasPublicasDebounced() {
+function publicarReservasPublicasDebounced(trainerKey) {
+            if (!window.bsReservasPublishPendientes) window.bsReservasPublishPendientes = new Set();
+            window.bsReservasPublishPendientes.add(trainerKey || entrenadorVisto || usuarioLogeado || '');
             clearTimeout(window.bsReservasPublishTimer);
-            window.bsReservasPublishTimer = setTimeout(publicarReservasPublicas, 800);
+            window.bsReservasPublishTimer = setTimeout(() => {
+                const trainerKeys = Array.from(window.bsReservasPublishPendientes || []).filter(Boolean);
+                window.bsReservasPublishPendientes = new Set();
+                publicarReservasPublicas(trainerKeys);
+            }, 800);
         }
 
 function guardarEstadoNubeAgenda(trainerKeyScope, opcionesGuardado) {
@@ -727,7 +733,7 @@ function ejecutarGuardadoEstadoNubeAgenda(trainerKeyScope) {
                         // guardado: antes cada guardado esperaba a releer el documento entero y a
                         // publicar los datos de TODOS los entrenadores antes de confirmarse, y los
                         // guardados siguientes esperaban detrás (lentitud reportada).
-                        publicarReservasPublicasDebounced();
+                        publicarReservasPublicasDebounced(scope);
                         return { ok: true };
                     })
                     .catch(err => {

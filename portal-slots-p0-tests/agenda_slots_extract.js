@@ -146,8 +146,9 @@ async function publicarReservasPublicasParaTrainer(trainerKey, { fs, claveMesRea
                 g.solicitudesPendientes = pendientes;
                 g.plazasLibres = Math.max(0, (g.capacidad || 0) - (g.asistentes || 0) - pendientes);
             });
+            const pendientesPublicacion = [];
             const scheduleRef = fs.collection(BS_PUBLIC_SCHEDULE_COLLECTION).doc(trainerKey);
-            batch.set(scheduleRef, {
+            encolarPublicacionSiCambia(batch, scheduleRef, {
                 trainerKey,
                 trainerName: nombreEntrenador(trainerKey),
                 centroId: dbCredenciales[trainerKey]?.centroId || '',
@@ -156,11 +157,14 @@ async function publicarReservasPublicasParaTrainer(trainerKey, { fs, claveMesRea
                 ocupados,
                 gruposAbiertos: gruposAbiertos.filter(g => g.plazasLibres > 0),
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
+            }, pendientesPublicacion);
             (dbClientes[trainerKey] || []).forEach(c => {
                 if (!c || c.tipo !== 'individual' || c.vinculacion || !clienteActivoParaAgenda(c)) return;
                 if (!c.email || !c.telefono) return;
-                if (!c.reservaToken) c.reservaToken = generarTokenReservaCliente();
+                // HOTFIX-V1-PUBLICACION-CUOTA-P0: antes se inventaba aquí un token que nunca se guardaba
+                // en la ficha (esto trabaja sobre una copia): cada publicación creaba un documento
+                // público nuevo y huérfano. El token se crea y se guarda al guardar la ficha.
+                if (!c.reservaToken) return;
                 const ref = fs.collection(BS_PUBLIC_CLIENTS_COLLECTION).doc(c.reservaToken);
                 // CLIENT-01/02 (2026-09-04): campos añadidos para portal-cliente.html --
                 // MISMO documento por token que ya usaba reservas.html (eliminado en
@@ -172,7 +176,7 @@ async function publicarReservasPublicasParaTrainer(trainerKey, { fs, claveMesRea
                 // lee el documento monolítico de agenda, solo este resumen ya calculado.
                 const contador = calcularContadorClases(c, claveMesReal, trainerKey);
                 const sesionesPortal = sesionesClienteParaPortal(trainerKey, c.id);
-                batch.set(ref, {
+                encolarPublicacionSiCambia(batch, ref, {
                     token: c.reservaToken,
                     clientId: c.id,
                     clientName: c.nombre,
@@ -211,12 +215,24 @@ async function publicarReservasPublicasParaTrainer(trainerKey, { fs, claveMesRea
                     cancelacionMinHoras: parseInt(c.cancelacionMinHoras, 10) || CANCELACION_MIN_HORAS_DEFAULT,
                     avisos: Array.isArray(c.avisosPortal) ? c.avisosPortal.slice(0, 10).map(a => ({ id: a.id, fecha: a.fecha, contenido: a.contenido })) : [],
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                }, { merge: true });
+                }, pendientesPublicacion);
             });
+            if (!pendientesPublicacion.length) return;
             await batch.commit();
+            pendientesPublicacion.forEach(([ruta, firma]) => window.bsPublicacionUltima.set(ruta, firma));
         }
 
-async function publicarReservasPublicas() {
+function encolarPublicacionSiCambia(batch, ref, datos, pendientes) {
+            if (!window.bsPublicacionUltima) window.bsPublicacionUltima = new Map();
+            const comparable = { ...datos };
+            delete comparable.updatedAt;
+            const firma = JSON.stringify(comparable);
+            if (window.bsPublicacionUltima.get(ref.path) === firma) return;
+            batch.set(ref, datos, { merge: true });
+            pendientes.push([ref.path, firma]);
+        }
+
+async function publicarReservasPublicas(trainerKeysPedidos) {
             try {
                 if (!window.firebase || !firebase.apps.length || !usuarioFirebaseActual) return;
                 const fs = firebase.firestore();
@@ -287,10 +303,12 @@ async function publicarReservasPublicas() {
                         dbAgenda = datosPublicacion.agenda;
                         dbDisponibilidadReservas = datosPublicacion.disponibilidadReservas;
                     }
-                    trainerKeysAPublicar = Array.from(new Set([
-                        ...Object.keys(dbDisponibilidadReservas || {}),
-                        ...Object.keys(dbClientes || {})
-                    ]));
+                    // HOTFIX-V1-PUBLICACION-CUOTA-P0: solo los entrenadores pedidos (por defecto, el
+                    // que se está viendo) y, para un PT, únicamente el suyo.
+                    const conDatos = new Set([...Object.keys(dbDisponibilidadReservas || {}), ...Object.keys(dbClientes || {})]);
+                    const pedidos = Array.isArray(trainerKeysPedidos) && trainerKeysPedidos.length ? trainerKeysPedidos : [entrenadorVisto];
+                    trainerKeysAPublicar = Array.from(new Set(pedidos))
+                        .filter(t => t && conDatos.has(t) && (rolActivo === 'admin' || t === usuarioLogeado));
                     publicaciones = trainerKeysAPublicar.map(trainerKey => publicarReservasPublicasParaTrainer(trainerKey, { fs, claveMesReal }));
                 } finally {
                     dbClientes = estadoVivoAgenda.dbClientes;
