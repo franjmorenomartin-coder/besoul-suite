@@ -4,6 +4,7 @@
 // No se carga desde ninguna página de la app.
 //
 //   0) Pegar besoul-datos.js en la consola (define window.BesoulDatos), y después este archivo.
+//   0b) await verificarReglasEIndicesBesoul()          -> SOLO LECTURAS: reglas nuevas activas e índices listos
 //   1) await migrarAgendaBesoul()                      -> SIMULACIÓN: lee, transforma, verifica. No escribe.
 //   2) await migrarAgendaBesoul({ ejecutar: true })    -> escribe los documentos nuevos (solo con autorización).
 //   3) await verificarMigracionBesoul()                -> relee TODO del servidor y compara con el original.
@@ -93,9 +94,26 @@
       const pendientes = docs.filter(d => !existentes[d.col][d.id]);
       const actor = (firebase.auth().currentUser || {}).email || 'migracion';
       for (let i = 0; i < pendientes.length; i += 100) {
+        if (!firebase.auth().currentUser) throw Object.assign(new Error('Migración DETENIDA: la sesión de administrador se ha cerrado. Vuelve a entrar y repite (lo ya escrito se reconoce como migrado).'), { informe });
         const batch = fs.batch();
-        pendientes.slice(i, i + 100).forEach(d => batch.set(fs.collection(D.COL[d.col]).doc(d.id), { ...d.data, rev: 1, actualizadoEn: firebase.firestore.FieldValue.serverTimestamp(), actualizadoPor: `migracion:${actor}` }));
-        await batch.commit();
+        const lote = pendientes.slice(i, i + 100);
+        const contenido = d => ({ ...d.data, rev: 1, actualizadoEn: firebase.firestore.FieldValue.serverTimestamp(), actualizadoPor: `migracion:${actor}` });
+        lote.forEach(d => batch.set(fs.collection(D.COL[d.col]).doc(d.id), contenido(d)));
+        // El lote es atómico: si falla, no se ha escrito nada de él. Se reintenta (un rechazo puntual
+        // por contención no debe detener el corte; observado en el emulador) y, si sigue fallando, se
+        // escriben uno a uno para identificar el documento rechazado (lo escrito es idéntico al
+        // original; repetir la migración lo reconoce como ya migrado y continúa).
+        let escrito = false;
+        for (let intento = 0; intento < 3 && !escrito; intento++) {
+          try { await batch.commit(); escrito = true; }
+          catch (e) { console.warn(`[MIGRACIÓN] lote ${i / 100 + 1} rechazado (${e.code}), reintento ${intento + 1}/3`); await new Promise(r => setTimeout(r, 1500 * (intento + 1))); }
+        }
+        if (!escrito) {
+          for (const d of lote) {
+            try { await fs.collection(D.COL[d.col]).doc(d.id).set(contenido(d)); }
+            catch (e2) { throw Object.assign(new Error(`Migración DETENIDA: ${d.col}/${d.id} rechazado (${e2.code}; sesión: ${(firebase.auth().currentUser || {}).email || "CERRADA"}): ${String(e2.message).slice(0, 400)}. Lo ya escrito es idéntico al original y se puede reanudar.`), { informe }); }
+          }
+        }
         console.log(`[MIGRACIÓN] escritos ${Math.min(i + 100, pendientes.length)}/${pendientes.length}`);
       }
       informe.escritos = pendientes.length;
@@ -150,6 +168,37 @@
     console.log('[RECONSTRUCCIÓN AGENDA]', r);
     return r;
   };
+  // ---------------------------------------------------------------- verificación del despliegue (solo lecturas)
+  // Reglas: con las reglas ANTERIORES, leer besoulAgendaSemanas/besoulAgendaConfig se deniega
+  // (regla por defecto); con las NUEVAS, un admin puede. Índices: cada consulta que necesita un
+  // índice compuesto falla con "failed-precondition" si el índice no existe o aún se está creando.
+  // No escribe nada en ningún documento.
+  window.verificarReglasEIndicesBesoul = async function () {
+    const r = { reglasNuevasActivas: false, indices: {}, todoListo: false };
+    try { await fs.collection(D.COL.semanas).limit(1).get({ source: 'server' }); await fs.collection(D.COL.config).doc('global').get({ source: 'server' }); r.reglasNuevasActivas = true; }
+    catch (e) { r.reglasError = e.code; }
+    const ts0 = firebase.firestore.Timestamp.fromMillis(0);
+    const consultas = {
+      'besoulAgendaSemanas(trainerKey,actualizadoEn)': () => fs.collection(D.COL.semanas).where('trainerKey', '==', '__verificacion__').where('actualizadoEn', '>=', ts0).limit(1),
+      'besoulClientes(trainerKey,actualizadoEn)': () => fs.collection(D.COL.clientes).where('trainerKey', '==', '__verificacion__').where('actualizadoEn', '>=', ts0).limit(1),
+      'besoulTrainers(trainerKey,actualizadoEn)': () => fs.collection(D.COL.trainers).where('trainerKey', '==', '__verificacion__').where('actualizadoEn', '>=', ts0).limit(1),
+      'besoulHistoricoClientes(trainerKey,actualizadoEn)': () => fs.collection(D.COL.historico).where('trainerKey', '==', '__verificacion__').where('actualizadoEn', '>=', ts0).limit(1),
+      'besoulNotas(trainerKey,actualizadoEn)': () => fs.collection(D.COL.notas).where('trainerKey', '==', '__verificacion__').where('actualizadoEn', '>=', ts0).limit(1),
+      'besoulNotifications(audience,createdAt)': () => fs.collection('besoulNotifications').where('audience', '==', 'admin').orderBy('createdAt', 'desc').limit(1),
+      'besoulNotifications(audience,trainerKey,createdAt)': () => fs.collection('besoulNotifications').where('audience', '==', 'trainer').where('trainerKey', '==', '__verificacion__').orderBy('createdAt', 'desc').limit(1),
+      'besoulReservas(trainerKey,createdAt)': () => fs.collection('besoulReservas').where('trainerKey', '==', '__verificacion__').orderBy('createdAt', 'desc').limit(1),
+      'besoulSolicitudesEliminacion(trainerKey,solicitadoEn)': () => fs.collection('besoulSolicitudesEliminacion').where('trainerKey', '==', '__verificacion__').orderBy('solicitadoEn', 'desc').limit(1),
+      'besoulLeads(trainerKey,estado)': () => fs.collection('besoulLeads').where('trainerKey', '==', '__verificacion__').where('estado', '==', 'Prueba agendada').limit(1),
+    };
+    for (const [nombre, q] of Object.entries(consultas)) {
+      try { await q().get({ source: 'server' }); r.indices[nombre] = 'OK'; }
+      catch (e) { r.indices[nombre] = e.code === 'failed-precondition' ? 'FALTA O EN CREACIÓN' : `ERROR ${e.code}`; }
+    }
+    r.todoListo = r.reglasNuevasActivas && Object.values(r.indices).every(v => v === 'OK');
+    console.log('[VERIFICACIÓN REGLAS E ÍNDICES]', r);
+    return r;
+  };
+
   // ---------------------------------------------------------------- MODO CONTINGENCIA
   const contRef = fs.collection('besoulSuite').doc('agendaContingencia');
   function tamanoFirestore(v) {

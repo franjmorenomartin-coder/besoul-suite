@@ -623,6 +623,12 @@
         const partes = { sesiones: {}, pruebasCRM: {}, excepciones: {}, bloqueos: {} };
         const meter = (campo, destino) => Object.keys(final[campo] || {}).forEach(c => { const f = fechaDeClave(c); if (f && lunesDe(f) === lunes) partes[destino][c] = final[campo][c]; });
         meter('agenda', 'sesiones'); meter('pruebasCRM', 'pruebasCRM');
+        // Las sesiones que este guardado NO cambia se reescriben EXACTAMENTE como están en el
+        // servidor (incluidas las 5 copias redundantes, si las tienen): solo se limpian las que se
+        // crean o modifican. Así ningún dato histórico se altera por guardar otra sesión de la semana.
+        const crudo = (data && data.sesiones) || {};
+        const crudoLimpio = limpiarAgenda ? limpiarAgenda(crudo) : crudo;
+        Object.keys(partes.sesiones).forEach(c => { if (c in crudo && igual(crudoLimpio[c], partes.sesiones[c])) partes.sesiones[c] = crudo[c]; });
         const disp = final.disponibilidadReservas || {};
         SUBMAPAS_DIA.forEach(sub => Object.keys(disp[sub] || {}).forEach(f => { if (RE_FECHA.test(f) && lunesDe(f) === lunes) partes[sub][f] = disp[sub][f]; }));
         escribir(refSemana(lunes), 'semanas', idSemana(tk, lunes), data, contenidoSemana(tk, lunes, partes));

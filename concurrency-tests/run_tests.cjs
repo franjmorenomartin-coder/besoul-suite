@@ -305,7 +305,10 @@ console.log('\n=== O: TAMAÑO -- las sesiones se guardan sin las copias de porta
   const r = await s.guardarEstadoNubeAgenda('m');
   const st = servidor.estadoActual();
   check('O: ok:true', r.ok, true);
-  check('O: las sesiones (existente y nueva) se guardan sin las copias', Object.values(st.agenda.m).map(x => Object.keys(x).sort()), [['duracionMin', 'id', 'nombre'], ['duracionMin', 'id', 'nombre']]);
+  // ARQ-V1-MIGRACION-IMPL: solo se limpian las sesiones que el guardado crea o cambia; las demás se
+  // reescriben idénticas (ningún dato histórico se altera por guardar otra sesión de la semana).
+  check('O: la sesión nueva se guarda sin las copias', Object.keys(st.agenda.m['2026-10-09_12:00']).sort(), ['duracionMin', 'id', 'nombre']);
+  check('O: la sesión existente que no se tocó queda EXACTAMENTE igual', st.agenda.m['2026-10-09_10:00'], sesionGorda);
   check('O: la ficha conserva token y contrato', st.clientes.m[0], fichaC1);
   check('O: la agenda de otro entrenador no se toca', st.agenda.otro['2026-10-09_10:00'].reservaToken, 'res_x');
   const servidor2 = crearServidorFirestore(base);

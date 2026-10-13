@@ -327,6 +327,18 @@ async function main() {
   v = await vista(admin, tkC);
   check('C19 cinco guardados simultáneos en la misma semana: los cinco confirmados y presentes', r19.every(r => r.status === 'fulfilled') && horas.every(h => !!v.agenda[`2026-11-30_${h}`]), r19.map(r => r.status + (r.reason ? ':' + r.reason.code : '')));
 
+  // C20: guardar una sesión NO altera las demás sesiones de la semana (p. ej. sesiones históricas del
+  // informe de daños): se reescriben idénticas, incluidas las 5 copias redundantes si las tienen.
+  await testEnv.withSecurityRulesDisabled(async ctx => {
+    const ref = ctx.firestore().collection(D.COL.semanas).doc(D.idSemana('pta', '2026-12-07'));
+    await ref.set({ ...D.contenidoSemana('pta', '2026-12-07', { sesiones: { '2026-12-07_10:00': { id: 'cliC', nombre: 'Histórica', duracionMin: 45, contratoCliente: { firmado: true }, reservaToken: 'tok', integrantesObj: [{ id: 'a' }] } } }), rev: 1, actualizadoEn: Timestamp.now() });
+  });
+  const antesC20 = (await pta.collection(D.COL.semanas).doc(D.idSemana('pta', '2026-12-07')).get()).data().sesiones['2026-12-07_10:00'];
+  b0 = await vista(pta, tkC);
+  await guardar(pta, tkC, b0, conCambio(b0, l => { l.agenda['2026-12-08_10:00'] = S(); }));
+  const despuesC20 = (await pta.collection(D.COL.semanas).doc(D.idSemana('pta', '2026-12-07')).get()).data().sesiones;
+  check('C20 guardar otra sesión de la semana deja las demás EXACTAMENTE igual (sin quitar ni cambiar campos)', D.igual(despuesC20['2026-12-07_10:00'], antesC20) && !!despuesC20['2026-12-08_10:00']);
+
   // ============================================================== D. SINCRONIZACIÓN Y CONSUMO
   console.log('\n=== D. Sincronización incremental y consumo medido ===');
   const cacheA = D.cacheMemoria();

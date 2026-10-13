@@ -4,6 +4,9 @@
 // 45 min, slots válidos, conflictos, no double-booking, IDs deterministas, transacción, bonos/
 // restricciones de cliente. Ningún dato real, ninguna escritura a Firestore real.
 const fs = require('fs');
+// Fecha de la reserva de grupo: dentro de la ventana de 30 días del portal y relativa a hoy (antes
+// era fija, 2026-10-05, y la prueba fallaba al quedar en el pasado, no por un defecto funcional).
+const FECHA_GRUPO = (() => { const d = new Date(); d.setDate(d.getDate() + 5); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
 const path = require('path');
 
 const extracted = fs.readFileSync(path.join(__dirname, 'portal_extract.js'), 'utf8');
@@ -159,10 +162,10 @@ console.log('\n=== IDs deterministas + transacción: no se puede reservar dos ve
   // la misma franja de grupo sin pisarse el documento entre ellos).
   const { M, db } = nuevoSandbox();
   M.clientData = { trainerKey: 'carmen', clientId: 'cliente-2', clientName: 'Luis', trainerName: 'Carmen' };
-  M.scheduleData = { gruposAbiertos: [{ clave: '2026-10-05_19:00', fechaISO: '2026-10-05', hora: '19:00', grupoId: 'g1', grupoNombre: 'HIIT', plazasLibres: 2, asistentesIds: [] }] };
-  M.selectedReserva = { iso: '2026-10-05', hora: '19:00', clave: '2026-10-05_19:00', tipoReserva: 'grupo_abierto', grupoId: 'g1', grupoNombre: 'HIIT' };
+  M.scheduleData = { gruposAbiertos: [{ clave: `${FECHA_GRUPO}_19:00`, fechaISO: `${FECHA_GRUPO}`, hora: '19:00', grupoId: 'g1', grupoNombre: 'HIIT', plazasLibres: 2, asistentesIds: [] }] };
+  M.selectedReserva = { iso: `${FECHA_GRUPO}`, hora: '19:00', clave: `${FECHA_GRUPO}_19:00`, tipoReserva: 'grupo_abierto', grupoId: 'g1', grupoNombre: 'HIIT' };
   await M.enviarSolicitudReserva();
-  check('la reserva de grupo abierto usa el ID trainerKey__clave__clientId (no pisa a otros asistentes)', db.writes.map(w => w.id), ['carmen__2026-10-05_19:00__cliente-2']);
+  check('la reserva de grupo abierto usa el ID trainerKey__clave__clientId (no pisa a otros asistentes)', db.writes.map(w => w.id), [`carmen__${FECHA_GRUPO}_19:00__cliente-2`]);
 }
 
 console.log(`\n${pass}/${pass + fail} pruebas OK.`);

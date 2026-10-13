@@ -26,6 +26,8 @@ function check(desc, ok, det) { ok ? pass++ : fail++; console.log(`${ok ? 'PASS'
   await page.waitForFunction(() => firebase.auth().currentUser, null, { timeout: 30000 });
   await page.addScriptTag({ content: fs.readFileSync(path.join(RAIZ, 'besoul-datos.js'), 'utf8') });
   await page.addScriptTag({ content: fs.readFileSync(path.join(RAIZ, 'scripts', 'migrar-agenda-documentos.js'), 'utf8') });
+  const ver = await page.evaluate(() => verificarReglasEIndicesBesoul());
+  check('M0 verificación (solo lecturas): reglas nuevas activas', ver.reglasNuevasActivas === true, ver);
   const sim = await page.evaluate(() => migrarAgendaBesoul());
   check('M1 simulación: ida y vuelta exacta y destino vacío, sin escribir', sim.idaYVueltaExacta === true && sim.destino.nuevos > 0 && !sim.escritos, sim.destino);
   const ej = await page.evaluate(() => migrarAgendaBesoul({ ejecutar: true }));
