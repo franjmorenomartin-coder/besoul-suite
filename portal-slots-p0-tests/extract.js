@@ -40,7 +40,7 @@ const agendaFunciones = [
   'esGrupoAbierto', 'capacidadGrupoAbierto', 'asistentesGrupoAbierto', 'clavesBloqueSesion',
   'minutosDesdeHorario', 'claveDesdeFechaYMinutos', 'formatoMinutosHorario',
   'sesionesClienteParaPortal', 'calendarioSesionesClienteParaPortal', 'nombreEntrenador',
-  'publicarReservasPublicasParaTrainer', 'publicarReservasPublicas', 'normalizarTrainerKey',
+  'publicarReservasPublicasParaTrainer', 'encolarPublicacionSiCambia', 'publicarReservasPublicas', 'normalizarTrainerKey',
   'diasDisponibilidadActivaTrainer', 'construirAuditoriaTrainerKey', 'disponibilidadReservasPorDefecto',
   // Cadena real de calcularContadorClases() (nunca un stub): PORTAL-SLOTS-P0 GLOBAL encontró que
   // contarSesionesAgendadas() leía el global entrenadorVisto en vez del trainerKey real del cliente

@@ -1365,7 +1365,7 @@ miércoles 07:00-09:00"></textarea>
         // texto plano, copiable sin depender de ninguna interacción de DevTools más allá de
         // seleccionar texto (el objeto expandible [BESOUL_SAVE_CONFLICT] no era extraíble de forma
         // fiable para un usuario sin experiencia en DevTools).
-        const BS_APP_BUILD_TAG = 'agenda-sesiones-ficha-p0-2026-10-13';
+        const BS_APP_BUILD_TAG = 'agenda-publicacion-cuota-p0-2026-10-13';
         console.log('[BESOUL BUILD]', BS_APP_BUILD_TAG, '-- si esto NO aparece en tu consola tras recargar, tu navegador está ejecutando una versión antigua cacheada: cierra TODAS las pestañas de la app y vuelve a abrirla, o usa una ventana de incógnito.');
         let slotAccionSeleccionado = '';
         window.bsAgendaDiaMovil = window.bsAgendaDiaMovil ?? null;
@@ -2529,7 +2529,7 @@ miércoles 07:00-09:00"></textarea>
                         // guardado: antes cada guardado esperaba a releer el documento entero y a
                         // publicar los datos de TODOS los entrenadores antes de confirmarse, y los
                         // guardados siguientes esperaban detrás (lentitud reportada).
-                        publicarReservasPublicasDebounced();
+                        publicarReservasPublicasDebounced(scope);
                         return { ok: true };
                     })
                     .catch(err => {
@@ -9255,7 +9255,7 @@ Cancelar = no hacer nada`,
                 errorSincronizacion = true;
             }
 
-            publicarReservasPublicas();
+            publicarReservasPublicas([s.trainerKey]);
             crearNotificacion({
                 trainerKey: s.trainerKey,
                 type: 'solicitud_administrativa',
@@ -9409,7 +9409,7 @@ Cancelar = no hacer nada`,
                 recalcularKPIs(); renderAgenda(); renderSolicitudesReservas();
                 return;
             }
-            publicarReservasPublicas();
+            publicarReservasPublicas([trainer]);
             recalcularKPIs(); renderAgenda(); renderSolicitudesReservas();
             // Aviso opcional tras aceptar: solo después de guardar con éxito (ver arriba), nunca antes.
             {
@@ -9459,9 +9459,9 @@ Cancelar = no hacer nada`,
                     dbSolicitudesReservas = mapa;
                     actualizarBadgeReservas();
                     if (document.getElementById('modal-solicitudes-reservas') && !document.getElementById('modal-solicitudes-reservas').classList.contains('hidden')) renderSolicitudesReservas();
-                    publicarReservasPublicasDebounced();
+                    // HOTFIX-V1-PUBLICACION-CUOTA-P0: solo los entrenadores cuyas solicitudes cambiaron.
+                    snapshot.docChanges().forEach(cambio => { const tk = (cambio.doc.data() || {}).trainerKey; if (tk) publicarReservasPublicasDebounced(tk); });
                 }, err => console.error('Error leyendo solicitudes de reservas:', err));
-                publicarReservasPublicasDebounced();
             } catch(err) { console.error('Error iniciando módulo de reservas:', err); }
         }
 
@@ -9552,9 +9552,26 @@ Cancelar = no hacer nada`,
             }
         }
 
-        function publicarReservasPublicasDebounced() {
+        // HOTFIX-V1-PUBLICACION-CUOTA-P0 (2026-10-13): CAUSA RAÍZ DEMOSTRADA de la cuota diaria de
+        // escrituras agotada (plan Spark: 20.000/día; consola de Firebase: ~21.000 el 9-oct y ~17.000
+        // el 10-oct) y de ~6.800 rechazos de reglas en 7 días. Cada guardado confirmado republicaba
+        // el portal de TODOS los entrenadores (~21 horarios + ~217 fichas públicas = ~238 escrituras
+        // por guardado desde una sesión de admin; desde una sesión de PT, los lotes de los demás
+        // entrenadores eran rechazados por las reglas). Con la cuota agotada, Firestore rechaza
+        // TODOS los guardados de todos los usuarios hasta el reinicio diario. Ahora:
+        //  - solo se publica el entrenador afectado (el del guardado / el que se está viendo);
+        //  - un PT solo publica lo suyo (nunca lotes que las reglas van a rechazar);
+        //  - un documento público solo se reescribe si su contenido ha cambiado desde la última
+        //    publicación confirmada de esta pantalla.
+        function publicarReservasPublicasDebounced(trainerKey) {
+            if (!window.bsReservasPublishPendientes) window.bsReservasPublishPendientes = new Set();
+            window.bsReservasPublishPendientes.add(trainerKey || entrenadorVisto || usuarioLogeado || '');
             clearTimeout(window.bsReservasPublishTimer);
-            window.bsReservasPublishTimer = setTimeout(publicarReservasPublicas, 800);
+            window.bsReservasPublishTimer = setTimeout(() => {
+                const trainerKeys = Array.from(window.bsReservasPublishPendientes || []).filter(Boolean);
+                window.bsReservasPublishPendientes = new Set();
+                publicarReservasPublicas(trainerKeys);
+            }, 800);
         }
 
         function claveFechaDesdeDateYMin(fecha, min) {
@@ -9604,8 +9621,9 @@ Cancelar = no hacer nada`,
                 g.solicitudesPendientes = pendientes;
                 g.plazasLibres = Math.max(0, (g.capacidad || 0) - (g.asistentes || 0) - pendientes);
             });
+            const pendientesPublicacion = [];
             const scheduleRef = fs.collection(BS_PUBLIC_SCHEDULE_COLLECTION).doc(trainerKey);
-            batch.set(scheduleRef, {
+            encolarPublicacionSiCambia(batch, scheduleRef, {
                 trainerKey,
                 trainerName: nombreEntrenador(trainerKey),
                 centroId: dbCredenciales[trainerKey]?.centroId || '',
@@ -9614,11 +9632,14 @@ Cancelar = no hacer nada`,
                 ocupados,
                 gruposAbiertos: gruposAbiertos.filter(g => g.plazasLibres > 0),
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
+            }, pendientesPublicacion);
             (dbClientes[trainerKey] || []).forEach(c => {
                 if (!c || c.tipo !== 'individual' || c.vinculacion || !clienteActivoParaAgenda(c)) return;
                 if (!c.email || !c.telefono) return;
-                if (!c.reservaToken) c.reservaToken = generarTokenReservaCliente();
+                // HOTFIX-V1-PUBLICACION-CUOTA-P0: antes se inventaba aquí un token que nunca se guardaba
+                // en la ficha (esto trabaja sobre una copia): cada publicación creaba un documento
+                // público nuevo y huérfano. El token se crea y se guarda al guardar la ficha.
+                if (!c.reservaToken) return;
                 const ref = fs.collection(BS_PUBLIC_CLIENTS_COLLECTION).doc(c.reservaToken);
                 // CLIENT-01/02 (2026-09-04): campos añadidos para portal-cliente.html --
                 // MISMO documento por token que ya usaba reservas.html (eliminado en
@@ -9630,7 +9651,7 @@ Cancelar = no hacer nada`,
                 // lee el documento monolítico de agenda, solo este resumen ya calculado.
                 const contador = calcularContadorClases(c, claveMesReal, trainerKey);
                 const sesionesPortal = sesionesClienteParaPortal(trainerKey, c.id);
-                batch.set(ref, {
+                encolarPublicacionSiCambia(batch, ref, {
                     token: c.reservaToken,
                     clientId: c.id,
                     clientName: c.nombre,
@@ -9669,12 +9690,26 @@ Cancelar = no hacer nada`,
                     cancelacionMinHoras: parseInt(c.cancelacionMinHoras, 10) || CANCELACION_MIN_HORAS_DEFAULT,
                     avisos: Array.isArray(c.avisosPortal) ? c.avisosPortal.slice(0, 10).map(a => ({ id: a.id, fecha: a.fecha, contenido: a.contenido })) : [],
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                }, { merge: true });
+                }, pendientesPublicacion);
             });
+            if (!pendientesPublicacion.length) return;
             await batch.commit();
+            pendientesPublicacion.forEach(([ruta, firma]) => window.bsPublicacionUltima.set(ruta, firma));
         }
 
-        async function publicarReservasPublicas() {
+        // HOTFIX-V1-PUBLICACION-CUOTA-P0: un documento público solo se reescribe si su contenido ha
+        // cambiado respecto a la última publicación CONFIRMADA desde esta pantalla (updatedAt no cuenta).
+        function encolarPublicacionSiCambia(batch, ref, datos, pendientes) {
+            if (!window.bsPublicacionUltima) window.bsPublicacionUltima = new Map();
+            const comparable = { ...datos };
+            delete comparable.updatedAt;
+            const firma = JSON.stringify(comparable);
+            if (window.bsPublicacionUltima.get(ref.path) === firma) return;
+            batch.set(ref, datos, { merge: true });
+            pendientes.push([ref.path, firma]);
+        }
+
+        async function publicarReservasPublicas(trainerKeysPedidos) {
             try {
                 if (!window.firebase || !firebase.apps.length || !usuarioFirebaseActual) return;
                 const fs = firebase.firestore();
@@ -9745,10 +9780,12 @@ Cancelar = no hacer nada`,
                         dbAgenda = datosPublicacion.agenda;
                         dbDisponibilidadReservas = datosPublicacion.disponibilidadReservas;
                     }
-                    trainerKeysAPublicar = Array.from(new Set([
-                        ...Object.keys(dbDisponibilidadReservas || {}),
-                        ...Object.keys(dbClientes || {})
-                    ]));
+                    // HOTFIX-V1-PUBLICACION-CUOTA-P0: solo los entrenadores pedidos (por defecto, el
+                    // que se está viendo) y, para un PT, únicamente el suyo.
+                    const conDatos = new Set([...Object.keys(dbDisponibilidadReservas || {}), ...Object.keys(dbClientes || {})]);
+                    const pedidos = Array.isArray(trainerKeysPedidos) && trainerKeysPedidos.length ? trainerKeysPedidos : [entrenadorVisto];
+                    trainerKeysAPublicar = Array.from(new Set(pedidos))
+                        .filter(t => t && conDatos.has(t) && (rolActivo === 'admin' || t === usuarioLogeado));
                     publicaciones = trainerKeysAPublicar.map(trainerKey => publicarReservasPublicasParaTrainer(trainerKey, { fs, claveMesReal }));
                 } finally {
                     dbClientes = estadoVivoAgenda.dbClientes;
