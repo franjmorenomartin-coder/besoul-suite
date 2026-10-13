@@ -16,6 +16,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script src="besoul-datos.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <style>
     body { font-family: 'Inter', sans-serif; background-color:#0B0F17; }
@@ -1828,7 +1829,11 @@
       return args;
     }
     function guardarCatalogoActividadesNube(payload){
-      if (!agendaRef) return;
+      if (!firestore) return;
+      // ARQ-V1-MIGRACION-IMPL: actividades por entrenador -> besoulTrainers/{tk}.actividades y
+      // catálogo -> besoulAgendaConfig/global, en transacción con control de versión.
+      return BesoulDatos.actualizarCamposRaiz({ firestore, FieldValue: firebase.firestore.FieldValue, payload, actor: usuarioFinanzasEmail || '' })
+        .catch(err => { console.error(err); alert('Error guardando el catálogo de actividades. Revisa permisos/reglas.'); });
       // Hallazgo real (confirmado contra el código fuente del SDK de Firestore, mismo bug ya
       // corregido en agenda.html/guardarEstadoNubeAgenda): set(payload,{merge:true}) trata una
       // clave con punto DENTRO del objeto (p.ej. "trainerActividades.veronica") como un nombre
@@ -1837,7 +1842,6 @@
       // trainerActividades.<key> que lee actividadesAutorizadasTrainer() nunca se llegaba a
       // tocar. update() sí interpreta las claves con punto del objeto como ruta anidada real.
       // Mismo payload dirigido de siempre, solo cambia el método de escritura.
-      agendaRef.update(...payloadParaUpdateFirestoreFinanzas(payload)).catch(err => { console.error(err); alert('Error guardando el catálogo de actividades. Revisa permisos/reglas.'); });
     }
     function crearActividadEspecial(){
       const nombre = prompt('Nombre de la nueva actividad especial (ej.: Pilates Máquina):');
@@ -2071,13 +2075,33 @@
     }
     async function refrescarTodoManual(){ await cargarInstantaneas(); pintarTodo(); }
 
-    async function cargarInstantaneas(){
-      const [finSnap, agSnap, usersSnap] = await Promise.all([finanzasRef.get(), agendaRef.get(), firestore.collection('besoulUsers').get()]);
-      if (finSnap.exists) dbFinanzas = normalizarFinanzas(finSnap.data());
-      else dbFinanzas = normalizarFinanzas({});
-      agendaData = agSnap.exists ? (agSnap.data() || {}) : {clientes:{}};
-      perfilesUsuarios = usersSnap.docs.map(d=>({email:d.id, ...d.data()})).filter(p=>p.activo !== false);
+    // ARQ-V1-MIGRACION-IMPL (consumo): los listeners ya entregan finanzas, usuarios y agenda al
+    // abrir; "Refrescar" solo vuelve a pintar (antes releía todo además de tener los listeners).
+    async function cargarInstantaneas(){ }
+    // ARQ-V1-MIGRACION-IMPL: datos de Agenda desde documentos independientes con sincronización
+    // INCREMENTAL (solo lo cambiado desde la última vez en este dispositivo; la copia local guarda
+    // únicamente lo recibido del servidor y se borra al cerrar sesión). Sustituye a la lectura y al
+    // listener del documento monolítico besoulSuite/agenda (que descargaba ~1 MB en cada cambio).
+    let bsFinanzasSincAgenda = null;
+    function iniciarSincronizacionAgendaAdmin(fs, onDatos){
+      if (bsFinanzasSincAgenda) { try { bsFinanzasSincAgenda.parar(); } catch(e) {} }
+      const email = String((firebase.auth().currentUser && firebase.auth().currentUser.email) || 'anonimo').toLowerCase();
+      bsFinanzasSincAgenda = BesoulDatos.crearSincronizador({
+        firestore: fs, Timestamp: firebase.firestore.Timestamp, alcance: { todos: true },
+        cache: typeof indexedDB !== 'undefined' ? BesoulDatos.cacheIndexedDB('besoul-datos') : BesoulDatos.cacheMemoria(),
+        claveCache: 'agenda|' + email + '|*',
+        onDatos: (datos, meta) => { if (meta.desdeServidor) onDatos(datos); },
+        onError: err => console.error('[BESOUL] Error sincronizando datos de Agenda:', err),
+      });
+      bsFinanzasSincAgenda.iniciar();
+      return () => { try { bsFinanzasSincAgenda.parar(); } catch(e) {} };
     }
+    function cerrarSesionBorrandoCopiaLocal(){
+      if (bsFinanzasSincAgenda) { try { bsFinanzasSincAgenda.parar(); } catch(e) {} }
+      const borrado = typeof indexedDB !== 'undefined' ? BesoulDatos.cacheIndexedDB('besoul-datos').borrarTodo() : Promise.resolve();
+      return Promise.race([borrado, new Promise(r => setTimeout(r, 1500))]);
+    }
+
     function normalizarFinanzas(data){
       const res = { centros:{}, trainerSettings:{}, gastos:{}, otrosIngresos:{}, historico:{}, auditoriaCierres:{}, ...(data || {}) };
       const centrosLimpios = {};
@@ -2116,11 +2140,11 @@
       if(!email || !pass){ alert('Introduce email y contraseña.'); return; }
       firebase.auth().signInWithEmailAndPassword(email,pass).catch(err=>{ console.error(err); alert('Acceso denegado. Revisa usuario, contraseña y rol admin.'); });
     }
-    function logout(){ firebase.auth().signOut().finally(()=>window.location.reload()); }
+    function logout(){ cerrarSesionBorrandoCopiaLocal().finally(()=>firebase.auth().signOut().finally(()=>window.location.reload())); }
 
     function inicializar(){
       if(!firebase.apps.length) firebase.initializeApp(BS_FIREBASE_CONFIG);
-      firestore=firebase.firestore(); finanzasRef=firestore.collection('besoulSuite').doc('finanzas'); agendaRef=firestore.collection('besoulSuite').doc('agenda');
+      firestore=firebase.firestore(); finanzasRef=firestore.collection('besoulSuite').doc('finanzas');
       firebase.auth().onAuthStateChanged(async user=>{
         if(!user){ document.getElementById('auth-screen').classList.remove('hidden'); document.getElementById('app-content').classList.add('hidden'); return; }
         try{
@@ -2132,10 +2156,9 @@
           perfilFinanzas={email:usuarioFinanzasEmail,...prof.data()};
           document.getElementById('lbl-usuario-logeado').innerText=perfilFinanzas.nombre||usuarioFinanzasEmail;
           document.getElementById('auth-screen').classList.add('hidden'); document.getElementById('app-content').classList.remove('hidden');
-          await cargarInstantaneas(); pintarTodo();
           if(finanzasUnsub) finanzasUnsub(); if(agendaUnsub) agendaUnsub(); if(usersUnsub) usersUnsub();
-          finanzasUnsub=finanzasRef.onSnapshot(s=>{ if(s.exists){ dbFinanzas=normalizarFinanzas(s.data()); pintarTodo(); }});
-          agendaUnsub=agendaRef.onSnapshot(s=>{ agendaData=s.exists?(s.data()||{}):{clientes:{}}; pintarTodo(); });
+          finanzasUnsub=finanzasRef.onSnapshot(s=>{ dbFinanzas=normalizarFinanzas(s.exists ? s.data() : {}); pintarTodo(); });
+          agendaUnsub=iniciarSincronizacionAgendaAdmin(firestore, datos=>{ agendaData=datos || {clientes:{}}; pintarTodo(); });
           usersUnsub=firestore.collection('besoulUsers').onSnapshot(s=>{ perfilesUsuarios=s.docs.map(d=>({email:d.id,...d.data()})).filter(p=>p.activo!==false); pintarTodo(); });
         }catch(err){ console.error(err); alert('Error cargando Finanzas. Revisa permisos/reglas.'); }
       });

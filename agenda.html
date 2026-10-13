@@ -39,6 +39,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script src="besoul-datos.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="./besoul-identidad.js"></script>
 <script src="./besoul-entorno-local.js"></script>
@@ -1365,7 +1366,7 @@ miércoles 07:00-09:00"></textarea>
         // texto plano, copiable sin depender de ninguna interacción de DevTools más allá de
         // seleccionar texto (el objeto expandible [BESOUL_SAVE_CONFLICT] no era extraíble de forma
         // fiable para un usuario sin experiencia en DevTools).
-        const BS_APP_BUILD_TAG = 'agenda-publicacion-cuota-p0-2026-10-13';
+        const BS_APP_BUILD_TAG = 'agenda-arq-documentos-2026-10-13';
         console.log('[BESOUL BUILD]', BS_APP_BUILD_TAG, '-- si esto NO aparece en tu consola tras recargar, tu navegador está ejecutando una versión antigua cacheada: cierra TODAS las pestañas de la app y vuelve a abrirla, o usa una ventana de incógnito.');
         let slotAccionSeleccionado = '';
         window.bsAgendaDiaMovil = window.bsAgendaDiaMovil ?? null;
@@ -2241,6 +2242,17 @@ miércoles 07:00-09:00"></textarea>
         // que se usa para el segundo segmento (el trainerKey completo) en cualquier clave con más
         // de un punto. Comportamiento IDÉNTICO para cualquier trainerKey sin puntos (la inmensa
         // mayoría hoy) -- split('.') da un único elemento y sigue el camino de siempre.
+        // ARQ-V1-MIGRACION-IMPL: las 5 partes de UN entrenador, desde la base conocida del servidor
+        // ({campo: {tk: valor}}) o desde el payload del guardado ({"campo.tk": valor}).
+        function partesScopeAgenda(fuente, scope, esPayload) {
+            const partes = {};
+            BS_CAMPOS_AGENDA_POR_TRAINER.forEach(campo => {
+                const valor = esPayload ? (fuente || {})[`${campo}.${scope}`] : ((fuente || {})[campo] || {})[scope];
+                partes[campo] = valor === undefined ? undefined : JSON.parse(JSON.stringify(valor));
+            });
+            return partes;
+        }
+
         function payloadParaUpdateFirestore(payload) {
             const args = [];
             Object.keys(payload).forEach(key => {
@@ -2335,14 +2347,10 @@ miércoles 07:00-09:00"></textarea>
             estadoGuardadoAgenda().bsAgendaNotasTocadas.clear();
             let releido = false;
             try {
-                if (window.bsAgendaCloudDocRef && typeof window.bsAgendaCloudDocRef.get === 'function') {
-                    let temporizador = null;
-                    const snap = await Promise.race([
-                        window.bsAgendaCloudDocRef.get({ source: 'server' }),
-                        new Promise((_, rechazar) => { temporizador = setTimeout(() => rechazar(new Error('relectura sin respuesta')), 8000); }),
-                    ]).finally(() => clearTimeout(temporizador));
-                    if (snap.exists) { aplicarEstadoNubeAgenda(snap.data(), { descartarPendientes: [scope] }); releido = true; }
-                }
+                // ARQ-V1-MIGRACION-IMPL: la verdad del servidor es lo que mantienen al día los listeners
+                // de la sincronización (solo datos recibidos del servidor), sin releer nada.
+                const sinc = window.bsAgendaSincronizador;
+                if (sinc && sinc.listo()) { aplicarEstadoNubeAgenda(BesoulDatos.legadoDesdeDocs(sinc.docs()), { descartarPendientes: [scope] }); releido = true; }
             } catch (errRelectura) {
                 console.error('[BESOUL Agenda] No se pudo releer la agenda del servidor tras un guardado fallido:', errRelectura);
             }
@@ -2460,38 +2468,26 @@ miércoles 07:00-09:00"></textarea>
                 // es siempre "servidor actual + cambios de esta pestaña", calculado dentro de la
                 // transacción: un cambio ajeno ya confirmado nunca se sobrescribe.
                 const baseConocida = window.bsUltimoServidorConocido;
-                const docRef = window.bsAgendaCloudDocRef;
                 let escritoPorCampo = null;
 
-                const transaccion = docRef.firestore.runTransaction(async tx => {
-                    const snap = await tx.get(docRef);
-                    const actual = snap.exists ? (snap.data() || {}) : {};
-                    const escritura = {};
-                    const conflictos = [];
-                    const escrito = {};
-                    BS_CAMPOS_AGENDA_POR_TRAINER.forEach(campo => {
-                        const ruta = `${campo}.${scope}`;
-                        const servidorCampo = (actual[campo] || {})[scope];
-                        const limpiar = campo === 'agenda' ? quitarCopiasFichaDeSesiones : (v => v);
-                        const r = fusionarCampoTresVias(campo, limpiar((baseConocida[campo] || {})[scope]), limpiar(payload[ruta]), limpiar(servidorCampo));
-                        r.conflictos.forEach(clave => conflictos.push({ campo, clave }));
-                        escrito[campo] = r.valor;
-                        if (r.cambiado) escritura[ruta] = r.valor;
-                    });
-                    if (conflictos.length) {
-                        const errConflicto = new Error('Conflicto de concurrencia detectado para trainerKey=' + scope);
-                        errConflicto.code = 'conflict';
-                        errConflicto.conflictos = conflictos;
-                        throw errConflicto;
-                    }
-                    Object.keys(payload).forEach(k => { if (k.startsWith('notas.')) escritura[k] = payload[k]; });
-                    if (Object.keys(escritura).length) {
-                        escritura.ultimaActualizacionLocal = payload.ultimaActualizacionLocal;
-                        escritura.actualizadoEn = payload.actualizadoEn;
-                        tx.update(docRef, ...payloadParaUpdateFirestore(escritura));
-                    }
-                    escritoPorCampo = escrito;
-                });
+                // ARQ-V1-MIGRACION-IMPL: misma fusión a tres vías por elemento, pero sobre documentos
+                // independientes (semana, ficha, histórico, entrenador, nota). Dentro de la transacción
+                // se releen SOLO los documentos que este cambio afecta; se escriben solo los que cambian
+                // (rev+1, hora del servidor) y se rechaza cualquier sesión nueva o movida que se solape
+                // con otra del mismo día. Ver besoul-datos.js guardarScope().
+                const transaccion = BesoulDatos.guardarScope({
+                    firestore: firebase.firestore(),
+                    FieldValue: firebase.firestore.FieldValue,
+                    tk: scope,
+                    base: partesScopeAgenda(baseConocida, scope, false),
+                    local: partesScopeAgenda(payload, scope, true),
+                    notas: { base: window.bsUltimasNotasServidor || {}, local: notasEnviadas },
+                    notasTocadas: Object.keys(notasEnviadas),
+                    fusionar: fusionarCampoTresVias,
+                    limpiarAgenda: quitarCopiasFichaDeSesiones,
+                    bloqueSesion: clavesBloqueSesion,
+                    actor: (firebase.auth && firebase.auth().currentUser && firebase.auth().currentUser.email) || usuarioLogeado || '',
+                }).then(r => { escritoPorCampo = r.escrito; });
 
                 // Nunca un "Guardando..." indefinido: si el servidor no confirma en este plazo, el
                 // guardado se da por NO confirmado (los cambios se conservan; ver
@@ -2521,6 +2517,11 @@ miércoles 07:00-09:00"></textarea>
                         // fusionados) + lo que el usuario haya cambiado DESPUÉS de construir este
                         // guardado (eso lo enviará el siguiente guardado de la cola).
                         rebasarMemoriaScopeAgenda(scope, payload, escritoPorCampo);
+                        if (!window.bsUltimasNotasServidor) window.bsUltimasNotasServidor = {};
+                        Object.keys(notasEnviadas).forEach(clave => {
+                            if (notasEnviadas[clave]) window.bsUltimasNotasServidor[clave] = notasEnviadas[clave];
+                            else delete window.bsUltimasNotasServidor[clave];
+                        });
                         Object.keys(notasEnviadas).forEach(clave => {
                             const actualLocal = (dbNotas && typeof dbNotas[clave] === 'string' && dbNotas[clave]) ? dbNotas[clave] : null;
                             if (actualLocal === notasEnviadas[clave]) estadoGuardadoAgenda().bsAgendaNotasTocadas.delete(clave);
@@ -2822,41 +2823,80 @@ miércoles 07:00-09:00"></textarea>
         // cambios de los demás sin ninguna indicación hasta recargar. Ahora el error se ve en el
         // indicador de estado y se vuelve a suscribir (con espera creciente). Un segundo listener,
         // solo de metadatos, informa de si los datos vienen del servidor o de la caché (sin red).
+        // ARQ-V1-MIGRACION-IMPL: sincronización INCREMENTAL sobre documentos independientes.
+        //  - PT: solo sus documentos (las reglas ya no le dejan leer los de otros entrenadores).
+        //  - Admin: todos.
+        //  - Cada dispositivo guarda lo último recibido DEL SERVIDOR (IndexedDB) y en cada apertura
+        //    descarga solo lo que ha cambiado desde entonces (consultas por actualizadoEn), no todo
+        //    el histórico. Lo que viene de esa copia local se pinta, pero NO permite guardar hasta que
+        //    el servidor confirma que está al día (bsUltimoServidorConocido sigue vacío).
+        function cacheDatosAgenda() {
+            if (!window.bsAgendaCacheDatos) window.bsAgendaCacheDatos = (typeof indexedDB !== 'undefined') ? BesoulDatos.cacheIndexedDB('besoul-datos') : BesoulDatos.cacheMemoria();
+            return window.bsAgendaCacheDatos;
+        }
+        function claveCacheDatosAgenda(alcance) {
+            const email = (firebase.auth && firebase.auth().currentUser && firebase.auth().currentUser.email) || usuarioLogeado || 'anonimo';
+            return `agenda|${String(email).toLowerCase()}|${alcance.todos ? '*' : alcance.trainerKey}`;
+        }
+
         function suscribirAgendaEnTiempoReal() {
-            const ref = window.bsAgendaCloudDocRef;
-            if (!ref) return;
-            (window.bsAgendaCloudUnsubs || []).forEach(u => { try { u(); } catch (e) { /* ya cancelada */ } });
-            window.bsAgendaCloudUnsubs = [];
+            if (!window.bsAgendaCloudDocRef) return;
+            if (window.bsAgendaSincronizador) { try { window.bsAgendaSincronizador.parar(); } catch (e) { /* ya parado */ } }
             clearTimeout(window.bsAgendaResuscripcionTimer);
-            const datos = ref.onSnapshot(snapshot => {
-                window.bsAgendaReintentosSuscripcion = 0;
-                if (snapshot.exists) {
-                    aplicarEstadoNubeAgenda(snapshot.data());
-                } else {
-                    guardarEstadoNubeAgenda();
-                }
-            }, err => {
-                console.error('[BESOUL Agenda] Error en la suscripción en tiempo real de la agenda:', err);
-                window.bsAgendaSincronizacion = 'error';
-                actualizarIndicadorGuardadoAgenda();
-                const intento = (window.bsAgendaReintentosSuscripcion || 0) + 1;
-                window.bsAgendaReintentosSuscripcion = intento;
-                if (window.bsCerrandoSesion) return;
-                if (intento === 1 && err && err.code === 'permission-denied') {
-                    alert('La agenda ha perdido el permiso para recibir cambios del servidor (sesión caducada o usuario desactivado). Lo que ves puede no estar al día: cierra sesión y vuelve a entrar.');
-                }
-                window.bsAgendaResuscripcionTimer = setTimeout(suscribirAgendaEnTiempoReal, Math.min(60000, 2000 * Math.pow(2, intento - 1)));
-            });
-            const metadatos = ref.onSnapshot({ includeMetadataChanges: true }, snapshot => {
-                const anterior = window.bsAgendaSincronizacion;
-                window.bsAgendaSincronizacion = snapshot.metadata.fromCache ? 'cache' : 'ok';
-                if (anterior !== window.bsAgendaSincronizacion) {
+            window.bsAgendaResuscripcionTimer = null;
+            const alcance = rolActivo === 'admin' ? { todos: true } : { trainerKey: usuarioLogeado };
+            if (!alcance.todos && !alcance.trainerKey) { console.error('[BESOUL Agenda] Sin trainerKey: no se puede sincronizar.'); return; }
+            const sinc = BesoulDatos.crearSincronizador({
+                firestore: firebase.firestore(),
+                Timestamp: firebase.firestore.Timestamp,
+                alcance,
+                cache: cacheDatosAgenda(),
+                claveCache: claveCacheDatosAgenda(alcance),
+                onDatos: (datos, meta) => {
+                    if (sinc !== window.bsAgendaSincronizador) return;
+                    if (meta.desdeServidor) {
+                        window.bsAgendaReintentosSuscripcion = 0;
+                        window.bsAgendaDatosDeCache = false;
+                        window.bsUltimasNotasServidor = JSON.parse(JSON.stringify(datos.notas || {}));
+                        aplicarEstadoNubeAgenda(datos);
+                    } else if (!window.bsUltimoServidorConocido) {
+                        // Copia local de una sincronización anterior: se pinta mientras llega el
+                        // servidor, pero no habilita guardados ni se presenta como confirmada.
+                        aplicarEstadoNubeAgenda(datos);
+                        window.bsUltimoServidorConocido = null;
+                        window.bsAgendaDisponibilidadCargada = false;
+                        window.bsAgendaDatosDeCache = true;
+                        window.bsAgendaSincronizacion = 'cache';
+                        actualizarIndicadorGuardadoAgenda();
+                    }
+                },
+                onEstado: estado => {
+                    if (sinc !== window.bsAgendaSincronizador) return;
+                    const anterior = window.bsAgendaSincronizacion;
+                    if (estado === 'error') window.bsAgendaSincronizacion = 'error';
+                    else if (estado === 'ok' && !window.bsAgendaDatosDeCache) window.bsAgendaSincronizacion = 'ok';
+                    else window.bsAgendaSincronizacion = 'cache';
+                    if (anterior !== window.bsAgendaSincronizacion) {
+                        actualizarIndicadorGuardadoAgenda();
+                        if (window.bsAgendaSincronizacion === 'ok' && (anterior === 'cache' || anterior === 'error')) reintentarGuardadosAgenda();
+                    }
+                },
+                onError: err => {
+                    if (sinc !== window.bsAgendaSincronizador) return;
+                    console.error('[BESOUL Agenda] Error en la sincronización en tiempo real de la agenda:', err);
+                    window.bsAgendaSincronizacion = 'error';
                     actualizarIndicadorGuardadoAgenda();
-                    // Conexión recuperada: se reintentan los cambios que quedaron sin guardar.
-                    if (window.bsAgendaSincronizacion === 'ok' && (anterior === 'cache' || anterior === 'error')) reintentarGuardadosAgenda();
-                }
-            }, () => { /* el error ya lo gestiona la suscripción de datos */ });
-            window.bsAgendaCloudUnsubs = [datos, metadatos];
+                    if (window.bsCerrandoSesion || window.bsAgendaResuscripcionTimer) return;
+                    const intento = (window.bsAgendaReintentosSuscripcion || 0) + 1;
+                    window.bsAgendaReintentosSuscripcion = intento;
+                    if (intento === 1 && err && err.code === 'permission-denied') {
+                        alert('La agenda ha perdido el permiso para recibir cambios del servidor (sesión caducada o usuario desactivado). Lo que ves puede no estar al día: cierra sesión y vuelve a entrar.');
+                    }
+                    window.bsAgendaResuscripcionTimer = setTimeout(suscribirAgendaEnTiempoReal, Math.min(60000, 2000 * Math.pow(2, intento - 1)));
+                },
+            });
+            window.bsAgendaSincronizador = sinc;
+            sinc.iniciar();
         }
 
         function iniciarSincronizacionNubeAgenda() {
@@ -2875,7 +2915,9 @@ miércoles 07:00-09:00"></textarea>
 
                 const firestore = firebase.firestore();
 
-                window.bsAgendaCloudDocRef = firestore.collection('besoulSuite').doc(BS_AGENDA_DOC_ID);
+                // ARQ-V1-MIGRACION-IMPL: ya no hay documento único; se conserva el indicador de "nube
+                // activa" que comprueban los guardados. besoulSuite/agenda queda congelado (solo lectura).
+                window.bsAgendaCloudDocRef = { arquitectura: 'documentos', firestore };
 
 
 
@@ -3028,7 +3070,9 @@ miércoles 07:00-09:00"></textarea>
         }
 
         function consultaLeadsPermitidosAgenda(firestore) {
-            let query = firestore.collection('besoulLeads');
+            // ARQ-V1-MIGRACION-IMPL (consumo): la Agenda solo pinta leads en "Prueba agendada"
+            // (leadDebePintarseComoPruebaCRM); antes descargaba TODOS los leads, dos veces por apertura.
+            let query = firestore.collection('besoulLeads').where('estado', '==', 'Prueba agendada');
             // Firestore Security Rules no filtra resultados: el PT debe consultar
             // únicamente documentos cuyo trainerKey sea el suyo.
             if (rolActivo !== 'admin' && usuarioLogeado) {
@@ -3059,8 +3103,6 @@ miércoles 07:00-09:00"></textarea>
                     window.bsAgendaLeadsCRMTimer = null;
                     window.bsAgendaLeadsCRMDebug = '';
                 }
-                // Carga inmediata por si el listener tarda o el navegador lo retrasa.
-                cargarLeadsCRMUnaVezAgenda();
                 window.bsAgendaLeadsCRMUnsub = consultaLeadsPermitidosAgenda(firestore).onSnapshot(snapshot => {
                     procesarSnapshotLeadsCRMAgenda(snapshot);
                 }, err => {
@@ -8957,6 +8999,8 @@ Cancelar = no hacer nada`,
                 query = rolActivo === 'admin'
                     ? query.where('audience', '==', 'admin')
                     : query.where('audience', '==', 'trainer').where('trainerKey', '==', usuarioLogeado);
+                // ARQ-V1-MIGRACION-IMPL (consumo): solo las 100 más recientes (antes, todas en cada apertura).
+                query = query.orderBy('createdAt', 'desc').limit(100);
                 window.bsNotificacionesUnsub = query.onSnapshot(snapshot => {
                     const mapa = {};
                     snapshot.forEach(doc => mapa[doc.id] = { id: doc.id, ...(doc.data() || {}) });
@@ -9286,6 +9330,8 @@ Cancelar = no hacer nada`,
                 if (rolActivo !== 'admin' && usuarioLogeado) {
                     query = query.where('trainerKey', '==', usuarioLogeado);
                 }
+                // ARQ-V1-MIGRACION-IMPL (consumo): las 100 más recientes; antes, todas en cada apertura.
+                query = query.orderBy('solicitadoEn', 'desc').limit(100);
                 window.bsEliminacionUnsub = query.onSnapshot(snapshot => {
                     const mapa = {};
                     snapshot.forEach(doc => mapa[doc.id] = { id: doc.id, ...(doc.data() || {}) });
@@ -9453,6 +9499,9 @@ Cancelar = no hacer nada`,
                 if (rolActivo !== 'admin' && usuarioLogeado) {
                     reservasQuery = reservasQuery.where('trainerKey', '==', usuarioLogeado);
                 }
+                // ARQ-V1-MIGRACION-IMPL (consumo): las 200 solicitudes más recientes (las pendientes y
+                // las aceptadas que ocupan huecos futuros siempre están entre ellas); antes, todas.
+                reservasQuery = reservasQuery.orderBy('createdAt', 'desc').limit(200);
                 window.bsReservasUnsub = reservasQuery.onSnapshot(snapshot => {
                     const mapa = {};
                     snapshot.forEach(doc => mapa[doc.id] = { id: doc.id, ...(doc.data() || {}) });
@@ -9740,9 +9789,11 @@ Cancelar = no hacer nada`,
                 // await final, batch.commit()) y se restauran en el finally antes de cualquier await,
                 // así que ninguna otra parte de la app puede ver nunca el estado sustituido.
                 let datosPublicacion = null;
-                if (window.bsAgendaCloudDocRef) {
-                    const snapshotFresco = await window.bsAgendaCloudDocRef.get({ source: 'server' });
-                    const datosFrescos = snapshotFresco.data() || {};
+                // ARQ-V1-MIGRACION-IMPL: lo último CONFIRMADO por el servidor (listeners + guardados
+                // confirmados), sin releer nada. Sin datos confirmados todavía, no se publica.
+                if (!window.bsUltimoServidorConocido) return;
+                {
+                    const datosFrescos = JSON.parse(JSON.stringify(window.bsUltimoServidorConocido));
                     datosPublicacion = {
                         clientes: datosFrescos.clientes || {},
                         agenda: datosFrescos.agenda || {},
@@ -10462,9 +10513,14 @@ Cancelar = no hacer nada`,
         function logout() {
             window.bsCerrandoSesion = true;
             (window.bsAgendaCloudUnsubs || []).forEach(u => { try { u(); } catch (e) { /* ya cancelada */ } });
+            if (window.bsAgendaSincronizador) { try { window.bsAgendaSincronizador.parar(); } catch (e) { /* ya parado */ } }
             limpiarCacheSensibleBesoul();
-            try { firebase.auth().signOut(); } catch(e) {}
-            window.location.reload();
+            // ARQ-V1-MIGRACION-IMPL: la copia local de datos (IndexedDB) se borra al cerrar sesión.
+            const borrado = (window.BesoulDatos && typeof indexedDB !== 'undefined') ? BesoulDatos.cacheIndexedDB('besoul-datos').borrarTodo() : Promise.resolve();
+            Promise.race([borrado, new Promise(r => setTimeout(r, 1500))]).finally(() => {
+                try { firebase.auth().signOut(); } catch(e) {}
+                window.location.reload();
+            });
         }
 
 

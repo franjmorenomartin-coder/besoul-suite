@@ -364,6 +364,7 @@
   </div>
 
 <script src="./besoul-identidad.js"></script>
+<script src="./besoul-datos.js"></script>
 <script src="./besoul-entorno-local.js"></script>
 <script>
 const BS_FIREBASE_CONFIG = {
@@ -769,8 +770,7 @@ async function sincronizarRegistroValoraciones() {
       registrar('email', l.email, { nombre:l.nombre, leadId:l.id, centroId:l.centroId, centroNombre:l.centroNombre, source:'lead_valoracion' });
       registrar('phone', l.telefono, { nombre:l.nombre, leadId:l.id, centroId:l.centroId, centroNombre:l.centroNombre, source:'lead_valoracion' });
     });
-    const agendaSnap = await db.collection('besoulSuite').doc('agenda').get();
-    const agenda = agendaSnap.exists ? (agendaSnap.data() || {}) : {};
+    const agenda = await datosAgendaCRM();
     const clientes = agenda.clientes || {};
     Object.keys(clientes).forEach(trainerKey => {
       (clientes[trainerKey] || []).forEach(c => {
@@ -787,6 +787,41 @@ async function sincronizarRegistroValoraciones() {
   } catch(err) {
     console.warn('No se pudo sincronizar el registro de valoraciones únicas:', err);
   }
+}
+
+// ARQ-V1-MIGRACION-IMPL: CRM (solo admin) usa la misma sincronización incremental que la Agenda
+// (documentos independientes + copia local de lo recibido del servidor): abrir CRM ya no descarga
+// todas las agendas; solo lo que ha cambiado desde la última vez en este dispositivo.
+let bsCRMSincronizador = null;
+let bsCRMDatosAgenda = null;
+let bsCRMEsperas = [];
+function iniciarDatosAgendaCRM() {
+  if (bsCRMSincronizador || !db || !window.BesoulDatos) return;
+  const email = (firebase.auth().currentUser && firebase.auth().currentUser.email) || 'anonimo';
+  bsCRMSincronizador = BesoulDatos.crearSincronizador({
+    firestore: db, Timestamp: firebase.firestore.Timestamp, alcance: { todos: true },
+    cache: typeof indexedDB !== 'undefined' ? BesoulDatos.cacheIndexedDB('besoul-datos') : BesoulDatos.cacheMemoria(),
+    claveCache: `agenda|${String(email).toLowerCase()}|*`,
+    onDatos: (datos, meta) => {
+      if (!meta.desdeServidor) return;
+      bsCRMDatosAgenda = datos;
+      bsCRMEsperas.splice(0).forEach(r => r(datos));
+    },
+    onError: err => console.error('[BESOUL CRM] Error sincronizando datos de Agenda:', err),
+  });
+  bsCRMSincronizador.iniciar();
+}
+/** Datos de Agenda confirmados por el servidor (forma clásica {clientes, agenda, ...}). */
+function datosAgendaCRM() {
+  iniciarDatosAgendaCRM();
+  if (bsCRMDatosAgenda) return Promise.resolve(bsCRMDatosAgenda);
+  return new Promise((resolve, reject) => {
+    bsCRMEsperas.push(resolve);
+    setTimeout(() => reject(new Error('Los datos de Agenda no han llegado del servidor a tiempo.')), 20000);
+  });
+}
+function opcionesTransaccionCRM() {
+  return { firestore: db, FieldValue: firebase.firestore.FieldValue, actor: (perfil && perfil.email) || '' };
 }
 
 function iniciarEscuchaLeads() {
@@ -1259,19 +1294,24 @@ function objetoPruebaAgendaCRM(leadId, leadData, claveInfo) {
 async function sincronizarPruebaAgendaDesdeLead(leadId, leadData, avisar = true) {
   if (!leadId || !db) return { visible:false };
 
-  const agendaRef = db.collection('besoulSuite').doc('agenda');
   const borrados = {};
   const resultado = { visible:false, clave:'', trainerKey:leadData.trainerKey || '', error:'' };
 
   try {
-    await db.runTransaction(async tx => {
-      const snap = await tx.get(agendaRef);
-      const agendaData = snap.exists ? snap.data() : {};
-      const agenda = agendaData.agenda || {};
-      const pruebasCRM = agendaData.pruebasCRM || {};
-      const camposSimples = {
-        ultimaActualizacionLocal: ahoraISO(),
-        actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
+    // ARQ-V1-MIGRACION-IMPL: se leen solo las semanas donde este lead tiene pruebas (índice
+    // leadsPrueba) y la semana de destino; la lógica de colocación es la de siempre.
+    const semanas = await BesoulDatos.semanasConPrueba(db, leadId);
+    const infoDestino = debeVersePruebaEnAgenda(leadData) ? claveAgendaDesdeFechaPrueba(leadData.fechaPrueba) : null;
+    if (infoDestino && infoDestino.ok) semanas.push({ tk: leadData.trainerKey, lunes: BesoulDatos.lunesDe(infoDestino.clave.split('_')[0]) });
+    await BesoulDatos.transaccionLegado({ ...opcionesTransaccionCRM(), semanas, mutar: (agendaData) => {
+      const agenda = agendaData.agenda || (agendaData.agenda = {});
+      const pruebasCRM = agendaData.pruebasCRM || (agendaData.pruebasCRM = {});
+      const BORRAR = { borrar: true };
+      const fijar = (campo, segmentos, valor) => {
+        const [, tk, clave] = segmentos;
+        const mapa = campo === 'agenda' ? agenda : pruebasCRM;
+        if (valor === BORRAR) { if (mapa[tk]) delete mapa[tk][clave]; }
+        else { if (!mapa[tk]) mapa[tk] = {}; mapa[tk][clave] = valor; }
       };
       // FIX-PT-AVAILABILITY-PERSISTENCE-V2 (mismo hallazgo aplicado aquí): un trainerKey puede
       // legítimamente contener un punto (causa raíz real ya confirmada en agenda.html con
@@ -1291,7 +1331,7 @@ async function sincronizarPruebaAgendaDesdeLead(leadId, leadData, avisar = true)
         Object.keys(agendaTrainer).forEach(clave => {
           const cita = agendaTrainer[clave];
           if (cita && cita.esPruebaCRM === true && cita.leadId === leadId) {
-            rutasAnidadas.push({ segmentos: ['agenda', trainerKey, clave], valor: firebase.firestore.FieldValue.delete() });
+            rutasAnidadas.push({ segmentos: ['agenda', trainerKey, clave], valor: BORRAR });
             if (!borrados[trainerKey]) borrados[trainerKey] = {};
             borrados[trainerKey][clave] = true;
           }
@@ -1303,7 +1343,7 @@ async function sincronizarPruebaAgendaDesdeLead(leadId, leadData, avisar = true)
         Object.keys(agendaTrainer).forEach(clave => {
           const cita = agendaTrainer[clave];
           if (cita && cita.leadId === leadId) {
-            rutasAnidadas.push({ segmentos: ['pruebasCRM', trainerKey, clave], valor: firebase.firestore.FieldValue.delete() });
+            rutasAnidadas.push({ segmentos: ['pruebasCRM', trainerKey, clave], valor: BORRAR });
             if (!borrados[trainerKey]) borrados[trainerKey] = {};
             borrados[trainerKey][clave] = true;
           }
@@ -1348,11 +1388,8 @@ async function sincronizarPruebaAgendaDesdeLead(leadId, leadData, avisar = true)
       // niveles reales, algo que ya no podemos garantizar si trainerKey contiene un punto (ver
       // rutasAnidadas arriba). Se pasa cada ruta como FieldPath explícito (forma varargs) en vez
       // de reconstruir el string, para que un trainerKey con punto nunca se parta de más.
-      const argsUpdate = [];
-      Object.keys(camposSimples).forEach(k => argsUpdate.push(k, camposSimples[k]));
-      rutasAnidadas.forEach(r => argsUpdate.push(new firebase.firestore.FieldPath(...r.segmentos), r.valor));
-      tx.update(agendaRef, ...argsUpdate);
-    });
+      rutasAnidadas.forEach(r => fijar(r.segmentos[0], r.segmentos, r.valor));
+    } });
 
     await db.collection('besoulLeads').doc(leadId).set({
       agendaPruebaVisible: resultado.visible,
@@ -1390,11 +1427,9 @@ async function sincronizarClienteAgendaDesdeLeadConvertido(leadId) {
     if (!convertido) return;
 
     const trainerPreferente = lead.convertedTrainerKey || lead.trainerKey || '';
-    const agendaRef = db.collection('besoulSuite').doc('agenda');
-    await db.runTransaction(async tx => {
-      const agendaSnap = await tx.get(agendaRef);
-      if (!agendaSnap.exists) return;
-      const agendaData = agendaSnap.data() || {};
+    // ARQ-V1-MIGRACION-IMPL: solo las fichas vinculadas a este lead (consulta por leadId + id convertido).
+    const idsFichas = await BesoulDatos.fichasDeLead(db, leadId, [lead.convertedClientId]);
+    await BesoulDatos.transaccionLegado({ ...opcionesTransaccionCRM(), clientes: idsFichas, mutar: (agendaData) => {
       const clientes = agendaData.clientes || {};
       let actualizado = false;
       const trainerKeys = trainerPreferente ? [trainerPreferente, ...Object.keys(clientes).filter(k => k !== trainerPreferente)] : Object.keys(clientes);
@@ -1423,14 +1458,8 @@ async function sincronizarClienteAgendaDesdeLeadConvertido(leadId) {
           };
         });
       });
-      if (actualizado) {
-        tx.set(agendaRef, {
-          clientes,
-          ultimaActualizacionLocal: ahoraISO(),
-          actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge:true });
-      }
-    });
+      if (actualizado) agendaData.clientes = clientes;
+    } });
   } catch (err) {
     console.error('No se pudo actualizar la ficha de Agenda desde CRM:', err);
     // Se relanza a propósito: el único llamador (guardarLead) ya envuelve esto en su propio
@@ -1468,8 +1497,7 @@ async function fusionarHistorialConServidor(leadId, historialLocal) {
 /** Clientes de Agenda (todos los entrenadores) como candidatos de identidad. Una lectura puntual,
  *  solo al crear/convertir -- nunca en cada render. */
 async function cargarClientesAgendaParaDuplicados() {
-  const snap = await db.collection('besoulSuite').doc('agenda').get();
-  const clientes = (snap.exists && (snap.data() || {}).clientes) || {};
+  const clientes = (await datosAgendaCRM()).clientes || {};
   const out = [];
   Object.keys(clientes).forEach(trainerKey => (clientes[trainerKey] || []).forEach(c => {
     if (!c || c.tipo === 'grupo') return;
@@ -1710,19 +1738,25 @@ async function convertirLeadEnCliente() {
   // escribir en el lead un convertedClientId que apunta a un cliente que nunca llegó a crearse.
   let clienteIdFinal = nuevoClienteId;
   try {
-    await db.runTransaction(async tx => {
-      const agendaRef = db.collection('besoulSuite').doc('agenda');
-      const leadRef = db.collection('besoulLeads').doc(leadEditandoId);
-      const agendaSnap = await tx.get(agendaRef);
+    // ARQ-V1-MIGRACION-IMPL: se leen en la transacción el lead, las fichas ya vinculadas a él, la
+    // ficha nueva (id) y las semanas con su prueba CRM; nada más. La prueba se elimina de verdad de
+    // la Agenda (antes, set({merge:true}) no borraba claves: la prueba quedaba como fantasma).
+    const leadRef = db.collection('besoulLeads').doc(leadEditandoId);
+    const leadPrevio = await leadRef.get();
+    const idsFichas = await BesoulDatos.fichasDeLead(db, leadEditandoId, [nuevoClienteId, (leadPrevio.data() || {}).convertedClientId]);
+    const semanasPrueba = await BesoulDatos.semanasConPrueba(db, leadEditandoId);
+    await BesoulDatos.transaccionLegado({ ...opcionesTransaccionCRM(), clientes: idsFichas, semanas: semanasPrueba, mutar: async (agendaData, { tx }) => {
       // HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: el lead también se lee DENTRO de la transacción (antes
       // solo la Agenda), y la ficha ya vinculada a este lead se busca en TODOS los entrenadores
       // (antes solo en el elegido): dos administradores convirtiendo el mismo lead a la vez hacia
       // entrenadores distintos ya no pueden crear dos fichas.
       const leadSnapTx = await tx.get(leadRef);
       const leadServidor = leadSnapTx.exists ? (leadSnapTx.data() || {}) : {};
-      const agendaData = agendaSnap.exists ? agendaSnap.data() : {};
-      const clientes = agendaData.clientes || {};
-      const agenda = agendaData.agenda || {};
+      const clientes = agendaData.clientes || (agendaData.clientes = {});
+      const agenda = agendaData.agenda || (agendaData.agenda = {});
+      Object.keys(agendaData.pruebasCRM || {}).forEach(tk => Object.keys(agendaData.pruebasCRM[tk] || {}).forEach(clave => {
+        if ((agendaData.pruebasCRM[tk][clave] || {}).leadId === leadEditandoId) delete agendaData.pruebasCRM[tk][clave];
+      }));
       eliminarPruebaAgendaEnObjeto(agenda, leadEditandoId);
       if (!Array.isArray(clientes[trainerKey])) clientes[trainerKey] = [];
       let existente = null;
@@ -1736,13 +1770,7 @@ async function convertirLeadEnCliente() {
         clientes[trainerKey].push(nuevoCliente);
         clienteIdFinal = nuevoClienteId;
       }
-      tx.set(agendaRef, {
-        clientes,
-        agenda,
-        ultimaActualizacionLocal: ahoraISO(),
-        actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge:true });
-      tx.set(leadRef, {
+      return { escrituras: [tx2 => tx2.set(leadRef, {
         ...leadActualizado,
         estado: 'Convertido a cliente',
         convertido: true,
@@ -1761,8 +1789,8 @@ async function convertirLeadEnCliente() {
           { tipo:'Conversión', texto:`Lead convertido en cliente de Agenda bajo ${textoTrainer(trainerKey)}.`, fecha:ahoraISO(), usuario:nombreUsuarioPerfil(), userEmail:perfil.email },
           ...(leadActualizado.historial || [])
         ]
-      }, { merge:true });
-    });
+      }, { merge:true })] };
+    } });
   } catch (err) {
     console.error(err);
     alert('No se ha podido convertir el lead. Revisa tu conexión e inténtalo de nuevo.');

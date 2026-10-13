@@ -16,6 +16,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script src="besoul-datos.js"></script>
   <script src="./besoul-identidad.js"></script>
   <script src="./besoul-entorno-local.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
@@ -1230,7 +1231,31 @@ function exportarResumenCSV(){
 }
 function mostrarAuthError(msg){ const el=document.getElementById('auth-error'); el.innerText=msg; el.classList.remove('hidden'); }
 function loginDashboard(){ const email=normalizarEmail(document.getElementById('login-email').value); const pass=document.getElementById('login-pass').value; if(!email||!pass){mostrarAuthError('Introduce email y contraseña.'); return;} auth.signInWithEmailAndPassword(email,pass).catch(()=>mostrarAuthError('Acceso denegado. Revisa email, contraseña y perfil admin.')); }
-function logoutDashboard(){ unsubs.forEach(fn=>{try{fn();}catch(e){}}); auth.signOut().finally(()=>location.reload()); }
+function logoutDashboard(){ unsubs.forEach(fn=>{try{fn();}catch(e){}}); cerrarSesionBorrandoCopiaLocal().finally(()=>auth.signOut().finally(()=>location.reload())); }
+    // ARQ-V1-MIGRACION-IMPL: datos de Agenda desde documentos independientes con sincronización
+    // INCREMENTAL (solo lo cambiado desde la última vez en este dispositivo; la copia local guarda
+    // únicamente lo recibido del servidor y se borra al cerrar sesión). Sustituye a la lectura y al
+    // listener del documento monolítico besoulSuite/agenda (que descargaba ~1 MB en cada cambio).
+    let bsDashboardSincAgenda = null;
+    function iniciarSincronizacionAgendaAdmin(fs, onDatos){
+      if (bsDashboardSincAgenda) { try { bsDashboardSincAgenda.parar(); } catch(e) {} }
+      const email = String((firebase.auth().currentUser && firebase.auth().currentUser.email) || 'anonimo').toLowerCase();
+      bsDashboardSincAgenda = BesoulDatos.crearSincronizador({
+        firestore: fs, Timestamp: firebase.firestore.Timestamp, alcance: { todos: true },
+        cache: typeof indexedDB !== 'undefined' ? BesoulDatos.cacheIndexedDB('besoul-datos') : BesoulDatos.cacheMemoria(),
+        claveCache: 'agenda|' + email + '|*',
+        onDatos: (datos, meta) => { if (meta.desdeServidor) onDatos(datos); },
+        onError: err => console.error('[BESOUL] Error sincronizando datos de Agenda:', err),
+      });
+      bsDashboardSincAgenda.iniciar();
+      return () => { try { bsDashboardSincAgenda.parar(); } catch(e) {} };
+    }
+    function cerrarSesionBorrandoCopiaLocal(){
+      if (bsDashboardSincAgenda) { try { bsDashboardSincAgenda.parar(); } catch(e) {} }
+      const borrado = typeof indexedDB !== 'undefined' ? BesoulDatos.cacheIndexedDB('besoul-datos').borrarTodo() : Promise.resolve();
+      return Promise.race([borrado, new Promise(r => setTimeout(r, 1500))]);
+    }
+
 async function iniciarApp(user){
   usuario=user; const email=normalizarEmail(user.email); const snap=await db.collection('besoulUsers').doc(email).get();
   if(!snap.exists) throw new Error('Tu usuario no tiene perfil en besoulUsers.');
@@ -1238,16 +1263,22 @@ async function iniciarApp(user){
   document.getElementById('auth-screen').classList.add('hidden'); document.getElementById('app-content').classList.remove('hidden');
   document.getElementById('lbl-usuario').innerText = perfil.nombre || email; document.getElementById('lbl-rango').innerText = 'Administrador';
   cambiarPeriodo();
-  await refrescarDashboard();
+  // ARQ-V1-MIGRACION-IMPL (consumo): antes se leía TODO dos veces al abrir (get + listener).
+  // Ahora solo los listeners (que entregan los datos iniciales) y la agenda es incremental.
   unsubs.forEach(fn=>{try{fn();}catch(e){}}); unsubs=[];
   unsubs.push(db.collection('besoulSuite').doc('finanzas').onSnapshot(s=>{ dbFinanzas=normalizarFinanzas(s.exists?s.data():{}); poblarFiltros(); aplicarDashboard(); }));
-  unsubs.push(db.collection('besoulSuite').doc('agenda').onSnapshot(s=>{ agendaData=s.exists?(s.data()||{}):{clientes:{},agenda:{}}; poblarFiltros(); aplicarDashboard(); }));
+  unsubs.push(iniciarSincronizacionAgendaAdmin(db, datos=>{ agendaData=datos || {clientes:{},agenda:{}}; poblarFiltros(); aplicarDashboard(); }));
   unsubs.push(db.collection('besoulUsers').onSnapshot(s=>{ perfilesUsuarios=s.docs.map(d=>({email:d.id,...d.data()})).filter(p=>p.activo!==false); poblarFiltros(); aplicarDashboard(); }));
   unsubs.push(db.collection('besoulLeads').onSnapshot(s=>{ leads=s.docs.map(d=>({id:d.id,...d.data()})); aplicarDashboard(); }));
 }
 async function refrescarDashboard(){
+  // ARQ-V1-MIGRACION-IMPL: los listeners mantienen los datos al día; refrescar = volver a pintar.
   if(!db) return;
-  const [fin, ag, users, leadsSnap] = await Promise.all([db.collection('besoulSuite').doc('finanzas').get(), db.collection('besoulSuite').doc('agenda').get(), db.collection('besoulUsers').get(), db.collection('besoulLeads').get()]);
+  poblarFiltros(); aplicarDashboard();
+}
+async function refrescarDashboardLecturaCompletaObsoleta(){
+  if(!db) return;
+  const [fin, ag, users, leadsSnap] = await Promise.all([db.collection('besoulSuite').doc('finanzas').get(), Promise.resolve({ exists:false }), db.collection('besoulUsers').get(), db.collection('besoulLeads').get()]);
   dbFinanzas=normalizarFinanzas(fin.exists?fin.data():{}); agendaData=ag.exists?(ag.data()||{}):{clientes:{},agenda:{}}; perfilesUsuarios=users.docs.map(d=>({email:d.id,...d.data()})).filter(p=>p.activo!==false); leads=leadsSnap.docs.map(d=>({id:d.id,...d.data()}));
   poblarFiltros(); aplicarDashboard();
 }

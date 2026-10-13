@@ -1,5 +1,150 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "besoulAgendaSemanas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "trainerKey",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "actualizadoEn",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "besoulClientes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "trainerKey",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "actualizadoEn",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "besoulTrainers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "trainerKey",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "actualizadoEn",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "besoulHistoricoClientes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "trainerKey",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "actualizadoEn",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "besoulNotas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "trainerKey",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "actualizadoEn",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "besoulNotifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "audience",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "besoulNotifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "audience",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "trainerKey",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "besoulReservas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "trainerKey",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "besoulSolicitudesEliminacion",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "trainerKey",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "solicitadoEn",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "besoulLeads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "trainerKey",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
   "fieldOverrides": [
     {
       "collectionGroup": "besoulSuite",
@@ -54,6 +199,71 @@
     {
       "collectionGroup": "besoulSuite",
       "fieldPath": "repartoActividadVersiones",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulAgendaSemanas",
+      "fieldPath": "sesiones",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulAgendaSemanas",
+      "fieldPath": "pruebasCRM",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulAgendaSemanas",
+      "fieldPath": "excepciones",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulAgendaSemanas",
+      "fieldPath": "bloqueos",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulClientes",
+      "fieldPath": "ficha",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulHistoricoClientes",
+      "fieldPath": "datos",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulTrainers",
+      "fieldPath": "disponibilidad",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulTrainers",
+      "fieldPath": "actividades",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulTrainers",
+      "fieldPath": "presencia",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulTrainers",
+      "fieldPath": "submapasDisp",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulTrainers",
+      "fieldPath": "historicoSinMeses",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulNotas",
+      "fieldPath": "texto",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulAgendaConfig",
+      "fieldPath": "campos",
       "indexes": []
     }
   ]

@@ -126,50 +126,137 @@ service cloud.firestore {
     }
 
     match /besoulSuite/{docId} {
-      // FASE 2 activada (2026-09-17, HARDENING-PRE-BASELINE-v3.2.1): aislamiento de ESCRITURA
-      // por trainerKey dentro del documento monolítico besoulSuite/agenda. Candidata validada
-      // contra el Firebase Emulator Suite antes de desplegar (rules-tests/, 55+ casos, PT
-      // propio ALLOW / PT ajeno DENY por cada uno de los 5 campos anidados por trainer, PT
-      // inactivo/auth sin perfil/anónimo DENY, admin ALLOW sin restricción, y el payload REAL
-      // que ya envía guardarEstadoNubeAgenda() -- FieldPath, dirigido, nunca documento
-      // completo -- sigue permitido sin cambios). Backup exacto de la Rule anterior
-      // (idéntica a esta salvo esta sustitución) en
-      // firestore-rules-LIVE-pre-FASE2-20260917.rules (fuera del repo), SHA256
-      // 669f24fd37a3d5ec6a92f35bea8a413cb2cd647124197e2f84f1710ae322df13.
-      //
-      // Lectura: SIN CAMBIO -- sigue siendo el documento completo. Firestore no tiene lectura
-      // parcial de un documento; ningún ajuste de Rules puede resolver esto mientras
-      // clientes/agenda/etc. de TODOS los entrenadores vivan en un único documento. Ver
-      // AGENDA_MONOLITHIC_RISK.md para la migración futura (agendaByTrainer/{trainerKey}) que
-      // sí lo resolvería -- fuera de alcance de esta fase.
-      allow read: if isActiveUser() && docId == 'agenda';
-      allow write: if docId == 'agenda' && (
-        isAdmin()
-        || (isActiveUser()
-            && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['clientes','agenda','disponibilidadReservas','historicoClientes','pruebasCRM','notas','actualizadoEn','ultimaActualizacionLocal'])
-            && request.resource.data.clientes.diff(resource.data.clientes).affectedKeys().hasOnly([myTrainerKey()])
-            && request.resource.data.agenda.diff(resource.data.agenda).affectedKeys().hasOnly([myTrainerKey()])
-            && request.resource.data.disponibilidadReservas.diff(resource.data.disponibilidadReservas).affectedKeys().hasOnly([myTrainerKey()])
-            && request.resource.data.historicoClientes.diff(resource.data.historicoClientes).affectedKeys().hasOnly([myTrainerKey()])
-            && request.resource.data.pruebasCRM.diff(resource.data.pruebasCRM).affectedKeys().hasOnly([myTrainerKey()])
-           )
-      );
-      // "notas" queda deliberadamente FUERA de la comprobación granular por trainerKey: es un
-      // mapa plano "trainerKey__clave" (nunca anidado por trainerKey), y Firestore Rules
-      // (CEL) no soporta iterar affectedKeys() con un predicado por clave --
-      // request.resource.data.notas.diff(...).affectedKeys().all(k, k.matches(...)) fue
-      // probado directamente contra el Emulator Suite (rules-tests/run_notas_feasibility_probe.cjs)
-      // y falla en tiempo de evaluación con "Function not found error: Name: [all]" -- no es una
-      // suposición, es el resultado real del motor de Rules. Aislarlo exigiría migrar "notas" a
-      // un mapa anidado por trainerKey (cambio de esquema, fuera de alcance de esta fase) o la
-      // migración completa a agendaByTrainer/{trainerKey}. Riesgo residual documentado y
-      // aceptado: un PT activo podría, en teoría, escribir la nota de otro PT llamando
-      // directamente al SDK -- ningún dato de cliente/agenda/disponibilidad/histórico/pruebasCRM
-      // queda expuesto por este hueco.
+      // ARQ-V1-MIGRACION-IMPL (post-corte): besoulSuite/agenda queda CONGELADO como respaldo de solo
+      // lectura para administración. Ninguna versión de la app (ni una antigua en caché) puede volver
+      // a escribir en él: los datos vivos están en besoulAgendaSemanas, besoulClientes,
+      // besoulTrainers, besoulHistoricoClientes y besoulNotas (ver más abajo). Reglas anteriores al
+      // corte: rama main @ 89b31e1 (firestore.rules), para el plan de vuelta atrás.
+      allow read: if isAdmin() && docId == 'agenda';
+      allow write: if false && docId == 'agenda';
 
       // Finanzas sigue reservado solo para administración.
       allow read, write: if isAdmin() && docId == 'finanzas';
+    }
+
+    // ===================== ARQUITECTURA DE DOCUMENTOS INDEPENDIENTES (ARQ-V1-MIGRACION-IMPL) =====
+    // Reglas comunes a todos los documentos de datos de la Agenda:
+    //  - aislamiento real: un PT solo lee y escribe documentos con SU trainerKey (lectura incluida:
+    //    ya no descarga los clientes de los demás entrenadores); admin, todo;
+    //  - un PT no puede cambiar el trainerKey de un documento (traspasos: solo admin);
+    //  - control de versión: rev = 1 al crear y > 1 al actualizar; la detección de conflictos la
+    //    hacen las transacciones (leen y escriben de forma atómica; si otro cambió el documento,
+    //    Firestore las repite con los datos nuevos);
+    //  - actualizadoEn = hora del servidor (base de la sincronización incremental);
+    //  - nunca se borra un documento (lápida "eliminado"): no hay delete.
+    function esMio(tk) {
+      return isActiveUser() && tk == myTrainerKey();
+    }
+    function alcancePermitido(tk) {
+      return isAdmin() || esMio(tk);
+    }
+    function versionCreacion() {
+      return request.resource.data.rev == 1 && request.resource.data.actualizadoEn == request.time;
+    }
+    // rev NO se compara con el valor guardado: con dos guardados simultáneos, la transacción que
+    // pierde debe REINTENTARSE (lo garantiza Firestore), no recibir un falso "permission-denied"
+    // (comprobado en el emulador: la regla rev == anterior+1 se evaluaba contra el documento ya
+    // cambiado por el otro usuario). La protección contra pisar cambios es la transacción; la regla
+    // exige versión numérica creciente y la hora del servidor (base de la sincronización).
+    function versionActualizacion() {
+      return request.resource.data.rev is int && request.resource.data.rev > 1 && request.resource.data.actualizadoEn == request.time;
+    }
+    // Lectura: un documento existente se lee si es del propio entrenador. Un documento que todavía
+    // NO existe (p. ej. la semana donde se va a crear la primera sesión, leída dentro de la
+    // transacción) solo se puede consultar si su identificador es del propio entrenador.
+    function lecturaPropia(prefijoId) {
+      return isAdmin() || (isActiveUser() && (resource == null ? prefijoId == myTrainerKey() : resource.data.trainerKey == myTrainerKey()));
+    }
+    function mismoTrainerSalvoAdmin() {
+      return isAdmin() || request.resource.data.trainerKey == resource.data.trainerKey;
+    }
+
+    match /besoulAgendaSemanas/{semanaId} {
+      allow read: if lecturaPropia(semanaId.split('__')[0]);
+      allow create: if alcancePermitido(request.resource.data.trainerKey)
+        && request.resource.data.trainerKey is string
+        && semanaId == request.resource.data.trainerKey + '__' + request.resource.data.semana
+        && versionCreacion();
+      allow update: if alcancePermitido(resource.data.trainerKey)
+        && request.resource.data.trainerKey == resource.data.trainerKey
+        && request.resource.data.semana == resource.data.semana
+        && versionActualizacion();
+      allow delete: if false;
+    }
+
+    match /besoulClientes/{clienteDocId} {
+      // Una ficha inexistente (id aleatorio de cliente nuevo) no revela datos de nadie.
+      allow read: if isAdmin() || (isActiveUser() && (resource == null || resource.data.trainerKey == myTrainerKey()));
+      allow create: if alcancePermitido(request.resource.data.trainerKey)
+        && request.resource.data.trainerKey is string
+        && request.resource.data.clienteId == clienteDocId
+        && versionCreacion();
+      allow update: if alcancePermitido(resource.data.trainerKey)
+        && mismoTrainerSalvoAdmin()
+        && request.resource.data.clienteId == resource.data.clienteId
+        && versionActualizacion();
+      allow delete: if false;
+    }
+
+    match /besoulHistoricoClientes/{historicoId} {
+      allow read: if lecturaPropia(historicoId.split('__')[0]);
+      allow create: if alcancePermitido(request.resource.data.trainerKey)
+        && request.resource.data.trainerKey is string
+        && historicoId == request.resource.data.trainerKey + '__' + request.resource.data.clienteId + '__' + request.resource.data.mes
+        && versionCreacion();
+      allow update: if alcancePermitido(resource.data.trainerKey)
+        && request.resource.data.trainerKey == resource.data.trainerKey
+        && request.resource.data.clienteId == resource.data.clienteId
+        && request.resource.data.mes == resource.data.mes
+        && versionActualizacion();
+      allow delete: if false;
+    }
+
+    match /besoulTrainers/{trainerKey} {
+      allow read: if lecturaPropia(trainerKey);
+      allow create: if alcancePermitido(trainerKey)
+        && request.resource.data.trainerKey == trainerKey
+        && (isAdmin() || !('actividades' in request.resource.data) || request.resource.data.actividades == null)
+        && versionCreacion();
+      // Las actividades autorizadas las fija administración (Finanzas): un PT no puede cambiarlas.
+      allow update: if alcancePermitido(trainerKey)
+        && request.resource.data.trainerKey == trainerKey
+        && (isAdmin() || request.resource.data.get('actividades', null) == resource.data.get('actividades', null))
+        && versionActualizacion();
+      allow delete: if false;
+    }
+
+    match /besoulNotas/{notaId} {
+      // Notas antiguas sin entrenador (trainerKey null): solo administración.
+      allow read: if lecturaPropia(notaId.split('__')[0]);
+      allow create: if (isAdmin() || (request.resource.data.trainerKey is string && esMio(request.resource.data.trainerKey)))
+        && request.resource.data.clave == notaId
+        && versionCreacion();
+      allow update: if alcancePermitido(resource.data.trainerKey)
+        && request.resource.data.trainerKey == resource.data.trainerKey
+        && request.resource.data.clave == resource.data.clave
+        && versionActualizacion();
+      allow delete: if false;
+    }
+
+    match /besoulAgendaConfig/{docId} {
+      // Catálogo global de actividades y sus versiones: lo lee cualquier usuario activo (la Agenda
+      // lo necesita para las fichas con actividades especiales); solo administración lo cambia.
+      allow read: if isActiveUser();
+      allow create: if isAdmin() && versionCreacion();
+      allow update: if isAdmin() && versionActualizacion();
+      allow delete: if false;
+    }
+
+    match /besoulAgendaLegado/{docId} {
+      // Campos raíz sueltos del documento antiguo, conservados verbatim por el migrador.
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false;
     }
 
     match /besoulLeads/{leadId} {
@@ -262,7 +349,10 @@ service cloud.firestore {
     match /besoulPublicSchedule/{trainerKey} {
       allow get: if true;
       allow list: if false;
-      allow create, update, delete: if isActiveUser();
+      // ARQ-V1-MIGRACION-IMPL: antes cualquier usuario activo podía sobrescribir o borrar el horario
+      // público de OTRO entrenador. Ahora solo el propio entrenador o administración.
+      allow create, update: if isAdmin() || esMio(trainerKey);
+      allow delete: if isAdmin();
     }
 
     match /besoulReservas/{reservaId} {

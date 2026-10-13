@@ -39,8 +39,6 @@ initializeApp();
 
 const CANCELACIONES_COLLECTION = 'besoulCancelacionesCliente';
 const PUBLIC_CLIENTS_COLLECTION = 'besoulPublicClients';
-const SUITE_COLLECTION = 'besoulSuite';
-const AGENDA_DOC_ID = 'agenda';
 
 /**
  * Paso 3 del contrato: recalcula si la cancelación sigue dentro de plazo, usando SIEMPRE la hora
@@ -111,40 +109,39 @@ exports.procesarCancelacionClienteBackend = onDocumentCreated(
     // transaction que relee besoulSuite/agenda y confirma que la cita sigue siendo LA MISMA
     // (mismo clientId en esa clave) antes de tocarla -- evita una condición de carrera si el PT
     // movió/borró la cita manualmente entre la creación de la solicitud y este procesamiento.
-    const agendaRef = db.collection(SUITE_COLLECTION).doc(AGENDA_DOC_ID);
+    // ARQ-V1-MIGRACION-IMPL: la cita vive en besoulAgendaSemanas/{trainerKey}__{lunes} y la nota en
+    // besoulNotas/{trainerKey__clave}. Se respetan las mismas invariantes que exigen las reglas a la
+    // app (rev + 1, actualizadoEn = hora del servidor) aunque el SDK de administración no las evalúe.
+    const lunes = (() => { const [y, m, d] = fechaISO.split('-').map(Number); const t = new Date(Date.UTC(y, m - 1, d)); t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7)); return t.toISOString().slice(0, 10); })();
+    const semanaRef = db.collection('besoulAgendaSemanas').doc(`${trainerKey}__${lunes}`);
+    const notaRef = db.collection('besoulNotas').doc(claveNota);
     let resultado;
     try {
       resultado = await db.runTransaction(async (tx) => {
-        const agendaSnap = await tx.get(agendaRef);
-        const agendaData = agendaSnap.data() || {};
-        const cita = (agendaData.agenda || {})[trainerKey]?.[clave];
+        const semanaSnap = await tx.get(semanaRef);
+        const notaSnap = await tx.get(notaRef);
+        const semana = semanaSnap.exists ? semanaSnap.data() : null;
+        const cita = semana && (semana.sesiones || {})[clave];
 
         if (!cita || cita.id !== clientId) {
           return { estado: 'error', motivoError: 'cita_no_encontrada_o_no_coincide' };
         }
 
         const dentroDePlazo = calcularDentroDePlazo(fechaISO, hora, cancelacionMinHorasReal);
-
+        const meta = previo => ({ rev: ((previo && previo.rev) || 0) + 1, actualizadoEn: FieldValue.serverTimestamp(), actualizadoPor: 'procesarCancelacionClienteBackend' });
+        const sesiones = { ...(semana.sesiones || {}) };
         if (dentroDePlazo) {
-          // >= plazo: liberar el hueco, no consume sesión. También limpia la nota asociada
-          // (mismo efecto colateral que fijarNotaAgenda(clave,'') en agenda.html), usando la
-          // clave determinista trainerKey__clave directamente -- evita la ambigüedad que tendría
-          // fijarNotaAgenda() si se llamara con el entrenadorVisto de una sesión de admin distinta
-          // al trainerKey real de esta cita.
-          tx.update(agendaRef, {
-            [`agenda.${trainerKey}.${clave}`]: FieldValue.delete(),
-            [`notas.${claveNota}`]: FieldValue.delete(),
-            actualizadoEn: FieldValue.serverTimestamp()
-          });
+          // >= plazo: liberar el hueco, no consume sesión. También limpia la nota asociada.
+          delete sesiones[clave];
+          tx.set(semanaRef, { ...semana, sesiones, ...meta(semana) });
+          if (notaSnap.exists && !notaSnap.data().eliminado) {
+            tx.set(notaRef, { ...notaSnap.data(), texto: '', eliminado: true, ...meta(notaSnap.data()) });
+          }
           return { estado: 'procesada', dentroDePlazoAplicado: true };
         } else {
-          // < plazo: nunca se borra -- se marca y sigue consumiendo sesión (mismos dos campos que
-          // escribe procesarCancelacionCliente() hoy: estadoCancelacion + canceladaEn).
-          tx.update(agendaRef, {
-            [`agenda.${trainerKey}.${clave}.estadoCancelacion`]: 'cancelada_fuera_plazo',
-            [`agenda.${trainerKey}.${clave}.canceladaEn`]: new Date().toISOString(),
-            actualizadoEn: FieldValue.serverTimestamp()
-          });
+          // < plazo: nunca se borra -- se marca y sigue consumiendo sesión.
+          sesiones[clave] = { ...cita, estadoCancelacion: 'cancelada_fuera_plazo', canceladaEn: new Date().toISOString() };
+          tx.set(semanaRef, { ...semana, sesiones, ...meta(semana) });
           return { estado: 'procesada', dentroDePlazoAplicado: false };
         }
       });
