@@ -73,7 +73,10 @@
   const idSeguro = s => String(s).replace(/%/g, '%25').replace(/\//g, '%2F');
   const idSemana = (tk, lunes) => `${idSeguro(tk)}__${lunes}`;
   const idHistorico = (tk, cid, mes) => `${idSeguro(tk)}__${idSeguro(cid)}__${idSeguro(mes)}`;
-  const idCliente = cid => idSeguro(cid);
+  // La ficha lleva el entrenador en su ID: un PT no puede ni consultar la existencia de fichas
+  // de otro entrenador (las reglas comprueban el prefijo). Un traspaso (solo admin) crea la ficha
+  // con el ID del nuevo entrenador y deja lápida en la del anterior.
+  const idCliente = (tk, cid) => `${idSeguro(tk)}__${idSeguro(cid)}`;
   const idNota = clave => idSeguro(clave);
   function trainerDeNota(clave) {
     const i = String(clave).indexOf('__');
@@ -161,7 +164,7 @@
       trainer(tk).presencia.clientes = true;
       (Array.isArray(a.clientes[tk]) ? a.clientes[tk] : []).forEach((ficha, orden) => {
         if (!ficha || !ficha.id) { noTransformable.push(`clientes.${tk}[${orden}]`); return; }
-        docs.push({ col: 'clientes', id: idCliente(ficha.id), data: contenidoCliente(tk, ficha, orden) });
+        docs.push({ col: 'clientes', id: idCliente(tk, ficha.id), data: contenidoCliente(tk, ficha, orden) });
       });
       if (!Array.isArray(a.clientes[tk])) noTransformable.push(`clientes.${tk} (no es una lista)`);
     });
@@ -444,6 +447,22 @@
     };
   }
 
+  // ---------------------------------------------------------------- transacciones con reintento
+  // Las reglas exigen rev = rev guardado + 1: una escritura basada en una versión ya superada se
+  // RECHAZA en el servidor (permission-denied), venga de donde venga. Si la causa es que otro
+  // usuario guardó entre medias, repetir la transacción relee los datos nuevos y fusiona; si es un
+  // permiso realmente denegado, sigue fallando y se informa tras los reintentos.
+  async function transaccionConReintento(firestore, fn, contador) {
+    for (let intento = 0; ; intento++) {
+      try { return await firestore.runTransaction(fn); }
+      catch (e) {
+        if (!(e && e.code === 'permission-denied') || intento >= 3) throw e;
+        (contador || consumo).sumar('transacciones', 1, 'reintentoVersion');
+        await new Promise(r => setTimeout(r, 120 * (intento + 1) + Math.floor(Math.random() * 80)));
+      }
+    }
+  }
+
   // ---------------------------------------------------------------- guardado transaccional
   // Equivalente, con documentos independientes, a la transacción del documento monolítico:
   //   base     = lo que esta pantalla sabía del servidor para ESTE entrenador
@@ -506,7 +525,7 @@
     }
     frescos.clientes.forEach(({ id, data }) => {
       const i = v.clientes.findIndex(f => f && String(f.id) === id);
-      const vivo = data && !data.eliminado && data.trainerKey === tk ? clonar(data.ficha) : null;
+      const vivo = data && !data.eliminado ? clonar(data.ficha) : null;
       if (i >= 0 && vivo) v.clientes[i] = vivo;
       else if (i >= 0) v.clientes.splice(i, 1);
       else if (vivo) v.clientes.push(vivo);
@@ -545,7 +564,7 @@
     const contador = cfg.contador || consumo;
     const af = afectadosScope(tk, base, local, notasTocadas);
     const refSemana = l => firestore.collection(COL.semanas).doc(idSemana(tk, l));
-    const refCliente = id => firestore.collection(COL.clientes).doc(idCliente(id));
+    const refCliente = id => firestore.collection(COL.clientes).doc(idCliente(tk, id));
     const refHist = (cid, mes) => firestore.collection(COL.historico).doc(idHistorico(tk, cid, mes));
     const refTrainer = () => firestore.collection(COL.trainers).doc(idSeguro(tk));
     const refNota = k => firestore.collection(COL.notas).doc(idNota(k));
@@ -556,7 +575,7 @@
     if (total > 450) throw Object.assign(new Error(`Demasiados documentos en un solo guardado (${total}).`), { code: 'demasiados-documentos' });
     const escritos = [];
     contador.sumar('transacciones', 1, 'guardar');
-    const resultado = await firestore.runTransaction(async tx => {
+    const resultado = await transaccionConReintento(firestore, async tx => {
       escritos.length = 0;
       const leer = ref => tx.get(ref).then(s => { contador.sumar('lecturas', 1, 'tx'); return s.exists ? s.data() : null; });
       const [fSem, fCli, fHis, fNot, fTra] = await Promise.all([
@@ -611,13 +630,12 @@
       const mf = mapaPorId(final.clientes);
       fCli.forEach(({ id, data }) => {
         if (mf.has(id)) {
-          const orden = data && !data.eliminado && data.trainerKey === tk && typeof data.orden === 'number' ? data.orden : mf.get(id).i;
-          escribir(refCliente(id), 'clientes', idCliente(id), data, contenidoCliente(tk, mf.get(id).f, orden));
-        } else if (data && !data.eliminado && data.trainerKey === tk) {
+          const orden = data && !data.eliminado && typeof data.orden === 'number' ? data.orden : mf.get(id).i;
+          escribir(refCliente(id), 'clientes', idCliente(tk, id), data, contenidoCliente(tk, mf.get(id).f, orden));
+        } else if (data && !data.eliminado) {
           // Lápida (nunca borrado físico): la ficha deja de existir para la app, el dato se conserva.
-          escribir(refCliente(id), 'clientes', idCliente(id), data, { ...data, eliminado: true, rev: undefined, actualizadoEn: undefined, actualizadoPor: undefined });
+          escribir(refCliente(id), 'clientes', idCliente(tk, id), data, { ...data, eliminado: true, rev: undefined, actualizadoEn: undefined, actualizadoPor: undefined });
         }
-        // Si ya pertenece a OTRO entrenador (traspaso confirmado), no se toca.
       });
       fHis.forEach(({ cid, mes, data }) => {
         const valor = ((final.historicoClientes || {})[cid] || {})[mes];
@@ -643,7 +661,7 @@
       // Limpieza de campos auxiliares (undefined) de las lápidas antes de que el SDK los vea.
       escritos.forEach(e => Object.keys(e.data).forEach(k => { if (e.data[k] === undefined) delete e.data[k]; }));
       return final;
-    });
+    }, contador);
     contador.sumar('escrituras', escritos.length, 'guardar');
     return { escrito: resultado, docs: escritos.slice() };
   }
@@ -662,14 +680,15 @@
     const clientes = [...new Set((cfg.clientes || []).filter(Boolean).map(String))];
     contador.sumar('transacciones', 1, 'legado');
     let escritos = [];
-    const resultado = await firestore.runTransaction(async tx => {
+    const resultado = await transaccionConReintento(firestore, async tx => {
       escritos = [];
       const leer = ref => tx.get(ref).then(sn => { contador.sumar('lecturas', 1, 'tx'); return sn.exists ? sn.data() : null; });
       const leidosSem = await Promise.all(semanas.map(x => leer(firestore.collection(COL.semanas).doc(x.id)).then(data => ({ ...x, data }))));
-      const leidosCli = await Promise.all(clientes.map(id => leer(firestore.collection(COL.clientes).doc(idCliente(id))).then(data => ({ id, data }))));
+      // Fichas a leer: IDs de DOCUMENTO ("tk__clientId", ver idCliente / fichasDeLead).
+      const leidosCli = await Promise.all(clientes.map(id => leer(firestore.collection(COL.clientes).doc(id)).then(data => ({ id, data }))));
       const grupo = agrupar([]);
       leidosSem.forEach(x => { if (x.data) grupo.semanas[x.id] = x.data; });
-      leidosCli.forEach(x => { if (x.data) grupo.clientes[idCliente(x.id)] = x.data; });
+      leidosCli.forEach(x => { if (x.data) grupo.clientes[x.id] = x.data; });
       const antes = legadoDesdeDocs(grupo);
       const despues = clonar(antes);
       const extra = (await mutar(despues, { tx, antes, leer })) || {};
@@ -690,12 +709,12 @@
         escribir('semanas', x.id, x.data, contenido);
       });
       const nuevosCli = new Map(nuevos.filter(d => d.col === 'clientes').map(d => [d.id, d.data]));
-      nuevosCli.forEach((_, id) => { if (!clientes.map(idCliente).includes(id)) throw Object.assign(new Error(`Ficha no declarada en la transacción: ${id}`), { code: 'ficha-no-leida' }); });
+      nuevosCli.forEach((_, id) => { if (!clientes.includes(id)) throw Object.assign(new Error(`Ficha no declarada en la transacción: ${id}`), { code: 'ficha-no-leida' }); });
       leidosCli.forEach(x => {
-        const id = idCliente(x.id);
+        const id = x.id;
         const nuevo = nuevosCli.get(id);
         if (nuevo) {
-          const orden = x.data && !x.data.eliminado && x.data.trainerKey === nuevo.trainerKey && typeof x.data.orden === 'number' ? x.data.orden : Date.now();
+          const orden = x.data && !x.data.eliminado && typeof x.data.orden === 'number' ? x.data.orden : Date.now();
           escribir('clientes', id, x.data, { ...nuevo, orden });
         } else if (x.data && !x.data.eliminado) {
           escribir('clientes', id, x.data, { ...sinMeta(x.data), eliminado: true });
@@ -703,7 +722,7 @@
       });
       (extra.escrituras || []).forEach(fn => fn(tx));
       return extra.resultado;
-    });
+    }, contador);
     contador.sumar('escrituras', escritos.length, 'legado');
     return { resultado, docs: escritos };
   }
@@ -723,7 +742,7 @@
     });
     contador.sumar('transacciones', 1, 'camposRaiz');
     let n = 0;
-    await firestore.runTransaction(async tx => {
+    await transaccionConReintento(firestore, async tx => {
       n = 0;
       const refsT = Object.keys(porTrainer).map(tk => ({ tk, ref: firestore.collection(COL.trainers).doc(idSeguro(tk)) }));
       const refC = Object.keys(porConfig).length ? firestore.collection(COL.config).doc('global') : null;
@@ -745,7 +764,7 @@
         });
         tx.set(refC, { campos, esquema: ESQUEMA, ...meta(leidoC) }); n++;
       }
-    });
+    }, contador);
     contador.sumar('escrituras', n, 'camposRaiz');
   }
 
@@ -763,12 +782,94 @@
     c.sumar('consultas', 1, 'fichasDeLead');
     const snap = await firestore.collection(COL.clientes).where('leadId', '==', String(leadId)).get();
     c.sumar('lecturas', Math.max(1, snap.size), 'fichasDeLead');
-    return [...new Set([...snap.docs.map(d => d.data().clienteId), ...(idsExtra || []).filter(Boolean)])];
+    const ids = snap.docs.map(d => d.id);
+    // idsExtra: IDs de cliente (sin entrenador) -> sus documentos, por consulta.
+    for (const cid of (idsExtra || []).filter(Boolean)) {
+      c.sumar('consultas', 1, 'fichasDeLead');
+      const s2 = await firestore.collection(COL.clientes).where('clienteId', '==', String(cid)).get();
+      c.sumar('lecturas', Math.max(1, s2.size), 'fichasDeLead');
+      s2.docs.forEach(d => ids.push(d.id));
+    }
+    return [...new Set(ids)];
+  }
+
+  // ---------------------------------------------------------------- contingencia (recuperación)
+  // Si la app nueva fallara, la operativa puede seguir con la app ANTERIOR apuntando a un documento
+  // NUEVO (besoulSuite/agendaContingencia; el original nunca se toca) que contiene: todas las fichas,
+  // disponibilidad, histórico, notas y actividades, y las sesiones/pruebas/excepciones/slots ocultos
+  // desde la fecha "desde" (las anteriores siguen intactas en los documentos nuevos). Las 5 copias
+  // redundantes de la ficha se quitan de las sesiones del documento de contingencia (se restauran
+  // al reincorporar). Al resolver el fallo, reincorporar() devuelve a los documentos nuevos todo lo
+  // cambiado en contingencia, sin tocar nada anterior a "desde".
+  const CINCO_REDUNDANTES = ['contratoCliente', 'restriccionesReservas', 'reservaToken', 'reservasBloqueadasTexto', 'reservasOnlineActivas'];
+  const sinCinco = ses => { if (!ses || typeof ses !== 'object' || Array.isArray(ses)) return ses; const c = { ...ses }; CINCO_REDUNDANTES.forEach(k => { delete c[k]; }); return c; };
+  function construirContingencia(docsAgrupados, desde) {
+    const l = legadoDesdeDocs(docsAgrupados);
+    const enAlcance = clave => { const f = fechaDeClave(clave) || (RE_FECHA.test(clave) ? clave : null); return !!f && f >= desde; };
+    ['agenda', 'pruebasCRM'].forEach(campo => Object.keys(l[campo] || {}).forEach(tk => {
+      const m = l[campo][tk] || {}; const out = {};
+      Object.keys(m).forEach(clave => { if (enAlcance(clave)) out[clave] = campo === 'agenda' ? sinCinco(m[clave]) : m[clave]; });
+      l[campo][tk] = out;
+    }));
+    Object.keys(l.disponibilidadReservas || {}).forEach(tk => SUBMAPAS_DIA.forEach(sub => {
+      const m = (l.disponibilidadReservas[tk] || {})[sub]; if (!esPlano(m)) return;
+      Object.keys(m).forEach(f => { if (!enAlcance(f)) delete m[f]; });
+    }));
+    delete l.__ausentes;
+    delete l.actualizadoEn; delete l.ultimaActualizacionLocal; // metadatos: los reescribe la app anterior
+    l.contingencia = { desde, esquema: ESQUEMA };
+    return l;
+  }
+  // Plan de reincorporación: documentos nuevos que hay que escribir para que la estructura nueva
+  // refleje el documento de contingencia (solo semanas desde "desde"; fichas, entrenadores,
+  // histórico y notas completos). Devuelve [{col, id, data|null(lápida), previo}].
+  function planReincorporacion(docsActuales, contingencia) {
+    const desde = (contingencia.contingencia || {}).desde;
+    if (!desde) throw new Error('El documento no es de contingencia (falta contingencia.desde).');
+    const lunesDesde = lunesDe(desde);
+    const actual = legadoDesdeDocs(docsActuales);
+    const objetivo = clonar(contingencia); delete objetivo.contingencia;
+    // Restaurar las 5 copias redundantes donde la sesión no cambió (comparando sin ellas).
+    Object.keys(objetivo.agenda || {}).forEach(tk => Object.keys(objetivo.agenda[tk] || {}).forEach(clave => {
+      const a = ((actual.agenda || {})[tk] || {})[clave];
+      if (a && igual(sinCinco(a), objetivo.agenda[tk][clave])) objetivo.agenda[tk][clave] = a;
+    }));
+    // Lo anterior a "desde" (por FECHA, también dentro de la semana del corte) no estaba en
+    // contingencia: se toma del estado actual, sin cambios.
+    ['agenda', 'pruebasCRM'].forEach(campo => Object.keys(actual[campo] || {}).forEach(tk => Object.keys(actual[campo][tk] || {}).forEach(clave => {
+      const f = fechaDeClave(clave); if (f && f < desde) { (objetivo[campo][tk] = objetivo[campo][tk] || {})[clave] = actual[campo][tk][clave]; }
+    })));
+    Object.keys(actual.disponibilidadReservas || {}).forEach(tk => SUBMAPAS_DIA.forEach(sub => Object.keys(((actual.disponibilidadReservas[tk] || {})[sub]) || {}).forEach(f => {
+      if (f < desde) { const d = objetivo.disponibilidadReservas[tk] = objetivo.disponibilidadReservas[tk] || {}; (d[sub] = d[sub] || {})[f] = actual.disponibilidadReservas[tk][sub][f]; }
+    })));
+    const legado = (docsActuales.legado || {}).raiz; if (legado) Object.keys(legado.camposRaiz || {}).forEach(k => { if (!k.startsWith('__') && !(k in objetivo)) objetivo[k] = legado.camposRaiz[k]; });
+    const destino = agrupar(docsDesdeLegado(objetivo).docs.filter(d => d.col !== 'legado'));
+    const plan = [];
+    ['semanas', 'clientes', 'trainers', 'historico', 'notas', 'config'].forEach(col => {
+      const ids = new Set([...Object.keys(destino[col] || {}), ...Object.keys(docsActuales[col] || {})]);
+      ids.forEach(id => {
+        const previo = (docsActuales[col] || {})[id] || null;
+        const nuevo = (destino[col] || {})[id] || null;
+        const sinMeta = d => { if (!d) return null; const c = { ...d }; delete c.rev; delete c.actualizadoEn; delete c.actualizadoPor; return c; };
+        if (nuevo && igual(sinMeta(previo), nuevo)) return;
+        if (!nuevo) {
+          if (!previo) return;
+          if (col === 'semanas' && previo.semana < lunesDesde) return; // fuera de alcance: intacto
+          if (col === 'semanas') { const vacia = contenidoSemana(previo.trainerKey, previo.semana, {}); if (!igual(sinMeta(previo), vacia)) plan.push({ col, id, data: vacia, previo }); return; }
+          if (col === 'trainers' || col === 'config') return;
+          if (!previo.eliminado) plan.push({ col, id, data: { ...sinMeta(previo), eliminado: true, ...(col === 'notas' ? { texto: '' } : {}) }, previo });
+          return;
+        }
+        plan.push({ col, id, data: nuevo, previo });
+      });
+    });
+    return plan;
   }
 
   return {
+    construirContingencia, planReincorporacion, CINCO_REDUNDANTES,
     COL, ESQUEMA, COLECCIONES_SINCRONIZADAS,
-    transaccionLegado, semanasConPrueba, fichasDeLead, leadsPruebaDe, actualizarCamposRaiz, CAMPOS_CONFIG,
+    transaccionLegado, transaccionConReintento, semanasConPrueba, fichasDeLead, leadsPruebaDe, actualizarCamposRaiz, CAMPOS_CONFIG,
     lunesDe, fechaDeClave, idSemana, idCliente, idHistorico, idNota, idSeguro, trainerDeNota,
     docsDesdeLegado, legadoDesdeDocs, agrupar, diferencias, igual, canon,
     contenidoSemana, contenidoCliente, contenidoHistorico, contenidoNota, dispGeneral,

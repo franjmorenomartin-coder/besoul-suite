@@ -1743,7 +1743,7 @@ async function convertirLeadEnCliente() {
     // la Agenda (antes, set({merge:true}) no borraba claves: la prueba quedaba como fantasma).
     const leadRef = db.collection('besoulLeads').doc(leadEditandoId);
     const leadPrevio = await leadRef.get();
-    const idsFichas = await BesoulDatos.fichasDeLead(db, leadEditandoId, [nuevoClienteId, (leadPrevio.data() || {}).convertedClientId]);
+    const idsFichas = [...await BesoulDatos.fichasDeLead(db, leadEditandoId, [(leadPrevio.data() || {}).convertedClientId]), BesoulDatos.idCliente(trainerKey, nuevoClienteId)];
     const semanasPrueba = await BesoulDatos.semanasConPrueba(db, leadEditandoId);
     await BesoulDatos.transaccionLegado({ ...opcionesTransaccionCRM(), clientes: idsFichas, semanas: semanasPrueba, mutar: async (agendaData, { tx }) => {
       // HOTFIX-CRM-DUPLICADOS-FECHA-ALTA: el lead también se lee DENTRO de la transacción (antes

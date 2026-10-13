@@ -7,7 +7,12 @@
 //   1) await migrarAgendaBesoul()                      -> SIMULACIÓN: lee, transforma, verifica. No escribe.
 //   2) await migrarAgendaBesoul({ ejecutar: true })    -> escribe los documentos nuevos (solo con autorización).
 //   3) await verificarMigracionBesoul()                -> relee TODO del servidor y compara con el original.
-//   Recuperación (solo si se decide volver a la versión anterior de la app):
+//   MODO CONTINGENCIA (si la app nueva falla; ver docs/arquitectura-firestore/07_CORTE_Y_RECUPERACION.md):
+//   6) await prepararContingenciaBesoul({ desde: 'AAAA-MM-DD' })           -> SIMULACIÓN (tamaño, recuentos)
+//   7) await prepararContingenciaBesoul({ desde: 'AAAA-MM-DD', ejecutar: true }) -> crea besoulSuite/agendaContingencia
+//   8) await reincorporarContingenciaBesoul()                              -> SIMULACIÓN del plan de vuelta
+//   9) await reincorporarContingenciaBesoul({ ejecutar: true })            -> devuelve lo cambiado a los documentos nuevos
+//   Recuperación antigua por documento único (NO recomendada: el original está casi lleno):
 //   4) await reconstruirAgendaBesoul()                 -> SIMULACIÓN del documento único desde los nuevos.
 //   5) await reconstruirAgendaBesoul({ ejecutar: true })-> lo escribe en besoulSuite/agenda (requiere
 //                                                         las reglas anteriores, ver docs/.../06).
@@ -145,5 +150,56 @@
     console.log('[RECONSTRUCCIÓN AGENDA]', r);
     return r;
   };
+  // ---------------------------------------------------------------- MODO CONTINGENCIA
+  const contRef = fs.collection('besoulSuite').doc('agendaContingencia');
+  function tamanoFirestore(v) {
+    if (v === null || v === undefined || typeof v === 'boolean') return 1;
+    if (typeof v === 'number') return 8;
+    if (typeof v === 'string') return enc.encode(v).length + 1;
+    if (typeof v.toMillis === 'function') return 8;
+    if (Array.isArray(v)) return v.reduce((a, x) => a + tamanoFirestore(x), 0);
+    return Object.keys(v).reduce((a, k) => a + enc.encode(k).length + 1 + tamanoFirestore(v[k]), 0);
+  }
+  window.prepararContingenciaBesoul = async function ({ desde, ejecutar = false } = {}) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(desde || '')) throw new Error('Indica desde: "AAAA-MM-DD" (p. ej. el día 1 del mes en curso).');
+    const nuevo = await leerTodoNuevo();
+    const cont = D.construirContingencia(nuevo, desde);
+    const bytes = tamanoFirestore(cont) + 80;
+    const plan = D.planReincorporacion(nuevo, cont);
+    const r = { modo: ejecutar ? 'EJECUCIÓN' : 'SIMULACIÓN (no se escribe nada)', desde, bytes, margenBytes: 1048576 - bytes, recuento: recuento(cont), idaYVueltaSinCambios: plan.length === 0, huella: await huella(cont) };
+    if (plan.length) { r.error = 'La contingencia no se puede reincorporar sin cambios (plan no vacío): NO se crea.'; console.error(r); return r; }
+    if (bytes > 900000) { r.error = 'Demasiado grande: elige una fecha "desde" más reciente.'; console.error(r); return r; }
+    const existente = await contRef.get({ source: 'server' });
+    if (existente.exists) { r.error = 'Ya existe besoulSuite/agendaContingencia: revisar antes (no se sobrescribe).'; console.error(r); return r; }
+    if (ejecutar) {
+      await contRef.set({ ...cont, actualizadoEn: firebase.firestore.FieldValue.serverTimestamp(), ultimaActualizacionLocal: new Date().toISOString() });
+      const leido = (await contRef.get({ source: 'server' })).data();
+      delete leido.actualizadoEn; delete leido.ultimaActualizacionLocal;
+      r.verificacionServidor = D.diferencias(cont, leido, '', [], 10).length === 0 ? 'IDÉNTICO' : 'DIFERENCIAS';
+    }
+    console.log('[CONTINGENCIA]', r);
+    return r;
+  };
+  window.reincorporarContingenciaBesoul = async function ({ ejecutar = false } = {}) {
+    const sc = await contRef.get({ source: 'server' });
+    if (!sc.exists) throw new Error('No existe besoulSuite/agendaContingencia.');
+    const cont = sc.data(); delete cont.actualizadoEn; delete cont.ultimaActualizacionLocal;
+    const nuevo = await leerTodoNuevo();
+    const plan = D.planReincorporacion(nuevo, cont);
+    const r = { modo: ejecutar ? 'EJECUCIÓN' : 'SIMULACIÓN (no se escribe nada)', documentosACambiar: plan.length, porColeccion: plan.reduce((m, p) => { m[p.col] = (m[p.col] || 0) + 1; return m; }, {}) };
+    if (ejecutar && plan.length) {
+      const actor = (firebase.auth().currentUser || {}).email || 'reincorporacion';
+      for (let i = 0; i < plan.length; i += 100) {
+        const batch = fs.batch();
+        plan.slice(i, i + 100).forEach(p => batch.set(fs.collection(D.COL[p.col]).doc(p.id), { ...p.data, rev: ((p.previo && p.previo.rev) || 0) + 1, actualizadoEn: firebase.firestore.FieldValue.serverTimestamp(), actualizadoPor: `reincorporacion:${actor}` }));
+        await batch.commit();
+      }
+      const despues = D.planReincorporacion(await leerTodoNuevo(), cont);
+      r.verificacionServidor = despues.length === 0 ? 'IDÉNTICO A LA CONTINGENCIA' : `QUEDAN ${despues.length} DIFERENCIAS`;
+    }
+    console.log('[REINCORPORACIÓN]', r);
+    return r;
+  };
+
   console.log('Migrador listo: await migrarAgendaBesoul() · await migrarAgendaBesoul({ ejecutar: true }) · await verificarMigracionBesoul() · await reconstruirAgendaBesoul()');
 })();

@@ -133,6 +133,9 @@ service cloud.firestore {
       // corte: rama main @ 89b31e1 (firestore.rules), para el plan de vuelta atrás.
       allow read: if isAdmin() && docId == 'agenda';
       allow write: if false && docId == 'agenda';
+      // Documento de contingencia (solo existe si se activa el modo contingencia): tras volver a la
+      // app nueva, administración lo lee para reincorporar lo cambiado; nadie lo escribe.
+      allow read: if isAdmin() && docId == 'agendaContingencia';
 
       // Finanzas sigue reservado solo para administración.
       allow read, write: if isAdmin() && docId == 'finanzas';
@@ -143,9 +146,8 @@ service cloud.firestore {
     //  - aislamiento real: un PT solo lee y escribe documentos con SU trainerKey (lectura incluida:
     //    ya no descarga los clientes de los demás entrenadores); admin, todo;
     //  - un PT no puede cambiar el trainerKey de un documento (traspasos: solo admin);
-    //  - control de versión: rev = 1 al crear y > 1 al actualizar; la detección de conflictos la
-    //    hacen las transacciones (leen y escriben de forma atómica; si otro cambió el documento,
-    //    Firestore las repite con los datos nuevos);
+    //  - control de versión en el servidor: rev = 1 al crear y rev guardado + 1 al actualizar;
+    //    ninguna escritura obsoleta (transacción, cliente antiguo o escritura directa) prospera;
     //  - actualizadoEn = hora del servidor (base de la sincronización incremental);
     //  - nunca se borra un documento (lápida "eliminado"): no hay delete.
     function esMio(tk) {
@@ -157,22 +159,19 @@ service cloud.firestore {
     function versionCreacion() {
       return request.resource.data.rev == 1 && request.resource.data.actualizadoEn == request.time;
     }
-    // rev NO se compara con el valor guardado: con dos guardados simultáneos, la transacción que
-    // pierde debe REINTENTARSE (lo garantiza Firestore), no recibir un falso "permission-denied"
-    // (comprobado en el emulador: la regla rev == anterior+1 se evaluaba contra el documento ya
-    // cambiado por el otro usuario). La protección contra pisar cambios es la transacción; la regla
-    // exige versión numérica creciente y la hora del servidor (base de la sincronización).
+    // Control optimista EN EL SERVIDOR: toda actualización debe partir de la versión vigente
+    // (rev nuevo = rev guardado + 1). Una escritura basada en datos ya superados se rechaza, sea de
+    // una transacción, de un cliente antiguo o de una escritura directa. Si dos usuarios guardan a
+    // la vez, el que pierde recibe el rechazo y la app repite la transacción con los datos nuevos
+    // (besoul-datos.js transaccionConReintento): ni pérdida ni falso error.
     function versionActualizacion() {
-      return request.resource.data.rev is int && request.resource.data.rev > 1 && request.resource.data.actualizadoEn == request.time;
+      return request.resource.data.rev == resource.data.rev + 1 && request.resource.data.actualizadoEn == request.time;
     }
     // Lectura: un documento existente se lee si es del propio entrenador. Un documento que todavía
     // NO existe (p. ej. la semana donde se va a crear la primera sesión, leída dentro de la
     // transacción) solo se puede consultar si su identificador es del propio entrenador.
     function lecturaPropia(prefijoId) {
       return isAdmin() || (isActiveUser() && (resource == null ? prefijoId == myTrainerKey() : resource.data.trainerKey == myTrainerKey()));
-    }
-    function mismoTrainerSalvoAdmin() {
-      return isAdmin() || request.resource.data.trainerKey == resource.data.trainerKey;
     }
 
     match /besoulAgendaSemanas/{semanaId} {
@@ -189,14 +188,16 @@ service cloud.firestore {
     }
 
     match /besoulClientes/{clienteDocId} {
-      // Una ficha inexistente (id aleatorio de cliente nuevo) no revela datos de nadie.
-      allow read: if isAdmin() || (isActiveUser() && (resource == null || resource.data.trainerKey == myTrainerKey()));
+      // ID = "{trainerKey}__{clientId}": ni siquiera la existencia de una ficha ajena es consultable.
+      allow read: if lecturaPropia(clienteDocId.split('__')[0]);
       allow create: if alcancePermitido(request.resource.data.trainerKey)
         && request.resource.data.trainerKey is string
-        && request.resource.data.clienteId == clienteDocId
+        && clienteDocId == request.resource.data.trainerKey + '__' + request.resource.data.clienteId
         && versionCreacion();
+      // trainerKey y clienteId inmutables (también para admin): un traspaso crea la ficha con el
+      // ID del nuevo entrenador y deja lápida en la anterior.
       allow update: if alcancePermitido(resource.data.trainerKey)
-        && mismoTrainerSalvoAdmin()
+        && request.resource.data.trainerKey == resource.data.trainerKey
         && request.resource.data.clienteId == resource.data.clienteId
         && versionActualizacion();
       allow delete: if false;

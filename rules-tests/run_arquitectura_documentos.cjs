@@ -146,11 +146,14 @@ async function main() {
   await denegado('B11 usuario inactivo no lee', inactivo.collection(D.COL.semanas).doc(D.idSemana('pta', lunes)).get());
   await denegado('B12 anónimo no lee', anonimo.collection(D.COL.semanas).doc(D.idSemana('pta', lunes)).get());
   const ficha = (tk, id, rev, extra) => ({ ...D.contenidoCliente(tk, { id, nombre: 'Cliente', telefono: '6', email: 'c@x' }, 0), rev, actualizadoEn: FieldValue.serverTimestamp(), ...(extra || {}) });
-  await permitido('B13 PT crea su ficha', pta.collection(D.COL.clientes).doc('cA1').set(ficha('pta', 'cA1', 1)));
-  await denegado('B14 PT no puede crear una ficha para otro entrenador', pta.collection(D.COL.clientes).doc('cB1').set(ficha('ptb', 'cB1', 1)));
-  await denegado('B15 PT no puede traspasar su ficha a otro entrenador', pta.collection(D.COL.clientes).doc('cA1').set(ficha('ptb', 'cA1', 2)));
-  await permitido('B16 admin sí puede traspasar una ficha (rev+1)', admin.collection(D.COL.clientes).doc('cA1').set(ficha('ptb', 'cA1', 2)));
-  await denegado('B17 tras el traspaso, el PT anterior ya no la lee', pta.collection(D.COL.clientes).doc('cA1').get());
+  const fid = (tk, id) => D.idCliente(tk, id);
+  await permitido('B13 PT crea su ficha', pta.collection(D.COL.clientes).doc(fid('pta', 'cA1')).set(ficha('pta', 'cA1', 1)));
+  await denegado('B14 PT no puede crear una ficha para otro entrenador', pta.collection(D.COL.clientes).doc(fid('ptb', 'cB1')).set(ficha('ptb', 'cB1', 1)));
+  await denegado('B14b PT no puede crear una ficha suya con el ID de otro entrenador', pta.collection(D.COL.clientes).doc(fid('ptb', 'cA9')).set(ficha('pta', 'cA9', 1)));
+  await denegado('B15 nadie (ni admin) cambia el entrenador de una ficha existente: el traspaso es ficha nueva + lápida', admin.collection(D.COL.clientes).doc(fid('pta', 'cA1')).set(ficha('ptb', 'cA1', 2)));
+  await permitido('B16 admin traspasa: crea la ficha en el otro entrenador', admin.collection(D.COL.clientes).doc(fid('ptb', 'cA1')).set(ficha('ptb', 'cA1', 1)));
+  await permitido('B16b ...y deja lápida en la del anterior', admin.collection(D.COL.clientes).doc(fid('pta', 'cA1')).set(ficha('pta', 'cA1', 2, { eliminado: true })));
+  await denegado('B17 el PT anterior no lee la ficha traspasada', pta.collection(D.COL.clientes).doc(fid('ptb', 'cA1')).get());
   await permitido('B18 PT crea su documento de entrenador (sin actividades)', pta.collection(D.COL.trainers).doc('pta').set({ trainerKey: 'pta', disponibilidad: { semanal: {} }, actividades: null, rev: 1, actualizadoEn: FieldValue.serverTimestamp() }));
   await denegado('B19 PT no puede autoasignarse actividades (solo admin desde Finanzas)', pta.collection(D.COL.trainers).doc('pta').set({ trainerKey: 'pta', disponibilidad: { semanal: {} }, actividades: ['pilates'], rev: 2, actualizadoEn: FieldValue.serverTimestamp() }));
   await permitido('B20 admin asigna actividades a un PT', admin.collection(D.COL.trainers).doc('pta').set({ trainerKey: 'pta', disponibilidad: { semanal: {} }, actividades: ['pilates'], rev: 2, actualizadoEn: FieldValue.serverTimestamp() }));
@@ -168,6 +171,25 @@ async function main() {
   await denegado('B32 PT no puede sondear una semana inexistente de otro entrenador', pta.collection(D.COL.semanas).doc(D.idSemana('ptb', '2030-01-07')).get());
   await denegado('B33 PT no puede sondear el documento inexistente de otro entrenador', pta.collection(D.COL.trainers).doc('nadie').get());
   await permitido('B34 PT consulta su documento de entrenador filtrando por trainerKey', pta.collection(D.COL.trainers).where('trainerKey', '==', 'pta').get());
+  // --- documentos inexistentes y existentes de OTRO entrenador, todas las colecciones ---
+  await permitido('B35 PT puede consultar una ficha suya inexistente (alta nueva)', pta.collection(D.COL.clientes).doc(fid('pta', 'nueva')).get());
+  await denegado('B36 PT NO puede consultar una ficha inexistente de otro entrenador', pta.collection(D.COL.clientes).doc(fid('ptb', 'nueva')).get());
+  await denegado('B37 PT NO puede consultar un histórico inexistente de otro entrenador', pta.collection(D.COL.historico).doc(D.idHistorico('ptb', 'x', '2026-09')).get());
+  await denegado('B38 PT NO puede consultar una nota inexistente de otro entrenador', pta.collection(D.COL.notas).doc('ptb__2026-10-14_10:00').get());
+  await testEnv.withSecurityRulesDisabled(async ctx => { await ctx.firestore().collection(D.COL.historico).doc(D.idHistorico('ptb', 'cB1', '2026-09')).set({ ...D.contenidoHistorico('ptb', 'cB1', '2026-09', { facturacionPrevista: 1 }), rev: 1, actualizadoEn: Timestamp.now() }); });
+  await denegado('B39 PT NO lee un histórico existente de otro entrenador', pta.collection(D.COL.historico).doc(D.idHistorico('ptb', 'cB1', '2026-09')).get());
+  await denegado('B40 PT NO modifica un histórico de otro entrenador', pta.collection(D.COL.historico).doc(D.idHistorico('ptb', 'cB1', '2026-09')).set({ ...D.contenidoHistorico('ptb', 'cB1', '2026-09', { facturacionPrevista: 999 }), rev: 2, actualizadoEn: FieldValue.serverTimestamp() }));
+  await denegado('B41 PT NO consulta los históricos de otro entrenador', pta.collection(D.COL.historico).where('trainerKey', '==', 'ptb').get());
+  await denegado('B42 PT NO modifica la ficha de otro entrenador', pta.collection(D.COL.clientes).doc(fid('ptb', 'cA1')).set(ficha('ptb', 'cA1', 2, { ficha: { id: 'cA1', nombre: 'Cambiado' } })));
+  // --- escrituras OBSOLETAS: nunca sobrescriben un cambio posterior ---
+  const refObs = pta.collection(D.COL.semanas).doc(D.idSemana('pta', lunes));
+  const leidaPorClienteViejo = (await refObs.get()).data();
+  await permitido('B43 otro dispositivo guarda primero (rev+1 sobre la versión vigente)', admin.collection(D.COL.semanas).doc(D.idSemana('pta', lunes)).set({ ...leidaPorClienteViejo, sesiones: { ...leidaPorClienteViejo.sesiones, [`${lunes}_12:00`]: { id: 'x', nombre: 'Posterior' } }, rev: leidaPorClienteViejo.rev + 1, actualizadoEn: FieldValue.serverTimestamp() }));
+  await denegado('B44 escritura DIRECTA basada en la versión anterior: RECHAZADA (no pisa el cambio posterior)', refObs.set({ ...leidaPorClienteViejo, sesiones: {}, rev: leidaPorClienteViejo.rev + 1, actualizadoEn: FieldValue.serverTimestamp() }));
+  await denegado('B45 escritura directa con versión inventada por encima: RECHAZADA', refObs.set({ ...leidaPorClienteViejo, sesiones: {}, rev: leidaPorClienteViejo.rev + 10, actualizadoEn: FieldValue.serverTimestamp() }));
+  await denegado('B46 escritura sin versión (cliente antiguo/externo): RECHAZADA', refObs.set({ trainerKey: 'pta', semana: lunes, sesiones: {} }));
+  check('B47 el cambio posterior sigue intacto tras los intentos obsoletos', !!((await admin.collection(D.COL.semanas).doc(D.idSemana('pta', lunes)).get()).data().sesiones[`${lunes}_12:00`]));
+  await denegado('B48 actualizar sin hora del servidor: RECHAZADO', refObs.set({ ...(await refObs.get()).data(), rev: (await refObs.get()).data().rev + 1, actualizadoEn: Timestamp.fromMillis(Date.now() + 3600000) }));
 
   // ============================================================== C. GUARDADOS Y CONCURRENCIA
   console.log('\n=== C. Guardados reales (fusión de agenda.html) y concurrencia ===');
@@ -265,7 +287,7 @@ async function main() {
   b0 = await vista(pta, tkC);
   await guardar(pta, tkC, b0, conCambio(b0, l => { l.clientes = []; }));
   v = await vista(pta, tkC);
-  const lapida = (await pta.collection(D.COL.clientes).doc('cliC').get()).data();
+  const lapida = (await pta.collection(D.COL.clientes).doc(D.idCliente('pta', 'cliC')).get()).data();
   check('C12 borrar una ficha deja una lápida (no se borra el documento)', v.clientes.length === 0 && lapida && lapida.eliminado === true && lapida.ficha && lapida.ficha.id === 'cliC');
   // C13: histórico mensual congelado: escribir y releer.
   b0 = await vista(pta, tkC);
@@ -295,6 +317,15 @@ async function main() {
   await guardar(pta, tkC, viejo, conCambio(viejo, l => { l.agenda['2026-10-16_15:00'] = S({ nombre: 'Nueva' }); }));
   v = await vista(pta, tkC);
   check('C18 pantalla desactualizada que cambia otra sesión: se fusiona y conserva el cambio ajeno', v.agenda['2026-10-15_10:00'].nombre === 'Cambio admin' && !!v.agenda['2026-10-16_15:00']);
+
+  // C19: 5 guardados simultáneos sobre la MISMA semana (sesiones distintas): todos confirmados,
+  // ninguno se pierde y ninguno recibe un falso permission-denied (la regla estricta rechaza la
+  // versión obsoleta y la transacción se repite con los datos nuevos).
+  b0 = await vista(pta, tkC);
+  const horas = ['07:00', '07:45', '08:30', '09:15', '10:00'];
+  const r19 = await Promise.allSettled(horas.map((h, i) => guardar(i % 2 ? admin : pta, tkC, b0, conCambio(b0, l => { l.agenda[`2026-11-30_${h}`] = S({ nombre: `Simultánea ${h}` }); }))));
+  v = await vista(admin, tkC);
+  check('C19 cinco guardados simultáneos en la misma semana: los cinco confirmados y presentes', r19.every(r => r.status === 'fulfilled') && horas.every(h => !!v.agenda[`2026-11-30_${h}`]), r19.map(r => r.status + (r.reason ? ':' + r.reason.code : '')));
 
   // ============================================================== D. SINCRONIZACIÓN Y CONSUMO
   console.log('\n=== D. Sincronización incremental y consumo medido ===');
