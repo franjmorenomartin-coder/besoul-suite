@@ -178,6 +178,10 @@ async function main() {
   consumo.push({ operacion: 'Recargar Agenda (PT, con copia local)', lecturas: cRecarga.lecturas, escrituras: 0 });
   check('E12 recargar no vuelve a descargar todo (≤ 1 lectura por consulta + cambios)', cRecarga.lecturas <= 8, cRecarga.lecturas);
   check('E13 tras recargar, los datos son los del servidor', await pt.evaluate(c => !!((dbAgenda || {}).laura || {})[c], claveSimPT));
+  // Incidencia 13-oct: con copia local, el indicador quedaba en "Sin conexión" aunque los datos ya eran del servidor.
+  await espera(3000);
+  const estRecarga = await pt.evaluate(() => ({ sinc: window.bsAgendaSincronizacion, cache: window.bsAgendaDatosDeCache, txt: (() => { const el = document.getElementById('bs-estado-guardado'); return el && el.style.display !== 'none' ? el.innerText : '(oculto)'; })() }));
+  check('E13b tras recargar con copia local, el estado es "ok" y no aparece "Sin conexión"', estRecarga.sinc === 'ok' && estRecarga.cache === false && !/Sin conexión/i.test(estRecarga.txt), estRecarga);
 
   // ---- E14 sin conexión: el cambio se conserva, nunca se da por guardado; al volver, se guarda una vez ----
   await pt.__context.setOffline(true);

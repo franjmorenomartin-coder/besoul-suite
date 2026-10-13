@@ -1366,7 +1366,7 @@ miércoles 07:00-09:00"></textarea>
         // texto plano, copiable sin depender de ninguna interacción de DevTools más allá de
         // seleccionar texto (el objeto expandible [BESOUL_SAVE_CONFLICT] no era extraíble de forma
         // fiable para un usuario sin experiencia en DevTools).
-        const BS_APP_BUILD_TAG = 'agenda-arq-documentos-2026-10-13';
+        const BS_APP_BUILD_TAG = 'agenda-arq-documentos-2026-10-13b';
         console.log('[BESOUL BUILD]', BS_APP_BUILD_TAG, '-- si esto NO aparece en tu consola tras recargar, tu navegador está ejecutando una versión antigua cacheada: cierra TODAS las pestañas de la app y vuelve a abrirla, o usa una ventana de incógnito.');
         let slotAccionSeleccionado = '';
         window.bsAgendaDiaMovil = window.bsAgendaDiaMovil ?? null;
@@ -2865,6 +2865,15 @@ miércoles 07:00-09:00"></textarea>
                         window.bsAgendaDatosDeCache = false;
                         window.bsUltimasNotasServidor = JSON.parse(JSON.stringify(datos.notas || {}));
                         aplicarEstadoNubeAgenda(datos);
+                        // Datos confirmados por el servidor: el indicador pasa a "ok" aquí mismo. Antes
+                        // dependía de un onEstado('ok') posterior que no llega si la última emisión la
+                        // produce la configuración o el legado (quedaba "Sin conexión" con datos al día).
+                        const anterior = window.bsAgendaSincronizacion;
+                        window.bsAgendaSincronizacion = 'ok';
+                        if (anterior !== 'ok') {
+                            actualizarIndicadorGuardadoAgenda();
+                            if (anterior === 'cache' || anterior === 'error') reintentarGuardadosAgenda();
+                        }
                     } else if (!window.bsUltimoServidorConocido) {
                         // Copia local de una sincronización anterior: se pinta mientras llega el
                         // servidor, pero no habilita guardados ni se presenta como confirmada.
