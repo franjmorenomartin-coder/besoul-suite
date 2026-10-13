@@ -1365,7 +1365,7 @@ miércoles 07:00-09:00"></textarea>
         // texto plano, copiable sin depender de ninguna interacción de DevTools más allá de
         // seleccionar texto (el objeto expandible [BESOUL_SAVE_CONFLICT] no era extraíble de forma
         // fiable para un usuario sin experiencia en DevTools).
-        const BS_APP_BUILD_TAG = 'agenda-sync-p0-2026-10-09';
+        const BS_APP_BUILD_TAG = 'agenda-sesiones-ficha-p0-2026-10-13';
         console.log('[BESOUL BUILD]', BS_APP_BUILD_TAG, '-- si esto NO aparece en tu consola tras recargar, tu navegador está ejecutando una versión antigua cacheada: cierra TODAS las pestañas de la app y vuelve a abrirla, o usa una ventana de incógnito.');
         let slotAccionSeleccionado = '';
         window.bsAgendaDiaMovil = window.bsAgendaDiaMovil ?? null;
@@ -6078,25 +6078,49 @@ function calcularRentabilidadFicha(ficha) {
 
 
 
-        function actualizarNombreEnAgendaSiCambia() {
+        // HOTFIX-V1-SESIONES-FICHA-P0 (2026-10-13): antes SUSTITUÍA cada sesión del entrenador por el
+        // objeto de su ficha (misma referencia), para TODAS las fichas y TODAS las fechas. Demostrado
+        // en producción (solo lectura, comparando con el respaldo del 9-oct): sesiones que perdieron
+        // duracionMin y recurrente/serieRecurrenteId, sesiones pasadas reescritas con la tarifa
+        // actual de la ficha y, desde clientes sin este hotfix, los 5 campos de portal/contrato
+        // reintroducidos (~93 KB). Ahora:
+        //  - solo las sesiones de la ficha editada;
+        //  - los campos propios de la sesión (duración, recurrencia, cancelación, asistentes, origen
+        //    de reserva, avisos...) se conservan siempre: se fusiona sobre una COPIA, nunca se sustituye;
+        //  - sesiones PASADAS: solo nombre/teléfono/email (las condiciones económicas de su momento
+        //    no se recalculan con la tarifa actual);
+        //  - sesiones de hoy en adelante: reciben los datos actuales de la ficha (comportamiento previo),
+        //    salvo los campos que nunca se copian a una sesión (BS_CAMPOS_FICHA_NO_SESION).
+        function actualizarNombreEnAgendaSiCambia(fichaId) {
 
-            if(!dbAgenda[entrenadorVisto] || !dbClientes[entrenadorVisto]) return;
+            if(!fichaId || !dbAgenda[entrenadorVisto] || !dbClientes[entrenadorVisto]) return;
 
-            const mapaFichas = {};
+            const ficha = dbClientes[entrenadorVisto].find(c => c && c.id === fichaId);
+            if (!ficha) return;
 
-            dbClientes[entrenadorVisto].forEach(c => mapaFichas[c.id] = c);
+            const datosFicha = { ...ficha };
+            BS_CAMPOS_FICHA_NO_SESION.forEach(campo => { delete datosFicha[campo]; });
+            const contactoFicha = {};
+            ['nombre', 'telefono', 'email'].forEach(campo => { if (ficha[campo] !== undefined) contactoFicha[campo] = ficha[campo]; });
+            const hoyISO = formatoFechaLocal(new Date());
+            let cambios = 0;
 
             Object.keys(dbAgenda[entrenadorVisto]).forEach(key => {
 
-                const idAgenda = dbAgenda[entrenadorVisto][key]?.id;
+                const sesion = dbAgenda[entrenadorVisto][key];
+                if (!sesion || typeof sesion !== 'object' || sesion.id !== fichaId) return;
 
-                if(idAgenda && mapaFichas[idAgenda]) {
-
-                    dbAgenda[entrenadorVisto][key] = mapaFichas[idAgenda];
-
-                }
+                const esPasada = String(key).split('_')[0] < hoyISO;
+                const actualizada = esPasada
+                    ? { ...sesion, ...contactoFicha }
+                    : { ...sesion, ...datosFicha };
+                if (JSON.stringify(actualizada) === JSON.stringify(sesion)) return;
+                dbAgenda[entrenadorVisto][key] = actualizada;
+                cambios++;
 
             });
+
+            if (!cambios) return;
 
             localStorage.setItem('bs_db_agenda_v6', JSON.stringify(dbAgenda));
 
