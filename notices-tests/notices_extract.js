@@ -1,4 +1,4 @@
-const BS_APP_BUILD_TAG = 'agenda-sync-p0-2026-10-09';
+const BS_APP_BUILD_TAG = 'agenda-sesiones-ficha-p0-2026-10-13';
 
 const BS_AGENDA_GUARDADO_TIMEOUT_MS = 20000;
 
