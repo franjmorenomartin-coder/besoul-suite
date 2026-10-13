@@ -25,9 +25,14 @@ Decisiones respecto a los informes 3–4 (justificadas por el código real):
   negocio, económica o de interfaz; solo cambia la persistencia. Las claves de sesión siguen siendo
   `fecha_hora` (identidad estable dentro de la semana); mover entre semanas es atómico (2 documentos, 1 transacción).
 - **Sin borrados**: fichas e históricos eliminados quedan como lápidas (`eliminado: true`).
-- **`rev` no se compara con el valor guardado en las reglas**: el emulador demostró que, con dos guardados
-  simultáneos, esa regla convertía el reintento de la transacción en un falso `permission-denied`
-  (exactamente el síntoma reportado). La protección contra pisar cambios es la transacción.
+- **Control de versión ESTRICTO en el servidor** (actualizado): `rev` nuevo = `rev` guardado + 1 y
+  `actualizadoEn` = hora del servidor, obligatorios en toda actualización. Ninguna escritura obsoleta
+  prospera (transacción, cliente antiguo o escritura directa; pruebas B43–B48). Con dos guardados
+  simultáneos, el que pierde recibe el rechazo y la app repite la transacción con los datos nuevos
+  (`transaccionConReintento`; prueba C19: cinco guardados simultáneos, todos confirmados).
+- **Fichas con ID `{trainerKey}__{clientId}`**: un PT no puede consultar ni la existencia de fichas
+  ajenas; el traspaso (solo admin) crea la ficha nueva y deja lápida en la anterior.
+- **Guardar una sesión no altera las demás sesiones de la semana**: se reescriben idénticas (prueba C20).
 
 ## 2. Pruebas superadas (todas en local; ninguna sobre producción)
 
@@ -103,41 +108,17 @@ como `trainerActividades.ruben`). Nota antigua sin entrenador (1): solo visible 
 - Daños anteriores al 9-oct: no determinables (no hay respaldo previo).
 La recuperación (`propuesta-recuperacion.json`) se aplicaría tras el corte, con autorización expresa.
 
-## 6. Procedimiento exacto de corte (requiere autorización final)
+## 6–7. Procedimiento de corte y recuperación
 
-Preparación (T-24 h): avisar a los entrenadores (ventana, "recargad la app al terminar", revisar agenda
-después); confirmar quién despliega reglas (consola de Firebase o CLI con una cuenta con permisos);
-fusionar `ARQ-V1-MIGRACION-IMPL` en una rama de publicación SIN subirla.
-
-| Paso | Acción | Tiempo | Criterio para continuar |
-|---|---|---|---|
-| 1 | Desplegar reglas e índices: `firebase deploy --only firestore:rules,firestore:indexes --project besoul-suite` | 2 min + creación de índices (2–10 min) | Índices "Habilitado" en la consola. **Desde aquí nadie puede escribir en el documento antiguo** (mantenimiento efectivo) |
-| 2 | Respaldo final del estado congelado (exportación desde la consola admin, como el 13-oct) + SHA-256 | 2 min | Hash verificado; copia fuera del equipo |
-| 3 | Migración: en la consola de la app (admin) pegar `besoul-datos.js` y `scripts/migrar-agenda-documentos.js`; `await migrarAgendaBesoul()` → revisar; `await migrarAgendaBesoul({ ejecutar: true })` | 2–3 min | `verificacionServidor: 'IDÉNTICO'`, `originalIntacto: true`, recuentos iguales |
-| 4 | Publicar la app (push de la rama de publicación a `main`); comprobar build `agenda-arq-documentos-2026-10-13` y SW v13 | 2–3 min | La web sirve la versión nueva |
-| 5 | Pruebas reales: admin y un PT autorizado abren Agenda, Dashboard, Finanzas y CRM; un guardado de prueba controlado en una agenda/cliente de prueba acordado; móvil iPhone/Android | 10–15 min | Sin errores de permisos; guardado confirmado; datos completos |
-| 6 | Abrir: avisar a los entrenadores para recargar | — | — |
-
-**Tiempo de mantenimiento estimado: 25–35 min** (reservar 60 min).
-
-**Condiciones de parada**: cualquier diferencia en la verificación; `originalIntacto: false`; índices no
-habilitados; cualquier `permission-denied` en flujos normales; un dato ausente en las pruebas reales.
-
-## 7. Recuperación si falla
-- **Fallo antes del paso 4** (sin escrituras nuevas): volver a desplegar las reglas anteriores
-  (`git show 89b31e1:firestore.rules`). El documento antiguo está intacto y la app antigua sigue
-  funcionando. Las colecciones nuevas quedan inertes (no se borran).
-- **Fallo después del paso 4**: preferible corregir hacia delante. Si hay que volver atrás:
-  1) volver a desplegar las reglas anteriores; 2) `reconstruirAgendaBesoul()` (simulación) — incluye todo lo
-  guardado después del corte; 3) si no cabe en 1 MiB (probable: el original ya ocupa ~1.032 KB), solo con
-  autorización, `reconstruirAgendaBesoul({ ejecutar: true, quitarCincoCamposRedundantes: true })`;
-  4) publicar el commit anterior de la app (`89b31e1` o `4e91256`). **Volver al código anterior no revierte
-  Firestore**: sin el paso 2–3, se perderían los cambios posteriores al corte.
-- **Restauración selectiva**: un documento (semana, ficha, histórico) desde el respaldo, sin tocar el resto.
+**Sustituido por `07_CORTE_Y_RECUPERACION.md`** (procedimiento verificado). Importante: las reglas
+desplegadas en producción incluyen el bloque de V2; la versión anterior de esta sección proponía volver a
+`git show 89b31e1:firestore.rules`, que lo habría ELIMINADO. La vuelta atrás correcta usa
+`scripts/corte/firestore.rules.PRODUCCION-2026-10-02.reconstruido` (copia exacta de lo desplegado), y la
+recuperación tras publicar es el modo contingencia (sin reconstruir el documento casi lleno).
 
 ## 8. Riesgos y pendientes
-- Hotfix `4e91256` (cuota de escrituras) sigue **sin publicar**: hasta el corte, la producción puede
-  volver a agotar la cuota diaria con actividad normal del admin.
+- Hotfix `4e91256` (cuota de escrituras): **publicado** el 13-oct; las 24 h siguientes muestran 23 rechazos
+  de reglas (antes ~2.000/día) y 249 escrituras, con poca actividad.
 - Pruebas en Safari iOS y Android reales: pendientes del corte.
 - Despliegue de reglas/índices: confirmar cuenta con permisos (la CLI de este equipo usa otra cuenta).
 - Primera apertura del admin en cada dispositivo: ~900 lecturas (una vez; cerrar sesión borra la copia local).

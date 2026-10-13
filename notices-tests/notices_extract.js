@@ -565,6 +565,11 @@ function guardarEstadoNubeAgenda(trainerKeyScope, opcionesGuardado) {
 
 function ejecutarGuardadoEstadoNubeAgenda(trainerKeyScope) {
 
+            // ARQ-V1-MIGRACION-IMPL: MODO CONSULTA (copia publicada en /consulta/ durante una
+            // contingencia): solo lectura del histórico completo; nunca escribe (además, las reglas de
+            // contingencia lo impiden).
+            if (window.BS_MODO_CONSULTA) return Promise.resolve({ ok: false, err: { code: 'modo-consulta', message: 'Modo consulta: esta copia de la Agenda es solo de lectura. Los cambios se hacen en la Agenda principal.' } });
+
             // Hallazgo real (hotfix edición de fichas, 2026-09-02): esta función SIEMPRE
             // resolvía en éxito, incluso cuando el guard de abajo omitía el guardado por
             // completo, o cuando .set() fallaba de verdad -- el .catch() se limitaba a

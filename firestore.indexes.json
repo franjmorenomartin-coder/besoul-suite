@@ -265,6 +265,88 @@
       "collectionGroup": "besoulAgendaConfig",
       "fieldPath": "campos",
       "indexes": []
+    },
+    {
+      "collectionGroup": "clients",
+      "fieldPath": "id",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sessions",
+      "fieldPath": "sessionId",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "historico",
+      "fieldPath": "clienteId",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "notes",
+      "fieldPath": "texto",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulMigrationQuarantine",
+      "fieldPath": "texto",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulMigrationQuarantine",
+      "fieldPath": "originalEntry",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "trainers",
+      "fieldPath": "actividadesAutorizadas",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulFinance",
+      "fieldPath": "catalogoActividades",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulFinance",
+      "fieldPath": "tarifasActividadVersiones",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "besoulFinance",
+      "fieldPath": "repartoActividadVersiones",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "sessions",
+      "fieldPath": "asistentesGrupoAbierto",
+      "indexes": []
     }
   ]
 }

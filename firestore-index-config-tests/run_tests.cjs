@@ -147,7 +147,11 @@ console.log('\n=== 13. Las colecciones que SÍ necesitan sus propios índices no
   const tocadas = overrides.filter(o => colectionesConQueryReal.includes(o.collectionGroup));
   check('ninguna fieldOverride toca una colección que SÍ tiene queries reales', tocadas, []);
   const nuevas = ['besoulAgendaSemanas', 'besoulClientes', 'besoulTrainers', 'besoulHistoricoClientes', 'besoulNotas', 'besoulAgendaConfig'];
-  check('las fieldOverrides son solo para besoulSuite o las colecciones nuevas de la Agenda', overrides.every(o => o.collectionGroup === 'besoulSuite' || nuevas.includes(o.collectionGroup)), true);
+  // V2 (DATA-ARCHITECTURE-V2) desplegó el 2026-09-18 sus propias exenciones en el MISMO proyecto: se
+  // conservan literalmente para no alterar V2 al desplegar este archivo.
+  const v2 = ['clients', 'sessions', 'historico', 'notes', 'trainers', 'besoulFinance', 'besoulMigrationQuarantine'];
+  check('las fieldOverrides son solo de besoulSuite, de las colecciones nuevas de la Agenda o las de V2 conservadas', overrides.every(o => o.collectionGroup === 'besoulSuite' || nuevas.includes(o.collectionGroup) || v2.includes(o.collectionGroup)), true);
+  check('se conservan las 11 exenciones de V2 desplegadas', overrides.filter(o => v2.includes(o.collectionGroup)).length, 11);
   const consultados = ['trainerKey', 'actualizadoEn', 'leadsPrueba', 'leadId', 'semana', 'clienteId', 'mes', 'eliminado'];
   check('ninguna exención de índice toca un campo que se consulta', overrides.filter(o => nuevas.includes(o.collectionGroup) && consultados.includes(o.fieldPath)).map(o => o.fieldPath), []);
 }
