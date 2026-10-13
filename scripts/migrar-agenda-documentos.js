@@ -87,11 +87,11 @@
     if (ejecutar) {
       const pendientes = docs.filter(d => !existentes[d.col][d.id]);
       const actor = (firebase.auth().currentUser || {}).email || 'migracion';
-      for (let i = 0; i < pendientes.length; i += 400) {
+      for (let i = 0; i < pendientes.length; i += 100) {
         const batch = fs.batch();
-        pendientes.slice(i, i + 400).forEach(d => batch.set(fs.collection(D.COL[d.col]).doc(d.id), { ...d.data, rev: 1, actualizadoEn: firebase.firestore.FieldValue.serverTimestamp(), actualizadoPor: `migracion:${actor}` }));
+        pendientes.slice(i, i + 100).forEach(d => batch.set(fs.collection(D.COL[d.col]).doc(d.id), { ...d.data, rev: 1, actualizadoEn: firebase.firestore.FieldValue.serverTimestamp(), actualizadoPor: `migracion:${actor}` }));
         await batch.commit();
-        console.log(`[MIGRACIÓN] escritos ${Math.min(i + 400, pendientes.length)}/${pendientes.length}`);
+        console.log(`[MIGRACIÓN] escritos ${Math.min(i + 100, pendientes.length)}/${pendientes.length}`);
       }
       informe.escritos = pendientes.length;
       const fin = await agendaRef.get({ source: 'server' });
@@ -124,9 +124,17 @@
 
   // RECUPERACIÓN: documento único reconstruido desde los documentos nuevos (incluye todo lo guardado
   // después del corte). Solo escribe con ejecutar:true y si cabe holgadamente en 1 MiB.
-  window.reconstruirAgendaBesoul = async function ({ ejecutar = false } = {}) {
+  // quitarCincoCamposRedundantes: SOLO con autorización expresa. El documento original ya ocupa
+  // ~1.032 KB (13-oct); si hay que volver al documento único, puede no caber sin quitar de las
+  // SESIONES los 5 campos de portal/contrato (demostrado que nunca se leen desde una sesión; la
+  // ficha los conserva). Sin esta opción, la reconstrucción se rechaza si no cabe.
+  window.reconstruirAgendaBesoul = async function ({ ejecutar = false, quitarCincoCamposRedundantes = false } = {}) {
     const nuevo = await leerTodoNuevo();
     const legado = D.legadoDesdeDocs(nuevo);
+    if (quitarCincoCamposRedundantes) {
+      const CINCO = ['contratoCliente', 'restriccionesReservas', 'reservaToken', 'reservasBloqueadasTexto', 'reservasOnlineActivas'];
+      Object.values(legado.agenda || {}).forEach(m => Object.values(m || {}).forEach(ses => { if (ses && typeof ses === 'object') CINCO.forEach(k => { delete ses[k]; }); }));
+    }
     const bytes = enc.encode(JSON.stringify(legado)).length;
     const r = { modo: ejecutar ? 'EJECUCIÓN' : 'SIMULACIÓN (no se escribe nada)', recuento: recuento(legado), bytesAprox: bytes, huella: await huella(legado) };
     if (bytes > 950000) { r.error = 'El documento reconstruido no cabe con seguridad en 1 MiB: recuperación por documento único NO posible; usar la recuperación selectiva.'; console.error(r); return r; }

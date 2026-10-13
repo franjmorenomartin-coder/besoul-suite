@@ -2,3 +2,7 @@ node_modules/
 firestore-debug.log
 ui-debug.log
 firebase-debug.log
+
+# ARQ-V1-MIGRACION-IMPL: salidas generadas por las pruebas de consumo (se regeneran)
+rules-tests/consumo_medido.json
+.review-local/agenda-persistencia/arq_consumo_navegador.json

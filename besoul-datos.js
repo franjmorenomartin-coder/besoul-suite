@@ -188,6 +188,9 @@
     const camposRaiz = {};
     Object.keys(a).forEach(k => { if (!CAMPOS_RAIZ_CONOCIDOS.includes(k)) camposRaiz[k] = a[k]; });
     if (!a.notas) camposRaiz.__sinNotas = true;
+    // Campos raíz clásicos que el documento original NO tenía (para reconstruirlo exactamente).
+    const ausentes = ['clientes', 'agenda', 'pruebasCRM', 'disponibilidadReservas', 'historicoClientes', 'trainerActividades'].filter(k => !(k in a));
+    if (ausentes.length) camposRaiz.__ausentes = ausentes;
     docs.push({ col: 'legado', id: 'raiz', data: { camposRaiz, esquema: ESQUEMA } });
     return { docs, noTransformable };
   }
@@ -243,8 +246,9 @@
     if (config && config.campos) CAMPOS_CONFIG.forEach(k => { if (k in config.campos) out[k] = copia(config.campos[k]); });
     const legado = (d.legado || {}).raiz;
     if (legado && legado.camposRaiz) {
-      Object.keys(legado.camposRaiz).forEach(k => { if (k !== '__sinNotas') out[k] = copia(legado.camposRaiz[k]); });
+      Object.keys(legado.camposRaiz).forEach(k => { if (k !== '__sinNotas' && k !== '__ausentes') out[k] = copia(legado.camposRaiz[k]); });
       if (legado.camposRaiz.__sinNotas && !Object.keys(out.notas).length) delete out.notas;
+      (legado.camposRaiz.__ausentes || []).forEach(k => { if (out[k] && !Object.keys(out[k]).length) delete out[k]; });
     }
     if (op.soloPresentes) {
       ['trainerActividades'].forEach(k => { if (!Object.keys(out[k]).length && !(legado && 'trainerActividades' in (legado.camposRaiz || {}))) delete out[k]; });

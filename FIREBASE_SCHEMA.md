@@ -18,9 +18,27 @@ Rules:
 - PT can read own profile.
 - Do not change `trainerKey` once the trainer has production data unless there is a migration plan.
 
-## `besoulSuite/agenda`
+## Agenda en documentos independientes (ARQ-V1-MIGRACION-IMPL, vigente tras el corte)
 
-Main agenda document.
+Fuente de verdad de la Agenda tras el corte. Código: `besoul-datos.js` (transformación, sincronización
+incremental, guardado transaccional). Detalle y procedimiento: `docs/arquitectura-firestore/06_IMPLEMENTACION.md`.
+
+| Colección | ID | Contenido | Acceso |
+|---|---|---|---|
+| `besoulAgendaSemanas` | `{trainerKey}__{lunes YYYY-MM-DD}` | `sesiones{clave}`, `pruebasCRM{clave}`, `excepciones{fecha}`, `bloqueos{fecha}`, `leadsPrueba[]` | PT: solo las suyas · admin: todas |
+| `besoulClientes` | `{clientId}` | `ficha{}`, `trainerKey`, `orden`, `leadId`, `eliminado` (lápida) | PT: solo las suyas · traspaso solo admin |
+| `besoulTrainers` | `{trainerKey}` | `disponibilidad{semanal,...}`, `actividades` (solo admin), presencia | PT: el suyo |
+| `besoulHistoricoClientes` | `{trainerKey}__{clientId}__{YYYY-MM}` | `datos{}` (resumen mensual congelado) | PT: los suyos |
+| `besoulNotas` | `{trainerKey}__{clave}` | `texto`, `eliminado` | PT: las suyas (sin trainerKey: solo admin) |
+| `besoulAgendaConfig` | `global` | `campos{catalogoActividades, tarifasActividadVersiones, repartoActividadVersiones}` | lectura usuarios activos · escritura admin |
+| `besoulAgendaLegado` | `raiz` | campos raíz sueltos del documento antiguo, verbatim | solo admin |
+
+Todos llevan `rev` (1 al crear, >1 al actualizar), `actualizadoEn` = hora del servidor (obligatorio por
+reglas; base de la sincronización incremental) y `actualizadoPor`. No se borra ningún documento.
+
+## `besoulSuite/agenda` (CONGELADO tras el corte: solo lectura admin, respaldo)
+
+Main agenda document (histórico; antes del corte era la fuente de verdad).
 
 Contains operational data such as:
 
