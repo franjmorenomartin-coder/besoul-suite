@@ -1,4 +1,4 @@
-const CACHE_NAME = 'besoul-pwa-icons-v14';
+const CACHE_NAME = 'besoul-pwa-icons-v15';
 const CORE_ASSETS = [
   './',
   './index.html',

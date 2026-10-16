@@ -540,20 +540,31 @@
 
   // Comprueba, para las sesiones que este guardado crea o cambia, que no se solapan con otra
   // sesión no cancelada del mismo día (doble reserva). bloqueSesion(clave, dur) -> claves de 15 min.
+  // sesionesServidor debe venir en la MISMA forma que sesionesFinal (limpia): si no, toda sesión
+  // migrada con copias de ficha parece "cambiada". Solo cuenta un solape NUEVO: dos sesiones que
+  // ya coincidían en el servidor en esa franja (p. ej. prueba CRM dentro de un grupo abierto,
+  // creada desde el CRM) no bloquean los guardados de la semana ni la edición de esas sesiones.
   function solapesNuevos(sesionesFinal, sesionesServidor, bloqueSesion) {
     const conflictos = [];
-    const activa = s => s && typeof s === 'object' && !s.estadoCancelacion;
-    const ocupacion = new Map();
-    Object.keys(sesionesFinal).forEach(clave => {
-      const s = sesionesFinal[clave];
-      if (!activa(s)) return;
-      bloqueSesion(clave, Number(s.duracionMin) || 45).forEach(t => { (ocupacion.get(t) || ocupacion.set(t, []).get(t)).push(clave); });
-    });
+    const activa = s => s && typeof s === 'object' && !s.estadoCancelacion && !s.eliminado;
+    const ocupar = mapa => {
+      const ocupacion = new Map();
+      Object.keys(mapa || {}).forEach(clave => {
+        const s = mapa[clave];
+        if (!activa(s)) return;
+        bloqueSesion(clave, Number(s.duracionMin) || 45).forEach(t => { (ocupacion.get(t) || ocupacion.set(t, []).get(t)).push(clave); });
+      });
+      return ocupacion;
+    };
+    const ocupacion = ocupar(sesionesFinal), previa = ocupar(sesionesServidor);
     Object.keys(sesionesFinal).forEach(clave => {
       if (igual(sesionesFinal[clave], (sesionesServidor || {})[clave])) return;
       const s = sesionesFinal[clave];
       if (!activa(s)) return;
-      const choca = bloqueSesion(clave, Number(s.duracionMin) || 45).some(t => (ocupacion.get(t) || []).some(o => o !== clave));
+      const choca = bloqueSesion(clave, Number(s.duracionMin) || 45).some(t => {
+        const antes = previa.get(t) || [];
+        return (ocupacion.get(t) || []).some(o => o !== clave && !(antes.includes(clave) && antes.includes(o)));
+      });
       if (choca) conflictos.push(clave);
     });
     return conflictos;
@@ -605,7 +616,8 @@
         fSem.forEach(({ lunes, data }) => {
           const finalSemana = {};
           Object.keys(final.agenda || {}).forEach(c => { const f = fechaDeClave(c); if (f && lunesDe(f) === lunes) finalSemana[c] = final.agenda[c]; });
-          solapesNuevos(finalSemana, data ? data.sesiones : {}, bloqueSesion).forEach(c => conflictos.push({ campo: 'agenda', clave: `k:${c}`, solape: true }));
+          const servidorSemana = data && data.sesiones ? data.sesiones : {};
+          solapesNuevos(finalSemana, limpiarAgenda ? limpiarAgenda(servidorSemana) : servidorSemana, bloqueSesion).forEach(c => conflictos.push({ campo: 'agenda', clave: `k:${c}`, solape: true }));
         });
       }
       if (conflictos.length) throw Object.assign(new Error(`Conflicto de concurrencia para trainerKey=${tk}`), { code: 'conflict', conflictos });

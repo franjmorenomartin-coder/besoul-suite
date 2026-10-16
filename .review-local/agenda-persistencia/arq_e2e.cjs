@@ -220,6 +220,44 @@ async function main() {
   srv = await vistaServidor();
   check('E19 viewport móvil (iPhone 13, Chromium): abrir y guardar funciona', !!srv.agenda.carlos[claveMovil]);
 
+  // ---- E19b INCIDENCIA 16-oct: semana MIGRADA (sesiones con las 5 copias de ficha) con una prueba CRM
+  // dentro de un grupo abierto. Antes, cualquier guardado de esa semana daba conflicto en el grupo. ----
+  const lunesInc = dia(21), viernesInc = dia(25), juevesInc = dia(24);
+  const CINCO = { contratoCliente: 'c', restriccionesReservas: {}, reservaToken: 'tok-ficticio', reservasBloqueadasTexto: '', reservasOnlineActivas: true };
+  const sesionesInc = {
+    [`${lunesInc}_18:00`]: { ...ficha('laura', 'cli_rosa_ficticia'), duracionMin: 45, ...CINCO },
+    [`${viernesInc}_17:00`]: { id: 'grupo_ficticio', nombre: 'Grupo abierto ficticio', tipo: 'grupo', grupoAbierto: true, asistentesGrupoAbierto: ['cli_rosa_ficticia'], duracionMin: 45, ...CINCO },
+    [`${viernesInc}_17:15`]: { id: 'lead_prueba_ficticio', nombre: 'Prueba CRM ficticia', tipo: 'lead', tipoCita: 'pruebaCRM', esPruebaCRM: true, noSumaFacturacion: true, leadId: 'lead_prueba_ficticio', duracionMin: 45 },
+  };
+  await escribir(`${D.COL.semanas}/${encodeURIComponent(D.idSemana('laura', lunesInc))}`, { ...D.contenidoSemana('laura', lunesInc, { sesiones: sesionesInc, pruebasCRM: { [`${viernesInc}_17:15`]: { leadId: 'lead_prueba_ficticio', nombre: 'Prueba CRM ficticia' } } }), rev: 1, actualizadoEn: new Date(), actualizadoPor: 'migracion:e2e' });
+  await pt.waitForFunction(k => !!((dbAgenda || {}).laura || {})[k], `${viernesInc}_17:15`, { timeout: 20000 });
+  pt.__dialogos.length = 0;
+  const esperarSinPendientes = async () => { await pt.waitForTimeout(500); await pt.waitForFunction(() => !Object.values(window.bsAgendaGuardadosPendientes || {}).some(e => e && (e.programado || e.enCola > 0)), null, { timeout: 25000 }); };
+  await pt.evaluate(() => { window.ofrecerWhatsAppTrasConfirmar = () => {}; });
+  // Caso 1: quitar la sesión del lunes 18:00 (Luz) y poner en su hueco a otro cliente (Ulrik).
+  await pt.evaluate(([k]) => { entrenadorVisto = 'laura'; celdaNotaSeleccionada = k; borrarSesionAgenda(); }, [`${lunesInc}_18:00`]);
+  await esperarSinPendientes();
+  await pt.evaluate(([c, i]) => soltarFichaEnCelda(c, i), [`${lunesInc}_18:00`, 'cli_crm_lead_alta_tardia']);
+  await esperarSinPendientes();
+  // Caso 2: clienta creada desde el CRM, arrastrada a jueves y viernes 10:00.
+  await pt.evaluate(([c, i]) => soltarFichaEnCelda(c, i), [`${juevesInc}_10:00`, 'cli_crm_lead_alta_tardia']);
+  await esperarSinPendientes();
+  await pt.evaluate(([c, i]) => soltarFichaEnCelda(c, i), [`${viernesInc}_10:00`, 'cli_crm_lead_alta_tardia']);
+  await esperarSinPendientes();
+  await pt.waitForTimeout(800);
+  const conflictosInc = pt.__dialogos.filter(m => /NO se ha guardado|no se ha guardado/i.test(m));
+  check('E19b sustituir lunes 18:00 y arrastrar jueves/viernes 10:00 en la semana migrada con prueba CRM en grupo: sin avisos de conflicto', conflictosInc.length === 0, conflictosInc);
+  const crudoInc = await leer(`${D.COL.semanas}/${encodeURIComponent(D.idSemana('laura', lunesInc))}`);
+  check('E19c en el servidor: el nuevo cliente ocupa el lunes 18:00 y tiene jueves y viernes 10:00', (crudoInc.sesiones[`${lunesInc}_18:00`] || {}).id === 'cli_crm_lead_alta_tardia' && (crudoInc.sesiones[`${juevesInc}_10:00`] || {}).id === 'cli_crm_lead_alta_tardia' && (crudoInc.sesiones[`${viernesInc}_10:00`] || {}).id === 'cli_crm_lead_alta_tardia', Object.keys(crudoInc.sesiones));
+  check('E19d grupo abierto y prueba CRM intactos (incluidas las 5 copias del grupo)', D.igual(crudoInc.sesiones[`${viernesInc}_17:00`], sesionesInc[`${viernesInc}_17:00`]) && D.igual(crudoInc.sesiones[`${viernesInc}_17:15`], sesionesInc[`${viernesInc}_17:15`]));
+  // Persistencia tras recargar la página.
+  await pt.reload();
+  await pt.waitForSelector('#login-user, #app-content', { timeout: 30000 });
+  if (await pt.isVisible('#login-user').catch(() => false)) { await pt.fill('#login-user', 'laura.revision@example.test'); await pt.fill('#login-pass', PASS); await pt.click('button[onclick="ejecutarLogin()"]'); }
+  await agendaLista(pt);
+  const trasRecargaInc = await pt.evaluate(([l, j, v]) => { const a = (dbAgenda || {}).laura || {}; return [a[`${l}_18:00`], a[`${j}_10:00`], a[`${v}_10:00`]].map(s => s && s.id); }, [lunesInc, juevesInc, viernesInc]);
+  check('E19e tras recargar la página, los tres cambios siguen ahí', trasRecargaInc.every(id => id === 'cli_crm_lead_alta_tardia'), trasRecargaInc);
+
   // ---- E20 Dashboard (admin) carga desde la nueva estructura ----
   const dash = await abrir('admin.revision@example.test', { pagina: 'dashboard.html', context: admin.__context });
   await dash.waitForFunction(() => typeof agendaData !== 'undefined' && agendaData && agendaData.agenda && Object.keys(agendaData.agenda.laura || {}).length > 0, null, { timeout: 30000 });

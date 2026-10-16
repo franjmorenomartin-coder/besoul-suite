@@ -259,6 +259,60 @@ async function main() {
   v = await vista(pta, tkC);
   check('C8 recurrencia de 12 semanas: 12 sesiones con su serie, en una sola transacción', Object.values(v.agenda).filter(s => s.serieRecurrenteId === 'serie1').length === 12);
   consumoTabla.push({ operacion: 'Crear recurrencia de 12 semanas', lecturas: cm.lecturas + 1, escrituras: cm.escrituras });
+
+  // INCIDENCIA 16-oct (agenda de una PT): semana MIGRADA (sesiones con las 5 copias de ficha) donde ya
+  // existía una prueba CRM (17:15) dentro de un grupo abierto (17:00). Cualquier guardado de esa semana
+  // daba "conflicto" en la sesión de las 17:00 aunque el cambio fuera en otro día/hora. Datos ficticios.
+  const LI = '2027-03-01';
+  const CINCO = { contratoCliente: 'c', restriccionesReservas: {}, reservaToken: 'tok-ficticio', reservasBloqueadasTexto: '', reservasOnlineActivas: true };
+  const semanaMigrada = {
+    sesiones: {
+      '2027-03-01_18:00': { id: 'luz', nombre: 'Luz ficticia', tipo: 'individual', duracionMin: 45, ...CINCO },
+      '2027-03-02_09:00': { id: 'otro', nombre: 'Otro ficticio', tipo: 'individual', duracionMin: 45, ...CINCO },
+      '2027-03-05_17:00': { id: 'grupo1', nombre: 'Grupo abierto', tipo: 'grupo', grupoAbierto: true, asistentesGrupoAbierto: ['a1'], duracionMin: 45, ...CINCO },
+      '2027-03-05_17:15': { id: 'lead1', nombre: 'Prueba CRM', tipo: 'lead', tipoCita: 'pruebaCRM', esPruebaCRM: true, noSumaFacturacion: true, leadId: 'lead1', duracionMin: 45 },
+    },
+    pruebasCRM: { '2027-03-05_17:15': { leadId: 'lead1', nombre: 'Prueba CRM' } },
+  };
+  await testEnv.withSecurityRulesDisabled(async ctx => ctx.firestore().collection(D.COL.semanas).doc(D.idSemana(tkC, LI)).set({ ...D.contenidoSemana(tkC, LI, semanaMigrada), rev: 1, actualizadoEn: Timestamp.now(), actualizadoPor: 'migracion:test' }));
+  const crudoSemana = async dbx => (await dbx.collection(D.COL.semanas).doc(D.idSemana(tkC, LI)).get()).data();
+  const sinConflicto = async (desc, p) => { let e = null; try { await p; } catch (x) { e = x; } check(desc, !e, e && { code: e.code, conflictos: e.conflictos }); };
+  // I1 (caso Ulrik/Luz): sustituir la sesión del lunes 18:00 por otro cliente.
+  b0 = await vista(pta, tkC);
+  await sinConflicto('I1 sustituir la sesión del lunes 18:00 (Luz -> Ulrik) en una semana migrada con prueba CRM dentro de un grupo: se guarda', guardar(pta, tkC, b0, conCambio(b0, l => { delete l.agenda['2027-03-01_18:00']; l.agenda['2027-03-01_18:00'] = S({ id: 'ulrik', nombre: 'Ulrik ficticio' }); })));
+  // I2 (caso Silvia): cliente creada desde el CRM, sesiones jueves y viernes a las 10:00.
+  b0 = await vista(pta, tkC);
+  await sinConflicto('I2 asignar jueves y viernes 10:00 a una clienta creada desde el CRM, misma semana: se guarda', guardar(pta, tkC, b0, conCambio(b0, l => { l.agenda['2027-03-04_10:00'] = S({ id: 'silvia', nombre: 'Silvia ficticia' }); l.agenda['2027-03-05_10:00'] = S({ id: 'silvia', nombre: 'Silvia ficticia' }); })));
+  // I3 persistencia tras recargar: lectura nueva desde el servidor con otro cliente (otro "dispositivo").
+  const trasRecarga = await vista(como('admin@x.com'), tkC);
+  check('I3 tras recargar (lectura nueva del servidor): Ulrik en lunes 18:00, Luz fuera, Silvia jueves y viernes 10:00', (trasRecarga.agenda['2027-03-01_18:00'] || {}).id === 'ulrik' && (trasRecarga.agenda['2027-03-04_10:00'] || {}).id === 'silvia' && (trasRecarga.agenda['2027-03-05_10:00'] || {}).id === 'silvia');
+  const crudo1 = await crudoSemana(admin);
+  check('I4 las sesiones no tocadas se conservan EXACTAMENTE (incluidas las 5 copias), grupo y prueba CRM intactos', D.igual(crudo1.sesiones['2027-03-02_09:00'], semanaMigrada.sesiones['2027-03-02_09:00']) && D.igual(crudo1.sesiones['2027-03-05_17:00'], semanaMigrada.sesiones['2027-03-05_17:00']) && D.igual(crudo1.sesiones['2027-03-05_17:15'], semanaMigrada.sesiones['2027-03-05_17:15']) && !!crudo1.pruebasCRM['2027-03-05_17:15']);
+  // I5 editar el propio grupo (solape YA existente con la prueba CRM): se guarda.
+  b0 = await vista(pta, tkC);
+  await sinConflicto('I5 editar el grupo abierto que ya coincidía con la prueba CRM: se guarda', guardar(pta, tkC, b0, conCambio(b0, l => { l.agenda['2027-03-05_17:00'].asistentesGrupoAbierto = ['a1', 'a2']; })));
+  // I6 la protección contra dobles reservas NUEVAS sigue activa en esa misma semana.
+  b0 = await vista(pta, tkC);
+  let e6b = null; try { await guardar(pta, tkC, b0, conCambio(b0, l => { l.agenda['2027-03-05_17:30'] = S({ nombre: 'Encima del grupo' }); })); } catch (e) { e6b = e; }
+  check('I6 un solape NUEVO (17:30 sobre el grupo y la prueba) sigue rechazado', !!e6b && e6b.code === 'conflict' && (e6b.conflictos || []).some(c => c.solape && c.clave === 'k:2027-03-05_17:30'), e6b && e6b.conflictos);
+  b0 = await vista(pta, tkC);
+  let e6c = null; try { await guardar(pta, tkC, b0, conCambio(b0, l => { l.agenda['2027-03-01_18:15'] = S({ nombre: 'Encima de Ulrik' }); })); } catch (e) { e6c = e; }
+  check('I7 solapar con la sesión recién guardada (lunes 18:15 vs 18:00) sigue rechazado', !!e6c && e6c.code === 'conflict');
+  // I8 concurrencia en la semana afectada: PT sustituye y admin edita el grupo a la vez -> ambos.
+  b0 = await vista(pta, tkC);
+  const ri8 = await Promise.allSettled([
+    guardar(pta, tkC, b0, conCambio(b0, l => { l.agenda['2027-03-03_11:00'] = S({ id: 'silvia', nombre: 'Silvia ficticia' }); })),
+    guardar(admin, tkC, b0, conCambio(b0, l => { l.agenda['2027-03-05_17:00'].asistentesGrupoAbierto = ['a1', 'a2', 'a3']; })),
+  ]);
+  const crudo2 = await crudoSemana(admin);
+  check('I8 PT y admin guardan a la vez en la semana afectada (sesión nueva + grupo): ambos confirmados', ri8.every(r => r.status === 'fulfilled') && !!crudo2.sesiones['2027-03-03_11:00'] && (crudo2.sesiones['2027-03-05_17:00'].asistentesGrupoAbierto || []).length === 3, ri8.map(r => r.status + (r.reason ? ':' + r.reason.code : '')));
+  // I9 conflicto REAL (mismo elemento a la vez) sigue detectándose en esa semana.
+  b0 = await vista(pta, tkC);
+  const ri9 = await Promise.allSettled([
+    guardar(pta, tkC, b0, conCambio(b0, l => { l.agenda['2027-03-04_12:00'] = S({ nombre: 'Uno' }); })),
+    guardar(admin, tkC, b0, conCambio(b0, l => { l.agenda['2027-03-04_12:00'] = S({ nombre: 'Dos' }); })),
+  ]);
+  check('I9 mismo hueco a la vez en la semana afectada: uno se guarda y el otro recibe conflicto', ri9.filter(r => r.status === 'fulfilled').length === 1 && ri9.filter(r => r.status === 'rejected' && r.reason.code === 'conflict').length === 1, ri9.map(r => r.status));
   // C9: admin edita la ficha y el PT crea una sesión a la vez -> ambos se guardan.
   b0 = await vista(pta, tkC);
   await guardar(pta, tkC, b0, conCambio(b0, l => { l.clientes.push({ id: 'cliC', nombre: 'Cliente C', telefono: '6', email: 'c@x', modalidad: 'A' }); }));
