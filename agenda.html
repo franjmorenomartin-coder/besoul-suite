@@ -3200,7 +3200,7 @@ miércoles 07:00-09:00"></textarea>
             }
             const perfil = perfilFirestoreAcredencial({ ...doc.data(), email, uid: user.uid }, email);
             if (!perfil.activo) {
-                throw new Error('Este usuario está desactivado en besoulUsers.');
+                throw Object.assign(new Error('Tu acceso a BESOUL está retirado. Si es un error, contacta con administración.'), { code: 'usuario-inactivo' });
             }
             return perfil;
         }
@@ -3233,6 +3233,30 @@ miércoles 07:00-09:00"></textarea>
                 actualizadoEn: firebase.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
             return limpio;
+        }
+
+        // GESTION-ENTRENADORES: retirada de acceso efectiva. Las reglas de Firestore ya deniegan todo a un
+        // perfil sin activo == true (isActiveUser); además, la app no deja abierta la sesión de
+        // Authentication ni datos de la Agenda guardados en el dispositivo, y una sesión ya abierta se
+        // cierra en cuanto administración retira el acceso (escucha del propio perfil, que las reglas
+        // permiten leer siempre).
+        function cerrarSesionAccesoRetirado() {
+            limpiarCacheSensibleBesoul();
+            const borrado = (window.BesoulDatos && typeof indexedDB !== 'undefined') ? BesoulDatos.cacheIndexedDB('besoul-datos').borrarTodo() : Promise.resolve();
+            return Promise.race([borrado, new Promise(r => setTimeout(r, 1500))]).catch(() => {}).finally(() => {
+                try { firebase.auth().signOut(); } catch (e) { /* sin sesión */ }
+            });
+        }
+        function vigilarAccesoUsuario(email) {
+            const fb = inicializarFirebaseBesoul();
+            const unsub = fb.firestore().collection('besoulUsers').doc(email).onSnapshot(doc => {
+                const datos = doc.exists ? doc.data() : null;
+                if ((datos && datos.activo !== false) || window.bsCerrandoSesion) return;
+                alert('Tu acceso a BESOUL ha sido retirado. Se cerrará la sesión.');
+                logout();
+            }, () => { /* sin conexión o sin permiso: las reglas siguen protegiendo los datos */ });
+            if (!window.bsAgendaCloudUnsubs) window.bsAgendaCloudUnsubs = [];
+            window.bsAgendaCloudUnsubs.push(unsub);
         }
 
         function mostrarErrorAuth(mensaje) {
@@ -4470,6 +4494,7 @@ function calcularRentabilidadFicha(ficha) {
                 const cred = await firebase.auth().signInWithEmailAndPassword(email, pass);
                 usuarioFirebaseActual = cred.user;
                 perfilFirebaseActual = await cargarPerfilUsuarioFirebase(cred.user);
+                vigilarAccesoUsuario(emailDocId(cred.user.email));
 
                 usuarioLogeado = perfilFirebaseActual.trainerKey;
                 rolActivo = perfilFirebaseActual.rol;
@@ -4522,6 +4547,7 @@ function calcularRentabilidadFicha(ficha) {
                 irSemanaActual();
 
             } catch (err) {
+                if (err && err.code === 'usuario-inactivo') cerrarSesionAccesoRetirado();
                 mostrarErrorAuth(err.message || 'No se ha podido iniciar sesión con Firebase Authentication.');
             }
 

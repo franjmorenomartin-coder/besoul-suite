@@ -238,6 +238,7 @@
       </section>
 
       <section id="view-config" class="hidden space-y-6">
+        <div id="gestion-entrenadores" class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4"></div>
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
             <div class="flex justify-between items-center border-b border-slate-800 pb-3">
@@ -366,12 +367,17 @@
       carmen: 'alfa_prime',
       lillo: 'lagunillas', miguel_fenech: 'lagunillas', ruben: 'lagunillas', carmen_palomo: 'lagunillas', lucia: 'lagunillas',
       miguel_luna: 'fantasy',
-      bea: 'inacua', soraya: 'inacua', eu: 'inacua', alvaro: 'inacua', juancarlos: 'inacua', raul: 'inacua', marina: 'inacua', yosvel: 'inacua', lolo: 'inacua', gonzalo: 'inacua', fernando: 'inacua', cristina: 'inacua', miguel: 'lagunillas'
+      bea: 'inacua', soraya: 'inacua', eu: 'inacua', alvaro: 'inacua', juancarlos: 'inacua', raul: 'inacua', marina: 'inacua', yosvel: 'inacua', lolo: 'inacua', gonzalo: 'inacua', fernando: 'inacua', cristina: 'inacua', miguel: 'lagunillas',
+      // GESTION-ENTRENADORES (2026-10-26, confirmado por administración): Igor y Manuel están en Inacua;
+      // antes llegaban solo por la regla "resto de PT → Inacua", que deja de aplicarse en octubre de 2026.
+      igor: 'inacua', manuel: 'inacua'
     };
     const TRAINERS_EXCLUIDOS_FINANZAS = ['fran', 'fran_moreno', 'franmoreno'];
     const TRAINERS_ADMIN_CON_CARTERA = ['bea', 'soraya'];
     // Bea y Soraya son CEO: aparecen en Inacua para imputación de costes de sede, pero no generan ingresos BESOUL/PT en Finanzas.
     const TRAINERS_SOLO_IMPUTACION_GASTOS = ['bea', 'soraya'];
+    // GESTION-ENTRENADORES: primer mes sin la asignación automática a Inacua de los PT sin centro.
+    const MES_SIN_CENTRO_POR_DEFECTO = '2026-10';
     const SISTEMAS_PAGO = {
       auto: 'Automático por rango Besoul',
       rango1: 'Rango I · 0-1 año',
@@ -458,8 +464,8 @@
     // Resolución: la entrada con 'desde' <= mesKey más reciente gana; si hay una
     // entrada puntual de un solo mes (desde==hasta==mesKey) para ese mes, esa gana
     // sobre cualquier entrada "desde ... en adelante" con el mismo 'desde'.
-    const CAMPOS_TEMPORALES_TRAINER = ['canonFijoIndependiente','aporteIndividualCliente','coordBonusPorPt','coordMaxPts','coordMaxBonus','pactoEspecial','sistemaPago','centroId','computaCanonCentro','costeEmpresaMensual','incentivoModelo','canonAtribuidoMensual'];
-    const CAMPOS_TEMPORALES_CENTRO = ['canonFijo','ptsIncluidos','canonPt','canonPtReducidoDesde','canonPtReducido'];
+    const CAMPOS_TEMPORALES_TRAINER = ['canonFijoIndependiente','aporteIndividualCliente','coordBonusPorPt','coordMaxPts','coordMaxBonus','pactoEspecial','sistemaPago','centroId','computaCanonCentro','costeEmpresaMensual','incentivoModelo','canonAtribuidoMensual','estadoEconomico'];
+    const CAMPOS_TEMPORALES_CENTRO = ['canonFijo','ptsIncluidos','canonPt','canonPtReducidoDesde','canonPtReducido','ajusteCanonMensual','ajusteCanonConcepto'];
     function entradaEfectivaTemporal(entradas, mesKey){
       const candidatas = (entradas||[]).filter(e => e.desde <= mesKey && (!e.hasta || mesKey <= e.hasta));
       if (!candidatas.length) return null;
@@ -490,6 +496,13 @@
       entrada._registradoEn = new Date().toISOString();
       entrada._registradoPor = usuarioFinanzasEmail || '';
       versiones.push(entrada);
+    }
+    // GESTION-ENTRENADORES: estado económico ('activo' | 'baja'), independiente del acceso a la app y
+    // del modelo de facturación. Versionado por mes como el resto (CAMPOS_TEMPORALES_TRAINER).
+    function estadoEconomicoTrainer(key, mesKey){ return settingsTrainerParaMes(key, mesKey || mesTrabajoKey()).estadoEconomico === 'baja' ? 'baja' : 'activo'; }
+    function tieneGestionEconomica(key){
+      return dbFinanzas.trainerSettings?.[key]?.estadoEconomico != null
+        || (dbFinanzas.trainerSettingsVersiones?.[key] || []).some(v => 'estadoEconomico' in v);
     }
     function settingsTrainerParaMes(key, mesKey){
       const live = dbFinanzas.trainerSettings?.[key] || {};
@@ -654,6 +667,10 @@
     function esPerfilOperativo(p){
       const key = trainerKeyPerfil(p);
       if (!key || TRAINERS_EXCLUIDOS_FINANZAS.includes(key)) return false;
+      // GESTION-ENTRENADORES: el acceso a la app (besoulUsers.activo) y el estado económico son cosas
+      // distintas. Sin acceso y sin gestión económica registrada queda fuera, como hasta ahora; con ella
+      // (p. ej. una baja con fecha efectiva) sigue en los meses en que estaba de alta.
+      if (p.activo === false && !tieneGestionEconomica(key)) return false;
       const rol = String(p.rol || '').toLowerCase();
       if (rol === 'pt') return true;
       if (TRAINERS_ADMIN_CON_CARTERA.includes(key)) return true;
@@ -661,7 +678,10 @@
       return Array.isArray(clientes) && clientes.length > 0;
     }
     function centroTrainer(key, perfil, mesKey){
-      const settings = mesKey ? settingsTrainerParaMes(key, mesKey) : (dbFinanzas.trainerSettings?.[key] || {});
+      // Sin mes explícito se resuelve con el mes de trabajo (antes, con el valor vivo): un traslado o una
+      // baja "desde octubre" no cambia lo que se ve al revisar meses anteriores.
+      const mesRef = mesKey || mesTrabajoKey();
+      const settings = settingsTrainerParaMes(key, mesRef);
       const nombre = nombrePerfil(perfil).toLowerCase();
       // Primero respetamos una asignación manual, siempre que apunte al maestro de centros.
       if (settings.centroId && centroValido(settings.centroId) && settings.centroId !== 'sin_centro') return settings.centroId;
@@ -672,11 +692,13 @@
       if (nombre.includes('miguel') && nombre.includes('luna')) return 'fantasy';
       // Si el perfil de Firestore tiene centro válido del maestro, lo usamos.
       if (perfil?.centroId && centroValido(perfil.centroId) && perfil.centroId !== 'sin_centro') return perfil.centroId;
-      // Resto de entrenadores actuales: Inacua.
-      if (String(perfil?.rol || '').toLowerCase() === 'pt') return 'inacua';
+      // GESTION-ENTRENADORES: hasta septiembre de 2026 un PT sin centro configurado caía en Inacua y sumaba
+      // a su canon. Se conserva solo para esos meses (no cambian); desde octubre aparece "Sin centro
+      // asignado" y no incrementa el canon de ningún centro.
+      if (mesRef < MES_SIN_CENTRO_POR_DEFECTO && String(perfil?.rol || '').toLowerCase() === 'pt') return 'inacua';
       return 'sin_centro';
     }
-    function nombreCentro(id){ const c = getCentros({incluirInactivos:true})[id] || getCentros()[id]; return c ? c.nombre : (id === 'sin_centro' ? 'Dirección / sin centro' : id || 'Sin centro'); }
+    function nombreCentro(id){ const c = getCentros({incluirInactivos:true})[id] || getCentros()[id]; return c ? c.nombre : (id === 'sin_centro' ? 'Sin centro asignado' : id || 'Sin centro'); }
     function fechaMsOrdenTrainer(t){
       const raw = String(t?.fechaAlta || '').trim();
       if (!raw) return Number.POSITIVE_INFINITY;
@@ -764,7 +786,11 @@
       c.canonVariableProrrateado = variableShare;
       c.canonProrrateado = totalShare;
       // Canon ordinario = fijo + coste por PT. El 1€/cliente ya NO forma parte de esta cifra.
-      c.canon = canonFijoCentro + canonVariableTotal;
+      // GESTION-ENTRENADORES: ajuste mensual del canon (importe fijo, con concepto y vigencia por mes).
+      // Se suma UNA vez al canon del centro y NO se reparte entre entrenadores: canonCentroShare no cambia.
+      c.ajusteCanon = parseNum(c.ajusteCanonMensual) || 0;
+      c.ajusteCanonConcepto = c.ajusteCanon ? String(c.ajusteCanonConcepto || '') : '';
+      c.canon = canonFijoCentro + canonVariableTotal + c.ajusteCanon;
       // Participación centro: acumula clientes + actividades especiales (ingresosActividades se
       // suma aparte, en construirCalculoVivo, sobre este mismo objeto c -- ver más abajo).
       // canonClientesTotal se conserva (alias) porque es un nombre ya leído por
@@ -789,6 +815,7 @@
       if ((c.canonExtrasRegulares||0) > 0) partes.push(`PT ${numero(c.canonExtrasRegulares)}×${dinero(c.canonPorPt||0)} = ${dinero((c.canonExtrasRegulares||0)*(c.canonPorPt||0))}`);
       if ((c.canonExtrasReducidos||0) > 0) partes.push(`PT reducido ${numero(c.canonExtrasReducidos)}×${dinero(c.canonPorPtReducido||0)} = ${dinero((c.canonExtrasReducidos||0)*(c.canonPorPtReducido||0))}`);
       if ((c.ptsIncluidos||0) > 0) partes.push(`incluye ${numero(c.ptsIncluidos)} PT`);
+      if (c.ajusteCanon) partes.push(`ajuste ${dinero(c.ajusteCanon)}${c.ajusteCanonConcepto ? ` (${escapeHTML(c.ajusteCanonConcepto)})` : ''}, no repartido`);
       return partes.join(' · ');
     }
 
@@ -968,6 +995,7 @@
       return perfilesUsuarios.filter(esPerfilOperativo).filter(p => {
         const k = trainerKeyPerfil(p);
         if (!k || k === key) return false;
+        if (estadoEconomicoTrainer(k) === 'baja') return false;
         if (centroTrainer(k, p) !== centroId) return false;
         const f = fechaAltaSettings(dbFinanzas.trainerSettings?.[k] || {});
         return f && f > fechaAlta;
@@ -977,6 +1005,7 @@
       return perfilesUsuarios.filter(esPerfilOperativo).filter(p => {
         const k = trainerKeyPerfil(p);
         if (!k || k === key) return false;
+        if (estadoEconomicoTrainer(k) === 'baja') return false;
         return centroTrainer(k, p) === centroId;
       }).length;
     }
@@ -1059,7 +1088,7 @@
     }
 
     function construirCalculoVivo(mesKey = mesTrabajoKey()){
-      const centrosBase = { ...getCentros(), sin_centro: { id:'sin_centro', nombre:'Dirección / sin centro', canonFijo:0, canonPt:0, activo:true } };
+      const centrosBase = { ...getCentros(), sin_centro: { id:'sin_centro', nombre:'Sin centro asignado', canonFijo:0, canonPt:0, activo:true } };
       const centros = {};
       Object.keys(centrosBase).forEach(id => {
         const resuelto = centroParaMes(centrosBase[id], mesKey);
@@ -1116,6 +1145,11 @@
           }
         });
         const settings = settingsTrainerParaMes(key, mesKey);
+        // GESTION-ENTRENADORES: de baja económica este mes. Sin fichas activas no aparece; con fichas
+        // activas su facturación se sigue contando (no se pierde en silencio) y Finanzas lo avisa.
+        // Nunca computa canon.
+        const bajaEconomica = settings.estadoEconomico === 'baja';
+        if (bajaEconomica && !fichasActivas) return;
         const centroId = centroIdParaActividades;
         const pactoEspecial = !!settings.pactoEspecial;
         const soloImputacionGastos = TRAINERS_SOLO_IMPUTACION_GASTOS.includes(key);
@@ -1145,7 +1179,7 @@
         const esEmpleado = reparto.sistemaEfectivo === 'empleado';
         const ptNetoTotal = esEmpleado ? 0 : reparto.pt + actividadPtNeto;
         const bsBrutoTotal = reparto.bs + actividadBesoulShare + (esEmpleado ? actividadPtNeto : 0);
-        const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, computaCanonCentro: settings.computaCanonCentro !== false, facturacion: facturacion + facturacionActividades, facturacionPt: facturacion, facturacionActividades, clientesActividades, actividadCentroShare, facturacionAgenda, desviacionAgenda, sesionesMensualesPrevistas, sesionesMensualesAgendadas, desviacionSesiones: sesionesMensualesPrevistas - sesionesMensualesAgendadas, motivosDesviacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, fichasActivas, soloImputacionGastos, ptNeto:ptNetoTotal, bsBruto:bsBrutoTotal, pactoEspecial, aporteCliente, aporteCentroCliente: aporteCliente, bonus:reparto.bonus || 0, coordinacionBonus:reparto.coordinacionBonus || 0, sistemaAplicado:reparto.sistemaAplicado, repartoDetalle:reparto.repartoDetalle || '', fechaAlta:reparto.fechaAlta, antiguedad:reparto.antiguedad, posteriores:reparto.posteriores, elegibleRango2:reparto.elegibleRango2, elegibleRango3:reparto.elegibleRango3, elegibleCoordinador:reparto.elegibleCoordinador, coordinadorAutorizado:reparto.coordinadorAutorizado, sistemaEfectivo:reparto.sistemaEfectivo, ptsActivosCentro:reparto.ptsActivosCentro || 0 };
+        const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, computaCanonCentro: settings.computaCanonCentro !== false && !bajaEconomica, bajaEconomica, facturacion: facturacion + facturacionActividades, facturacionPt: facturacion, facturacionActividades, clientesActividades, actividadCentroShare, facturacionAgenda, desviacionAgenda, sesionesMensualesPrevistas, sesionesMensualesAgendadas, desviacionSesiones: sesionesMensualesPrevistas - sesionesMensualesAgendadas, motivosDesviacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, fichasActivas, soloImputacionGastos, ptNeto:ptNetoTotal, bsBruto:bsBrutoTotal, pactoEspecial, aporteCliente, aporteCentroCliente: aporteCliente, bonus:reparto.bonus || 0, coordinacionBonus:reparto.coordinacionBonus || 0, sistemaAplicado:reparto.sistemaAplicado, repartoDetalle:reparto.repartoDetalle || '', fechaAlta:reparto.fechaAlta, antiguedad:reparto.antiguedad, posteriores:reparto.posteriores, elegibleRango2:reparto.elegibleRango2, elegibleRango3:reparto.elegibleRango3, elegibleCoordinador:reparto.elegibleCoordinador, coordinadorAutorizado:reparto.coordinadorAutorizado, sistemaEfectivo:reparto.sistemaEfectivo, ptsActivosCentro:reparto.ptsActivosCentro || 0 };
         trainers.push(row);
         if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0, participacionClientes:0, participacionCentro:0, ingresosActividades:0 };
         centros[centroId].trainers.push(row);
@@ -1314,7 +1348,7 @@
       document.getElementById('kpi-gastos-total').innerText = dinero(calculoActual.total.gastos);
       document.getElementById('kpi-beneficio-neto').innerText = dinero(calculoActual.total.beneficio);
       renderAlertasCarrera();
-      renderCentrosResumen(); renderEmpleadosResumen(); renderGastos(); renderOtrosIngresos(); renderHistorico(); renderConfigCentros(); renderConfigTrainers(); renderConfigActividades();
+      renderCentrosResumen(); renderEmpleadosResumen(); renderGastos(); renderOtrosIngresos(); renderHistorico(); renderConfigCentros(); renderGestionEntrenadores(); renderConfigTrainers(); renderConfigActividades();
     }
 
     // FINANZAS-UX-V2: colapso + ocultar (individual/todos) son puramente locales al navegador --
@@ -1460,7 +1494,7 @@
             <table class="w-full text-[11px] min-w-[1040px]"><thead class="text-slate-500 uppercase"><tr><th class="text-left py-2">Entrenador</th><th class="text-right">Clientes</th><th class="text-right">Fact. cartera</th><th class="text-right">Valor agenda</th><th class="text-right">Desviación</th><th class="text-right">Neto PT</th><th class="text-right">BESOUL bruto</th><th class="text-right">Coste sede</th><th class="text-right">BESOUL neto</th></tr></thead><tbody class="divide-y divide-slate-800/60">
               ${c.trainers.length ? c.trainers.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(t => {
                 const detalleDesv = (t.motivosDesviacion||[]).length ? `<div class="text-[9px] text-slate-500 max-w-[220px] ml-auto">${(t.motivosDesviacion||[]).map(escapeHTML).join('<br>')}</div>` : `<div class="text-[9px] text-slate-500">${(t.desviacionSesiones||0) === 0 ? 'Agenda alineada' : 'Ver sesiones contratadas vs agendadas'}</div>`;
-                return `<tr><td class="py-2 text-white font-semibold"><div>${escapeHTML(t.nombre)} <span class="text-[9px] text-slate-500">${escapeHTML(t.key)}</span></div><div class="text-[9px] text-cyan-400">${escapeHTML(t.sistemaAplicado || 'Base por tramos')}</div></td><td class="text-right">${numero(t.clientes)}</td><td class="text-right font-mono"><div>${dinero(t.facturacion)}</div><div class="text-[9px] text-slate-500">Mensual ${dinero(t.facturacionMensual||0)} · bonos/sueltas ${dinero(t.facturacionVariable||0)}${t.sesionesBonosSueltas ? ` · ${t.sesionesBonosSueltas} ses.` : ''}${t.coordinacionBonus ? ` · coord. ${dinero(t.coordinacionBonus)}` : ''}${t.soloImputacionGastos ? ` · solo imputación gastos${t.clientesAgendaNoComputados ? ` · cartera no computada: ${numero(t.clientesAgendaNoComputados)}` : ''}` : ''}</div></td><td class="text-right font-mono"><div>${dinero(t.facturacionAgenda||0)}</div><div class="text-[9px] text-slate-500">${numero(t.sesionesMensualesAgendadas||0)}/${numero(t.sesionesMensualesPrevistas||0)} ses. mensuales</div></td><td class="text-right font-mono ${claseDesviacion(t.desviacionAgenda||0)}"><div>${dinero(t.desviacionAgenda||0)}</div>${detalleDesv}</td><td class="text-right font-mono text-amber-400">${dinero(t.ptNeto)}</td><td class="text-right font-mono text-emerald-400">${dinero(t.bsBruto)}</td><td class="text-right font-mono text-red-300"><div>-${dinero(t.canonCentroShare||0)}</div><div class="text-[9px] text-slate-500">${t.computaCanonCentro === false ? 'Exento de canon ordinario' : `Fijo ${dinero(t.canonFijoShare||0)} · variable media ${dinero(t.canonPtShare||0)}`}</div></td><td class="text-right font-mono ${(t.bsNetoCentro||0) >= 0 ? 'text-cyan-400' : 'text-red-400'}">${dinero(t.bsNetoCentro||0)}</td></tr>`;
+                return `<tr><td class="py-2 text-white font-semibold"><div>${escapeHTML(t.nombre)} <span class="text-[9px] text-slate-500">${escapeHTML(t.key)}</span></div><div class="text-[9px] text-cyan-400">${escapeHTML(t.sistemaAplicado || 'Base por tramos')}</div></td><td class="text-right">${numero(t.clientes)}</td><td class="text-right font-mono"><div>${dinero(t.facturacion)}</div><div class="text-[9px] text-slate-500">Mensual ${dinero(t.facturacionMensual||0)} · bonos/sueltas ${dinero(t.facturacionVariable||0)}${t.sesionesBonosSueltas ? ` · ${t.sesionesBonosSueltas} ses.` : ''}${t.coordinacionBonus ? ` · coord. ${dinero(t.coordinacionBonus)}` : ''}${t.soloImputacionGastos ? ` · solo imputación gastos${t.clientesAgendaNoComputados ? ` · cartera no computada: ${numero(t.clientesAgendaNoComputados)}` : ''}` : ''}</div></td><td class="text-right font-mono"><div>${dinero(t.facturacionAgenda||0)}</div><div class="text-[9px] text-slate-500">${numero(t.sesionesMensualesAgendadas||0)}/${numero(t.sesionesMensualesPrevistas||0)} ses. mensuales</div></td><td class="text-right font-mono ${claseDesviacion(t.desviacionAgenda||0)}"><div>${dinero(t.desviacionAgenda||0)}</div>${detalleDesv}</td><td class="text-right font-mono text-amber-400">${dinero(t.ptNeto)}</td><td class="text-right font-mono text-emerald-400">${dinero(t.bsBruto)}</td><td class="text-right font-mono text-red-300"><div>-${dinero(t.canonCentroShare||0)}</div><div class="text-[9px] text-slate-500">${t.bajaEconomica ? 'Baja económica · no computa canon' : t.computaCanonCentro === false ? 'Exento de canon ordinario' : `Fijo ${dinero(t.canonFijoShare||0)} · variable media ${dinero(t.canonPtShare||0)}`}</div></td><td class="text-right font-mono ${(t.bsNetoCentro||0) >= 0 ? 'text-cyan-400' : 'text-red-400'}">${dinero(t.bsNetoCentro||0)}</td></tr>`;
               }).join('') : '<tr><td colspan="9" class="py-3 text-center text-slate-500">Sin entrenadores asignados.</td></tr>'}
             </tbody></table>
           </div>
@@ -1902,9 +1936,309 @@
       guardarConfigFinanzas();
     }
 
+    // --- GESTION-ENTRENADORES (2026-10-26): altas, bajas, reactivaciones, cambios de centro y exención
+    // de canon con FECHA EFECTIVA (mes "desde"). Nada se borra: cada cambio es una entrada más de
+    // trainerSettingsVersiones y los meses anteriores conservan su asignación. Antes de guardar se
+    // previsualiza el impacto (cálculo completo sobre una copia en memoria). El acceso a la app
+    // (besoulUsers.activo) NO se cambia aquí: se muestra como referencia, separado del estado económico
+    // y del modelo de facturación. El guardado seguro solo escribe trainerSettings.{key} y
+    // trainerSettingsVersiones.{key} (o centros.{id} y centrosVersiones.{id} para el ajuste de canon).
+    const GESTION_ACCIONES = { traslado:'Cambio de centro', baja:'Baja económica', reactivacion:'Reactivación', alta:'Alta económica', exencion:'Exención de canon' };
+    let gestionForm = { key:'', accion:'traslado', centroId:'', computaCanon:true, mes:'' };
+    let gestionAjusteForm = { centroId:'', importe:'', concepto:'', mes:'' };
+    let gestionPrevision = null; // { tipo:'entrenador'|'ajuste', firma, html }
+    const MES_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+    function mesAnteriorKey(mes){ const [y,m] = mes.split('-').map(Number); const d = new Date(y, m-2, 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+    function mesesCerradosDesde(mes){ return Object.keys(dbFinanzas.historico || {}).filter(m => m >= mes).sort(); }
+    function perfilesGestionEntrenadores(){
+      return perfilesUsuarios.filter(esPerfilOperativo).sort((a,b) => nombrePerfil(a).localeCompare(nombrePerfil(b),'es'));
+    }
+    function origenCentroTrainer(key, perfil, mes){
+      const s = settingsTrainerParaMes(key, mes);
+      if (s.centroId && centroValido(s.centroId) && s.centroId !== 'sin_centro') return 'Configurado';
+      const id = centroTrainer(key, perfil, mes);
+      if (id === 'sin_centro') return 'Sin centro asignado';
+      if (DEFAULT_CENTER_BY_TRAINER[key]) return 'Asignación oficial';
+      if (mes < MES_SIN_CENTRO_POR_DEFECTO && id === 'inacua') return 'Por defecto (hasta septiembre 2026)';
+      return 'Perfil de usuario';
+    }
+    function fichasActivasTrainer(key){
+      return ((agendaData.clientes && agendaData.clientes[key]) || []).filter(f => f && !f.vinculacion && normalizarEstado(f.estadoCliente || 'activo') === 'activo').length;
+    }
+    function textoValorGestion(campo, v){
+      if (campo === 'centroId') return v ? nombreCentro(v) : 'sin configurar';
+      if (campo === 'computaCanonCentro') return v === false ? 'exento de canon' : (v === true ? 'computa canon' : 'computa canon (por defecto)');
+      if (campo === 'estadoEconomico') return v === 'baja' ? 'baja económica' : (v === 'activo' ? 'alta' : 'alta (sin registrar)');
+      return String(v ?? '');
+    }
+
+    // Lo que hay que registrar para la acción pedida, comparando con lo vigente en el mes efectivo.
+    function planCambioEntrenador(form){
+      const errores = [], avisos = [], cambios = [];
+      const { key, accion, centroId, computaCanon, mes } = form;
+      const perfil = perfilesUsuarios.find(p => trainerKeyPerfil(p) === key);
+      if (!perfil) errores.push('Elige un entrenador.');
+      if (!GESTION_ACCIONES[accion]) errores.push('Elige una acción.');
+      if (!MES_RE.test(String(mes || ''))) errores.push('Indica el mes efectivo (desde qué mes se aplica).');
+      if (errores.length) return { errores, avisos, cambios };
+      const cerrados = mesesCerradosDesde(mes);
+      if (cerrados.length) errores.push(`Hay meses cerrados desde ${etiquetaMes(mes)} (${cerrados.map(etiquetaMes).join(', ')}): no se modifican meses cerrados. Elige un mes posterior.`);
+      const s = settingsTrainerParaMes(key, mes);
+      const enBaja = s.estadoEconomico === 'baja';
+      const centroVigente = centroTrainer(key, perfil, mes);
+      const computaVigente = s.computaCanonCentro !== false;
+      const centroDestinoValido = centroId && centroId !== 'sin_centro' && centroValido(centroId);
+      if (accion === 'baja') {
+        if (enBaja) errores.push('Ya está de baja económica en ese mes.');
+        else cambios.push({ campo:'estadoEconomico', valor:'baja' });
+        const activas = fichasActivasTrainer(key);
+        if (activas) avisos.push(`Tiene ${activas} ficha(s) activa(s) en la Agenda: mientras sigan activas, su facturación se sigue contando. Desactívalas o reasígnalas en la Agenda.`);
+      } else if (accion === 'reactivacion') {
+        if (!enBaja) errores.push('No está de baja económica en ese mes.');
+        else cambios.push({ campo:'estadoEconomico', valor:'activo' });
+      } else if (accion === 'alta' || accion === 'traslado') {
+        if (!centroDestinoValido) errores.push('Elige el centro.');
+        else {
+          if (accion === 'traslado' && centroId === centroVigente) errores.push(`Ya está en ${nombreCentro(centroId)} en ese mes.`);
+          if (s.centroId !== centroId) cambios.push({ campo:'centroId', valor:centroId });
+        }
+        if (accion === 'alta' && s.estadoEconomico !== 'activo') cambios.push({ campo:'estadoEconomico', valor:'activo' });
+        if (accion === 'traslado' && enBaja) avisos.push('Está de baja económica en ese mes: el cambio de centro no lo reactiva.');
+        if (!!computaCanon !== computaVigente) cambios.push({ campo:'computaCanonCentro', valor:!!computaCanon });
+      } else if (accion === 'exencion') {
+        if (!!computaCanon === computaVigente) errores.push(computaVigente ? 'Ya computa canon en ese mes.' : 'Ya está exento de canon en ese mes.');
+        else cambios.push({ campo:'computaCanonCentro', valor:!!computaCanon });
+      }
+      if (!errores.length && !cambios.length) errores.push('No hay cambios respecto a lo vigente en ese mes.');
+      if (perfil && perfil.activo !== false && (accion === 'baja')) avisos.push('El acceso a la aplicación no cambia aquí: se retira aparte, en su perfil de usuario (besoulUsers).');
+      return { errores, avisos, cambios };
+    }
+    function aplicarPlanEntrenadorEn(db, key, cambios, mes){
+      if (!db.trainerSettings) db.trainerSettings = {};
+      if (!db.trainerSettings[key]) db.trainerSettings[key] = {};
+      if (!db.trainerSettingsVersiones) db.trainerSettingsVersiones = {};
+      cambios.forEach(({ campo, valor }) => {
+        registrarVersionTemporal(db.trainerSettingsVersiones, key, campo, valor, db.trainerSettings[key][campo], mes, false);
+        db.trainerSettings[key][campo] = valor;
+      });
+    }
+    function planAjusteCanon(form){
+      const errores = [], avisos = [], cambios = [];
+      const { centroId, mes } = form;
+      const importe = Math.round(parseNum(form.importe) * 100) / 100;
+      const concepto = String(form.concepto || '').trim();
+      if (!centroId || centroId === 'sin_centro' || !centroValido(centroId)) errores.push('Elige el centro.');
+      if (!MES_RE.test(String(mes || ''))) errores.push('Indica el mes efectivo (desde qué mes se aplica).');
+      if (importe && !concepto) errores.push('Indica el concepto del ajuste.');
+      if (errores.length) return { errores, avisos, cambios };
+      const cerrados = mesesCerradosDesde(mes);
+      if (cerrados.length) errores.push(`Hay meses cerrados desde ${etiquetaMes(mes)} (${cerrados.map(etiquetaMes).join(', ')}): no se modifican meses cerrados. Elige un mes posterior.`);
+      const vigente = centroParaMes({ ...(getCentros({ incluirInactivos:true })[centroId] || {}), id:centroId }, mes);
+      const importeVigente = parseNum(vigente.ajusteCanonMensual) || 0;
+      const conceptoVigente = importeVigente ? String(vigente.ajusteCanonConcepto || '') : '';
+      if (importe !== importeVigente) cambios.push({ campo:'ajusteCanonMensual', valor:importe });
+      if ((importe ? concepto : '') !== conceptoVigente) cambios.push({ campo:'ajusteCanonConcepto', valor:importe ? concepto : '' });
+      if (!errores.length && !cambios.length) errores.push('No hay cambios respecto al ajuste vigente en ese mes.');
+      return { errores, avisos, cambios };
+    }
+    function aplicarPlanAjusteEn(db, centroId, cambios, mes){
+      if (!db.centros) db.centros = {};
+      if (!db.centros[centroId]) db.centros[centroId] = { id:centroId };
+      if (!db.centrosVersiones) db.centrosVersiones = {};
+      cambios.forEach(({ campo, valor }) => {
+        registrarVersionTemporal(db.centrosVersiones, centroId, campo, valor, db.centros[centroId][campo], mes, false);
+        db.centros[centroId][campo] = valor;
+      });
+    }
+    // Cálculo completo del mes con una copia en memoria de Finanzas (nada se guarda).
+    function calcularConFinanzasSimuladas(dbSimulada, mes){
+      const real = dbFinanzas;
+      dbFinanzas = dbSimulada;
+      try { return construirCalculoVivo(mes); } finally { dbFinanzas = real; }
+    }
+    function impactoCambioFinanzas(aplicar, mes, keyFoco){
+      const sim = JSON.parse(JSON.stringify(dbFinanzas));
+      aplicar(sim);
+      const antes = construirCalculoVivo(mes), despues = calcularConFinanzasSimuladas(sim, mes);
+      const mesPrevio = mesAnteriorKey(mes);
+      const previoIgual = JSON.stringify(construirCalculoVivo(mesPrevio).total) === JSON.stringify(calcularConFinanzasSimuladas(sim, mesPrevio).total);
+      const centros = [...new Set([...Object.keys(antes.centros), ...Object.keys(despues.centros)])].map(id => {
+        const a = antes.centros[id] || { canon:0, trainers:[] }, d = despues.centros[id] || { canon:0, trainers:[] };
+        const n = c => (c.trainers || []).filter(t => t.computaCanonCentro !== false).length;
+        const cuota = c => ((c.trainers || []).find(t => t.computaCanonCentro !== false) || {}).canonCentroShare || 0;
+        return { id, nombre:nombreCentro(id), canonAntes:a.canon||0, canonDespues:d.canon||0, nAntes:n(a), nDespues:n(d), cuotaAntes:cuota(a), cuotaDespues:cuota(d) };
+      }).filter(c => Math.abs(c.canonAntes - c.canonDespues) > 0.004 || c.nAntes !== c.nDespues);
+      const clave = t => [Math.round((t.facturacion||0)*100), Math.round((t.ptNeto||0)*100), Math.round((t.bsBruto||0)*100)].join('|');
+      const otrosConCambios = antes.trainers.filter(t => t.key !== keyFoco).filter(t => { const d = despues.trainers.find(x => x.key === t.key); return !d || clave(d) !== clave(t); }).map(t => t.nombre || t.key);
+      const foco = keyFoco ? { antes:antes.trainers.find(t => t.key === keyFoco), despues:despues.trainers.find(t => t.key === keyFoco) } : null;
+      return { centros, total:{ antes:antes.total, despues:despues.total }, previoIgual, mesPrevio, otrosConCambios, foco };
+    }
+    function htmlImpacto(plan, impacto, mes){
+      const lista = (arr, cls) => arr.map(x => `<li class="${cls}">${escapeHTML(x)}</li>`).join('');
+      const filaCentro = c => `<tr><td class="py-1 text-white">${escapeHTML(c.nombre)}</td><td class="text-right font-mono">${dinero(c.canonAntes)} → <b class="text-white">${dinero(c.canonDespues)}</b></td><td class="text-right">${numero(c.nAntes)} → <b class="text-white">${numero(c.nDespues)}</b></td><td class="text-right font-mono">${dinero(c.cuotaAntes)} → <b class="text-white">${dinero(c.cuotaDespues)}</b></td></tr>`;
+      const t = impacto.total;
+      const foco = impacto.foco;
+      const textoFoco = (r) => r ? `${escapeHTML(nombreCentro(r.centroId))} · ${r.bajaEconomica ? 'baja económica' : (r.computaCanonCentro === false ? 'no computa canon' : 'computa canon')} · cuota ${dinero(r.canonCentroShare||0)} · facturación ${dinero(r.facturacion||0)}` : 'no aparece en el cálculo (sin fichas activas)';
+      return `
+        <div class="text-xs space-y-2">
+          <div class="text-slate-300">Cambios a registrar desde <b class="text-white">${escapeHTML(etiquetaMes(mes))}</b>: ${plan.cambios.map(c => `<b class="text-white">${escapeHTML(c.campo)}</b> → ${escapeHTML(c.campo.startsWith('ajusteCanon') ? String(c.valor) : textoValorGestion(c.campo, c.valor))}`).join(' · ')}</div>
+          ${foco ? `<div class="text-slate-400">Entrenador: ${textoFoco(foco.antes)} <span class="text-slate-500">→</span> <span class="text-white">${textoFoco(foco.despues)}</span></div>` : ''}
+          ${impacto.centros.length ? `<table class="w-full"><thead><tr class="text-[10px] uppercase text-slate-500"><th class="text-left">Centro</th><th class="text-right">Canon del mes</th><th class="text-right">Computan</th><th class="text-right">Cuota por entrenador</th></tr></thead><tbody>${impacto.centros.map(filaCentro).join('')}</tbody></table>` : '<div class="text-slate-400">Ningún canon de centro cambia.</div>'}
+          <div class="text-slate-400">Totales del mes: cánones ${dinero(t.antes.canones)} → <b class="text-white">${dinero(t.despues.canones)}</b> · beneficio ${dinero(t.antes.beneficio)} → <b class="text-white">${dinero(t.despues.beneficio)}</b> · facturación ${dinero(t.antes.facturacion)} → <b class="text-white">${dinero(t.despues.facturacion)}</b></div>
+          <div class="${impacto.otrosConCambios.length ? 'text-amber-300' : 'text-emerald-400'}">${impacto.otrosConCambios.length ? `⚠ Cambia la facturación o el reparto de otros entrenadores: ${escapeHTML(impacto.otrosConCambios.join(', '))}` : '✔ La facturación y el reparto de los demás entrenadores no cambian.'}</div>
+          <div class="${impacto.previoIgual ? 'text-emerald-400' : 'text-red-300'}">${impacto.previoIgual ? `✔ ${escapeHTML(etiquetaMes(impacto.mesPrevio))} y anteriores no cambian.` : `⚠ ${escapeHTML(etiquetaMes(impacto.mesPrevio))} cambiaría: revisa el mes efectivo.`}</div>
+          ${plan.avisos.length ? `<ul class="space-y-1">${lista(plan.avisos, 'text-amber-300')}</ul>` : ''}
+        </div>`;
+    }
+    function gestionSet(campo, valor){
+      gestionForm = { ...gestionForm, [campo]: valor };
+      // Al elegir entrenador o mes, la casilla de canon parte de lo vigente (no fuerza "computa").
+      if ((campo === 'key' || campo === 'mes') && gestionForm.key) {
+        gestionForm.computaCanon = settingsTrainerParaMes(gestionForm.key, MES_RE.test(gestionForm.mes) ? gestionForm.mes : mesTrabajoKey()).computaCanonCentro !== false;
+      }
+      gestionPrevision = null; renderGestionEntrenadores();
+    }
+    function gestionAjusteSet(campo, valor){ gestionAjusteForm = { ...gestionAjusteForm, [campo]: valor }; gestionPrevision = null; renderGestionEntrenadores(); }
+    function previsualizarGestionEntrenador(){
+      const plan = planCambioEntrenador(gestionForm);
+      const firma = JSON.stringify(gestionForm);
+      if (plan.errores.length) { gestionPrevision = { tipo:'entrenador', firma, error:true, html:`<ul class="text-xs space-y-1">${plan.errores.map(e => `<li class="text-red-300">${escapeHTML(e)}</li>`).join('')}</ul>` }; renderGestionEntrenadores(); return plan; }
+      const { key, mes } = gestionForm;
+      const impacto = impactoCambioFinanzas(sim => aplicarPlanEntrenadorEn(sim, key, plan.cambios, mes), mes, key);
+      gestionPrevision = { tipo:'entrenador', firma, error:false, html:htmlImpacto(plan, impacto, mes), impacto };
+      renderGestionEntrenadores();
+      return plan;
+    }
+    function previsualizarAjusteCanon(){
+      const plan = planAjusteCanon(gestionAjusteForm);
+      const firma = JSON.stringify(gestionAjusteForm);
+      if (plan.errores.length) { gestionPrevision = { tipo:'ajuste', firma, error:true, html:`<ul class="text-xs space-y-1">${plan.errores.map(e => `<li class="text-red-300">${escapeHTML(e)}</li>`).join('')}</ul>` }; renderGestionEntrenadores(); return plan; }
+      const { centroId, mes } = gestionAjusteForm;
+      const impacto = impactoCambioFinanzas(sim => aplicarPlanAjusteEn(sim, centroId, plan.cambios, mes), mes, null);
+      gestionPrevision = { tipo:'ajuste', firma, error:false, html:htmlImpacto(plan, impacto, mes), impacto };
+      renderGestionEntrenadores();
+      return plan;
+    }
+    // Guardado: exige una previsualización de exactamente estos datos y confirmación. Si el servidor
+    // rechaza la escritura, se restaura la copia local (mismo patrón que editarTrainer/editarCentro).
+    async function guardarCambioGestion(tipo){
+      const form = tipo === 'ajuste' ? gestionAjusteForm : gestionForm;
+      if (!gestionPrevision || gestionPrevision.tipo !== tipo || gestionPrevision.error || gestionPrevision.firma !== JSON.stringify(form)) { alert('Previsualiza primero el impacto de este cambio.'); return { ok:false }; }
+      const plan = tipo === 'ajuste' ? planAjusteCanon(form) : planCambioEntrenador(form);
+      if (plan.errores.length) { alert(plan.errores.join('\n')); return { ok:false }; }
+      const id = tipo === 'ajuste' ? form.centroId : form.key;
+      const etiqueta = tipo === 'ajuste' ? `Ajuste de canon de ${nombreCentro(id)}` : `${GESTION_ACCIONES[form.accion]} de ${id}`;
+      if (!confirm(`${etiqueta} desde ${etiquetaMes(form.mes)}.\n\nSe aplica a ${etiquetaMes(form.mes)} y meses siguientes; los anteriores no cambian. ¿Guardar?`)) return { ok:false, cancelado:true };
+      const bucketVivo = tipo === 'ajuste' ? 'centros' : 'trainerSettings';
+      const bucketVersiones = tipo === 'ajuste' ? 'centrosVersiones' : 'trainerSettingsVersiones';
+      const vivoAntes = dbFinanzas[bucketVivo]?.[id] ? JSON.parse(JSON.stringify(dbFinanzas[bucketVivo][id])) : null;
+      const versionesAntes = dbFinanzas[bucketVersiones]?.[id] ? JSON.parse(JSON.stringify(dbFinanzas[bucketVersiones][id])) : null;
+      if (tipo === 'ajuste') aplicarPlanAjusteEn(dbFinanzas, id, plan.cambios, form.mes);
+      else aplicarPlanEntrenadorEn(dbFinanzas, id, plan.cambios, form.mes);
+      const resultado = await guardarConfigFinanzas({ silencioso:true });
+      if (!resultado || resultado.ok !== true) {
+        if (!resultado || !resultado.revertido) {
+          if (vivoAntes) dbFinanzas[bucketVivo][id] = vivoAntes; else if (dbFinanzas[bucketVivo]) delete dbFinanzas[bucketVivo][id];
+          if (versionesAntes) dbFinanzas[bucketVersiones][id] = versionesAntes; else if (dbFinanzas[bucketVersiones]) delete dbFinanzas[bucketVersiones][id];
+        }
+        pintarTodo();
+        alert(`No se ha podido guardar en el servidor: ${etiqueta}. El cambio NO se ha guardado.`);
+        return { ok:false, resultado };
+      }
+      gestionPrevision = null;
+      if (tipo === 'ajuste') gestionAjusteForm = { centroId:'', importe:'', concepto:'', mes:'' };
+      else gestionForm = { key:'', accion:'traslado', centroId:'', computaCanon:true, mes:'' };
+      pintarTodo();
+      return { ok:true };
+    }
+    function historialGestionTrainer(key){
+      const campos = ['estadoEconomico','centroId','computaCanonCentro'];
+      const versiones = (dbFinanzas.trainerSettingsVersiones?.[key] || []).filter(v => campos.some(c => c in v));
+      if (!versiones.length) return '<div class="text-slate-500">Sin cambios registrados.</div>';
+      return versiones.slice().sort((a,b) => (a.desde < b.desde ? -1 : a.desde > b.desde ? 1 : 0)).map(v => {
+        const cuando = v._legacy ? 'Situación anterior' : `Desde ${etiquetaMes(v.desde)}${v.hasta ? ` (solo ${etiquetaMes(v.hasta)})` : ''}`;
+        const que = campos.filter(c => c in v).map(c => textoValorGestion(c, v[c])).join(' · ');
+        const quien = v._legacy ? '' : ` <span class="text-slate-500">· ${escapeHTML((v._registradoEn || '').slice(0,10))} ${escapeHTML(v._registradoPor || '')}</span>`;
+        return `<div><span class="text-slate-400">${escapeHTML(cuando)}:</span> <span class="text-white">${escapeHTML(que)}</span>${quien}</div>`;
+      }).join('');
+    }
+    function renderGestionEntrenadores(){
+      const cont = document.getElementById('gestion-entrenadores');
+      if (!cont) return;
+      const mes = mesTrabajoKey();
+      const perfiles = perfilesGestionEntrenadores();
+      const centros = getCentros({ incluirInactivos:false });
+      const filas = perfiles.map(p => {
+        const key = trainerKeyPerfil(p);
+        const s = settingsTrainerParaMes(key, mes);
+        const enBaja = s.estadoEconomico === 'baja';
+        const centroId = centroTrainer(key, p, mes);
+        const row = (calculoActual?.trainers || []).find(t => t.key === key);
+        const canon = enBaja ? '<span class="text-slate-500">No computa · baja</span>'
+          : centroId === 'sin_centro' ? '<span class="text-amber-300">No computa · sin centro</span>'
+          : s.computaCanonCentro === false ? '<span class="text-cyan-300">Exento de canon</span>'
+          : `<span class="text-emerald-400">Computa</span>${row ? ` <span class="text-slate-500">· ${dinero(row.canonCentroShare || 0)}</span>` : ''}`;
+        const modelo = TRAINERS_SOLO_IMPUTACION_GASTOS.includes(key) ? 'Solo imputación de gastos' : (SISTEMAS_PAGO[s.sistemaPago || 'auto'] || s.sistemaPago || 'Automático');
+        const activas = enBaja ? fichasActivasTrainer(key) : 0;
+        return `<tr class="border-t border-slate-800 align-top">
+          <td class="py-2 pr-2"><div class="text-white font-semibold">${escapeHTML(nombrePerfil(p))}</div><div class="text-[10px] text-slate-500">${escapeHTML(key)}</div></td>
+          <td class="py-2 pr-2">${p.activo === false ? '<span class="text-red-300">Acceso retirado</span>' : '<span class="text-slate-300">Con acceso</span>'}</td>
+          <td class="py-2 pr-2">${enBaja ? '<span class="text-slate-400">Baja económica</span>' : '<span class="text-emerald-400">Alta</span>'}${activas ? `<div class="text-[10px] text-amber-300">⚠ ${numero(activas)} ficha(s) activa(s) siguen facturando</div>` : ''}</td>
+          <td class="py-2 pr-2"><div class="${centroId === 'sin_centro' ? 'text-amber-300' : 'text-white'}">${escapeHTML(nombreCentro(centroId))}</div><div class="text-[10px] text-slate-500">${escapeHTML(origenCentroTrainer(key, p, mes))}</div></td>
+          <td class="py-2 pr-2">${canon}</td>
+          <td class="py-2 pr-2 text-slate-300">${escapeHTML(modelo)}</td>
+          <td class="py-2"><details><summary class="cursor-pointer text-slate-400">Ver</summary><div class="mt-1 space-y-0.5 text-[11px]">${historialGestionTrainer(key)}</div></details></td>
+        </tr>`;
+      }).join('');
+      const opcionesTrainer = '<option value="">Elige entrenador…</option>' + perfiles.map(p => { const k = trainerKeyPerfil(p); return `<option value="${escapeHTML(k)}" ${gestionForm.key === k ? 'selected' : ''}>${escapeHTML(nombrePerfil(p))} (${escapeHTML(k)})</option>`; }).join('');
+      const opcionesAccion = Object.keys(GESTION_ACCIONES).map(a => `<option value="${a}" ${gestionForm.accion === a ? 'selected' : ''}>${GESTION_ACCIONES[a]}</option>`).join('');
+      const opcionesCentro = (sel) => '<option value="">Elige centro…</option>' + Object.values(centros).map(c => `<option value="${escapeHTML(c.id)}" ${sel === c.id ? 'selected' : ''}>${escapeHTML(c.nombre)}</option>`).join('');
+      const usaCentro = gestionForm.accion === 'alta' || gestionForm.accion === 'traslado';
+      const usaCanon = usaCentro || gestionForm.accion === 'exencion';
+      const ajustesVigentes = Object.values(centros).map(c => ({ c, r: centroParaMes(c, mes) })).filter(x => parseNum(x.r.ajusteCanonMensual));
+      const prevE = gestionPrevision && gestionPrevision.tipo === 'entrenador' ? gestionPrevision : null;
+      const prevA = gestionPrevision && gestionPrevision.tipo === 'ajuste' ? gestionPrevision : null;
+      const puedeGuardar = (prev) => prev && !prev.error;
+      const campo = 'bg-slate-950 border border-slate-700 rounded-lg px-2 py-2 text-white w-full';
+      cont.innerHTML = `
+        <div class="border-b border-slate-800 pb-3"><h2 class="text-sm font-bold text-white">Gestión de entrenadores</h2>
+          <p class="text-xs text-slate-400">Situación en <b class="text-slate-200">${escapeHTML(etiquetaMes(mes))}</b> (mes de trabajo). Altas, bajas, reactivaciones, cambios de centro y exenciones se aplican desde el mes efectivo que indiques; los meses anteriores conservan su asignación y nada se borra. El estado económico, el modelo de facturación y el acceso a la aplicación son independientes: el acceso se gestiona en el perfil de usuario.</p></div>
+        <div class="overflow-x-auto"><table class="w-full text-xs min-w-[720px]"><thead><tr class="text-[10px] uppercase text-slate-500 text-left"><th class="py-1">Entrenador</th><th>Acceso app</th><th>Estado económico</th><th>Centro</th><th>Canon</th><th>Modelo de facturación</th><th>Historial</th></tr></thead><tbody>${filas || '<tr><td colspan="7" class="text-slate-500 py-2">Sin entrenadores.</td></tr>'}</tbody></table></div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3">
+            <h3 class="text-xs font-bold text-white uppercase tracking-wide">Programar un cambio</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <label class="text-slate-400">Entrenador<select class="${campo} mt-1" onchange="gestionSet('key', this.value)">${opcionesTrainer}</select></label>
+              <label class="text-slate-400">Acción<select class="${campo} mt-1" onchange="gestionSet('accion', this.value)">${opcionesAccion}</select></label>
+              ${usaCentro ? `<label class="text-slate-400">Centro<select class="${campo} mt-1" onchange="gestionSet('centroId', this.value)">${opcionesCentro(gestionForm.centroId)}</select></label>` : ''}
+              <label class="text-slate-400">Mes efectivo (desde)<input type="month" value="${escapeHTML(gestionForm.mes)}" class="${campo} mt-1" onchange="gestionSet('mes', this.value)"></label>
+              ${usaCanon ? `<label class="flex items-center gap-2 text-slate-300 sm:col-span-2"><input type="checkbox" ${gestionForm.computaCanon ? 'checked' : ''} onchange="gestionSet('computaCanon', this.checked)" class="accent-cyan-500"> Computa para el canon del centro (desmarcado = exento)</label>` : ''}
+            </div>
+            <div class="flex gap-2 flex-wrap"><button onclick="previsualizarGestionEntrenador()" class="bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-3 py-2 rounded-lg text-xs font-bold">Previsualizar impacto</button>
+              <button onclick="guardarCambioGestion('entrenador')" ${puedeGuardar(prevE) ? '' : 'disabled'} class="bg-emerald-500 text-slate-950 px-3 py-2 rounded-lg text-xs font-black disabled:opacity-40 disabled:cursor-not-allowed">Guardar cambio</button></div>
+            ${prevE ? `<div class="border-t border-slate-800 pt-3">${prevE.html}</div>` : ''}
+          </div>
+          <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3">
+            <h3 class="text-xs font-bold text-white uppercase tracking-wide">Ajuste mensual del canon de un centro</h3>
+            <p class="text-[11px] text-slate-400">Importe fijo que se suma una vez al canon del centro, sin repartirse entre entrenadores. Para eliminarlo, deja el importe a 0 desde el mes que corresponda.</p>
+            <div class="text-[11px] ${ajustesVigentes.length ? 'text-slate-300' : 'text-slate-500'}">${ajustesVigentes.length ? ajustesVigentes.map(x => `Vigente en ${escapeHTML(etiquetaMes(mes))}: <b class="text-white">${escapeHTML(x.c.nombre)}</b> ${dinero(x.r.ajusteCanonMensual)} · ${escapeHTML(x.r.ajusteCanonConcepto || '')}`).join('<br>') : `Sin ajustes vigentes en ${escapeHTML(etiquetaMes(mes))}.`}</div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <label class="text-slate-400">Centro<select class="${campo} mt-1" onchange="gestionAjusteSet('centroId', this.value)">${opcionesCentro(gestionAjusteForm.centroId)}</select></label>
+              <label class="text-slate-400">Mes efectivo (desde)<input type="month" value="${escapeHTML(gestionAjusteForm.mes)}" class="${campo} mt-1" onchange="gestionAjusteSet('mes', this.value)"></label>
+              <label class="text-slate-400">Importe mensual (€)<input inputmode="decimal" value="${escapeHTML(gestionAjusteForm.importe)}" class="${campo} mt-1 text-right" onchange="gestionAjusteSet('importe', this.value)"></label>
+              <label class="text-slate-400">Concepto<input value="${escapeHTML(gestionAjusteForm.concepto)}" class="${campo} mt-1" onchange="gestionAjusteSet('concepto', this.value)"></label>
+            </div>
+            <div class="flex gap-2 flex-wrap"><button onclick="previsualizarAjusteCanon()" class="bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-3 py-2 rounded-lg text-xs font-bold">Previsualizar impacto</button>
+              <button onclick="guardarCambioGestion('ajuste')" ${puedeGuardar(prevA) ? '' : 'disabled'} class="bg-emerald-500 text-slate-950 px-3 py-2 rounded-lg text-xs font-black disabled:opacity-40 disabled:cursor-not-allowed">Guardar ajuste</button></div>
+            ${prevA ? `<div class="border-t border-slate-800 pt-3">${prevA.html}</div>` : ''}
+          </div>
+        </div>`;
+    }
+
     function renderConfigTrainers(){
       const cont=document.getElementById('trainers-config'); const centros=getCentros({soloVisibles:'visibleAgenda'});
-      const opcionesCentroBase = Object.values(centros).map(c=>`<option value="${c.id}">${escapeHTML(c.nombre)}</option>`).join('') + '<option value="sin_centro">Dirección / sin centro</option>';
+      const opcionesCentroBase = Object.values(centros).map(c=>`<option value="${c.id}">${escapeHTML(c.nombre)}</option>`).join('') + '<option value="sin_centro">Sin centro asignado</option>';
       const opcionesSistema = Object.keys(SISTEMAS_PAGO).map(k=>`<option value="${k}">${SISTEMAS_PAGO[k]}</option>`).join('');
       const perfiles = perfilesUsuarios.filter(esPerfilOperativo).sort((a,b)=>nombrePerfil(a).localeCompare(nombrePerfil(b)));
       // Mismo hallazgo que en renderConfigCentros: mostrar el valor vivo sin resolver la
@@ -2445,7 +2779,7 @@
           if(finanzasUnsub) finanzasUnsub(); if(agendaUnsub) agendaUnsub(); if(usersUnsub) usersUnsub();
           finanzasUnsub=suscribirFinanzas(finanzasRef);
           agendaUnsub=iniciarSincronizacionAgendaAdmin(firestore, datos=>{ agendaData=datos || {clientes:{}}; pintarTodo(); });
-          usersUnsub=firestore.collection('besoulUsers').onSnapshot(s=>{ perfilesUsuarios=s.docs.map(d=>({email:d.id,...d.data()})).filter(p=>p.activo!==false); pintarTodo(); });
+          usersUnsub=firestore.collection('besoulUsers').onSnapshot(s=>{ perfilesUsuarios=s.docs.map(d=>({email:d.id,...d.data()})); pintarTodo(); });
         }catch(err){ console.error(err); alert('Error cargando Finanzas. Revisa permisos/reglas.'); }
       });
     }

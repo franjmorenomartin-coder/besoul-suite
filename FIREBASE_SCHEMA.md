@@ -10,7 +10,10 @@ Typical fields:
 - `nombre`
 - `rol`: `admin` or `pt`
 - `trainerKey`
-- `activo`
+- `activo`: access to the app. Rules (`isActiveUser()`) require `activo == true` for every internal
+  collection; with `false` the user can only read their own profile (GESTION-ENTRENADORES: Agenda then
+  clears the device cache, signs out, and closes an open session as soon as the flag changes). It is
+  independent from the economic status in Finanzas (`trainerSettings.{key}.estadoEconomico`).
 - `ocultarResumenEconomico` (boolean, optional; IGOR-RESUMEN-ECONOMICO, 2026-10-26): set by an admin
   only. When `true`, Agenda hides the trainer's aggregated economic summaries (revenue KPIs, billing
   forecast, agenda value, deviation, open-group profitability). Individual client prices stay
@@ -132,6 +135,20 @@ Important rules:
     individual client + 10 € per eligible group of 3 or more, once per client/group per month.
   - `gastos.{mes}[].trainerKey` (optional): attributes an expense to a trainer for analysis; the
     expense still counts once in the monthly total. Category `Incentivos` added; payroll uses `Sueldos`.
+- Trainer management (GESTION-ENTRENADORES, 2026-10-26; Finanzas › Centros / PT › Gestión de
+  entrenadores). Every change has an effective month and is stored as a new
+  `trainerSettingsVersiones.{key}` / `centrosVersiones.{id}` entry; earlier months keep their values:
+  - `trainerSettings.{key}.estadoEconomico`: `'baja'` (economic leave) or `'activo'`; missing = active.
+    In a month with `'baja'` the trainer never computes canon; without active fichas they do not appear;
+    with active fichas their billing is still counted and Finanzas warns. A profile with
+    `besoulUsers.activo == false` stays in Finanzas only if it has this field registered.
+  - `trainerSettings.{key}.centroId` / `computaCanonCentro`: centre change and canon exemption, versioned.
+  - From `2026-10`, a PT with no valid centre (configured, official map or profile) is shown as
+    «Sin centro asignado» and adds to no centre canon. Until `2026-09` the old fallback to Inacua is kept,
+    so earlier months do not change.
+  - `centros.{id}.ajusteCanonMensual` (number) and `ajusteCanonConcepto` (string), versioned: fixed
+    monthly adjustment added once to the centre canon (`total.canones`), never shared among trainers.
+    Removed by setting it to 0 from a given month.
 - Fields added only by the selective restoration tool (`scripts/restaurar-finanzas-selectivo.js`),
   if it is ever executed:
   - `auditoriaRestauraciones.{id}`: `{accion: 'restauracion'|'reversion', fecha, por, motivo, rutas,

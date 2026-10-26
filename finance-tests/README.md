@@ -84,3 +84,19 @@ node finance-tests/run_empleado_tests.cjs <respaldo.json> # además, simulación
 
 Con respaldo no escribe nada: todo ocurre en memoria. El respaldo contiene datos personales y nunca debe
 añadirse al repositorio.
+
+## `run_gestion_entrenadores_tests.cjs` (GESTION-ENTRENADORES)
+
+Gestión de entrenadores de Finanzas con el código real de `finanzas.html` y `dashboard.html`: altas,
+bajas, reactivación, cambio de centro, exención y ajuste mensual del canon, siempre con mes efectivo
+(previsualizar → confirmar → guardar, con reversión si el servidor rechaza); «Sin centro asignado» desde
+octubre de 2026 sin sumar canon; y la pantalla. Con respaldo aplica en memoria las operaciones
+confirmadas (Verónica a Alfa Prime exenta, bajas de Adrián y Andrés, ajuste de 23,32 € en Inacua desde
+2026-10) y compara con el código del commit `BASE_REF` (por defecto `1b8080e`): enero–septiembre
+idénticos, Inacua con los 11 entrenadores y 2.223,32 €, guardado seguro limitado a las rutas afectadas
+y Dashboard coherente.
+
+```bash
+node finance-tests/run_gestion_entrenadores_tests.cjs                 # solo datos sintéticos
+node finance-tests/run_gestion_entrenadores_tests.cjs <respaldo.json> # además, con un respaldo
+```

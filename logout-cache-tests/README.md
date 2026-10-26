@@ -23,3 +23,13 @@ Se conserva a propósito `bs_modo_agenda_slots_v1` (preferencia de UI, sin PII).
 ```
 node extract.js && node run_tests.cjs
 ```
+
+## `run_acceso_retirado_tests.cjs` (GESTION-ENTRENADORES)
+
+Retirada de acceso en la Agenda, con las funciones reales de `agenda.html`: un perfil desactivado no
+entra (borra la caché del dispositivo y cierra la sesión de Authentication) y una sesión abierta se
+cierra en cuanto administración pone `activo: false` o elimina el perfil.
+
+```
+node run_acceso_retirado_tests.cjs
+```

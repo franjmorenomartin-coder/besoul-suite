@@ -38,3 +38,16 @@ firebase emulators:exec --only firestore --project demo-besoul-suite "node rules
 
 (Si `java -version` es anterior a 21, instala un JDK 21+ antes de ejecutar -- p.ej. `winget install
 --id EclipseAdoptium.Temurin.21.JDK` -- y antepón su carpeta `bin` al `PATH` de la sesión.)
+
+## `run_acceso_retirado_tests.cjs` (GESTION-ENTRENADORES)
+
+Retirada de acceso de un entrenador con las reglas actuales, sin cambiarlas: con `besoulUsers.activo:
+true` lee y escribe lo suyo; con `activo: false` se le deniega todo (agenda, fichas, histórico,
+disponibilidad, notas, reservas, solicitudes, notificaciones, leads, catálogo, Finanzas) salvo leer su
+propio perfil, no puede reactivarse ni borrarse, y sus datos se conservan. Como `run_tests.cjs`, el
+emulador debe escuchar en `127.0.0.1:8080` (si `firebase.json` usa otro puerto, pasa `--config` con uno
+que fije 8080):
+
+```bash
+firebase emulators:exec --only firestore --project demo-besoul-suite "node rules-tests/run_acceso_retirado_tests.cjs"
+```
