@@ -16,6 +16,8 @@ const {
   assertSucceeds,
   assertFails,
 } = require('@firebase/rules-unit-testing');
+const firebaseCompat = require('firebase/compat/app');
+require('firebase/compat/firestore');
 
 const PROJECT_ID = 'demo-besoul-suite';
 const RULES_PATH = path.join(__dirname, '..', 'firestore.rules');
@@ -92,7 +94,13 @@ async function main() {
   // ============================================================
   console.log('\n=== besoulSuite/finanzas ===');
   // ============================================================
-  await checkOk('ADMIN lee/escribe besoulSuite/finanzas', admin.collection('besoulSuite').doc('finanzas').update({ centros: { x: 1 } }));
+  // FIX-FINANZAS-GUARDADO-SEGURO: toda escritura en Finanzas debe llevar guardadoSeguroEn == hora
+  // del servidor (docs/FINANZAS_GUARDADO_SEGURO.md). Cobertura completa en finance-save-tests/.
+  const marcaGuardadoSeguro = () => ({ guardadoSeguroEn: firebaseCompat.firestore.FieldValue.serverTimestamp() });
+  await checkOk('ADMIN lee besoulSuite/finanzas', admin.collection('besoulSuite').doc('finanzas').get());
+  await checkDenied('ADMIN NO puede escribir besoulSuite/finanzas sin la marca guardadoSeguroEn (versión antigua)', admin.collection('besoulSuite').doc('finanzas').update({ centros: { x: 1 } }));
+  await checkOk('ADMIN escribe besoulSuite/finanzas con guardadoSeguroEn = serverTimestamp()', admin.collection('besoulSuite').doc('finanzas').update({ centros: { x: 1 }, ...marcaGuardadoSeguro() }));
+  await checkDenied('PT A NO puede escribir besoulSuite/finanzas aunque incluya la marca guardadoSeguroEn', ptA.collection('besoulSuite').doc('finanzas').update({ centros: { y: 1 }, ...marcaGuardadoSeguro() }));
   await checkDenied('PT A NO puede leer besoulSuite/finanzas', ptA.collection('besoulSuite').doc('finanzas').get());
   await checkDenied('ANONIMO NO puede leer besoulSuite/finanzas', anon.collection('besoulSuite').doc('finanzas').get());
 
