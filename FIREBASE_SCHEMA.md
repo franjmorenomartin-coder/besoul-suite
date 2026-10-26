@@ -11,6 +11,12 @@ Typical fields:
 - `rol`: `admin` or `pt`
 - `trainerKey`
 - `activo`
+- `ocultarResumenEconomico` (boolean, optional; IGOR-RESUMEN-ECONOMICO, 2026-10-26): set by an admin
+  only. When `true`, Agenda hides the trainer's aggregated economic summaries (revenue KPIs, billing
+  forecast, agenda value, deviation, open-group profitability). Individual client prices stay
+  visible and editable. Only the exact value `true` hides; missing/`false` keeps today's view. It is
+  a UI preference, not a security boundary (the PT still reads their own fichas). The Agenda profile
+  save uses `set` with merge, so the flag is preserved.
 
 Rules:
 
@@ -114,6 +120,18 @@ Important rules:
     `finanzas.html` and the restoration tool. Rules (`finanzasEscrituraSegura()`) require
     `guardadoSeguroEn == request.time` on create/update, so an old cached version (full-document
     `set`) cannot write at all. Not read by the engine.
+- Employee trainers (IGOR-RESUMEN-ECONOMICO, 2026-10-26). All optional and versioned in
+  `trainerSettingsVersiones` (desde/hasta, never retroactive):
+  - `trainerSettings.{key}.sistemaPago: 'empleado'`: 100 % of the trainer's billing goes to BESOUL
+    (no tiers, no PT share, no commission on billing).
+  - `trainerSettings.{key}.costeEmpresaMensual` (number): company labour cost, analysis reference.
+  - `trainerSettings.{key}.canonAtribuidoMensual` (number): agreed canon attributed to the trainer,
+    analysis only (used when > 0, otherwise the automatic centre share). Never added to
+    `total.canones`: the centre canon is still computed once by the engine.
+  - `trainerSettings.{key}.incentivoModelo` (`'opcion_b'`, or missing = pending): 5 € per eligible
+    individual client + 10 € per eligible group of 3 or more, once per client/group per month.
+  - `gastos.{mes}[].trainerKey` (optional): attributes an expense to a trainer for analysis; the
+    expense still counts once in the monthly total. Category `Incentivos` added; payroll uses `Sueldos`.
 - Fields added only by the selective restoration tool (`scripts/restaurar-finanzas-selectivo.js`),
   if it is ever executed:
   - `auditoriaRestauraciones.{id}`: `{accion: 'restauracion'|'reversion', fecha, por, motivo, rutas,

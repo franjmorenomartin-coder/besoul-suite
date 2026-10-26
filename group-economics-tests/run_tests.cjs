@@ -177,5 +177,29 @@ console.log('\n=== Cliente INDIVIDUAL normal (no grupo) -- preview sin cambios, 
   check('cliente individual normal: esFichaMiembroGrupo = false (rama del fix no se activa)', M, false);
 }
 
+// ============================================================
+console.log('\n=== Pareja / Trío individual: tarifa × personas de la modalidad (Facturación cartera de Agenda) ===');
+// ============================================================
+// Caso real (Agenda de Igor, octubre 2026): Pareja, factor 2, 6,25 % de descuento, sin integrantesObj.
+// Desde FIN-GRUPO-02 (2026-09-15) calcularFacturacionGrupoTotal la dejaba en 160 × 1 × 0,9375 = 150 €
+// (mitad), mientras finanzas.html y el preview de la ficha dan 160 × 2 × 0,9375 = 300 €.
+{
+  const total = (ficha) => new Function('dbClientes', 'entrenadorVisto', extracted + `
+    entrenadorVisto = 'igor';
+    return { total: calcularFacturacionGrupoTotal(dbClientes.igor[0]), efectivo: importeEfectivoCliente(dbClientes.igor[0]) };
+  `)({ igor: [ficha] }, 'igor');
+  const pareja = total({ id: 'p1', tipo: 'individual', modalidad: 'Pareja', factor: 2, descuentoPct: 6.25, integrantesObj: [] });
+  check('Pareja factor 2, 6,25 %: 300 € (160 × 2 × 0,9375), no 150 €', pareja.total, 300);
+  check('Pareja: mismo importe que importeEfectivoCliente (preview / facturacionEstadistica)', pareja.total, pareja.efectivo);
+  const parejaSinLista = total({ id: 'p2', tipo: 'individual', modalidad: 'Pareja', factor: 1, descuentoPct: 0 });
+  check('Pareja factor 1 sin integrantesObj: 180 € (90 × 2)', parejaSinLista.total, 180);
+  const trio = total({ id: 't1', tipo: 'individual', modalidad: 'Trío', factor: 1, descuentoPct: 0 });
+  check('Trío individual: tarifa × 3', trio.total, trio.efectivo);
+  const indiv = total({ id: 'i1', tipo: 'individual', modalidad: 'Individual Plan', factor: 2, descuentoPct: 0 });
+  check('Individual Plan factor 2: sin cambios (210 €)', indiv.total, 210);
+  const grupoSinFichas = total({ id: 'g9', tipo: 'grupo', modalidad: 'Grupo Reducido Plan', factor: 1, descuentoPct: 0, integrantesObj: [{ id: 'm1' }, { id: 'm2' }, { id: 'm3' }] });
+  check('Grupo sin fichas de integrante: sigue la aproximación tarifa × integrantes (sin cambios)', grupoSinFichas.total, total({ id: 'g9b', tipo: 'grupo', modalidad: 'Grupo Reducido Plan', factor: 1, descuentoPct: 0, integrantesObj: [{ id: 'm1' }] }).total * 3);
+}
+
 console.log(`\n${pass}/${pass + fail} pruebas OK.`);
 if (fail > 0) { console.log('\nFALLOS:'); fails.forEach(f => console.log(' - ' + f)); process.exitCode = 1; }

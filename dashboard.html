@@ -268,7 +268,7 @@ const DEFAULT_CENTER_BY_TRAINER = {
 const TRAINERS_EXCLUIDOS_FINANZAS = ['fran', 'fran_moreno', 'franmoreno'];
 const TRAINERS_ADMIN_CON_CARTERA = ['bea', 'soraya'];
 const TRAINERS_SOLO_IMPUTACION_GASTOS = ['bea', 'soraya'];
-const SISTEMAS_PAGO = { auto:'Automático por rango Besoul', rango1:'Rango I · 0-1 año', rango2:'Rango II · desde 1 año', rango3:'Rango III · canon fijo', coordinador:'Rango IV · coordinador de sede' };
+const SISTEMAS_PAGO = { auto:'Automático por rango Besoul', rango1:'Rango I · 0-1 año', rango2:'Rango II · desde 1 año', rango3:'Rango III · canon fijo', coordinador:'Rango IV · coordinador de sede', empleado:'Empleado BESOUL · 100 % facturación BESOUL' };
 const DIAS = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 let auth, db, perfil = null, usuario = null;
 let dbFinanzas = { centros:{}, trainerSettings:{}, gastos:{}, otrosIngresos:{}, historico:{}, auditoriaCierres:{} };
@@ -313,7 +313,7 @@ function getCentros(opts={}){ const {incluirInactivos=false}=opts; const res={};
 // resolvía canon/rango por mes, y una ficha con actividadEspecialId devolvía 0€ de facturación
 // porque calcularFacturacionFichaFinanzas busca TARIFAS_2026[ficha.modalidad], que no existe
 // para una ficha de actividad (auditoría Verónica, 2026-09-02 -- ver BESOUL_WORK_STATE.md).
-const CAMPOS_TEMPORALES_TRAINER = ['canonFijoIndependiente','aporteIndividualCliente','coordBonusPorPt','coordMaxPts','coordMaxBonus','pactoEspecial','sistemaPago','centroId','computaCanonCentro'];
+const CAMPOS_TEMPORALES_TRAINER = ['canonFijoIndependiente','aporteIndividualCliente','coordBonusPorPt','coordMaxPts','coordMaxBonus','pactoEspecial','sistemaPago','centroId','computaCanonCentro','costeEmpresaMensual','incentivoModelo','canonAtribuidoMensual'];
 const CAMPOS_TEMPORALES_CENTRO = ['canonFijo','ptsIncluidos','canonPt','canonPtReducidoDesde','canonPtReducido'];
 function entradaEfectivaTemporal(entradas, mesKey){
   const candidatas = (entradas||[]).filter(e => e.desde <= mesKey && (!e.hasta || mesKey <= e.hasta));
@@ -705,7 +705,10 @@ function calcularComisionAvanzada(F, settings={}, contexto={}){
       if ((sistema === 'auto' && coordinadorAutorizado && elegibleCoordinador) || sistema === 'coordinador') sistemaEfectivo = 'coordinador';
 
       let res;
-      if (pactoEspecial && sistemaEfectivo !== 'coordinador') {
+      if (sistema === 'empleado') {
+        // FINANZAS-EMPLEADO (port de finanzas.html): toda la facturación es de BESOUL.
+        res = { pt: 0, bs: F, bonus:0, coordinacionBonus:0, sistemaAplicado: SISTEMAS_PAGO.empleado, repartoDetalle:'Empleado: toda la facturación de su cartera es de BESOUL. Su nómina e incentivos se registran en Gastos (una sola vez) y aquí solo se atribuyen.' };
+      } else if (pactoEspecial && sistemaEfectivo !== 'coordinador') {
         // Pacto especial manual: BESOUL cobra exclusivamente el canon fijo configurado para ese PT.
         // Ejemplo Carmen Fernández: Canon Rango III = 500 => BESOUL 500 y el resto para la PT.
         const bs = Math.max(0, canonFijo + aporteClientes);
@@ -891,8 +894,10 @@ function construirCalculoMes(mesKey = mesActualKey()){
         const reparto = soloImputacionGastos
           ? { pt:0, bs:0, bonus:0, coordinacionBonus:0, sistemaAplicado:'CEO · solo imputación gastos', repartoDetalle:'Bea/Soraya computan como coste de sede, pero sus carteras no generan ingresos BESOUL ni liquidación PT en Finanzas.', fechaAlta:settings.fechaAlta || '', antiguedad:yearsBetween(fechaAltaSettings(settings), fechaReferenciaMes(mesKey)), posteriores:0, elegibleRango2:false, elegibleRango3:false, elegibleCoordinador:false, coordinadorAutorizado:false, sistemaEfectivo:'solo_gastos', ptsActivosCentro:0 }
           : calcularComisionAvanzada(facturacion, settings, { key, centroId, aporteClientes: aporteCliente, fechaReferencia: fechaReferenciaMes(mesKey) });
-        const ptNetoTotal = reparto.pt + actividadPtNeto;
-        const bsBrutoTotal = reparto.bs + actividadBesoulShare;
+        // Empleado (port de finanzas.html): la parte entrenador de las actividades es de BESOUL.
+        const esEmpleado = reparto.sistemaEfectivo === 'empleado';
+        const ptNetoTotal = esEmpleado ? 0 : reparto.pt + actividadPtNeto;
+        const bsBrutoTotal = reparto.bs + actividadBesoulShare + (esEmpleado ? actividadPtNeto : 0);
         const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, computaCanonCentro: settings.computaCanonCentro !== false, facturacion: facturacion + facturacionActividades, facturacionPt: facturacion, facturacionActividades, clientesActividades, actividadCentroShare, facturacionAgenda, desviacionAgenda, sesionesMensualesPrevistas, sesionesMensualesAgendadas, desviacionSesiones: sesionesMensualesPrevistas - sesionesMensualesAgendadas, motivosDesviacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, fichasActivas, soloImputacionGastos, ptNeto:ptNetoTotal, bsBruto:bsBrutoTotal, pactoEspecial, aporteCliente, aporteCentroCliente: aporteCliente, bonus:reparto.bonus || 0, coordinacionBonus:reparto.coordinacionBonus || 0, sistemaAplicado:reparto.sistemaAplicado, repartoDetalle:reparto.repartoDetalle || '', fechaAlta:reparto.fechaAlta, antiguedad:reparto.antiguedad, posteriores:reparto.posteriores, elegibleRango2:reparto.elegibleRango2, elegibleRango3:reparto.elegibleRango3, elegibleCoordinador:reparto.elegibleCoordinador, coordinadorAutorizado:reparto.coordinadorAutorizado, sistemaEfectivo:reparto.sistemaEfectivo, ptsActivosCentro:reparto.ptsActivosCentro || 0 };
         trainers.push(row);
         if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0, participacionClientes:0, participacionCentro:0, ingresosActividades:0 };

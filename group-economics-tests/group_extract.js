@@ -103,6 +103,10 @@ function calcularFacturacionGrupoTotal(fichaGrupo) {
 
             if (!fichaGrupo) return 0;
             if (esGrupoAbierto(fichaGrupo)) return 0;
+            // Una ficha que no es de grupo (individual, Pareja, Trío) no tiene integrantes: su importe es
+            // tarifa × personas de la modalidad × descuento, igual que finanzas.html y que el preview de la
+            // ficha. La aproximación de abajo cuenta integrantesObj y dejaba una Pareja en ×1 (mitad).
+            if (fichaGrupo.tipo !== 'grupo') return importeEfectivoCliente(fichaGrupo);
 
             const miembros = fichasMiembrosGrupo(fichaGrupo);
 

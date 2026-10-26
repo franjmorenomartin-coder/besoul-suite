@@ -69,3 +69,18 @@ esta fase.
 guardados disparados, el usuario recibe el aviso de mes bloqueado) salvo que el mes se reabra
 explícitamente (`mesCerradoEditando === key`), en cuyo caso las mutaciones sí aplican y reabrir un
 mes no reabre ningún otro. No existía ningún test de este guardián antes de esta fase.
+
+## `run_empleado_tests.cjs` (IGOR-RESUMEN-ECONOMICO, fase B)
+
+Carga el script principal completo de `finanzas.html` y `dashboard.html` (sin `inicializar()`) sobre un
+DOM simulado: entrenador empleado (100 % facturación BESOUL), canon de centro sin duplicar, canon acordado
+solo para análisis, incentivo Opción B (5·C + 10·G, una vez por cliente/grupo), no retroactividad de las
+versiones «desde este mes» y guardado seguro limitado a las rutas afectadas.
+
+```bash
+node finance-tests/run_empleado_tests.cjs                 # solo datos sintéticos
+node finance-tests/run_empleado_tests.cjs <respaldo.json> # además, simulación en memoria con un respaldo
+```
+
+Con respaldo no escribe nada: todo ocurre en memoria. El respaldo contiene datos personales y nunca debe
+añadirse al repositorio.

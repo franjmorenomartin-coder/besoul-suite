@@ -175,6 +175,7 @@
           <div id="centros-selector" class="flex flex-wrap gap-2"></div>
           <div id="centros-resumen" class="space-y-4"></div>
         </div>
+        <div id="empleados-resumen" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4"></div>
       </section>
 
       <section id="view-gastos" class="hidden space-y-6">
@@ -376,7 +377,22 @@
       rango1: 'Rango I · 0-1 año',
       rango2: 'Rango II · desde 1 año',
       rango3: 'Rango III · canon fijo',
-      coordinador: 'Rango IV · coordinador de sede'
+      coordinador: 'Rango IV · coordinador de sede',
+      empleado: 'Empleado BESOUL · 100 % facturación BESOUL'
+    };
+    // FINANZAS-EMPLEADO (Igor Carvalho, condiciones confirmadas 2026-10-26): un empleado no reparte
+    // facturación por tramos ni paga canon sobre ella -- el 100 % de lo que factura su cartera es de
+    // BESOUL. Su coste se contabiliza UNA sola vez:
+    //   - nómina (coste empresa) e incentivos: como gastos del mes (Gastos), con trainerKey para
+    //     atribuirlos al empleado; total.gastos ya los incluye, nunca se suman otra vez;
+    //   - canon de su centro: ya está en total.canones (calcularCanonCentroYAsignar); al empleado se
+    //     le ATRIBUYE su parte (canonCentroShare) solo a efectos de análisis.
+    // Modelos de incentivo: importes acordados; criterio de elegibilidad PROVISIONAL (pendiente de
+    // confirmación): cliente individual / grupo de minPersonasGrupo o más, activo y con facturación > 0
+    // en el mes. Cada ficha cuenta una vez por mes; los integrantes de un grupo no cuentan aparte.
+    // Nunca se multiplica por sesiones ni se genera solo: el admin lo registra como gasto.
+    const INCENTIVO_MODELOS = {
+      opcion_b: { nombre: 'Opción B · 5 €/cliente individual + 10 €/grupo de 3 o más', porIndividual: 5, porGrupo: 10, minPersonasGrupo: 3 }
     };
     function slugCentro(valor){
       return String(valor || '').trim().toLowerCase()
@@ -395,7 +411,7 @@
     function centrosValidos(){ return Object.keys(getCentros({incluirInactivos:true})).concat(['sin_centro']); }
     function centroValido(id){ return centrosValidos().includes(String(id || '')); }
 
-    const GASTO_CATEGORIAS = ['Sueldos','Administración','Seguros','Compras','Material deportivo','Redes sociales','Publicidad','Software','Gestoría','Comisiones bancarias','Otros'];
+    const GASTO_CATEGORIAS = ['Sueldos','Incentivos','Administración','Seguros','Compras','Material deportivo','Redes sociales','Publicidad','Software','Gestoría','Comisiones bancarias','Otros'];
     const INGRESO_CATEGORIAS = ['Regularización PT antiguo','Merchandising','Patrocinio','Alquiler / cesión','Penalización / compensación','Ingreso administrativo','Otros'];
 
     let usuarioFinanzasEmail = '';
@@ -442,7 +458,7 @@
     // Resolución: la entrada con 'desde' <= mesKey más reciente gana; si hay una
     // entrada puntual de un solo mes (desde==hasta==mesKey) para ese mes, esa gana
     // sobre cualquier entrada "desde ... en adelante" con el mismo 'desde'.
-    const CAMPOS_TEMPORALES_TRAINER = ['canonFijoIndependiente','aporteIndividualCliente','coordBonusPorPt','coordMaxPts','coordMaxBonus','pactoEspecial','sistemaPago','centroId','computaCanonCentro'];
+    const CAMPOS_TEMPORALES_TRAINER = ['canonFijoIndependiente','aporteIndividualCliente','coordBonusPorPt','coordMaxPts','coordMaxBonus','pactoEspecial','sistemaPago','centroId','computaCanonCentro','costeEmpresaMensual','incentivoModelo','canonAtribuidoMensual'];
     const CAMPOS_TEMPORALES_CENTRO = ['canonFijo','ptsIncluidos','canonPt','canonPtReducidoDesde','canonPtReducido'];
     function entradaEfectivaTemporal(entradas, mesKey){
       const candidatas = (entradas||[]).filter(e => e.desde <= mesKey && (!e.hasta || mesKey <= e.hasta));
@@ -460,8 +476,13 @@
       const yaVersionado = versiones.some(v => campo in v);
       // Primera vez que este campo se versiona: se congela el valor previo como base
       // legacy para todos los meses no cubiertos explícitamente (incluidos los pasados).
-      if (!yaVersionado && valorAnteriorLive !== undefined) {
-        versiones.push({ desde: '0000-01', [campo]: valorAnteriorLive, _legacy: true });
+      // Si el campo nunca tuvo valor (p. ej. sistemaPago de un PT sin configuración, o un campo
+      // nuevo como costeEmpresaMensual), la base es null: sin ella, "desde este mes en adelante"
+      // cambiaba también los meses anteriores abiertos, porque el valor vivo nuevo era el
+      // fallback de todo mes sin entrada. null equivale a "sin valor" en todos los cálculos
+      // (?? / || / !== false), igual que undefined.
+      if (!yaVersionado) {
+        versiones.push({ desde: '0000-01', [campo]: valorAnteriorLive === undefined ? null : valorAnteriorLive, _legacy: true });
       }
       const entrada = soloEsteMes
         ? { desde: mesDesde, hasta: mesDesde, [campo]: valorNuevo }
@@ -994,7 +1015,10 @@
       if ((sistema === 'auto' && coordinadorAutorizado && elegibleCoordinador) || sistema === 'coordinador') sistemaEfectivo = 'coordinador';
 
       let res;
-      if (pactoEspecial && sistemaEfectivo !== 'coordinador') {
+      if (sistema === 'empleado') {
+        // FINANZAS-EMPLEADO: sin tramos, canon ni pacto sobre la facturación -- es toda de BESOUL.
+        res = { pt: 0, bs: F, bonus:0, coordinacionBonus:0, sistemaAplicado: SISTEMAS_PAGO.empleado, repartoDetalle:'Empleado: toda la facturación de su cartera es de BESOUL. Su nómina e incentivos se registran en Gastos (una sola vez) y aquí solo se atribuyen.' };
+      } else if (pactoEspecial && sistemaEfectivo !== 'coordinador') {
         // Pacto especial manual: BESOUL cobra exclusivamente el canon fijo configurado para ese PT.
         // Ejemplo Carmen Fernández: Canon Rango III = 500 => BESOUL 500 y el resto para la PT.
         const bs = Math.max(0, canonFijo + aporteClientes);
@@ -1116,8 +1140,11 @@
         // El PT-neto y el bruto BESOUL suman el reparto PT estándar + el reparto de actividades
         // especiales (porcentual, ya resuelto arriba por ficha) — coexisten sin mezclarse porque
         // cada uno viene de una fuente de cálculo independiente (rango/canon vs. % de catálogo).
-        const ptNetoTotal = reparto.pt + actividadPtNeto;
-        const bsBrutoTotal = reparto.bs + actividadBesoulShare;
+        // Empleado: la parte "entrenador" del reparto de actividades también es de BESOUL (la del
+        // centro sigue siendo del centro).
+        const esEmpleado = reparto.sistemaEfectivo === 'empleado';
+        const ptNetoTotal = esEmpleado ? 0 : reparto.pt + actividadPtNeto;
+        const bsBrutoTotal = reparto.bs + actividadBesoulShare + (esEmpleado ? actividadPtNeto : 0);
         const row = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, computaCanonCentro: settings.computaCanonCentro !== false, facturacion: facturacion + facturacionActividades, facturacionPt: facturacion, facturacionActividades, clientesActividades, actividadCentroShare, facturacionAgenda, desviacionAgenda, sesionesMensualesPrevistas, sesionesMensualesAgendadas, desviacionSesiones: sesionesMensualesPrevistas - sesionesMensualesAgendadas, motivosDesviacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, fichasActivas, soloImputacionGastos, ptNeto:ptNetoTotal, bsBruto:bsBrutoTotal, pactoEspecial, aporteCliente, aporteCentroCliente: aporteCliente, bonus:reparto.bonus || 0, coordinacionBonus:reparto.coordinacionBonus || 0, sistemaAplicado:reparto.sistemaAplicado, repartoDetalle:reparto.repartoDetalle || '', fechaAlta:reparto.fechaAlta, antiguedad:reparto.antiguedad, posteriores:reparto.posteriores, elegibleRango2:reparto.elegibleRango2, elegibleRango3:reparto.elegibleRango3, elegibleCoordinador:reparto.elegibleCoordinador, coordinadorAutorizado:reparto.coordinadorAutorizado, sistemaEfectivo:reparto.sistemaEfectivo, ptsActivosCentro:reparto.ptsActivosCentro || 0 };
         trainers.push(row);
         if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0, participacionClientes:0, participacionCentro:0, ingresosActividades:0 };
@@ -1151,6 +1178,84 @@
       total.ingresosBesoul = total.bsBruto + otrosIngresos;
       total.beneficio = total.bsBruto + otrosIngresos - total.canones - gastos;
       return { mes: mesKey, centros, trainers, total, generadoEn:new Date().toISOString(), fuente:'vivo' };
+    }
+
+    // FINANZAS-EMPLEADO: incentivo calculado del mes (no registrado). Cada ficha cuenta una vez;
+    // grupos de menos de minPersonasGrupo y fichas de actividad especial quedan fuera y se listan
+    // como pendientes de criterio. Sin modelo vigente en el mes => no hay incentivo (nunca retroactivo).
+    function calcularIncentivoEmpleado(key, mesKey){
+      const settings = settingsTrainerParaMes(key, mesKey);
+      const modelo = INCENTIVO_MODELOS[settings.incentivoModelo || ''] || null;
+      const res = { modeloId: modelo ? settings.incentivoModelo : '', modelo, individuales: [], grupos: [], fueraDeCriterio: [], importe: 0 };
+      if (!modelo) return res;
+      const vistos = new Set();
+      (Array.isArray(agendaData.clientes?.[key]) ? agendaData.clientes[key] : []).forEach(f => {
+        if (!f || !f.id || vistos.has(f.id)) return;
+        if (f.vinculacion || contarPersonasFicha(f) === 0) return; // integrante de grupo o no activo
+        vistos.add(f.id);
+        const nombre = f.nombre || f.nombreCliente || 'Cliente';
+        if (f.actividadEspecialId) { res.fueraDeCriterio.push({ id: f.id, nombre, motivo: 'actividad especial' }); return; }
+        if (!(calcularFacturacionFichaFinanzas(f, key, mesKey).total > 0)) return;
+        if (f.tipo === 'grupo') {
+          const personas = contarPersonasFicha(f);
+          if (personas >= modelo.minPersonasGrupo) res.grupos.push({ id: f.id, nombre, personas });
+          else res.fueraDeCriterio.push({ id: f.id, nombre, motivo: `grupo de ${personas} persona(s)` });
+        } else {
+          res.individuales.push({ id: f.id, nombre });
+        }
+      });
+      res.importe = modelo.porIndividual * res.individuales.length + modelo.porGrupo * res.grupos.length;
+      return res;
+    }
+    function gastosAtribuidosTrainer(key, mesKey){
+      return (dbFinanzas.gastos?.[mesKey] || []).map((g, idx) => ({ g, idx })).filter(x => x.g && x.g.trainerKey === key);
+    }
+    // Resultado de un empleado en un mes. Lo registrado en Gastos es lo que cuenta en la
+    // contabilidad general; lo "previsto" (nómina configurada, incentivo calculado) se enseña
+    // aparte para que el admin lo registre -- nunca se suma solo.
+    function analisisEmpleado(row, mesKey){
+      const settings = settingsTrainerParaMes(row.key, mesKey);
+      const atribuidos = gastosAtribuidosTrainer(row.key, mesKey);
+      const suma = lista => lista.reduce((s, x) => s + parseNum(x.g.importe), 0);
+      const nominas = atribuidos.filter(x => x.g.categoria === 'Sueldos');
+      const incentivos = atribuidos.filter(x => x.g.categoria === 'Incentivos');
+      const otros = atribuidos.filter(x => x.g.categoria !== 'Sueldos' && x.g.categoria !== 'Incentivos');
+      const costeLaboral = suma(nominas), incentivo = suma(incentivos), otrosGastos = suma(otros);
+      // Atribución analítica del canon: la acordada para el empleado si está configurada (> 0); si
+      // no, su parte del reparto automático del centro. Nunca cambia total.canones.
+      const canonCalculado = row.canonCentroShare || 0;
+      const canonAcordado = parseNum(settings.canonAtribuidoMensual);
+      const canonAtribuido = canonAcordado > 0 ? canonAcordado : canonCalculado;
+      const incentivoCalculado = calcularIncentivoEmpleado(row.key, mesKey);
+      const costeLaboralPrevisto = parseNum(settings.costeEmpresaMensual);
+      const nominaPendiente = !nominas.length && costeLaboralPrevisto > 0;
+      const incentivoPendiente = !incentivos.length && incentivoCalculado.importe > 0;
+      const costeTotal = costeLaboral + canonAtribuido + incentivo + otrosGastos;
+      const facturacion = row.facturacion || 0;
+      return {
+        key: row.key, nombre: row.nombre, mes: mesKey, facturacion,
+        clientes: row.clientes || 0, fichasActivas: row.fichasActivas || 0,
+        sesiones: (row.sesionesBonosSueltas || 0) + (row.sesionesMensualesAgendadas || 0),
+        costeLaboral, costeLaboralPrevisto, nominaPendiente, nominasRegistradas: nominas.length,
+        canonAtribuido, canonCalculado, canonAcordado: canonAcordado > 0, incentivo, incentivoCalculado, incentivoPendiente, incentivosRegistrados: incentivos.length,
+        otrosGastos, costeTotal, resultado: facturacion - costeTotal,
+        resultadoPrevisto: facturacion - costeTotal - (nominaPendiente ? costeLaboralPrevisto : 0) - (incentivoPendiente ? incentivoCalculado.importe : 0)
+      };
+    }
+    function registrarGastoEmpleado(key, tipoGasto){
+      const mes = obtenerMesGastos();
+      const row = (calculoActual?.trainers || []).find(t => t.key === key);
+      if (!row || row.sistemaEfectivo !== 'empleado' || mes !== calculoActual.mes) { alert('Abre en Finanzas el mismo mes de gastos que quieres registrar.'); return; }
+      const a = analisisEmpleado(row, mes);
+      const esNomina = tipoGasto === 'nomina';
+      if (esNomina ? a.nominasRegistradas : a.incentivosRegistrados) { alert(`Ya hay ${esNomina ? 'una nómina' : 'un incentivo'} de ${row.nombre} registrado en ${etiquetaMes(mes)}. No se registra otra vez.`); return; }
+      const importe = esNomina ? a.costeLaboralPrevisto : a.incentivoCalculado.importe;
+      if (!(importe > 0)) { alert(esNomina ? 'Configura antes el coste empresa mensual del empleado.' : 'No hay incentivo calculado para este mes.'); return; }
+      const detalle = esNomina ? '' : ` (${a.incentivoCalculado.individuales.length} individual(es) × ${a.incentivoCalculado.modelo.porIndividual} € + ${a.incentivoCalculado.grupos.length} grupo(s) × ${a.incentivoCalculado.modelo.porGrupo} €)`;
+      if (!confirm(`Registrar en Gastos de ${etiquetaMes(mes)}:\n${esNomina ? 'Nómina (coste empresa)' : 'Incentivo'} de ${row.nombre}: ${dinero(importe)}${detalle}\n\nSe contabiliza una sola vez en el total de gastos.`)) return;
+      const lista = asegurarGastosMes(); if (!lista) return;
+      lista.push({ categoria: esNomina ? 'Sueldos' : 'Incentivos', concepto: `${esNomina ? 'Nómina coste empresa' : 'Incentivo ' + (a.incentivoCalculado.modeloId || '')} · ${row.nombre}${detalle}`, tipo: esNomina ? 'fijo' : 'variable', importe, trainerKey: key, creadoEn: new Date().toISOString(), creadoPor: usuarioFinanzasEmail, mes });
+      guardarConfigFinanzas();
     }
 
     function totalGastosMes(mesKey){ return (dbFinanzas.gastos?.[mesKey] || []).reduce((s,g)=>s+parseNum(g.importe),0); }
@@ -1209,7 +1314,7 @@
       document.getElementById('kpi-gastos-total').innerText = dinero(calculoActual.total.gastos);
       document.getElementById('kpi-beneficio-neto').innerText = dinero(calculoActual.total.beneficio);
       renderAlertasCarrera();
-      renderCentrosResumen(); renderGastos(); renderOtrosIngresos(); renderHistorico(); renderConfigCentros(); renderConfigTrainers(); renderConfigActividades();
+      renderCentrosResumen(); renderEmpleadosResumen(); renderGastos(); renderOtrosIngresos(); renderHistorico(); renderConfigCentros(); renderConfigTrainers(); renderConfigActividades();
     }
 
     // FINANZAS-UX-V2: colapso + ocultar (individual/todos) son puramente locales al navegador --
@@ -1239,6 +1344,8 @@
         const fecha = fechaAltaSettings(settings);
         const centroId = centroTrainer(key, p);
         const row = (calculoActual?.trainers || []).find(t => t.key === key);
+        // Rangos, canon Rango III y coordinación no aplican a un empleado.
+        if (settingsTrainerParaMes(key, mesTrabajoKey()).sistemaPago === 'empleado') return;
         if (!fecha) {
           alertas.push({ id: `${key}_sin_fecha`, atencion: true, texto: `⚠️ ${escapeHTML(nombre)} no tiene fecha de alta configurada. No se podrán calcular rangos ni avisos.` });
           return;
@@ -1360,6 +1467,48 @@
         </div>`).join('');
     }
 
+    // FINANZAS-EMPLEADO: resultado de cada empleado del mes. Solo análisis -- no cambia ningún total.
+    function renderEmpleadosResumen(){
+      const cont = document.getElementById('empleados-resumen');
+      if (!cont) return;
+      const mes = calculoActual.mes;
+      const empleados = (calculoActual.trainers || []).filter(t => t.sistemaEfectivo === 'empleado');
+      cont.classList.toggle('hidden', !empleados.length);
+      if (!empleados.length) { cont.innerHTML = ''; return; }
+      const locked = mesEstaCerrado(mes) && !mesEnEdicion(mes);
+      const celda = (titulo, valor, extra='', clase='text-white') => `<div class="bg-slate-950 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">${titulo}</span><b class="${clase}">${valor}</b>${extra ? `<small class="block text-[9px] text-slate-500">${extra}</small>` : ''}</div>`;
+      const boton = (key, tipo, texto) => `<button ${locked ? 'disabled' : ''} onclick="registrarGastoEmpleado('${key}','${tipo}')" class="mt-1 bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded px-2 py-1 text-[10px] font-bold">${texto}</button>`;
+      cont.innerHTML = `
+        <div><h2 class="text-sm font-bold text-white">Empleados BESOUL · resultado de ${escapeHTML(etiquetaMes(mes))}</h2>
+        <p class="text-xs text-slate-400 mt-1">Su facturación ya está incluida al 100 % en BESOUL bruto. Nómina e incentivos cuentan en el total de gastos solo una vez, al registrarlos en Gastos; el canon ya está en Cánones. Aquí solo se atribuyen. La facturación es la generada: Finanzas no registra cobros ni importes pendientes de cobro.</p></div>
+        ${empleados.map(row => {
+          const a = analisisEmpleado(row, mes);
+          const inc = a.incentivoCalculado;
+          const avisos = [];
+          if (a.nominasRegistradas > 1) avisos.push(`Hay ${a.nominasRegistradas} nóminas atribuidas este mes: revisa si alguna está duplicada.`);
+          if (a.incentivosRegistrados > 1) avisos.push(`Hay ${a.incentivosRegistrados} incentivos atribuidos este mes: revisa si alguno está duplicado.`);
+          if (!a.costeLaboralPrevisto && !a.nominasRegistradas) avisos.push('Falta configurar el coste empresa mensual (Configuración → entrenadores).');
+          if (!inc.modelo) avisos.push('Sin modelo de incentivos vigente este mes: no se calcula incentivo.');
+          if (a.canonAcordado && Math.abs(a.canonAtribuido - a.canonCalculado) >= 0.01) avisos.push(`El canon acordado (${dinero(a.canonAtribuido)}) no coincide con el reparto automático del centro (${dinero(a.canonCalculado)}): revisa los entrenadores que computan en el canon de ${escapeHTML(nombreCentro(row.centroId))} y su configuración.`);
+          if (inc.fueraDeCriterio.length) avisos.push(`${inc.fueraDeCriterio.length} ficha(s) fuera del criterio provisional (${[...new Set(inc.fueraDeCriterio.map(x => x.motivo))].map(escapeHTML).join(', ')}): pendiente de confirmar si cuentan.`);
+          return `<div class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3">
+            <div class="flex justify-between gap-3"><div><h3 class="text-sm font-black text-white">${escapeHTML(a.nombre)}</h3><p class="text-[10px] text-slate-500">${escapeHTML(a.key)} · ${escapeHTML(row.sistemaAplicado || '')}</p></div>
+            <div class="text-right"><div class="text-[10px] text-slate-500 uppercase font-bold">Resultado</div><div class="text-lg font-black ${a.resultado >= 0 ? 'text-emerald-400' : 'text-red-400'}">${dinero(a.resultado)}</div>${(a.nominaPendiente || a.incentivoPendiente) ? `<div class="text-[10px] text-amber-300">Previsto con lo pendiente: ${dinero(a.resultadoPrevisto)}</div>` : ''}</div></div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-center text-[11px]">
+              ${celda('Facturación generada', dinero(a.facturacion), '100 % BESOUL', 'text-emerald-400')}
+              ${celda('Clientes · sesiones', `${numero(a.clientes)} · ${numero(a.sesiones)}`, `${numero(a.fichasActivas)} ficha(s) activa(s) · sesiones facturables agendadas`)}
+              <div class="bg-slate-950 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">Coste laboral (nómina)</span><b class="text-red-300">-${dinero(a.costeLaboral)}</b>${a.nominaPendiente ? `<small class="block text-[9px] text-amber-300">Pendiente de registrar: ${dinero(a.costeLaboralPrevisto)}</small>${boton(a.key, 'nomina', 'Registrar nómina del mes')}` : `<small class="block text-[9px] text-slate-500">Registrado en Gastos</small>`}</div>
+              ${celda('Canon atribuido del centro', `-${dinero(a.canonAtribuido)}`, `${a.canonAcordado ? `Acordado · reparto automático ${dinero(a.canonCalculado)}` : 'Reparto automático del centro'} · ya incluido en Cánones (no se suma otra vez)`, 'text-red-300')}
+              <div class="bg-slate-950 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">Incentivos</span><b class="text-red-300">-${dinero(a.incentivo)}</b>${inc.modelo ? `<small class="block text-[9px] text-slate-500">Calculado: ${inc.individuales.length} × ${inc.modelo.porIndividual} € + ${inc.grupos.length} × ${inc.modelo.porGrupo} € = ${dinero(inc.importe)} (criterio provisional)</small>` : ''}${a.incentivoPendiente ? boton(a.key, 'incentivo', 'Registrar incentivo del mes') : ''}</div>
+              ${celda('Otros gastos atribuidos', `-${dinero(a.otrosGastos)}`, 'Gastos con este entrenador asignado', 'text-red-300')}
+              ${celda('Coste total atribuible', `-${dinero(a.costeTotal)}`, 'Nómina + canon + incentivos + otros', 'text-red-400')}
+              ${celda('Resultado', dinero(a.resultado), 'Facturación − coste total', a.resultado >= 0 ? 'text-emerald-400' : 'text-red-400')}
+            </div>
+            ${avisos.length ? `<ul class="text-[11px] text-amber-200 bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 space-y-1">${avisos.map(t => `<li>⚠️ ${t}</li>`).join('')}</ul>` : ''}
+          </div>`;
+        }).join('')}`;
+    }
+
     function renderGastos(){
       const cont = document.getElementById('gastos-list');
       const mes = obtenerMesGastos();
@@ -1371,18 +1520,27 @@
       if(lblMes) lblMes.innerText = etiquetaMes(mes);
       if(lblTotal) lblTotal.innerText = dinero(totalMes);
       if (!lista.length) { cont.innerHTML = `<div class="text-xs text-slate-500 text-center py-6">No hay gastos registrados en el mes seleccionado.${locked ? ' Mes cerrado: reabre edición para añadir gastos.' : ''}</div>`; return; }
+      // FINANZAS-EMPLEADO: un gasto puede atribuirse a un empleado (análisis de su resultado). Sigue
+      // contando una sola vez en el total del mes; la atribución no lo duplica.
+      const empleadosMes = (calculoActual?.trainers || []).filter(t => t.sistemaEfectivo === 'empleado').map(t => ({ key:t.key, nombre:t.nombre }));
+      const opcionesAtribucion = g => {
+        const lista = empleadosMes.slice();
+        if (g.trainerKey && !lista.some(e => e.key === g.trainerKey)) lista.push({ key:g.trainerKey, nombre:g.trainerKey });
+        return `<option value="">Sin atribuir</option>` + lista.map(e => `<option value="${escapeHTML(e.key)}" ${g.trainerKey===e.key?'selected':''}>${escapeHTML(e.nombre)}</option>`).join('');
+      };
       cont.innerHTML = lista.map((g,idx)=>`
         <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-12 gap-2 md:items-center text-xs">
           <div class="md:col-span-2"><label class="md:hidden text-[10px] text-slate-500 block mb-1">Categoría</label><select ${locked?'disabled':''} onchange="editarGasto(${idx}, 'categoria', this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white">${GASTO_CATEGORIAS.map(cat=>`<option value="${escapeHTML(cat)}" ${g.categoria===cat?'selected':''}>${escapeHTML(cat)}</option>`).join('')}</select></div>
-          <div class="md:col-span-4"><label class="md:hidden text-[10px] text-slate-500 block mb-1">Concepto</label><input ${locked?'disabled':''} onchange="editarGasto(${idx}, 'concepto', this.value)" value="${escapeHTML(g.concepto||'')}" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" placeholder="Concepto"></div>
+          <div class="md:col-span-3"><label class="md:hidden text-[10px] text-slate-500 block mb-1">Concepto</label><input ${locked?'disabled':''} onchange="editarGasto(${idx}, 'concepto', this.value)" value="${escapeHTML(g.concepto||'')}" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" placeholder="Concepto"></div>
+          <div class="md:col-span-2"><label class="md:hidden text-[10px] text-slate-500 block mb-1">Atribuido a</label><select ${locked?'disabled':''} onchange="editarGasto(${idx}, 'trainerKey', this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white" title="Solo para analizar el resultado de un empleado: el gasto cuenta una sola vez en el total.">${opcionesAtribucion(g)}</select></div>
           <div class="md:col-span-2"><label class="md:hidden text-[10px] text-slate-500 block mb-1">Tipo</label><select ${locked?'disabled':''} onchange="editarGasto(${idx}, 'tipo', this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white"><option value="fijo" ${g.tipo==='fijo'?'selected':''}>Fijo</option><option value="variable" ${g.tipo==='variable'?'selected':''}>Variable</option></select></div>
           <div class="md:col-span-2"><label class="md:hidden text-[10px] text-slate-500 block mb-1">Importe</label><input ${locked?'disabled':''} onchange="editarGasto(${idx}, 'importe', this.value)" value="${escapeHTML(g.importe||0)}" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right font-mono" placeholder="0"></div>
-          <button ${locked?'disabled':''} onclick="borrarGasto(${idx})" class="md:col-span-2 bg-red-500/10 text-red-400 border border-red-500/30 rounded p-2 font-bold">Borrar</button>
+          <button ${locked?'disabled':''} onclick="borrarGasto(${idx})" class="md:col-span-1 bg-red-500/10 text-red-400 border border-red-500/30 rounded p-2 font-bold">Borrar</button>
         </div>`).join('');
     }
     function asegurarGastosMes(){ const m=obtenerMesGastos(); if(!puedeEditarMes(m,'gastos')) return null; if(!dbFinanzas.gastos) dbFinanzas.gastos={}; if(!Array.isArray(dbFinanzas.gastos[m])) dbFinanzas.gastos[m]=[]; return dbFinanzas.gastos[m]; }
     function agregarGasto(){ const lista=asegurarGastosMes(); if(!lista) return; lista.push({categoria:'Otros', concepto:'Nuevo gasto', tipo:'variable', importe:0, creadoEn:new Date().toISOString(), creadoPor:usuarioFinanzasEmail, mes:obtenerMesGastos()}); guardarConfigFinanzas(); }
-    function editarGasto(idx,campo,valor){ const lista=asegurarGastosMes(); if(!lista || !lista[idx]) return; lista[idx][campo]=campo==='importe'?parseNum(valor):valor; lista[idx].actualizadoEn=new Date().toISOString(); lista[idx].actualizadoPor=usuarioFinanzasEmail; guardarConfigFinanzas(); }
+    function editarGasto(idx,campo,valor){ const lista=asegurarGastosMes(); if(!lista || !lista[idx]) return; if(campo==='trainerKey' && !valor) delete lista[idx].trainerKey; else lista[idx][campo]=campo==='importe'?parseNum(valor):valor; lista[idx].actualizadoEn=new Date().toISOString(); lista[idx].actualizadoPor=usuarioFinanzasEmail; guardarConfigFinanzas(); }
     function borrarGasto(idx){ if(!confirm('¿Borrar este gasto?')) return; const lista=asegurarGastosMes(); if(!lista) return; lista.splice(idx,1); guardarConfigFinanzas(); }
     function crearMesGastosVacio(){
       const mes = obtenerMesGastos();
@@ -1795,6 +1953,12 @@
             <div class="md:col-span-2 text-[10px] text-slate-500">${escapeHTML(row.repartoDetalle || 'Configura fecha de alta para calcular rango automático.')}</div>
             <input value="${escapeHTML(settings.coordNotas||'')}" onchange="editarTrainer('${key}','coordNotas',this.value)" class="md:col-span-5 bg-slate-900 border border-slate-800 rounded p-2 text-white" placeholder="Notas gerencia/coordinador">
           </div>
+          ${settings.sistemaPago === 'empleado' ? `<div class="grid grid-cols-1 md:grid-cols-6 gap-2 items-end pt-2 border-t border-slate-800">
+            <div class="md:col-span-2"><label class="text-[10px] text-slate-500 block mb-1">Coste empresa mensual (nómina, no el neto)</label><input value="${escapeHTML(settings.costeEmpresaMensual ?? '')}" onchange="editarTrainer('${key}','costeEmpresaMensual',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right" placeholder="0"></div>
+            <div class="md:col-span-1"><label class="text-[10px] text-slate-500 block mb-1">Canon acordado (análisis)</label><input value="${escapeHTML(settings.canonAtribuidoMensual ?? '')}" onchange="editarTrainer('${key}','canonAtribuidoMensual',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-right" placeholder="auto" title="Parte del canon del centro que se atribuye a este empleado en su resultado. Vacío o 0 = reparto automático. No cambia el total de cánones."></div>
+            <div class="md:col-span-1"><label class="text-[10px] text-slate-500 block mb-1">Modelo de incentivos</label><select onchange="editarTrainer('${key}','incentivoModelo',this.value)" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white"><option value="">Pendiente / sin incentivo</option>${Object.keys(INCENTIVO_MODELOS).map(id => `<option value="${id}" ${settings.incentivoModelo===id?'selected':''}>${escapeHTML(INCENTIVO_MODELOS[id].nombre)}</option>`).join('')}</select></div>
+            <div class="md:col-span-2 text-[10px] text-slate-500">Empleado: su nómina e incentivos se registran en Gastos (botones del resumen de empleados); el canon de su centro se le atribuye sin volver a sumarse.</div>
+          </div>` : ''}
           ${Object.keys(catalogoActividadesVivo()).length ? `<div class="flex flex-wrap gap-2 items-center pt-2 border-t border-slate-800">
             <span class="text-[10px] text-slate-500 uppercase font-bold">Actividades autorizadas:</span>
             ${Object.values(catalogoActividadesVivo()).map(act => `<label class="flex items-center gap-1.5 text-slate-300 bg-slate-900 border border-slate-800 rounded px-2 py-1"><input type="checkbox" onchange="toggleActividadTrainer('${key}','${act.id}',this.checked)" ${actividadesAutorizadasTrainer(key).includes(act.id)?'checked':''} class="accent-cyan-400"> ${escapeHTML(act.nombre)}</label>`).join('')}
@@ -1970,7 +2134,7 @@
     async function editarTrainer(key,campo,valor){
       if(!dbFinanzas.trainerSettings) dbFinanzas.trainerSettings={};
       if(!dbFinanzas.trainerSettings[key]) dbFinanzas.trainerSettings[key]={};
-      const numericFields = ['aporteIndividualCliente','canonFijoIndependiente','coordBonusPorPt','coordMaxPts','coordMaxBonus'];
+      const numericFields = ['aporteIndividualCliente','canonFijoIndependiente','coordBonusPorPt','coordMaxPts','coordMaxBonus','costeEmpresaMensual','canonAtribuidoMensual'];
       const valorFinal = numericFields.includes(campo) ? parseNum(valor) : valor;
       const valorAnterior = dbFinanzas.trainerSettings[key][campo];
       // Snapshot para deshacer si el guardado remoto falla de verdad -- incluye el propio

@@ -3167,7 +3167,8 @@ miércoles 07:00-09:00"></textarea>
                     email: raw.email || '',
                     uid: raw.uid || '',
                     trainerKey,
-                    activo: raw.activo !== false
+                    activo: raw.activo !== false,
+                    ocultarResumenEconomico: raw.ocultarResumenEconomico === true
                 };
             });
             return salida;
@@ -3182,7 +3183,11 @@ miércoles 07:00-09:00"></textarea>
                 email,
                 uid: perfil?.uid || '',
                 trainerKey,
-                activo: perfil?.activo !== false
+                activo: perfil?.activo !== false,
+                // IGOR-RESUMEN-ECONOMICO: lo fija administración en besoulUsers (un PT no puede
+                // escribir su propio perfil). guardarPerfilUsuarioFirebase usa merge con campos
+                // explícitos, así que editar el perfil desde la Agenda no borra esta marca.
+                ocultarResumenEconomico: perfil?.ocultarResumenEconomico === true
             };
         }
 
@@ -4081,6 +4086,10 @@ miércoles 07:00-09:00"></textarea>
 
             if (!fichaGrupo) return 0;
             if (esGrupoAbierto(fichaGrupo)) return 0;
+            // Una ficha que no es de grupo (individual, Pareja, Trío) no tiene integrantes: su importe es
+            // tarifa × personas de la modalidad × descuento, igual que finanzas.html y que el preview de la
+            // ficha. La aproximación de abajo cuenta integrantesObj y dejaba una Pareja en ×1 (mitad).
+            if (fichaGrupo.tipo !== 'grupo') return importeEfectivoCliente(fichaGrupo);
 
             const miembros = fichasMiembrosGrupo(fichaGrupo);
 
@@ -6855,6 +6864,8 @@ Cancelar = no hacer nada`,
             const desdeISO = formatoFechaLocal(inicioMes);
             const hastaISO = formatoFechaLocal(finMes);
             const clientes = dbClientes[entrenadorVisto] || [];
+            // Sin permiso para el resumen económico, los totales ni siquiera se calculan (quedan a 0).
+            const conEconomia = puedeVerResumenEconomico();
             let atletasActivos = 0;
             let facturacionPrevista = 0;
 
@@ -6862,7 +6873,7 @@ Cancelar = no hacer nada`,
                 if (!clienteActivoParaAgenda(c)) return;
                 if (c.modalidad === "Miembro Subordinado") { atletasActivos++; return; }
                 if (c.tipo === 'individual') atletasActivos++;
-                if (c.vinculacion) return;
+                if (c.vinculacion || !conEconomia) return;
                 if (c.tipo === 'individual' || c.tipo === 'grupo') facturacionPrevista += calcularFacturacionFicha(c);
             });
 
@@ -6878,11 +6889,11 @@ Cancelar = no hacer nada`,
                     if (esGrupoAbierto(objGuardado) || esGrupoAbierto(obj)) {
                         const asistentes = asistentesGrupoAbierto(objGuardado);
                         sesionesAgendadas += asistentes.length || 1;
-                        valorAgenda += calcularRentabilidadGrupoAbierto(objGuardado, entrenadorVisto);
+                        if (conEconomia) valorAgenda += calcularRentabilidadGrupoAbierto(objGuardado, entrenadorVisto);
                         return;
                     }
                     sesionesAgendadas++;
-                    valorAgenda += calcularRentabilidadFicha(obj);
+                    if (conEconomia) valorAgenda += calcularRentabilidadFicha(obj);
                 });
             }
 
@@ -6912,6 +6923,7 @@ Cancelar = no hacer nada`,
 
         function pintarKPIsExtendidosAgenda(resumen) {
             const set = (id, txt) => { const el = document.getElementById(id); if (el) el.innerText = txt; };
+            if (!puedeVerResumenEconomico()) { set('kpi-ext-ocupacion', `${(resumen.ocupacionPct || 0).toFixed(0)}%`); return; }
             set('kpi-ext-previsto', `${(resumen.facturacionPrevista || 0).toFixed(2)} €`);
             set('kpi-ext-agenda', `${(resumen.valorAgenda || 0).toFixed(2)} €`);
             set('kpi-ext-desviacion', `${(resumen.desviacion || 0).toFixed(2)} €`);
@@ -6927,6 +6939,14 @@ Cancelar = no hacer nada`,
         // este Chrome): con el header ya compacto, ESTE bloque seguía siendo lo primero que se
         // veía antes de llegar a los días/citas. Mismo patrón <details> que el resto de la app.
         function resumenKPIsMobileHTML(resumen) {
+            if (!puedeVerResumenEconomico()) {
+                return `<details id="agenda-kpi-mobile-wrap" class="mb-2">
+                <summary class="text-xs text-slate-400 font-bold cursor-pointer select-none py-1.5 flex items-center gap-1"><span>Resumen de la semana</span></summary>
+                <div class="agenda-mobile-kpis mt-1">
+                <div class="kpi-card"><span class="kpi-label">Ocupación</span><span class="kpi-value text-white">${(resumen.ocupacionPct || 0).toFixed(0)}%</span><span class="block text-xs text-slate-500 mt-0.5">${resumen.slotsOcupados}/${resumen.slotsHabilitados} slots</span></div>
+                </div>
+            </details>`;
+            }
             return `<details id="agenda-kpi-mobile-wrap" class="mb-2">
                 <summary class="text-xs text-slate-400 font-bold cursor-pointer select-none py-1.5 flex items-center gap-1"><span>Resumen de la semana</span></summary>
                 <div class="agenda-mobile-kpis mt-1">
@@ -9871,9 +9891,39 @@ Cancelar = no hacer nada`,
         }
 
 
+        // IGOR-RESUMEN-ECONOMICO: un usuario con ocultarResumenEconomico no ve los TOTALES
+        // económicos de su Agenda (facturación de cartera, rentabilidad promedio, facturación
+        // prevista, valor agenda, desviación, total de una sesión de grupo abierto). Sí ve y edita
+        // el importe individual de cada cliente. Administración lo ve todo, también al "ver como".
+        // Sin perfil cargado, un no-admin no ve los totales (falla cerrado).
+        function puedeVerResumenEconomico() {
+            return rolActivo === 'admin' || (!!perfilFirebaseActual && perfilFirebaseActual.ocultarResumenEconomico !== true);
+        }
+
+        // Las tarjetas económicas no se rellenan ni se muestran: el importe nunca llega al DOM.
+        function aplicarVisibilidadResumenEconomico() {
+            const visible = puedeVerResumenEconomico();
+            ['kpi-rentabilidad-total', 'kpi-facturacion-cartera', 'kpi-ext-previsto', 'kpi-ext-agenda', 'kpi-ext-desviacion'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (!visible) el.innerText = '';
+                const tarjeta = el.closest('.bs-kpi');
+                if (tarjeta) tarjeta.classList.toggle('hidden', !visible);
+            });
+            return visible;
+        }
+
         function recalcularKPIs() {
             actualizarLabelsKPIMes();
             actualizarBadgeAvisosManana();
+
+            if (!aplicarVisibilidadResumenEconomico()) {
+                const resumen = calcularResumenAgendaEntrenador();
+                document.getElementById('kpi-atletas-activos').innerText = dbClientes[entrenadorVisto] ? resumen.atletasActivos : 0;
+                document.getElementById('kpi-sesiones-semana').innerText = dbClientes[entrenadorVisto] ? `${resumen.ocupacionPct.toFixed(0)}%` : `0%`;
+                pintarKPIsExtendidosAgenda(dbClientes[entrenadorVisto] ? resumen : { ocupacionPct: 0 });
+                return;
+            }
 
             const resumen = calcularResumenAgendaEntrenador();
 
@@ -10165,11 +10215,16 @@ Cancelar = no hacer nada`,
             panel.classList.remove('hidden');
             const capacidad = capacidadGrupoAbierto(obj);
             const asistentes = asistentesGrupoAbierto(obj);
-            const rent = calcularRentabilidadGrupoAbierto(obj, entrenadorVisto);
             const info = document.getElementById('grupo-abierto-capacidad-info');
             if (info) info.innerText = `Asistentes: ${asistentes.length}/${capacidad} plazas`;
+            // El total de la sesión es la suma de varios clientes: solo con permiso de resumen
+            // económico. El importe de cada asistente (lista de abajo) sigue visible.
             const rentEl = document.getElementById('grupo-abierto-rentabilidad');
-            if (rentEl) rentEl.innerText = `${rent.toFixed(2)} €`;
+            if (rentEl) {
+                const visible = puedeVerResumenEconomico();
+                rentEl.classList.toggle('hidden', !visible);
+                rentEl.innerText = visible ? `${calcularRentabilidadGrupoAbierto(obj, entrenadorVisto).toFixed(2)} €` : '';
+            }
             const ids = new Set(asistentes.map(a => a.id || a.clientId));
             const select = document.getElementById('grupo-abierto-cliente-select');
             if (select) {
@@ -10224,8 +10279,10 @@ Cancelar = no hacer nada`,
 
             document.getElementById('nota-info-asignado').innerText = obj.nombre;
 
-            const rentMostrada = esGrupoAbierto(obj) ? calcularRentabilidadGrupoAbierto(obj, entrenadorVisto) : rent;
-            document.getElementById('nota-info-profit').innerText = `${rentMostrada.toFixed(2)} €`;
+            // Grupo abierto = total de varios clientes: oculto sin permiso de resumen económico.
+            const totalOculto = esGrupoAbierto(obj) && !puedeVerResumenEconomico();
+            const rentMostrada = totalOculto ? 0 : (esGrupoAbierto(obj) ? calcularRentabilidadGrupoAbierto(obj, entrenadorVisto) : rent);
+            document.getElementById('nota-info-profit').innerText = totalOculto ? '—' : `${rentMostrada.toFixed(2)} €`;
 
             document.getElementById('txt-nota-contenido').value = obtenerNotaAgenda(clave);
             prepararPanelRecurrenciaSesion(clave, obj);
