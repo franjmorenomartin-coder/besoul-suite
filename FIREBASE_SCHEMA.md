@@ -101,6 +101,25 @@ Important rules:
 
 - Finanzas is admin-only.
 - Historical closing must not be overwritten accidentally.
+- Writes (FIX-FINANZAS-GUARDADO-SEGURO, 2026-10-23; see `docs/FINANZAS_GUARDADO_SEGURO.md`):
+  - The client only writes after a server snapshot has been received, and only the changed
+    second-level paths (`gastos.2026-10`, `trainerSettings.igor`…) in a transaction with a
+    per-path conflict check (`besoul-finanzas-guardado.js`). Never the whole document.
+  - Rules (`finanzasSinVaciado()`): `update` is denied if it empties a critical map that had entries
+    (`trainerSettings`, `trainerSettingsVersiones`, `centros`, `centrosVersiones`, `otrosIngresos`,
+    `gastos`, `historico`; `historico` may be emptied only when `historicoBorrado` changes in the same
+    write) or removes more than one entry of `trainerSettings`, `trainerSettingsVersiones`, `centros`
+    or `centrosVersiones`. `delete` of the document is denied. Read: admin only.
+  - `guardadoSeguroEn` (timestamp): written with `serverTimestamp()` on every write by the current
+    `finanzas.html` and the restoration tool. Rules (`finanzasEscrituraSegura()`) require
+    `guardadoSeguroEn == request.time` on create/update, so an old cached version (full-document
+    `set`) cannot write at all. Not read by the engine.
+- Fields added only by the selective restoration tool (`scripts/restaurar-finanzas-selectivo.js`),
+  if it is ever executed:
+  - `auditoriaRestauraciones.{id}`: `{accion: 'restauracion'|'reversion', fecha, por, motivo, rutas,
+    origen?, actualizado?, huellaAntes?, de?}`. Audit only; not read by the engine.
+  - `historicoLegadoRestaurado`: the legacy `historico` array from old backups (e.g. «JUNIO 2026»),
+    kept for reference only; not read by the engine.
 - Monthly memberships bill the whole month.
 - Packs/single sessions bill only scheduled billable sessions.
 

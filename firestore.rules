@@ -150,7 +150,53 @@ service cloud.firestore {
       allow read: if isAdmin() && docId == 'agendaContingencia';
 
       // Finanzas sigue reservado solo para administración.
-      allow read, write: if isAdmin() && docId == 'finanzas';
+      // FIX-FINANZAS-GUARDADO-SEGURO (incidente 10-10-2026, docs/FINANZAS_GUARDADO_SEGURO.md):
+      // ninguna escritura -- tampoco de una versión antigua de la app en caché -- puede dejar vacío
+      // un mapa de configuración que tenía contenido, ni borrar más de una entrada de configuración
+      // de una vez, ni borrar el documento. Además, toda escritura debe llevar la marca
+      // guardadoSeguroEn == hora del servidor (finanzasEscrituraSegura): solo la versión nueva de
+      // finanzas.html (escrituras dirigidas) y la herramienta de restauración la envían; una
+      // versión antigua en caché, que envía el documento completo, queda sin permiso de escritura.
+      allow read: if isAdmin() && docId == 'finanzas';
+      allow create: if isAdmin() && docId == 'finanzas' && finanzasEscrituraSegura();
+      allow update: if isAdmin() && docId == 'finanzas' && finanzasEscrituraSegura() && finanzasSinVaciado();
+    }
+
+    function finanzasEscrituraSegura() {
+      return request.resource.data.get('guardadoSeguroEn', null) == request.time;
+    }
+
+    // Un mapa que tenía entradas debe seguir siendo un mapa con entradas.
+    function finanzasMapaNoVaciado(campo) {
+      return !(campo in resource.data)
+        || !(resource.data[campo] is map)
+        || resource.data[campo].size() == 0
+        || (campo in request.resource.data
+            && request.resource.data[campo] is map
+            && request.resource.data[campo].size() > 0);
+    }
+    // Como mucho una entrada menos por escritura (eliminar un centro personalizado, de uno en uno).
+    function finanzasSinBorradoMasivo(campo) {
+      return !(campo in resource.data)
+        || !(resource.data[campo] is map)
+        || (campo in request.resource.data
+            && request.resource.data[campo] is map
+            && request.resource.data[campo].diff(resource.data[campo]).removedKeys().size() <= 1);
+    }
+    function finanzasSinVaciado() {
+      return finanzasMapaNoVaciado('trainerSettings')
+        && finanzasMapaNoVaciado('trainerSettingsVersiones')
+        && finanzasMapaNoVaciado('centros')
+        && finanzasMapaNoVaciado('centrosVersiones')
+        && finanzasMapaNoVaciado('otrosIngresos')
+        && finanzasMapaNoVaciado('gastos')
+        // Quitar el último cierre es legítimo solo si se mueve a la papelera en la misma escritura.
+        && (finanzasMapaNoVaciado('historico')
+            || request.resource.data.diff(resource.data).affectedKeys().hasAny(['historicoBorrado']))
+        && finanzasSinBorradoMasivo('trainerSettings')
+        && finanzasSinBorradoMasivo('trainerSettingsVersiones')
+        && finanzasSinBorradoMasivo('centros')
+        && finanzasSinBorradoMasivo('centrosVersiones');
     }
 
     // ===================== ARQUITECTURA DE DOCUMENTOS INDEPENDIENTES (ARQ-V1-MIGRACION-IMPL) =====

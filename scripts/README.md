@@ -31,3 +31,21 @@ Cada ejecución crea `scripts/backups/<timestamp>/` con un `.json` por colecció
 ### Alternativa más robusta (no implementada aquí)
 
 Firestore permite exports gestionados por Google Cloud (`gcloud firestore export`) a un bucket de Cloud Storage, o una Cloud Function programada (Cloud Scheduler) que haga lo mismo sin depender de que alguien ejecute un script a mano. Ambas opciones requieren activar facturación/servicios de Google Cloud — fuera de lo que se puede preparar sin autorización explícita de gasto (uno de los motivos de STOP del proyecto). Este script es la opción sin coste adicional, a cambio de depender de que se ejecute manualmente o se programe con el Programador de tareas de Windows / cron.
+
+## restaurar-finanzas-selectivo.js — FIX-FINANZAS-GUARDADO-SEGURO (2026-10-23)
+
+Restauración **selectiva y reversible** de rutas de `besoulSuite/finanzas` desde un respaldo JSON
+(`respaldoBesoul()`). **Preparado, no ejecutado nunca contra producción.** Se pega en la consola de
+`finanzas.html` con sesión de admin; no usa claves.
+
+- `planificar()` solo simula y clasifica cada ruta (`restaurable`, `ya_restaurado`, `requiere_decision`,
+  `cambiado_tras_respaldo`, `fecha_serializada`).
+- `ejecutar()` exige la frase `RESTAURAR FINANZAS`, vuelve a comprobar el documento en una
+  transacción, escribe solo las rutas aprobadas + `auditoriaRestauraciones.<id>` y descarga el archivo
+  de reversión.
+- `revertir()` exige `REVERTIR RESTAURACION`, devuelve su valor anterior solo a las rutas que se
+  sobrescribieron (nunca vuelve a vaciar) y solo si no han cambiado después.
+- `gastos` nunca se restaura; el `historico` antiguo (lista) va a `historicoLegadoRestaurado`.
+
+Procedimiento completo: `docs/FINANZAS_GUARDADO_SEGURO.md` §5. Pruebas:
+`finance-save-tests/run_restauracion_selectiva.cjs`.

@@ -17,6 +17,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <script src="besoul-datos.js"></script>
+<script src="besoul-finanzas-guardado.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <style>
     body { font-family: 'Inter', sans-serif; background-color:#0B0F17; }
@@ -73,6 +74,10 @@
         <button onclick="logout()" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-950 text-slate-400 border border-slate-800 hover:text-white transition">Salir</button>
       </div>
     </header>
+    <!-- FIX-FINANZAS-GUARDADO-SEGURO: estado de carga del documento de Finanzas. Mientras no haya
+         datos del servidor (o si la carga falla) el contenido queda inerte (atributo inert, no solo
+         CSS) y guardarConfigFinanzas() rechaza cualquier escritura. -->
+    <div id="finanzas-estado-carga" role="status" class="mx-4 md:mx-6 mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Cargando datos de Finanzas del servidor… No se puede modificar nada hasta que terminen de cargar.</div>
 
     <!-- Navegación global inferior (mobile). finanzas.html ya es admin-only (bloqueado en su
          propio login), así que los 5 accesos se muestran siempre -- no hace falta filtrar por
@@ -1709,9 +1714,13 @@
       // de este mes, corrompiendo la base para el resto de meses sin que el admin lo pidiera.
       const resultado = await guardarConfigFinanzas({ silencioso:true });
       if (!resultado || resultado.ok !== true) {
-        dbFinanzas.centros[id] = centroAntes;
-        if (versionesAntes) dbFinanzas.centrosVersiones[id] = versionesAntes;
-        else if (dbFinanzas.centrosVersiones) delete dbFinanzas.centrosVersiones[id];
+        // Si guardarConfigFinanzas ya ha devuelto las rutas al valor del servidor, no se repone la
+        // copia local (podría ser anterior a un cambio de otra sesión recibido entre medias).
+        if (!resultado || !resultado.revertido) {
+          dbFinanzas.centros[id] = centroAntes;
+          if (versionesAntes) dbFinanzas.centrosVersiones[id] = versionesAntes;
+          else if (dbFinanzas.centrosVersiones) delete dbFinanzas.centrosVersiones[id];
+        }
         pintarTodo();
         console.error(`[BESOUL Finanzas] editarCentro: fallo al guardar · centroId=${id} · campo=${campo} · code=${resultado?.err?.code || '(sin código)'} · message=${resultado?.err?.message || '(desconocido)'}`);
         alert(`No se ha podido guardar el cambio de "${campo}" en el servidor. Revisa tu conexión e inténtalo de nuevo -- el cambio NO se ha guardado.`);
@@ -2011,9 +2020,12 @@
       // -- evita corromper el valor vivo con el valor efectivo de este mes.
       const resultado = await guardarConfigFinanzas({ silencioso:true });
       if (!resultado || resultado.ok !== true) {
-        dbFinanzas.trainerSettings[key] = settingsAntes;
-        if (versionesAntes) dbFinanzas.trainerSettingsVersiones[key] = versionesAntes;
-        else if (dbFinanzas.trainerSettingsVersiones) delete dbFinanzas.trainerSettingsVersiones[key];
+        // Ver editarCentro(): si guardarConfigFinanzas ya revirtió al valor del servidor, no se repone la copia local.
+        if (!resultado || !resultado.revertido) {
+          dbFinanzas.trainerSettings[key] = settingsAntes;
+          if (versionesAntes) dbFinanzas.trainerSettingsVersiones[key] = versionesAntes;
+          else if (dbFinanzas.trainerSettingsVersiones) delete dbFinanzas.trainerSettingsVersiones[key];
+        }
         pintarTodo();
         console.error(`[BESOUL Finanzas] editarTrainer: fallo al guardar · trainerKey=${key} · campo=${campo} · code=${resultado?.err?.code || '(sin código)'} · message=${resultado?.err?.message || '(desconocido)'}`);
         alert(`No se ha podido guardar el cambio de "${campo}" en el servidor. Revisa tu conexión e inténtalo de nuevo -- el cambio NO se ha guardado.`);
@@ -2037,11 +2049,20 @@
     }
     async function sincronizarCentrosPublicos(){
       if(!firestore) return;
+      const centros = centrosPublicosMinimos();
       await firestore.collection('besoulPublicConfig').doc('centros').set({
-        centros: centrosPublicosMinimos(),
+        centros,
         actualizadoEn: firebase.firestore.FieldValue.serverTimestamp(),
         actualizadoPor: usuarioFinanzasEmail
       }, { merge:true });
+      bsFirmaCentrosPublicos = BesoulFinanzasGuardado.canon(centros);
+    }
+    // FIX-FINANZAS-GUARDADO-SEGURO: firma de lo publicado (centrosPublicosMinimos) al cargar o al
+    // sincronizar. Un guardado de centros solo escribe besoulPublicConfig/centros si esa lista cambia.
+    let bsFirmaCentrosPublicos = null;
+    function sincronizarCentrosPublicosSiCambian(){
+      if (BesoulFinanzasGuardado.canon(centrosPublicosMinimos()) === bsFirmaCentrosPublicos) return Promise.resolve();
+      return sincronizarCentrosPublicos().catch(err => console.warn('No se pudieron sincronizar centros públicos. Revisa reglas besoulPublicConfig.', err));
     }
     // Hallazgo real (auditoría PT/Centro, 2026-09-03) -- NO es el bug de .set()+claves de punto
     // ya corregido en otros sitios: guardarConfigFinanzas() siempre envía el objeto COMPLETO
@@ -2057,25 +2078,124 @@
     // en el orden equivocado. Corregido encadenando cada guardado al anterior (nunca en
     // paralelo) y capturando el payload DENTRO de la cadena, no antes: así el último guardado en
     // la cola es también el último en llegar al servidor, y siempre lleva el estado más reciente.
+    //
+    // FIX-FINANZAS-GUARDADO-SEGURO (incidente 10-10-2026, docs/FINANZAS_GUARDADO_SEGURO.md): ya no se
+    // envía el documento completo. Se escriben solo las rutas que esta pestaña ha cambiado respecto
+    // a lo último recibido del servidor (bsFinanzasBase), en una transacción que detecta conflictos
+    // por ruta y bloquea vaciados -- ver besoul-finanzas-guardado.js. Sin datos del servidor no se
+    // guarda nada (antes se guardaba el estado inicial vacío de dbFinanzas).
     let bsGuardadoFinanzasEnCurso = Promise.resolve();
+    function mensajeErrorGuardadoFinanzas(err){
+      const code = err && err.code;
+      if (code === 'finanzas-no-cargada') return 'Finanzas todavía no ha recibido los datos del servidor. No se ha guardado nada: espera a que termine la carga o pulsa "Actualizar".';
+      if (code === 'conflicto-concurrencia') return `${err.message}\n\nNo se ha guardado nada. Se muestran los datos actuales del servidor: revisa y repite el cambio si sigue haciendo falta.`;
+      if (code === 'vaciado-bloqueado' || code === 'borrado-masivo-bloqueado') return `${err.message}\n\nNo se ha guardado nada. Recarga la página; si el problema continúa, avisa a soporte.`;
+      if (code === 'documento-inexistente') return 'El documento de Finanzas no existe en el servidor. No se ha guardado nada.';
+      if (code === 'permission-denied') return 'El servidor ha rechazado el guardado (permisos o protección contra vaciado). No se ha guardado nada.';
+      return 'Error guardando Finanzas. No se ha guardado nada; revisa tu conexión e inténtalo de nuevo.';
+    }
     function guardarConfigFinanzas(opts){
       if (window.BS_MODO_CONSULTA) { alert('Modo consulta: solo lectura. Los cambios se hacen en Finanzas principal.'); return Promise.resolve({ ok:false, omitido:true }); }
       const silencioso = !!(opts && opts.silencioso);
       if(!finanzasRef) return Promise.resolve({ ok:false, omitido:true });
+      if (estadoCargaFinanzas !== 'listo' || !bsFinanzasBase) {
+        const err = Object.assign(new Error('Finanzas no cargada'), { code:'finanzas-no-cargada' });
+        console.error('[BESOUL Finanzas] Guardado rechazado: no hay datos del servidor (estado=' + estadoCargaFinanzas + ').');
+        if (!silencioso) alert(mensajeErrorGuardadoFinanzas(err));
+        return Promise.resolve({ ok:false, omitido:true, err });
+      }
       const p = bsGuardadoFinanzasEnCurso
         .catch(() => {})
-        .then(() => {
-          const payload = { ...dbFinanzas, actualizadoEn: firebase.firestore.FieldValue.serverTimestamp(), actualizadoPor: usuarioFinanzasEmail };
-          return finanzasRef.set(payload, { merge:true });
+        .then(() => BesoulFinanzasGuardado.guardarCambios({
+          firestore, ref: finanzasRef, FieldValue: firebase.firestore.FieldValue, FieldPath: firebase.firestore.FieldPath,
+          base: bsFinanzasBase, actual: dbFinanzas, actor: usuarioFinanzasEmail || ''
+        }))
+        .then(res => {
+          // La base avanza con lo escrito sobre la base ACTUAL (puede haber llegado un snapshot
+          // durante la transacción), no con una copia del momento en que empezó el guardado.
+          if (!res.sinCambios && bsFinanzasBase) bsFinanzasBase = BesoulFinanzasGuardado.avanzarBase(bsFinanzasBase, res.ops);
+          // besoulPublicConfig/centros solo depende de "centros": se sincroniza solo si cambia lo
+          // que se publica (nombre, activo, orden, visibilidad), no por un cambio de canon.
+          if (res.ops.some(op => op.campo === 'centros')) return sincronizarCentrosPublicosSiCambian();
         })
-        .then(() => sincronizarCentrosPublicos().catch(err => console.warn('No se pudieron sincronizar centros públicos. Revisa reglas besoulPublicConfig.', err)))
         .then(() => ({ ok:true }))
-        .catch(err => { console.error(err); if (!silencioso) alert('Error guardando Finanzas.'); return { ok:false, err }; });
+        .catch(err => {
+          console.error('[BESOUL Finanzas] Error guardando:', err);
+          // Lo rechazado vuelve al último valor confirmado por el servidor: la pestaña no sigue
+          // mostrando (ni reintentando en el guardado siguiente) un cambio que no se ha guardado.
+          let revertido = false;
+          if (bsFinanzasBase && err && Array.isArray(err.ops) && err.ops.length) {
+            dbFinanzas = BesoulFinanzasGuardado.revertirRutas(dbFinanzas, bsFinanzasBase, err.ops);
+            revertido = true; pintarTodo();
+          }
+          if (!silencioso) alert(mensajeErrorGuardadoFinanzas(err));
+          return { ok:false, err, revertido };
+        });
       bsGuardadoFinanzasEnCurso = p;
       pintarTodo();
       return p;
     }
-    async function refrescarTodoManual(){ await cargarInstantaneas(); pintarTodo(); }
+    // Estado de carga: 'cargando' | 'listo' | 'error' | 'sin_documento'. Solo un snapshot que
+    // existe y viene del servidor (no de la caché) pone 'listo' y sustituye dbFinanzas; un error o
+    // un documento inexistente NUNCA sustituye los datos por configuraciones vacías o por defecto.
+    let estadoCargaFinanzas = 'cargando';
+    let bsFinanzasBase = null;
+    function pintarEstadoCargaFinanzas(detalle){
+      const banner = document.getElementById('finanzas-estado-carga');
+      const listo = estadoCargaFinanzas === 'listo';
+      const app = document.getElementById('app-content');
+      if (app && app.children) Array.from(app.children).forEach(el => {
+        if (el.tagName === 'HEADER' || el.tagName === 'NAV' || el.id === 'finanzas-estado-carga') return;
+        if (listo) el.removeAttribute('inert'); else el.setAttribute('inert', '');
+      });
+      if (!banner) return;
+      if (listo) { banner.classList.add('hidden'); return; }
+      banner.classList.remove('hidden');
+      const textos = {
+        cargando: 'Cargando datos de Finanzas del servidor… No se puede modificar nada hasta que terminen de cargar.',
+        error: `No se han podido cargar los datos de Finanzas${detalle ? ' (' + detalle + ')' : ''}. No se muestran cifras ni se permite guardar para no sustituir datos reales. Pulsa "Actualizar" o recarga la página.`,
+        sin_documento: 'El documento de Finanzas no existe en el servidor. No se permite guardar. Avisa a soporte antes de continuar.'
+      };
+      banner.innerText = textos[estadoCargaFinanzas] || textos.cargando;
+      banner.className = estadoCargaFinanzas === 'cargando'
+        ? 'mx-4 md:mx-6 mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200'
+        : 'mx-4 md:mx-6 mt-4 rounded-lg border border-rose-500/50 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-200';
+    }
+    function suscribirFinanzas(ref){
+      estadoCargaFinanzas = 'cargando'; bsFinanzasBase = null; pintarEstadoCargaFinanzas();
+      return ref.onSnapshot({ includeMetadataChanges:true }, s => {
+        if (s.metadata && s.metadata.fromCache) return; // solo datos confirmados por el servidor
+        if (!s.exists) { estadoCargaFinanzas = 'sin_documento'; bsFinanzasBase = null; pintarEstadoCargaFinanzas(); return; }
+        const raw = s.data();
+        const baseNueva = BesoulFinanzasGuardado.crearBase(raw, normalizarFinanzas);
+        if (estadoCargaFinanzas === 'listo' && bsFinanzasBase) {
+          // Snapshot nuevo con la pestaña ya cargada: se conservan las ediciones locales que aún
+          // no ha confirmado el servidor (un guardado en curso o en cola). Si otra sesión ha
+          // cambiado entre medias la misma ruta, gana el servidor y se avisa.
+          const r = BesoulFinanzasGuardado.rebasar(bsFinanzasBase, dbFinanzas, baseNueva);
+          bsFinanzasBase = baseNueva; dbFinanzas = r.actual;
+          if (r.descartadas.length) {
+            console.warn('[BESOUL Finanzas] Cambios locales descartados por conflicto:', r.descartadas);
+            alert(`Otro usuario ha cambiado los mismos datos mientras editabas: ${r.descartadas.join(', ')}.\n\nSe muestran sus datos; tu cambio en esos apartados NO se ha guardado.`);
+          }
+        } else {
+          bsFinanzasBase = baseNueva; dbFinanzas = normalizarFinanzas(raw);
+          bsFirmaCentrosPublicos = BesoulFinanzasGuardado.canon(centrosPublicosMinimos());
+        }
+        estadoCargaFinanzas = 'listo';
+        pintarEstadoCargaFinanzas();
+        pintarTodo();
+      }, err => {
+        console.error('[BESOUL Finanzas] Error cargando el documento de Finanzas:', err);
+        estadoCargaFinanzas = 'error'; bsFinanzasBase = null;
+        pintarEstadoCargaFinanzas(err && err.code ? err.code : '');
+      });
+    }
+    async function refrescarTodoManual(){
+      // Si la carga falló, el listener se ha detenido: se vuelve a suscribir (nunca se rellenan datos por defecto).
+      if (estadoCargaFinanzas !== 'listo' && finanzasRef) { if (finanzasUnsub) finanzasUnsub(); finanzasUnsub = suscribirFinanzas(finanzasRef); }
+      await cargarInstantaneas(); pintarTodo();
+    }
 
     // ARQ-V1-MIGRACION-IMPL (consumo): los listeners ya entregan finanzas, usuarios y agenda al
     // abrir; "Refrescar" solo vuelve a pintar (antes releía todo además de tener los listeners).
@@ -2159,7 +2279,7 @@
           document.getElementById('lbl-usuario-logeado').innerText=perfilFinanzas.nombre||usuarioFinanzasEmail;
           document.getElementById('auth-screen').classList.add('hidden'); document.getElementById('app-content').classList.remove('hidden');
           if(finanzasUnsub) finanzasUnsub(); if(agendaUnsub) agendaUnsub(); if(usersUnsub) usersUnsub();
-          finanzasUnsub=finanzasRef.onSnapshot(s=>{ dbFinanzas=normalizarFinanzas(s.exists ? s.data() : {}); pintarTodo(); });
+          finanzasUnsub=suscribirFinanzas(finanzasRef);
           agendaUnsub=iniciarSincronizacionAgendaAdmin(firestore, datos=>{ agendaData=datos || {clientes:{}}; pintarTodo(); });
           usersUnsub=firestore.collection('besoulUsers').onSnapshot(s=>{ perfilesUsuarios=s.docs.map(d=>({email:d.id,...d.data()})).filter(p=>p.activo!==false); pintarTodo(); });
         }catch(err){ console.error(err); alert('Error cargando Finanzas. Revisa permisos/reglas.'); }
