@@ -157,6 +157,59 @@ Important rules:
     kept for reference only; not read by the engine.
 - Monthly memberships bill the whole month.
 - Packs/single sessions bill only scheduled billable sessions.
+- REFORMA-FINANZAS (2026-10-27). From `2026-10` (`MES_INICIO_REGISTRO_REAL`) the real income and
+  expenses of each month live in `besoulFinanzasMeses/{AAAA-MM}` (below), not here. This document keeps
+  the configuration (centres, trainer settings and their versions, special activities) and, read-only,
+  everything earlier:
+  - `gastos.{mes}` / `otrosIngresos.{mes}` of `2026-10` onwards are no longer written; existing entries are
+    shown and counted as «heredado» until «Traspasar registros heredados» copies them into the month
+    document (they are never deleted here).
+  - The canon fields (`centros.{id}.canonFijo/canonPt…/ajusteCanonMensual`, `computaCanonCentro`,
+    `canonAtribuidoMensual`, tiers) are kept untouched for the old theoretical engine, which still
+    computes `2026-01`…`2026-09` exactly as before. They create no income or expense from `2026-10`.
+  - `historico.{mes}` remains the old closure of the months before `2026-10`.
+
+## `besoulFinanzasMeses/{AAAA-MM}` (REFORMA-FINANZAS, 2026-10-27)
+
+One document per month with the REAL records of BESOUL, entered by hand. Each month is independent:
+nothing is carried over, nothing is recomputed from other months. Written only by `finanzas.html` through
+`besoul-finanzas-real.js` (`ejecutarOperacion`): a transaction with targeted `FieldPath` updates; the
+document is created with `rev: 1` and every write sets `rev + 1` and `actualizadoEn = serverTimestamp()`.
+Old cached versions of the app never write here.
+
+Fields:
+
+- `mes` (`'2026-10'`, = document id), `estado`: `'abierto' | 'revisado' | 'cerrado'`, `rev` (number),
+  `actualizadoEn` / `actualizadoPor`, `creadoEn` / `creadoPor`.
+- Record maps (`id → record`, stable ids, never arrays):
+  - `ingresosEntrenadores`: what a trainer actually paid BESOUL. `trainerKey`, `trainerNombre`, `centroId`,
+    `centroNombre` (the centre at the time; it does not change if the trainer later moves), `fecha`,
+    `importe`, `estado` (`'confirmado'` counts; `'pendiente'` is shown apart and does not count),
+    `observaciones`. A missing payment is not a debt. Not allowed for employee trainers (their billing is
+    already 100 % BESOUL income).
+  - `gastosCentros`: `centroId`, `centroNombre`, `fecha`, `concepto`, `importe`, `observaciones`.
+  - `gastos` (company expenses): `categoria`, `concepto`, `tipo` (`fijo|variable`), `trainerKey`
+    (optional, analysis attribution only), `fecha`, `importe`, `observaciones`.
+  - `otrosIngresos`: `categoria`, `concepto`, `centroId`, `fecha`, `importe`, `observaciones`.
+  - Every record also has `id`, `mes`, `creadoEn/Por`, and when edited `modificadoEn/Por`. Deleting is an
+    annulment: `anulado: true`, `anuladoEn/Por`, `motivoAnulacion`; it stops counting but is kept.
+  - Records copied from `besoulSuite/finanzas` have `origen: 'heredado'`, `importadoEn/Por` and ids
+    `her_gas_AAAAMM_i` / `her_oin_AAAAMM_i`; `legadoImportado: {en, por, registros}` prevents a
+    second copy.
+- `revision: {por, en, enISO}` (abierto → revisado), `cierre: {cerradoPor, cerradoEn, cerradoEnISO, snapshot}`
+  (revisado → cerrado), `ultimaReapertura: {por, en, enISO, motivo}` (cerrado → abierto, admin, motivo ≥ 5
+  characters), `historialEstados[]: {de, a, por, en (ISO), motivo?}` (last 50).
+- `cierre.snapshot` (`version: 'finanzas-real-v1'`): `resumen` (real income: confirmed payments + employee
+  billing + BESOUL share of special activities + other income; real expenses; result), every record, the
+  statistical billing at closing time (`estadistica`) and, for months before `2026-10`, the old theoretical
+  calculation (`teorico`). A closed month is read from the snapshot by Finanzas and the Dashboard; the
+  Agenda is never affected. Reopening keeps the previous snapshot until the month is closed again.
+
+Rules (`firestore.rules`, prepared, publish manually): admin only (read, create, update); never delete;
+`keys().hasOnly(...)`; `rev == resource.rev + 1` and `actualizadoEn == request.time`; state transitions
+checked (`finMesTransicion()`): records change only while `abierto`; `revision`, `cierre` and
+`ultimaReapertura` must carry the caller's email and `request.time`; a `cerrado` month accepts only a
+reopening. Tests: `rules-tests/run_finanzas_meses_tests.cjs`.
 
 ## `besoulLeads/{leadId}`
 

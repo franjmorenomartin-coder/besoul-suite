@@ -51,3 +51,17 @@ que fije 8080):
 ```bash
 firebase emulators:exec --only firestore --project demo-besoul-suite "node rules-tests/run_acceso_retirado_tests.cjs"
 ```
+
+## `run_finanzas_meses_tests.cjs` (REFORMA-FINANZAS)
+
+Reglas preparadas (sin publicar) de `besoulFinanzasMeses/{AAAA-MM}`. Las operaciones válidas usan el
+mismo módulo que Finanzas (`besoul-finanzas-real.js`); las inválidas imitan a un cliente antiguo o
+manipulado: solo admin activo lee y escribe; PT, anónimo y admin con acceso retirado, denegados; `rev`
+desfasada o que salta, hora del cliente, campos desconocidos (p. ej. un canon automático), cambio de `mes`
+y borrado, denegados; transiciones abierto → revisado → cerrado → abierto con autor y hora del servidor;
+un mes revisado o cerrado no admite cambios de registros ni reescribir la fotografía; reabrir exige motivo.
+Emulador en `127.0.0.1:8080`:
+
+```bash
+firebase emulators:exec --only firestore --project demo-besoul-suite "node rules-tests/run_finanzas_meses_tests.cjs"
+```

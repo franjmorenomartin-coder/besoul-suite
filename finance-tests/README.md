@@ -70,33 +70,33 @@ guardados disparados, el usuario recibe el aviso de mes bloqueado) salvo que el 
 explícitamente (`mesCerradoEditando === key`), en cuyo caso las mutaciones sí aplican y reabrir un
 mes no reabre ningún otro. No existía ningún test de este guardián antes de esta fase.
 
-## `run_empleado_tests.cjs` (IGOR-RESUMEN-ECONOMICO, fase B)
+## `run_reforma_tests.cjs` (REFORMA-FINANZAS-CLIENTES, 2026-10-27)
 
-Carga el script principal completo de `finanzas.html` y `dashboard.html` (sin `inicializar()`) sobre un
-DOM simulado: entrenador empleado (100 % facturación BESOUL), canon de centro sin duplicar, canon acordado
-solo para análisis, incentivo Opción B (5·C + 10·G, una vez por cliente/grupo), no retroactividad de las
-versiones «desde este mes» y guardado seguro limitado a las rutas afectadas.
+Sustituye a `run_empleado_tests.cjs` y `run_gestion_entrenadores_tests.cjs` (retiradas: comprobaban el
+canon automático, la exención y el ajuste de canon de octubre, eliminados en la reforma; lo que sigue
+vigente —bajas, «Sin centro asignado», reactivación, acceso retirado, incentivo Opción B, no
+retroactividad— está portado aquí). `run_cierre_tests.cjs` sigue probando el guardián de cierre anterior
+sobre su extracto congelado (`cierre_extract.js`); el cierre nuevo se prueba aquí.
 
-```bash
-node finance-tests/run_empleado_tests.cjs                 # solo datos sintéticos
-node finance-tests/run_empleado_tests.cjs <respaldo.json> # además, simulación en memoria con un respaldo
-```
-
-Con respaldo no escribe nada: todo ocurre en memoria. El respaldo contiene datos personales y nunca debe
-añadirse al repositorio.
-
-## `run_gestion_entrenadores_tests.cjs` (GESTION-ENTRENADORES)
-
-Gestión de entrenadores de Finanzas con el código real de `finanzas.html` y `dashboard.html`: altas,
-bajas, reactivación, cambio de centro, exención y ajuste mensual del canon, siempre con mes efectivo
-(previsualizar → confirmar → guardar, con reversión si el servidor rechaza); «Sin centro asignado» desde
-octubre de 2026 sin sumar canon; y la pantalla. Con respaldo aplica en memoria las operaciones
-confirmadas (Verónica a Alfa Prime exenta, bajas de Adrián y Andrés, ajuste de 23,32 € en Inacua desde
-2026-10) y compara con el código del commit `BASE_REF` (por defecto `1b8080e`): enero–septiembre
-idénticos, Inacua con los 11 entrenadores y 2.223,32 €, guardado seguro limitado a las rutas afectadas
-y Dashboard coherente.
+- Módulo `besoul-finanzas-real.js` con un Firestore en memoria (`firestore_falso.cjs`): meses
+  independientes, varios cobros, pendientes que no cuentan, duplicados, anulación, cobro manual de un
+  empleado rechazado, heredados contados una sola vez, abierto → revisado → cerrado → reabierto con
+  fotografía, motivo e historial, bloqueo de escrituras en meses revisados/cerrados y escrituras dirigidas.
+- `besoul-exportar.js`: CSV (BOM, `;`, coma decimal, fórmulas neutralizadas) y XLSX (ZIP/CRC, texto
+  como `inlineStr`, sin fórmulas).
+- `besoul-clientes-bd.js`: parejas, tríos, grupos e integrantes sin duplicar, descuentos y precio final,
+  vacíos en lugar de 0, sesiones, pruebas CRM, filtros combinados, orden y hojas de exportación.
+- Código real de `finanzas.html` y `dashboard.html`: motor de octubre sin canon (Igor, Verónica,
+  Bea/Soraya), flujos de la interfaz (registrar, duplicado, cerrar, reabrir, copiar gastos fijos),
+  gestión de entrenadores y Dashboard = Finanzas (también con un mes cerrado).
+- Con respaldo: enero–septiembre idénticos al commit `BASE_REF` (por defecto `bbf444c`) en Finanzas y
+  Dashboard, facturación estadística de octubre sin cambios, Igor 1.929,99 − 970,90 = 959,09 antes de
+  incentivos, base de datos de clientes con el precio calculado por el código real de `agenda.html`.
 
 ```bash
-node finance-tests/run_gestion_entrenadores_tests.cjs                 # solo datos sintéticos
-node finance-tests/run_gestion_entrenadores_tests.cjs <respaldo.json> # además, con un respaldo
+node finance-tests/run_reforma_tests.cjs                 # solo datos sintéticos
+node finance-tests/run_reforma_tests.cjs <respaldo.json> # además, con un respaldo (todo en memoria)
 ```
+
+No imprime datos personales (solo recuentos, importes agregados y trainerKeys). El respaldo contiene datos
+personales y nunca debe añadirse al repositorio.

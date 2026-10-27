@@ -17,6 +17,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <script src="besoul-datos.js"></script>
+<script src="besoul-finanzas-real.js"></script>
   <script src="./besoul-identidad.js"></script>
   <script src="./besoul-entorno-local.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
@@ -134,24 +135,25 @@
           <button onclick="exportarResumenCSV()" class="w-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 rounded-xl p-2 font-bold hover:bg-emerald-500/20 transition">Export CSV</button>
         </div>
       </div>
-      <p class="text-[11px] text-slate-500 leading-relaxed">Dashboard de solo lectura. Cálculo financiero sincronizado con Finanzas: mismos rangos, centros, cánones, desviaciones y cierres.</p>
+      <p class="text-[11px] text-slate-500 leading-relaxed">Dashboard de solo lectura. Cifras sincronizadas con Finanzas: ingresos y gastos reales registrados, facturación estadística y cierres mensuales.</p>
     </section>
 
     <main class="flex-1 p-4 md:p-6 pb-24 md:pb-6 space-y-6">
       <!-- Jerarquía: 2 cifras dominantes (lo esencial de un vistazo) + rejilla secundaria más
            compacta debajo, en vez de 12 cajas idénticas -- mismos ids, pintarKPIs() sin cambios. -->
       <section class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div class="bg-gradient-to-br from-purple-500/10 via-slate-900 to-slate-900 border border-purple-500/30 rounded-2xl p-5"><p class="text-[11px] uppercase font-bold text-purple-300">Beneficio neto</p><p id="kpi-beneficio" class="text-3xl font-black text-white font-mono mt-1">0,00 €</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5"><p class="text-[11px] uppercase font-bold text-slate-400">Facturación</p><p id="kpi-facturacion" class="text-3xl font-black text-white font-mono mt-1">0,00 €</p></div>
+        <div class="bg-gradient-to-br from-purple-500/10 via-slate-900 to-slate-900 border border-purple-500/30 rounded-2xl p-5"><p id="lbl-kpi-beneficio" class="text-[11px] uppercase font-bold text-purple-300">Resultado real BESOUL</p><p id="kpi-beneficio" class="text-3xl font-black text-white font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5"><p class="text-[11px] uppercase font-bold text-slate-400">Facturación estadística</p><p id="kpi-facturacion" class="text-3xl font-black text-white font-mono mt-1">0,00 €</p><p class="text-[10px] text-slate-500 mt-1">Lo que facturan los entrenadores a sus clientes. En autónomos no es ingreso de BESOUL.</p></div>
       </section>
+      <p id="lbl-estado-periodo" class="text-[11px] text-slate-500 -mt-3"></p>
       <section class="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-10 gap-3">
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">BESOUL bruto</p><p id="kpi-besoul" class="text-sm font-black text-emerald-400 font-mono mt-1">0,00 €</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Coste sede</p><p id="kpi-coste" class="text-sm font-black text-red-300 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p id="lbl-kpi-besoul" class="text-[9px] uppercase font-bold text-slate-500">Ingresos reales BESOUL</p><p id="kpi-besoul" class="text-sm font-black text-emerald-400 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p id="lbl-kpi-coste" class="text-[9px] uppercase font-bold text-slate-500">Gastos reales BESOUL</p><p id="kpi-coste" class="text-sm font-black text-red-300 font-mono mt-1">0,00 €</p></div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Clientes activos</p><p id="kpi-clientes" class="text-sm font-black text-amber-400 font-mono mt-1">0</p></div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Entrenadores</p><p id="kpi-trainers" class="text-sm font-black text-white font-mono mt-1">0</p></div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Sesiones</p><p id="kpi-sesiones" class="text-sm font-black text-blue-300 font-mono mt-1">0</p></div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Conversión CRM</p><p id="kpi-conversion" class="text-sm font-black text-purple-300 font-mono mt-1">0%</p></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Canon clientes</p><p id="kpi-canon-clientes" class="text-sm font-black text-red-200 font-mono mt-1">0,00 €</p></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Cobros entrenadores</p><p id="kpi-canon-clientes" class="text-sm font-black text-emerald-300 font-mono mt-1">0,00 €</p></div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Valor agenda</p><p id="kpi-valor-agenda" class="text-sm font-black text-cyan-300 font-mono mt-1">0,00 €</p></div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Desviación</p><p id="kpi-desviacion-agenda" class="text-sm font-black text-amber-300 font-mono mt-1">0,00 €</p></div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><p class="text-[9px] uppercase font-bold text-slate-500">Ocupación disp.</p><p id="kpi-ocupacion-disponibilidad" class="text-sm font-black text-emerald-300 font-mono mt-1">0%</p></div>
@@ -161,7 +163,7 @@
 
       <section class="grid grid-cols-1 2xl:grid-cols-2 gap-4">
         <div class="chart-card bg-slate-900 border border-slate-800 rounded-xl p-4">
-          <div class="flex items-center justify-between mb-3"><h2 class="text-sm font-black text-white">Evolución mensual</h2><span class="text-[10px] text-slate-500">Facturación · gastos · neto</span></div>
+          <div class="flex items-center justify-between mb-3"><h2 class="text-sm font-black text-white">Evolución mensual</h2><span class="text-[10px] text-slate-500">Facturación estadística · ingresos · gastos · resultado</span></div>
           <canvas id="chartMonthly"></canvas>
         </div>
         <div class="chart-card bg-slate-900 border border-slate-800 rounded-xl p-4">
@@ -194,10 +196,10 @@
         </div>
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
           <h2 class="text-sm font-black text-white mb-1">Top entrenadores</h2>
-          <p class="text-[11px] text-slate-500 mb-4">Ranking del periodo/mes por facturación, clientes, canon centro y margen Besoul real.</p>
+          <p class="text-[11px] text-slate-500 mb-4">Ranking por facturación estadística, con lo realmente cobrado. <span id="lbl-tablas-mes"></span></p>
           <div class="hidden md:block overflow-x-auto">
             <table class="w-full min-w-[760px] text-left text-xs">
-              <thead class="text-[10px] uppercase text-slate-500 border-b border-slate-800"><tr><th class="py-2">Entrenador</th><th>Centro</th><th>Clientes</th><th>Facturación</th><th>BESOUL bruto</th><th>Canon centro</th><th>Neto Besoul</th><th>Sistema</th></tr></thead>
+              <thead id="thead-trainers" class="text-[10px] uppercase text-slate-500 border-b border-slate-800"><tr><th class="py-2">Entrenador</th><th>Centro</th><th>Clientes</th><th>Facturación</th><th>BESOUL bruto</th><th>Canon centro</th><th>Neto Besoul</th><th>Sistema</th></tr></thead>
               <tbody id="tabla-trainers" class="divide-y divide-slate-800/70"></tbody>
             </table>
           </div>
@@ -210,7 +212,7 @@
           <h2 class="text-sm font-black text-white mb-4">Centros</h2>
           <div class="hidden md:block overflow-x-auto">
             <table class="w-full min-w-[760px] text-left text-xs">
-              <thead class="text-[10px] uppercase text-slate-500 border-b border-slate-800"><tr><th class="py-2">Centro</th><th>PT</th><th>Clientes</th><th>Facturación</th><th>% Fact.</th><th>Canon clientes</th><th>Coste centro</th><th>Neto centro</th></tr></thead>
+              <thead id="thead-centros" class="text-[10px] uppercase text-slate-500 border-b border-slate-800"><tr><th class="py-2">Centro</th><th>PT</th><th>Clientes</th><th>Facturación</th><th>% Fact.</th><th>Canon clientes</th><th>Coste centro</th><th>Neto centro</th></tr></thead>
               <tbody id="tabla-centros" class="divide-y divide-slate-800/70"></tbody>
             </table>
           </div>
@@ -259,15 +261,8 @@ const DEFAULT_CENTROS = {
   capuchinos: { id:'capuchinos', nombre:'Capuchinos', orden:5, canonFijo:0, ptsIncluidos:0, canonPt:0, canonPtReducidoDesde:0, canonPtReducido:0, activo:true, visibleCRM:true, visibleAgenda:true, visibleReservas:true, visibleQR:true, economiaConfigurada:false }
 };
 function economiaCentroConfigurada(centro) { return centro?.economiaConfigurada !== false; }
-const DEFAULT_CENTER_BY_TRAINER = {
-  carmen: 'alfa_prime',
-  lillo: 'lagunillas', miguel_fenech: 'lagunillas', ruben: 'lagunillas', carmen_palomo: 'lagunillas', lucia: 'lagunillas', miguel: 'lagunillas',
-  miguel_luna: 'fantasy',
-  bea: 'inacua', soraya: 'inacua', eu: 'inacua', alvaro: 'inacua', juancarlos: 'inacua', raul: 'inacua', marina: 'inacua', yosvel: 'inacua', lolo: 'inacua', gonzalo: 'inacua', fernando: 'inacua', cristina: 'inacua',
-  // GESTION-ENTRENADORES (2026-10-26, confirmado por administración): Igor y Manuel están en Inacua;
-  // antes llegaban solo por la regla "resto de PT → Inacua", que deja de aplicarse en octubre de 2026.
-  igor: 'inacua', manuel: 'inacua'
-};
+// Fuente única: besoul-finanzas-real.js (también la usa la base de datos de clientes de la Agenda).
+const DEFAULT_CENTER_BY_TRAINER = BesoulFinanzasReal.CENTRO_OFICIAL_POR_ENTRENADOR;
 const TRAINERS_EXCLUIDOS_FINANZAS = ['fran', 'fran_moreno', 'franmoreno'];
 const TRAINERS_ADMIN_CON_CARTERA = ['bea', 'soraya'];
 // GESTION-ENTRENADORES: primer mes sin la asignación automática a Inacua de los PT sin centro.
@@ -279,6 +274,9 @@ let auth, db, perfil = null, usuario = null;
 let dbFinanzas = { centros:{}, trainerSettings:{}, gastos:{}, otrosIngresos:{}, historico:{}, auditoriaCierres:{} };
 let agendaData = { clientes:{}, agenda:{}, pruebasCRM:{} };
 let perfilesUsuarios = [];
+// REFORMA-FINANZAS: documentos besoulFinanzasMeses/{AAAA-MM} (ingresos y gastos REALES y cierres).
+const FR = BesoulFinanzasReal;
+let mesesFinanzas = {};
 let leads = [];
 let charts = {};
 let ultimoResumen = null;
@@ -847,11 +845,12 @@ function calcularCanonCentroYAsignar(c){
       return c;
     }
 function construirCalculoMes(mesKey = mesActualKey()){
+      const modeloReal = FR.esMesRegistroReal(mesKey);
       const centrosBase = { ...getCentros(), sin_centro: { id:'sin_centro', nombre:'Sin centro asignado', canonFijo:0, canonPt:0, activo:true } };
       const centros = {};
       Object.keys(centrosBase).forEach(id => {
         const resuelto = centroParaMes(centrosBase[id], mesKey);
-        centros[id] = { ...resuelto, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0, participacionClientes:0, participacionCentro:0, ingresosActividades:0 };
+        centros[id] = { ...resuelto, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0, participacionClientes:0, participacionCentro:0, ingresosActividades:0, ingresoBesoulEspecial:0 };
       });
       const trainers = [];
       perfilesUsuarios.filter(esPerfilOperativo).forEach(perfil => {
@@ -919,6 +918,26 @@ function construirCalculoMes(mesKey = mesActualKey()){
           clientes = 0;
           facturacionActividades = 0; clientesActividades = 0; actividadPtNeto = 0; actividadCentroShare = 0; actividadBesoulShare = 0;
         }
+        const baseRow = { key, nombre:nombrePerfil(perfil), email: perfil.email || '', rol: perfil.rol || '', centroId, bajaEconomica, facturacion: facturacion + facturacionActividades, facturacionPt: facturacion, facturacionActividades, clientesActividades, actividadCentroShare, actividadBesoulShare, actividadPtNeto, facturacionAgenda, desviacionAgenda, sesionesMensualesPrevistas, sesionesMensualesAgendadas, desviacionSesiones: sesionesMensualesPrevistas - sesionesMensualesAgendadas, motivosDesviacion, facturacionMensual, facturacionVariable, sesionesBonosSueltas, clientes, clientesAgendaNoComputados, fichasActivas, soloImputacionGastos };
+        if (modeloReal) {
+          // REFORMA-FINANZAS: solo dos ingresos automáticos de BESOUL (el 100 % de un empleado, menos la
+          // parte del centro de sus actividades, y la parte BESOUL de las actividades especiales).
+          const esEmpleadoReal = !soloImputacionGastos && settings.sistemaPago === 'empleado';
+          const ingresoBesoulEspecial = esEmpleadoReal ? Math.max(0, baseRow.facturacion - actividadCentroShare) : actividadBesoulShare;
+          const modelo = soloImputacionGastos ? 'solo_gastos' : (esEmpleadoReal ? 'empleado' : 'autonomo');
+          const rowReal = { ...baseRow, modelo, sistemaEfectivo: modelo, ingresoBesoulEspecial, ptNeto:0, bsBruto:0, canonCentroShare:0,
+            sistemaAplicado: modelo === 'empleado' ? 'Empleado BESOUL' : (modelo === 'solo_gastos' ? 'Responsable de centro · sin facturación' : 'Autónomo') };
+          trainers.push(rowReal);
+          if (!centros[centroId]) centros[centroId] = { id:centroId, nombre:nombreCentro(centroId), canonFijo:0, canonPt:0, activo:true, trainers:[], facturacion:0, facturacionAgenda:0, desviacionAgenda:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0, ptNeto:0, bsBruto:0, clientes:0, canon:0, canonClientesTotal:0, participacionClientes:0, participacionCentro:0, ingresosActividades:0, ingresoBesoulEspecial:0 };
+          const cr = centros[centroId];
+          cr.trainers.push(rowReal);
+          cr.facturacion += rowReal.facturacion; cr.facturacionAgenda += facturacionAgenda; cr.desviacionAgenda += desviacionAgenda;
+          cr.sesionesMensualesPrevistas += sesionesMensualesPrevistas; cr.sesionesMensualesAgendadas += sesionesMensualesAgendadas;
+          cr.clientes += clientes + clientesActividades;
+          cr.ingresosActividades = (cr.ingresosActividades || 0) + actividadCentroShare;
+          cr.ingresoBesoulEspecial = (cr.ingresoBesoulEspecial || 0) + ingresoBesoulEspecial;
+          return;
+        }
         const aporteCliente = soloImputacionGastos ? 0 : parseNum(settings.aporteIndividualCliente ?? 0) * clientes;
         const reparto = soloImputacionGastos
           ? { pt:0, bs:0, bonus:0, coordinacionBonus:0, sistemaAplicado:'CEO · solo imputación gastos', repartoDetalle:'Bea/Soraya computan como coste de sede, pero sus carteras no generan ingresos BESOUL ni liquidación PT en Finanzas.', fechaAlta:settings.fechaAlta || '', antiguedad:yearsBetween(fechaAltaSettings(settings), fechaReferenciaMes(mesKey)), posteriores:0, elegibleRango2:false, elegibleRango3:false, elegibleCoordinador:false, coordinadorAutorizado:false, sistemaEfectivo:'solo_gastos', ptsActivosCentro:0 }
@@ -942,6 +961,11 @@ function construirCalculoMes(mesKey = mesActualKey()){
         centros[centroId].clientes += clientes + clientesActividades;
         centros[centroId].ingresosActividades = (centros[centroId].ingresosActividades || 0) + actividadCentroShare;
       });
+      if (modeloReal) {
+        const totalReal = Object.values(centros).reduce((acc,c)=>{ acc.facturacion+=c.facturacion; acc.facturacionAgenda+=c.facturacionAgenda||0; acc.desviacionAgenda+=c.desviacionAgenda||0; acc.sesionesMensualesPrevistas+=c.sesionesMensualesPrevistas||0; acc.sesionesMensualesAgendadas+=c.sesionesMensualesAgendadas||0; acc.clientes+=c.clientes; acc.ingresosActividades+=c.ingresosActividades||0; acc.ingresoBesoulEspecial+=c.ingresoBesoulEspecial||0; return acc; }, {facturacion:0,facturacionAgenda:0,desviacionAgenda:0,sesionesMensualesPrevistas:0,sesionesMensualesAgendadas:0,clientes:0,ingresosActividades:0,ingresoBesoulEspecial:0});
+        return { mes: mesKey, modelo:'registro_real', centros, trainers, total: totalReal, generadoEn:new Date().toISOString(), fuente:'finanzas_live_engine_v3' };
+      }
+      // Modelo anterior (meses hasta septiembre de 2026): cálculo teórico sin cambios.
       Object.values(centros).forEach(c => {
         // Coste de sede separado en dos capas:
         // 1) Canon fijo de sede: se paga una vez y se prorratea entre los PT activos.
@@ -965,11 +989,24 @@ function construirCalculoMes(mesKey = mesActualKey()){
           t.aporteCentroClientes = t.aporteCentroCliente || 0;
         });
       });
-      return { mes: mesKey, centros, trainers, total, generadoEn:new Date().toISOString(), fuente:'finanzas_live_engine_v3' };
+      return { mes: mesKey, modelo:'teorico_anterior', centros, trainers, total, generadoEn:new Date().toISOString(), fuente:'finanzas_live_engine_v3' };
     }
 function gastosMes(mesKey){ return (dbFinanzas.gastos?.[mesKey] || []).reduce((s,g)=>s+parseNum(g.importe),0); }
 function otrosIngresosMes(mesKey){ return (dbFinanzas.otrosIngresos?.[mesKey] || []).reduce((s,g)=>s+parseNum(g.importe),0); }
-function gastosCategoriasPeriodo(meses){ const res={}; meses.forEach(m=>{ (dbFinanzas.gastos?.[m]||[]).forEach(g=>{ const cat=g.categoria||'Otros'; res[cat]=(res[cat]||0)+parseNum(g.importe); }); }); return res; }
+function gastosCategoriasPeriodo(meses){
+  const res={};
+  meses.forEach(m=>{
+    if (FR.esMesRegistroReal(m)) {
+      const d = obtenerMesData(m).real;
+      if (!d) return;
+      Object.entries(d.gastosGenerales?.porCategoria || {}).forEach(([cat, v]) => { const k = cat || 'Otros'; res[k]=(res[k]||0)+v; });
+      if (d.gastosCentros?.total) res['Gastos de centros']=(res['Gastos de centros']||0)+d.gastosCentros.total;
+      return;
+    }
+    (dbFinanzas.gastos?.[m]||[]).forEach(g=>{ const cat=g.categoria||'Otros'; res[cat]=(res[cat]||0)+parseNum(g.importe); });
+  });
+  return res;
+}
 function normalizarFinanzas(data){
   const res = { centros:{}, trainerSettings:{}, gastos:{}, otrosIngresos:{}, historico:{}, auditoriaCierres:{}, ...(data || {}) };
   const centros = {}; const source={...DEFAULT_CENTROS, ...(data?.centros||{})};
@@ -1017,14 +1054,61 @@ function normalizarAliasCalculoFinanzas(data){
 function historicoCompatibleFinanzasV3(h){
   return !!(h && h.total && typeof h.total.canonClientesTotal !== 'undefined' && typeof h.total.facturacionAgenda !== 'undefined' && Array.isArray(h.trainers));
 }
-function obtenerMesData(mesKey){
-  const h = dbFinanzas.historico?.[mesKey];
-  // Regla nueva: si el mes está cerrado en Finanzas, el Dashboard NO recalcula.
-  // Lee el snapshot congelado aunque sea el mes actual, para que Finanzas y Dashboard coincidan.
-  if (h && h.total) return normalizarAliasCalculoFinanzas(h);
-  return normalizarAliasCalculoFinanzas(construirCalculoMes(mesKey));
+function especialesDeCalculo(calc){
+  if (!calc || calc.modelo !== 'registro_real') return { empleados: [], actividades: [] };
+  const fila = t => ({ key: t.key, nombre: t.nombre, centroId: t.centroId, importe: FR.redondear(t.ingresoBesoulEspecial), facturacion: FR.redondear(t.facturacion) });
+  return { empleados: (calc.trainers||[]).filter(t => t.modelo === 'empleado' && t.ingresoBesoulEspecial > 0).map(fila), actividades: (calc.trainers||[]).filter(t => t.modelo === 'autonomo' && t.ingresoBesoulEspecial > 0).map(fila) };
 }
+function teoricoDeTotal(t){ t = t || {}; return { facturacion:parseNum(t.facturacion), ptNeto:parseNum(t.ptNeto), bsBruto:parseNum(t.bsBruto), canones:parseNum(t.canones), gastos:parseNum(t.gastos), otrosIngresos:parseNum(t.otrosIngresos), ingresosBesoul:parseNum(t.ingresosBesoul), beneficio:parseNum(t.beneficio) }; }
+function obtenerMesData(mesKey){
+  const esReal = FR.esMesRegistroReal(mesKey);
+  const doc = mesesFinanzas[mesKey] ? FR.normalizarDocMes(mesesFinanzas[mesKey], mesKey) : null;
+  const h = dbFinanzas.historico?.[mesKey];
+  const cierreAnterior = !esReal && !doc && h && h.total;
+  // Cierre del sistema anterior: se lee congelado, como siempre.
+  const data = normalizarAliasCalculoFinanzas(cierreAnterior ? JSON.parse(JSON.stringify(h)) : construirCalculoMes(mesKey));
+  data.estadoMes = doc ? doc.estado : (cierreAnterior ? 'cerrado_anterior' : 'abierto');
+  data.esMesReal = esReal;
+  data.real = null; data.teorico = null; data.cierre = null;
+  if (doc && doc.estado === 'cerrado' && doc.cierre && doc.cierre.snapshot) {
+    data.cierre = { por: doc.cierre.cerradoPor || '', en: String(doc.cierre.cerradoEnISO || '').slice(0,10) };
+    data.real = doc.cierre.snapshot.resumen || null;
+    data.teorico = doc.cierre.snapshot.teorico || null;
+  } else if (esReal) {
+    data.real = FR.resumenMes({ doc, legado: { gastos: dbFinanzas.gastos?.[mesKey] || [], otrosIngresos: dbFinanzas.otrosIngresos?.[mesKey] || [] }, especiales: especialesDeCalculo(data), mes: mesKey });
+  } else {
+    data.teorico = teoricoDeTotal(data.total);
+  }
+  return data;
+}
+// Cifras del mes con el filtro de centro/entrenador: estadística (siempre de la Agenda) y BESOUL
+// (reales desde octubre de 2026, teóricas antes). Un mes cerrado usa su fotografía.
 function aplicarFiltroFinanzasMes(data, centroId, trainerKey){
+  const est = aplicarFiltroEstadisticaMes(data, centroId, trainerKey);
+  const r = data.real;
+  if (data.esMesReal && r) {
+    let ingresos, gastos, cobros, especiales;
+    const esp = [...(r.modelosEspeciales?.empleados || []), ...(r.modelosEspeciales?.actividades || [])];
+    if (trainerKey) {
+      cobros = r.cobros?.porEntrenador?.[trainerKey]?.total || 0;
+      especiales = esp.filter(e => e.key === trainerKey).reduce((s,e)=>s+(e.importe||0),0);
+      gastos = 0;
+    } else if (centroId) {
+      cobros = r.cobros?.porCentro?.[centroId] || 0;
+      especiales = esp.filter(e => e.centroId === centroId).reduce((s,e)=>s+(e.importe||0),0);
+      gastos = r.gastosCentros?.porCentro?.[centroId] || 0;
+    } else {
+      cobros = r.cobros?.total || 0; especiales = r.modelosEspeciales?.total || 0; gastos = r.gastosReales || 0;
+    }
+    ingresos = trainerKey || centroId ? FR.redondear(cobros + especiales) : (r.ingresosReales || 0);
+    return { ...est, tipo:'real', ingresos, gastos: FR.redondear(gastos), resultado: FR.redondear(ingresos - gastos), cobros: FR.redondear(cobros), especiales: FR.redondear(especiales), otrosIngresos: trainerKey || centroId ? 0 : (r.otrosIngresos?.total || 0), gastosCentros: trainerKey ? 0 : (centroId ? FR.redondear(gastos) : (r.gastosCentros?.total || 0)), gastosGenerales: trainerKey || centroId ? 0 : (r.gastosGenerales?.total || 0), estadoMes: data.estadoMes };
+  }
+  const tTeo = data.teorico && !trainerKey && !centroId ? data.teorico : null;
+  const ingresos = tTeo ? tTeo.ingresosBesoul : (est.bsBruto + (est.otrosIngresos || 0));
+  const gastos = tTeo ? tTeo.canones + tTeo.gastos : est.canones + (est.gastos || 0);
+  return { ...est, tipo:'teorico', ingresos, gastos, resultado: tTeo ? tTeo.beneficio : est.beneficio, cobros:0, especiales:0, otrosIngresos: est.otrosIngresos || 0, gastosCentros: est.canones, gastosGenerales: est.gastos || 0, estadoMes: data.estadoMes };
+}
+function aplicarFiltroEstadisticaMes(data, centroId, trainerKey){
   data = normalizarAliasCalculoFinanzas(data);
   const empty = { facturacion:0, facturacionAgenda:0, desviacionAgenda:0, ptNeto:0, bsBruto:0, canones:0, canonClientes:0, gastos:0, otrosIngresos:0, beneficio:0, clientes:0, trainers:0, sesionesMensualesPrevistas:0, sesionesMensualesAgendadas:0 };
   if (trainerKey) {
@@ -1120,16 +1204,23 @@ function analizarLeads(startDate,endDate,centroId,trainerKey){
   return { leads:filtrados, total:filtrados.length, contactados:filtrados.filter(l=>l.estado && l.estado!=='Nuevo lead').length, valoracionesSolicitadas:filtrados.filter(l=>['Prueba solicitada','Prueba agendada','Prueba realizada','Convertido a cliente'].includes(l.estado)).length, valoracionesRealizadas:filtrados.filter(l=>['Prueba realizada','Convertido a cliente'].includes(l.estado)).length, convertidos:filtrados.filter(l=>l.estado==='Convertido a cliente'||l.convertido===true).length, perdidos:filtrados.filter(l=>l.estado==='Perdido').length, fuente };
 }
 function pintarKPIs(res){
+  const tipos = new Set(res.monthly.map(m => m.tipo));
+  const mezcla = tipos.size > 1, soloTeorico = tipos.size === 1 && tipos.has('teorico');
+  document.getElementById('lbl-kpi-beneficio').innerText = soloTeorico ? 'Beneficio (teórico, modelo anterior)' : (mezcla ? 'Resultado BESOUL (real + teórico anterior)' : 'Resultado real BESOUL');
+  document.getElementById('lbl-kpi-besoul').innerText = soloTeorico ? 'Ingresos BESOUL (teóricos)' : 'Ingresos reales BESOUL';
+  document.getElementById('lbl-kpi-coste').innerText = soloTeorico ? 'Cánones + gastos (teóricos)' : 'Gastos reales BESOUL';
   document.getElementById('kpi-facturacion').innerText = dinero(res.total.facturacion);
-  document.getElementById('kpi-besoul').innerText = dinero(res.total.bsBruto);
-  document.getElementById('kpi-coste').innerText = dinero(res.total.canones + (res.total.gastos||0));
-  document.getElementById('kpi-beneficio').innerText = dinero(res.total.beneficio);
+  document.getElementById('kpi-besoul').innerText = dinero(res.total.ingresos);
+  document.getElementById('kpi-coste').innerText = dinero(res.total.gastos);
+  document.getElementById('kpi-beneficio').innerText = dinero(res.total.resultado);
+  const cerrados = res.monthly.filter(m => m.estadoMes === 'cerrado' || m.estadoMes === 'cerrado_anterior').length;
+  document.getElementById('lbl-estado-periodo').innerText = `${res.meses.length} mes(es) · ${cerrados} cerrado(s)${mezcla ? ' · incluye meses del modelo anterior (teórico)' : ''}`;
   document.getElementById('kpi-clientes').innerText = numero(res.total.clientes);
   document.getElementById('kpi-trainers').innerText = numero(res.total.trainers);
   document.getElementById('kpi-sesiones').innerText = numero(res.agenda.reales);
   const conv = res.crm.total ? res.crm.convertidos / res.crm.total : 0;
   document.getElementById('kpi-conversion').innerText = pct(conv);
-  document.getElementById('kpi-canon-clientes').innerText = dinero(res.total.canonClientes || 0);
+  document.getElementById('kpi-canon-clientes').innerText = dinero(res.total.cobros || 0);
   document.getElementById('kpi-valor-agenda').innerText = dinero(res.total.facturacionAgenda || 0);
   document.getElementById('kpi-desviacion-agenda').innerText = dinero(res.total.desviacionAgenda || ((res.total.facturacion || 0) - (res.total.facturacionAgenda || 0)));
   document.getElementById('kpi-ocupacion-disponibilidad').innerText = pct(res.disponibilidad.ocupacion || 0);
@@ -1139,7 +1230,7 @@ function setChart(id, config){ if(charts[id]) charts[id].destroy(); const ctx=do
 function colorList(n){ const base=['#f59e0b','#06b6d4','#10b981','#8b5cf6','#f43f5e','#84cc16','#f97316','#60a5fa','#e879f9','#22d3ee']; return Array.from({length:n},(_,i)=>base[i%base.length]); }
 function pintarGraficas(res){
   const meses=res.meses;
-  setChart('chartMonthly', { type:'line', data:{ labels:meses.map(etiquetaMes), datasets:[{label:'Facturación', data:res.monthly.map(m=>m.facturacion), borderColor:'#f59e0b', tension:.35}, {label:'Gastos/costes', data:res.monthly.map(m=>m.canones+m.gastos), borderColor:'#f43f5e', tension:.35}, {label:'Beneficio neto', data:res.monthly.map(m=>m.beneficio), borderColor:'#06b6d4', tension:.35}]}, options:chartOptions() });
+  setChart('chartMonthly', { type:'line', data:{ labels:meses.map(etiquetaMes), datasets:[{label:'Facturación estadística', data:res.monthly.map(m=>m.facturacion), borderColor:'#f59e0b', tension:.35}, {label:'Ingresos BESOUL', data:res.monthly.map(m=>m.ingresos), borderColor:'#10b981', tension:.35}, {label:'Gastos BESOUL', data:res.monthly.map(m=>m.gastos), borderColor:'#f43f5e', tension:.35}, {label:'Resultado', data:res.monthly.map(m=>m.resultado), borderColor:'#06b6d4', tension:.35}]}, options:chartOptions() });
   const centros = Object.values(res.current.centros || {}).filter(c => c.id !== 'sin_centro' && (c.facturacion || c.trainers?.length));
   setChart('chartCenters', { type:'doughnut', data:{ labels:centros.map(c=>c.nombre), datasets:[{ data:centros.map(c=>c.facturacion||0), backgroundColor:colorList(centros.length), borderColor:'#0f172a' }]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{color:'#cbd5e1', boxWidth:10}}} } });
   setChart('chartCrm', { type:'bar', data:{ labels:['Leads','Contactados','Valorac. solic.','Valorac. real.','Convertidos','Perdidos'], datasets:[{label:'CRM', data:[res.crm.total,res.crm.contactados,res.crm.valoracionesSolicitadas,res.crm.valoracionesRealizadas,res.crm.convertidos,res.crm.perdidos], backgroundColor:'#8b5cf6'}]}, options:chartOptions() });
@@ -1152,6 +1243,11 @@ function pintarGraficas(res){
 }
 function pintarTablas(res){
   const totalFact = res.current.total.facturacion || 0;
+  const realMes = res.current.esMesReal && res.current.real ? res.current.real : null;
+  document.getElementById('lbl-tablas-mes').innerText = `${etiquetaMes(res.current.mes)} · ${realMes ? 'cifras reales' : 'modelo anterior (teórico)'}${res.current.cierre ? ' · cerrado' : ''}`;
+  if (realMes) { pintarTablasReales(res, realMes, totalFact); return; }
+  document.getElementById('thead-centros').innerHTML = '<tr><th class="py-2">Centro</th><th>PT</th><th>Clientes</th><th>Facturación</th><th>% Fact.</th><th>Canon clientes</th><th>Coste centro</th><th>Neto centro</th></tr>';
+  document.getElementById('thead-trainers').innerHTML = '<tr><th class="py-2">Entrenador</th><th>Centro</th><th>Clientes</th><th>Facturación</th><th>BESOUL bruto</th><th>Canon centro</th><th>Neto Besoul</th><th>Sistema</th></tr>';
   const centros = Object.values(res.current.centros || {}).filter(c=>c.id !== 'sin_centro' && ((c.trainers||[]).length || c.facturacion || c.canon));
   document.getElementById('tabla-centros').innerHTML = centros.map(c=>`<tr class="hover:bg-slate-950/50"><td class="py-2 font-bold text-white">${escapeHTML(c.nombre)}</td><td>${numero((c.trainers||[]).length)}</td><td>${numero(c.clientes||0)}</td><td class="font-mono">${dinero(c.facturacion||0)}</td><td>${pct(totalFact ? (c.facturacion||0)/totalFact : 0)}</td><td class="font-mono text-red-200">${dinero(c.canonClientesTotal??c.canonClienteTotal??0)}</td><td class="font-mono text-red-300">${dinero(c.canon||0)}</td><td class="font-mono ${(c.bsBruto-c.canon)>=0?'text-cyan-300':'text-red-300'}">${dinero((c.bsBruto||0)-(c.canon||0))}</td></tr>`).join('') || '<tr><td colspan="8" class="py-8 text-center text-slate-500">Sin datos.</td></tr>';
   const cardsCentros = document.getElementById('cards-centros-mobile');
@@ -1189,6 +1285,30 @@ function pintarTablas(res){
     </div>`).join('') || '<div class="py-6 text-center text-slate-500 text-xs">Sin datos.</div>';
   }
 }
+function pintarTablasReales(res, r, totalFact){
+  const centros = Object.values(res.current.centros || {}).filter(c=>c.id !== 'sin_centro' && ((c.trainers||[]).length || c.facturacion || r.cobros?.porCentro?.[c.id] || r.gastosCentros?.porCentro?.[c.id]));
+  const ingresosCentro = c => FR.redondear((r.cobros?.porCentro?.[c.id] || 0) + (c.ingresoBesoulEspecial || 0));
+  const gastosCentro = c => r.gastosCentros?.porCentro?.[c.id] || 0;
+  document.getElementById('thead-centros').innerHTML = '<tr><th class="py-2">Centro</th><th>PT</th><th>Clientes</th><th>Fact. estadística</th><th>% Fact.</th><th>Cobrado (real)</th><th>Modelos especiales</th><th>Gastos centro (real)</th><th>Resultado centro</th></tr>';
+  document.getElementById('tabla-centros').innerHTML = centros.map(c=>{ const neto = ingresosCentro(c) - gastosCentro(c); return `<tr class="hover:bg-slate-950/50"><td class="py-2 font-bold text-white">${escapeHTML(c.nombre)}</td><td>${numero((c.trainers||[]).length)}</td><td>${numero(c.clientes||0)}</td><td class="font-mono">${dinero(c.facturacion||0)}</td><td>${pct(totalFact ? (c.facturacion||0)/totalFact : 0)}</td><td class="font-mono text-emerald-300">${dinero(r.cobros?.porCentro?.[c.id] || 0)}</td><td class="font-mono text-emerald-200">${dinero(c.ingresoBesoulEspecial || 0)}</td><td class="font-mono text-red-300">${dinero(gastosCentro(c))}</td><td class="font-mono ${neto>=0?'text-cyan-300':'text-red-300'}">${dinero(neto)}</td></tr>`; }).join('') || '<tr><td colspan="9" class="py-8 text-center text-slate-500">Sin datos.</td></tr>';
+  const cardsCentros = document.getElementById('cards-centros-mobile');
+  if (cardsCentros) cardsCentros.innerHTML = centros.map(c => { const neto = ingresosCentro(c) - gastosCentro(c); return `<div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
+      <div class="flex items-start justify-between gap-2"><div><div class="font-bold text-white text-sm">${escapeHTML(c.nombre)}</div><div class="text-[10px] text-slate-500">${numero((c.trainers||[]).length)} PT · ${numero(c.clientes||0)} clientes</div></div>
+      <div class="text-right"><div class="text-[9px] text-slate-500 uppercase font-bold">Resultado centro</div><div class="${neto>=0?'text-cyan-300':'text-red-300'} font-black text-sm">${dinero(neto)}</div></div></div>
+      <div class="grid grid-cols-3 gap-2 text-[10px] pt-2 border-t border-slate-800/60"><div><span class="text-slate-500 block">Fact. estad.</span><span class="text-slate-200 font-semibold">${dinero(c.facturacion||0)}</span></div><div><span class="text-slate-500 block">Ingresos</span><span class="text-emerald-300 font-semibold">${dinero(ingresosCentro(c))}</span></div><div><span class="text-slate-500 block">Gastos</span><span class="text-red-300 font-semibold">${dinero(gastosCentro(c))}</span></div></div>
+    </div>`; }).join('') || '<div class="py-6 text-center text-slate-500 text-xs">Sin datos.</div>';
+  const filtroT = document.getElementById('filter-trainer').value, filtroC = document.getElementById('filter-center').value;
+  const trainers = (res.current.trainers || []).filter(t => !filtroT || t.key === filtroT).filter(t => !filtroC || t.centroId === filtroC).sort((a,b)=>(b.facturacion||0)-(a.facturacion||0)).slice(0,20);
+  const cobradoT = t => r.cobros?.porEntrenador?.[t.key]?.total || 0;
+  document.getElementById('thead-trainers').innerHTML = '<tr><th class="py-2">Entrenador</th><th>Centro</th><th>Clientes</th><th>Fact. estadística</th><th>Cobrado (real)</th><th>Ingreso BESOUL automático</th><th>Modelo</th></tr>';
+  document.getElementById('tabla-trainers').innerHTML = trainers.map(t=>`<tr class="hover:bg-slate-950/50"><td class="py-2 font-bold text-white">${escapeHTML(t.nombre)}<div class="text-[10px] text-slate-500">${escapeHTML(t.key)}</div></td><td>${escapeHTML(nombreCentro(t.centroId))}</td><td>${numero(t.clientes||0)}</td><td class="font-mono">${dinero(t.facturacion||0)}</td><td class="font-mono text-emerald-300">${t.modelo === 'autonomo' ? dinero(cobradoT(t)) : '—'}</td><td class="font-mono text-emerald-200">${dinero(t.ingresoBesoulEspecial||0)}</td><td class="text-cyan-300 text-[10px]">${escapeHTML(t.sistemaAplicado||'---')}</td></tr>`).join('') || '<tr><td colspan="7" class="py-8 text-center text-slate-500">Sin datos.</td></tr>';
+  const cardsTrainers = document.getElementById('cards-trainers-mobile');
+  if (cardsTrainers) cardsTrainers.innerHTML = trainers.map(t => `<div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
+      <div class="flex items-start justify-between gap-2"><div><div class="font-bold text-white text-sm">${escapeHTML(t.nombre)}</div><div class="text-[10px] text-slate-500">${escapeHTML(nombreCentro(t.centroId))} · ${numero(t.clientes||0)} clientes</div></div>
+      <div class="text-right"><div class="text-[9px] text-slate-500 uppercase font-bold">Ingreso BESOUL</div><div class="text-emerald-300 font-black text-sm">${dinero((t.modelo === 'autonomo' ? cobradoT(t) : 0) + (t.ingresoBesoulEspecial||0))}</div></div></div>
+      <div class="grid grid-cols-2 gap-2 text-[10px] pt-2 border-t border-slate-800/60"><div><span class="text-slate-500 block">Fact. estadística</span><span class="text-slate-200 font-semibold">${dinero(t.facturacion||0)}</span></div><div><span class="text-slate-500 block">Modelo</span><span class="text-cyan-300 font-semibold">${escapeHTML(t.sistemaAplicado||'---')}</span></div></div>
+    </div>`).join('') || '<div class="py-6 text-center text-slate-500 text-xs">Sin datos.</div>';
+}
 function pintarHeatmap(res){
   const hours=[]; for(let h=6; h<22; h++) hours.push(`${String(h).padStart(2,'0')}:00`);
   let html = '<table class="w-full text-[10px] text-center"><thead><tr><th class="text-left text-slate-500 py-2">Día/Hora</th>' + hours.map(h=>`<th class="text-slate-500 py-2">${h}</th>`).join('') + '</tr></thead><tbody>';
@@ -1214,13 +1334,15 @@ function pintarInsights(res){
   const centros=Object.values(res.current.centros||{}).filter(c=>c.id!=='sin_centro' && c.trainers?.length);
   const topCentro=centros.slice().sort((a,b)=>(b.facturacion||0)-(a.facturacion||0))[0];
   if(topCentro) ideas.push(`Centro con mayor facturación: <b>${escapeHTML(topCentro.nombre)}</b> (${dinero(topCentro.facturacion)}).`);
-  if((res.total.canonClientes||0)>0) ideas.push(`Canon por cliente destinado a centros: <b class="text-red-200">${dinero(res.total.canonClientes)}</b>. No se suma a BESOUL bruto.`);
+  if (res.monthly.some(m => m.tipo === 'real')) ideas.push(`La facturación estadística (${dinero(res.total.facturacion)}) es lo que los entrenadores facturan a sus clientes: en los autónomos no es ingreso de BESOUL. Ingresos reales de BESOUL del periodo: <b class="text-emerald-300">${dinero(res.total.ingresos)}</b>.`);
+  const sinCobro = res.current.esMesReal && res.current.real ? (res.current.trainers||[]).filter(t => t.modelo === 'autonomo' && (t.facturacion||0) > 0 && !(res.current.real.cobros?.porEntrenador?.[t.key])).length : 0;
+  if (sinCobro) ideas.push(`${sinCobro} entrenador(es) autónomo(s) con facturación en ${etiquetaMes(res.current.mes)} sin cobro registrado todavía (no se supone ninguna deuda).`);
   const desviacion=res.total.desviacionAgenda || ((res.total.facturacion||0)-(res.total.facturacionAgenda||0));
   if(Math.abs(desviacion)>1) ideas.push(`Desviación cartera vs agenda: <b class="${desviacion>=0?'text-amber-300':'text-cyan-300'}">${dinero(desviacion)}</b>. Positivo indica facturación contratada todavía no reflejada en sesiones agendadas.`);
   ideas.push(`Ocupación de disponibilidad publicada: <b class="text-emerald-300">${pct(res.disponibilidad.ocupacion||0)}</b> (${res.disponibilidad.ocupados}/${res.disponibilidad.slots} slots).`);
   const topFuente=Object.entries(res.crm.fuente).sort((a,b)=>b[1]-a[1])[0];
   if(topFuente) ideas.push(`Fuente principal de leads: <b>${escapeHTML(topFuente[0])}</b> (${topFuente[1]} lead/s).`);
-  if(res.total.beneficio < 0) ideas.push(`El beneficio neto del periodo está en negativo: <b class="text-red-300">${dinero(res.total.beneficio)}</b>. Revisa costes de centro y gastos.`);
+  if(res.total.resultado < 0) ideas.push(`El resultado del periodo está en negativo: <b class="text-red-300">${dinero(res.total.resultado)}</b>. Revisa gastos de centros y gastos generales.`);
   const box=document.getElementById('insights');
   if(!ideas.length){ box.classList.add('hidden'); return; }
   box.classList.remove('hidden');
@@ -1237,10 +1359,12 @@ function aplicarDashboard(){
   const total=monthly.reduce((a,m)=>{
     a.facturacion+=m.facturacion; a.facturacionAgenda+=m.facturacionAgenda||0; a.desviacionAgenda+=m.desviacionAgenda||0;
     a.ptNeto+=m.ptNeto; a.bsBruto+=m.bsBruto; a.canones+=m.canones; a.canonClientes+=m.canonClientes||0; a.gastos+=m.gastos; a.beneficio+=m.beneficio;
+    a.ingresos+=m.ingresos||0; a.resultado+=m.resultado||0; a.cobros+=m.cobros||0; a.especiales+=m.especiales||0; a.otrosIngresos+=m.otrosIngresos||0; a.gastosCentros+=m.gastosCentros||0; a.gastosGenerales+=m.gastosGenerales||0;
     a.sesionesMensualesPrevistas+=m.sesionesMensualesPrevistas||0; a.sesionesMensualesAgendadas+=m.sesionesMensualesAgendadas||0;
     a.clientes=Math.max(a.clientes,m.clientes); a.trainers=Math.max(a.trainers,m.trainers);
     return a;
-  }, {facturacion:0,facturacionAgenda:0,desviacionAgenda:0,ptNeto:0,bsBruto:0,canones:0,canonClientes:0,gastos:0,beneficio:0,clientes:0,trainers:0,sesionesMensualesPrevistas:0,sesionesMensualesAgendadas:0});
+  }, {facturacion:0,facturacionAgenda:0,desviacionAgenda:0,ptNeto:0,bsBruto:0,canones:0,canonClientes:0,gastos:0,beneficio:0,ingresos:0,resultado:0,cobros:0,especiales:0,otrosIngresos:0,gastosCentros:0,gastosGenerales:0,clientes:0,trainers:0,sesionesMensualesPrevistas:0,sesionesMensualesAgendadas:0});
+  ['ingresos','resultado','gastos','cobros','especiales','otrosIngresos','gastosCentros','gastosGenerales'].forEach(k => { total[k] = FR.redondear(total[k]); });
   // Para tablas y ranking usamos el mes seleccionado si es mensual; si el periodo toca varios meses, usamos el último mes del rango.
   const current=obtenerMesData(meses.length ? meses[meses.length-1] : mesActualKey());
   const agenda=analizarAgenda(startDate,endDate,centroId,trainerKey);
@@ -1259,8 +1383,9 @@ function poblarFiltros(){
 }
 function exportarResumenCSV(){
   if(!ultimoResumen) return;
-  const rows=[['Métrica','Valor'],['Facturación',ultimoResumen.total.facturacion],['Besoul bruto',ultimoResumen.total.bsBruto],['Canon clientes centro',ultimoResumen.total.canonClientes],['Costes centro total',ultimoResumen.total.canones],['Gastos',ultimoResumen.total.gastos],['Beneficio',ultimoResumen.total.beneficio],['Clientes',ultimoResumen.total.clientes],['Entrenadores',ultimoResumen.total.trainers],['Sesiones reales',ultimoResumen.agenda.reales],['Valor agenda Finanzas',ultimoResumen.total.facturacionAgenda],['Desviación cartera-agenda Finanzas',ultimoResumen.total.desviacionAgenda || (ultimoResumen.total.facturacion-ultimoResumen.total.facturacionAgenda)],['Ocupación disponibilidad',ultimoResumen.disponibilidad.ocupacion],['Slots disponibles',ultimoResumen.disponibilidad.slots],['Slots ocupados',ultimoResumen.disponibilidad.ocupados],['Slots libres',ultimoResumen.disponibilidad.libres],['Leads',ultimoResumen.crm.total],['Convertidos',ultimoResumen.crm.convertidos]];
-  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n');
+  const T = ultimoResumen.total;
+  const rows=[['Métrica','Valor'],['Facturación estadística (entrenadores a clientes)',T.facturacion],['Ingresos BESOUL',T.ingresos],['· Cobros de entrenadores',T.cobros],['· Modelos especiales (empleados y actividades)',T.especiales],['· Otros ingresos',T.otrosIngresos],['Gastos BESOUL',T.gastos],['· Gastos de centros',T.gastosCentros],['· Gastos generales',T.gastosGenerales],['Resultado BESOUL',T.resultado],['Meses del modelo anterior (cifras teóricas)',ultimoResumen.monthly.filter(m=>m.tipo==='teorico').length],['Clientes',ultimoResumen.total.clientes],['Entrenadores',ultimoResumen.total.trainers],['Sesiones reales',ultimoResumen.agenda.reales],['Valor agenda Finanzas',ultimoResumen.total.facturacionAgenda],['Desviación cartera-agenda Finanzas',ultimoResumen.total.desviacionAgenda || (ultimoResumen.total.facturacion-ultimoResumen.total.facturacionAgenda)],['Ocupación disponibilidad',ultimoResumen.disponibilidad.ocupacion],['Slots disponibles',ultimoResumen.disponibilidad.slots],['Slots ocupados',ultimoResumen.disponibilidad.ocupados],['Slots libres',ultimoResumen.disponibilidad.libres],['Leads',ultimoResumen.crm.total],['Convertidos',ultimoResumen.crm.convertidos]];
+  const csv='\uFEFF'+rows.map(r=>r.map(v=>{ let s = typeof v === 'number' ? String(Math.round(v*100)/100).replace('.',',') : String(v); if (/^[=+\-@\t\r]/.test(s) && typeof v !== 'number') s = "'"+s; return `"${s.replace(/"/g,'""')}"`; }).join(';')).join('\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`besoul_dashboard_${dateISO(new Date())}.csv`; a.click(); URL.revokeObjectURL(url);
 }
 function mostrarAuthError(msg){ const el=document.getElementById('auth-error'); el.innerText=msg; el.classList.remove('hidden'); }
@@ -1304,6 +1429,7 @@ async function iniciarApp(user){
   unsubs.push(iniciarSincronizacionAgendaAdmin(db, datos=>{ agendaData=datos || {clientes:{},agenda:{}}; poblarFiltros(); aplicarDashboard(); }));
   unsubs.push(db.collection('besoulUsers').onSnapshot(s=>{ perfilesUsuarios=s.docs.map(d=>({email:d.id,...d.data()})); poblarFiltros(); aplicarDashboard(); }));
   unsubs.push(db.collection('besoulLeads').onSnapshot(s=>{ leads=s.docs.map(d=>({id:d.id,...d.data()})); aplicarDashboard(); }));
+  unsubs.push(db.collection(FR.COLECCION_MESES).onSnapshot(s=>{ const m={}; s.docs.forEach(d=>{ if (FR.MES_RE.test(d.id)) m[d.id]=d.data(); }); mesesFinanzas=m; aplicarDashboard(); }, err=>console.error('[BESOUL Dashboard] Error leyendo los meses de Finanzas:', err)));
 }
 async function refrescarDashboard(){
   // ARQ-V1-MIGRACION-IMPL: los listeners mantienen los datos al día; refrescar = volver a pintar.

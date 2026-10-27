@@ -199,6 +199,71 @@ service cloud.firestore {
         && finanzasSinBorradoMasivo('centrosVersiones');
     }
 
+    // ===================== FINANZAS: INGRESOS Y GASTOS REALES POR MES (REFORMA-FINANZAS) ==========
+    // besoulFinanzasMeses/{AAAA-MM}: un documento por mes con los cobros reales de entrenadores, los
+    // gastos de centros, los gastos generales y otros ingresos (besoul-finanzas-real.js). Solo
+    // administración. El cierre se protege AQUÍ, no solo en la interfaz:
+    //  - abierto: se pueden añadir/editar/anular registros (nunca tocar revisión, cierre ni reapertura);
+    //  - revisado: ningún importe cambia; solo volver a abierto o cerrar;
+    //  - cerrado: nada cambia salvo la reapertura, que exige motivo, quién (el propio usuario) y cuándo
+    //    (hora del servidor); el cierre exige igualmente quién y cuándo, y su fotografía.
+    // Control de versión (rev + 1) y actualizadoEn = hora del servidor en toda escritura: una escritura
+    // basada en datos ya superados, o de un cliente que no conoce este documento, no prospera. No hay
+    // delete. Ninguna versión anterior de la app escribe en esta colección.
+    function finMesClaves() {
+      return ['mes', 'estado', 'rev', 'actualizadoEn', 'actualizadoPor', 'creadoEn', 'creadoPor',
+              'ingresosEntrenadores', 'gastosCentros', 'gastos', 'otrosIngresos', 'legadoImportado',
+              'revision', 'cierre', 'ultimaReapertura', 'historialEstados'];
+    }
+    function finMesDatos() {
+      return ['ingresosEntrenadores', 'gastosCentros', 'gastos', 'otrosIngresos', 'legadoImportado'];
+    }
+    function finMesRevisionValida() {
+      return request.resource.data.revision.por == request.auth.token.email
+        && request.resource.data.revision.en == request.time;
+    }
+    function finMesTransicion() {
+      let antes = resource.data.estado;
+      let despues = request.resource.data.estado;
+      let cambiados = request.resource.data.diff(resource.data).affectedKeys();
+      return (antes == 'abierto' && despues == 'abierto'
+              && !cambiados.hasAny(['revision', 'cierre', 'ultimaReapertura']))
+        || (antes == 'abierto' && despues == 'revisado'
+              && cambiados.hasOnly(['estado', 'rev', 'actualizadoEn', 'actualizadoPor', 'historialEstados', 'revision'])
+              && finMesRevisionValida())
+        || (antes == 'revisado' && despues == 'abierto'
+              && cambiados.hasOnly(['estado', 'rev', 'actualizadoEn', 'actualizadoPor', 'historialEstados']))
+        || (antes == 'revisado' && despues == 'cerrado'
+              && cambiados.hasOnly(['estado', 'rev', 'actualizadoEn', 'actualizadoPor', 'historialEstados', 'cierre'])
+              && request.resource.data.cierre.cerradoPor == request.auth.token.email
+              && request.resource.data.cierre.cerradoEn == request.time
+              && request.resource.data.cierre.snapshot is map)
+        || (antes == 'cerrado' && despues == 'abierto'
+              && cambiados.hasOnly(['estado', 'rev', 'actualizadoEn', 'actualizadoPor', 'historialEstados', 'ultimaReapertura'])
+              && request.resource.data.ultimaReapertura.por == request.auth.token.email
+              && request.resource.data.ultimaReapertura.en == request.time
+              && request.resource.data.ultimaReapertura.motivo is string
+              && request.resource.data.ultimaReapertura.motivo.size() >= 5);
+    }
+    match /besoulFinanzasMeses/{mes} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && mes.matches('^[0-9]{4}-(0[1-9]|1[0-2])$')
+        && request.resource.data.mes == mes
+        && request.resource.data.rev == 1
+        && request.resource.data.actualizadoEn == request.time
+        && request.resource.data.keys().hasOnly(finMesClaves())
+        && (request.resource.data.estado == 'abierto'
+            || (request.resource.data.estado == 'revisado' && finMesRevisionValida()));
+      allow update: if isAdmin()
+        && request.resource.data.mes == resource.data.mes
+        && request.resource.data.rev == resource.data.rev + 1
+        && request.resource.data.actualizadoEn == request.time
+        && request.resource.data.keys().hasOnly(finMesClaves())
+        && finMesTransicion();
+      allow delete: if false;
+    }
+
     // ===================== ARQUITECTURA DE DOCUMENTOS INDEPENDIENTES (ARQ-V1-MIGRACION-IMPL) =====
     // Reglas comunes a todos los documentos de datos de la Agenda:
     //  - aislamiento real: un PT solo lee y escribe documentos con SU trainerKey (lectura incluida:

@@ -40,6 +40,9 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <script src="besoul-datos.js"></script>
+<script src="besoul-finanzas-real.js"></script>
+<script src="besoul-exportar.js"></script>
+<script src="besoul-clientes-bd.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="./besoul-identidad.js"></script>
 <script src="./besoul-entorno-local.js"></script>
@@ -372,6 +375,7 @@
                     <button onclick="abrirModalAvisosManana()" class="bs-btn-ghost relative px-3.5 py-2.5 text-sm rounded-xl">Avisos mañana <span id="badge-avisos-manana" class="hidden ml-1 bg-cyan-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
                     <button onclick="abrirModalAvisoMultiple()" class="bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Enviar aviso a clientes</button>
                     <button id="btn-admin-entrenadores" onclick="abrirModalEntrenadores()" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Entrenadores</button>
+                    <button id="btn-admin-clientes-bd" onclick="abrirBaseDatosClientes()" class="hidden bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Clientes · Base de datos</button>
                     <button id="btn-admin-solicitudes-eliminacion" onclick="abrirModalSolicitudesEliminacion()" class="hidden relative bs-btn-ghost px-3.5 py-2.5 text-sm rounded-xl">Solicitudes <span id="badge-solicitudes-eliminacion" class="hidden ml-1 bg-red-400 text-slate-950 rounded-full px-1.5 py-0.5 text-[10px] font-black align-middle">0</span></button>
 
                     <span class="w-px h-6 bg-white/10 mx-1 hidden sm:block"></span>
@@ -923,6 +927,17 @@ miércoles 07:00-09:00"></textarea>
 
 
     <!-- MODAL ADMINISTRACIÓN DE ENTRENADORES -->
+
+    <!-- CLIENTES-BD: base de datos de clientes (solo administración, solo lectura). -->
+    <div id="modal-clientes-bd" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-6 m-2 md:m-6 space-y-4">
+            <div class="flex items-start justify-between gap-4">
+                <div><h2 class="text-lg font-black text-white">Clientes · Base de datos</h2><p class="text-xs text-slate-400">Activos, inactivos, en prueba, individuales, parejas, tríos y grupos. Solo consulta y exportación: no modifica ninguna ficha.</p></div>
+                <button onclick="cerrarBaseDatosClientes()" class="bs-btn-ghost px-3 py-2 text-sm rounded-xl">Cerrar</button>
+            </div>
+            <div id="clientes-bd-contenido" class="space-y-3"><p class="text-xs text-slate-500">Cargando…</p></div>
+        </div>
+    </div>
 
     <div id="modal-entrenadores" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
 
@@ -4517,6 +4532,7 @@ function calcularRentabilidadFicha(ficha) {
                 if (rolActivo === 'admin') {
                     document.getElementById('admin-trainer-filter-block').classList.remove('hidden');
                     document.getElementById('btn-admin-entrenadores').classList.remove('hidden');
+                    document.getElementById('btn-admin-clientes-bd').classList.remove('hidden');
                     document.getElementById('btn-admin-solicitudes-eliminacion').classList.remove('hidden');
                     document.getElementById('nav-dashboard').classList.remove('hidden');
                     document.getElementById('nav-finanzas').classList.remove('hidden');
@@ -4525,6 +4541,8 @@ function calcularRentabilidadFicha(ficha) {
                 } else {
                     document.getElementById('admin-trainer-filter-block').classList.add('hidden');
                     document.getElementById('btn-admin-entrenadores').classList.add('hidden');
+                    document.getElementById('btn-admin-clientes-bd').classList.add('hidden');
+                    if (document.getElementById('modal-clientes-bd')) document.getElementById('modal-clientes-bd').classList.add('hidden');
                     document.getElementById('btn-admin-solicitudes-eliminacion').classList.add('hidden');
                     document.getElementById('nav-dashboard').classList.add('hidden');
                     document.getElementById('nav-finanzas').classList.add('hidden');
@@ -4586,6 +4604,145 @@ function calcularRentabilidadFicha(ficha) {
         }
 
 
+
+        // ===================== CLIENTES-BD (2026-10-27): base de datos de clientes (solo admin) =====================
+        // Consulta, filtra, ordena y exporta (Excel/CSV) los clientes ya cargados en la Agenda. Solo lectura:
+        // no escribe nada ni modifica las fichas. Los importes salen de las mismas funciones que la Agenda
+        // usa para facturar (importeEfectivoCliente, calcularFacturacionGrupoTotal...). El centro se lee de
+        // la configuración de Finanzas (una lectura al abrir; admin ya tiene acceso a ella).
+        const BD_COLUMNAS_INICIALES = ['nombreCompleto', 'telefono', 'email', 'estado', 'entrenadorNombre', 'centro', 'modalidad', 'tipoTarifa', 'plan', 'precioBase', 'descuentoPct', 'descuentoImporte', 'precioFinal', 'grupoNombre', 'sesionesRealizadas', 'sesionesPendientes', 'proximaSesion'];
+        let bdClientes = { datos: null, filtros: {}, orden: { clave: 'nombreCompleto', dir: 'asc' }, columnas: null, finanzas: null, cargandoFinanzas: false, error: '' };
+        function precioFichaBaseDatos(ficha, trainerKey, grupo) {
+            const previo = entrenadorVisto;
+            entrenadorVisto = trainerKey;
+            try {
+                if (ficha.actividadEspecialId) {
+                    const r = calcularFacturacionActividadFicha(ficha, trainerKey, claveMesVisible());
+                    if (r.tipo === 'actividad_sin_tarifa' || r.precioTotal === undefined) return { base: '', final: '' };
+                    return { base: r.precioTotal, final: r.precioTotal };
+                }
+                const conTarifa = f => !!(f && TARIFAS_2026[f.modalidad]);
+                if (ficha.tipo === 'grupo') return { unitario: conTarifa(ficha) ? tarifaBaseFicha(ficha) : '', base: '', final: esGrupoAbierto(ficha) ? '' : calcularFacturacionGrupoTotal(ficha) };
+                if (grupo) return { base: conTarifa(grupo) ? tarifaBaseFicha(grupo) : '', final: conTarifa(grupo) ? importeEfectivoCliente(ficha) : '' };
+                if (!conTarifa(ficha)) return { base: '', final: '' };
+                return { base: tarifaBaseFicha(ficha) * multiplicadorFacturacionFicha(ficha), final: importeEfectivoCliente(ficha) };
+            } finally {
+                entrenadorVisto = previo;
+            }
+        }
+        function construirBaseDatosClientes() {
+            const mes = formatoFechaLocal(new Date()).slice(0, 7);
+            const fin = bdClientes.finanzas || {};
+            const entrenadores = {};
+            const claves = new Set([...Object.keys(dbClientes || {}), ...Object.keys(dbPruebasCRM || {}), ...Object.keys(dbCredenciales || {})]);
+            claves.forEach(tk => {
+                const centroId = BesoulFinanzasReal.centroConfiguradoEntrenador(fin, tk, mes) || dbCredenciales[tk]?.centroId || '';
+                const centro = centroId ? (fin.centros?.[centroId]?.nombre || dbCredenciales[tk]?.centroNombre || centroId) : (dbCredenciales[tk]?.centroNombre || '');
+                entrenadores[tk] = { nombre: nombreEntrenador(tk), centro };
+            });
+            return BesoulClientesBD.construir({ clientes: dbClientes, agenda: dbAgenda, pruebasCRM: dbPruebasCRM, entrenadores, ahora: new Date(), precio: precioFichaBaseDatos, tarifas: TARIFAS_2026, actividades: catalogoActividadesVivo() });
+        }
+        async function abrirBaseDatosClientes() {
+            if (rolActivo !== 'admin') return;
+            document.getElementById('modal-clientes-bd').classList.remove('hidden');
+            if (!bdClientes.columnas) bdClientes.columnas = new Set(BD_COLUMNAS_INICIALES);
+            if (!bdClientes.finanzas && !bdClientes.cargandoFinanzas) {
+                bdClientes.cargandoFinanzas = true;
+                try {
+                    const snap = await firebase.firestore().collection('besoulSuite').doc('finanzas').get();
+                    bdClientes.finanzas = snap.exists ? (snap.data() || {}) : {};
+                } catch (err) {
+                    console.warn('[BESOUL] Base de datos de clientes: no se pudo leer la asignación de centros de Finanzas.', err);
+                    bdClientes.finanzas = {};
+                    bdClientes.error = 'No se ha podido leer la asignación de centros de Finanzas: el centro se muestra según el perfil del entrenador.';
+                } finally { bdClientes.cargandoFinanzas = false; }
+            }
+            bdClientes.datos = construirBaseDatosClientes();
+            renderBaseDatosClientes();
+        }
+        function cerrarBaseDatosClientes() { document.getElementById('modal-clientes-bd').classList.add('hidden'); }
+        function bdFiltroSet(campo, valor) { bdClientes.filtros = { ...bdClientes.filtros, [campo]: valor }; renderBaseDatosClientes(campo === 'texto'); }
+        function bdLimpiarFiltros() { bdClientes.filtros = {}; renderBaseDatosClientes(); }
+        function bdOrdenar(clave) { const o = bdClientes.orden; bdClientes.orden = { clave, dir: o.clave === clave && o.dir === 'asc' ? 'desc' : 'asc' }; renderBaseDatosClientes(); }
+        function bdColumna(clave, visible) { if (visible) bdClientes.columnas.add(clave); else bdClientes.columnas.delete(clave); renderBaseDatosClientes(); }
+        function bdTodasColumnas(todas) { bdClientes.columnas = new Set(todas ? BesoulClientesBD.COLUMNAS_CLIENTES.map(c => c.clave) : BD_COLUMNAS_INICIALES); renderBaseDatosClientes(); }
+        function bdFilasFiltradas() {
+            const d = bdClientes.datos;
+            if (!d) return [];
+            return BesoulClientesBD.ordenar(BesoulClientesBD.filtrar(d.clientes, bdClientes.filtros), bdClientes.orden.clave, bdClientes.orden.dir);
+        }
+        function bdValorCelda(col, v) {
+            if (v === '' || v === null || v === undefined) return '';
+            if (col.tipo === 'importe') return Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+            if (col.tipo === 'numero') return Number(v).toLocaleString('es-ES', { maximumFractionDigits: 2 });
+            return String(v);
+        }
+        function renderBaseDatosClientes(mantenerFoco) {
+            const cont = document.getElementById('clientes-bd-contenido');
+            if (!cont || !bdClientes.datos) return;
+            const d = bdClientes.datos, f = bdClientes.filtros;
+            const filas = bdFilasFiltradas();
+            const esc = v => escapeHTML(String(v ?? ''));
+            const sel = (campo, etiqueta, opciones) => `<label class="text-[10px] uppercase font-bold text-slate-500">${etiqueta}<select onchange="bdFiltroSet('${campo}', this.value)" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white normal-case font-normal"><option value="">Todos</option>${opciones.map(([v, t]) => `<option value="${esc(v)}" ${String(f[campo] || '') === String(v) ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
+            const distintos = clave => BesoulClientesBD.valoresDistintos(d.clientes, clave).map(v => [v, v]);
+            const entrenadores = [...new Map(d.clientes.map(r => [r.trainerKey, r.entrenadorNombre])).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1]), 'es'));
+            const actividades = [...new Map(d.clientes.filter(r => r.actividadId).map(r => [r.actividadId, r.actividad])).entries()];
+            const cols = BesoulClientesBD.COLUMNAS_CLIENTES.filter(c => bdClientes.columnas.has(c.clave));
+            const limite = 400;
+            const flecha = c => bdClientes.orden.clave === c.clave ? (bdClientes.orden.dir === 'asc' ? ' ▲' : ' ▼') : '';
+            const totalFinal = filas.reduce((s, r) => s + (typeof r.precioFinal === 'number' ? r.precioFinal : 0), 0);
+            cont.innerHTML = `
+                ${bdClientes.error ? `<div class="text-xs text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">${esc(bdClientes.error)}</div>` : ''}
+                <div class="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-10 gap-2 items-end">
+                    <label class="col-span-2 text-[10px] uppercase font-bold text-slate-500">Buscar (nombre, teléfono o email)<input id="bd-busqueda" value="${esc(f.texto || '')}" oninput="bdFiltroSet('texto', this.value)" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white normal-case font-normal" placeholder="Buscar…"></label>
+                    ${sel('trainerKey', 'Entrenador', entrenadores)}
+                    ${sel('centro', 'Centro', distintos('centro'))}
+                    ${sel('estado', 'Estado', Object.entries(BesoulClientesBD.ESTADOS))}
+                    ${sel('modalidad', 'Modalidad', distintos('modalidad'))}
+                    ${sel('tipoTarifa', 'Tarifa', distintos('tipoTarifa'))}
+                    ${sel('actividad', 'Actividad', actividades)}
+                    ${sel('grupo', 'Grupos', Object.entries(BesoulClientesBD.GRUPOS_FILTRO))}
+                    ${sel('conDescuento', 'Descuento', [['si', 'Con descuento'], ['no', 'Sin descuento']])}
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="text-xs text-slate-400"><b class="text-white">${filas.length}</b> de ${d.clientes.length} cliente(s) · ${d.grupos.length} grupo(s) · precio final de lo filtrado: <b class="text-white">${bdValorCelda({ tipo: 'importe' }, totalFinal)}</b> <button onclick="bdLimpiarFiltros()" class="ml-2 text-cyan-300 font-bold">Quitar filtros</button></div>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="exportarBaseDatosClientes('xlsx', 'todo')" class="bg-emerald-500 text-slate-950 font-black px-3 py-2 rounded-lg text-xs">Excel · todo</button>
+                        <button onclick="exportarBaseDatosClientes('xlsx', 'filtrado')" class="bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 font-bold px-3 py-2 rounded-lg text-xs">Excel · filtrado</button>
+                        <button onclick="exportarBaseDatosClientes('csv', 'todo')" class="bg-slate-950 text-slate-200 border border-slate-700 font-bold px-3 py-2 rounded-lg text-xs">CSV · todo</button>
+                        <button onclick="exportarBaseDatosClientes('csv', 'filtrado')" class="bg-slate-950 text-slate-200 border border-slate-700 font-bold px-3 py-2 rounded-lg text-xs">CSV · filtrado</button>
+                    </div>
+                </div>
+                <details class="bg-slate-950/60 border border-slate-800 rounded-lg p-3 text-xs"><summary class="cursor-pointer text-slate-300 font-bold">Columnas (${cols.length} de ${BesoulClientesBD.COLUMNAS_CLIENTES.length}) · se exportan las columnas elegidas</summary>
+                    <div class="flex gap-3 mt-2"><button onclick="bdTodasColumnas(true)" class="text-cyan-300 font-bold">Todas</button><button onclick="bdTodasColumnas(false)" class="text-cyan-300 font-bold">Por defecto</button></div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-1 mt-2">${BesoulClientesBD.COLUMNAS_CLIENTES.map(c => `<label class="flex items-center gap-1.5 text-slate-300"><input type="checkbox" ${bdClientes.columnas.has(c.clave) ? 'checked' : ''} onchange="bdColumna('${c.clave}', this.checked)" class="accent-cyan-400"> ${esc(c.titulo)}</label>`).join('')}</div>
+                </details>
+                <div class="overflow-auto max-h-[60vh] border border-slate-800 rounded-lg">
+                    <table class="w-full text-[11px] text-left">
+                        <thead class="sticky top-0 bg-slate-900 text-[10px] uppercase text-slate-500"><tr>${cols.map(c => `<th onclick="bdOrdenar('${c.clave}')" class="px-2 py-2 whitespace-nowrap cursor-pointer hover:text-white ${['importe', 'numero'].includes(c.tipo) ? 'text-right' : ''}">${esc(c.titulo)}${flecha(c)}</th>`).join('')}</tr></thead>
+                        <tbody class="divide-y divide-slate-800/60">${filas.slice(0, limite).map(r => `<tr class="hover:bg-slate-800/30">${cols.map(c => `<td class="px-2 py-1.5 whitespace-nowrap ${['importe', 'numero'].includes(c.tipo) ? 'text-right font-mono text-white' : 'text-slate-300'}">${esc(bdValorCelda(c, r[c.clave]))}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${cols.length}" class="px-2 py-6 text-center text-slate-500">Ningún cliente con estos filtros.</td></tr>`}</tbody>
+                    </table>
+                </div>
+                ${filas.length > limite ? `<p class="text-[11px] text-slate-500">Se muestran los primeros ${limite}; la exportación incluye los ${filas.length}.</p>` : ''}
+                <p class="text-[10px] text-slate-500">Un grupo cerrado no es un cliente: cada integrante aparece en su propia fila (con el grupo indicado) y el grupo, en la hoja «Grupos» del Excel. Los campos que no constan en la ficha se dejan vacíos. No se incluyen contraseñas, enlaces de reserva ni notas internas.</p>`;
+            if (mantenerFoco) {
+                const input = document.getElementById('bd-busqueda');
+                if (input) { input.focus(); const n = input.value.length; input.setSelectionRange(n, n); }
+            }
+        }
+        function exportarBaseDatosClientes(formato, alcance) {
+            if (rolActivo !== 'admin' || !bdClientes.datos) return;
+            const d = bdClientes.datos;
+            const filas = alcance === 'todo' ? BesoulClientesBD.ordenar(d.clientes, bdClientes.orden.clave, bdClientes.orden.dir) : bdFilasFiltradas();
+            const columnas = [...bdClientes.columnas];
+            const hoy = formatoFechaLocal(new Date());
+            const nombre = `besoul-clientes-${alcance}-${hoy}`;
+            if (formato === 'csv') {
+                BesoulExportar.descargarCSV(`${nombre}.csv`, filas, BesoulClientesBD.COLUMNAS_CLIENTES.filter(c => columnas.includes(c.clave)));
+                return;
+            }
+            BesoulExportar.descargarXLSX(`${nombre}.xlsx`, BesoulClientesBD.hojas(d, filas, columnas));
+        }
 
         function abrirModalEntrenadores() {
 
