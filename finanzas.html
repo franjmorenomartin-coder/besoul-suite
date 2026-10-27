@@ -124,6 +124,7 @@
           </div>
         </div>
         <div id="acciones-estado-mes" class="flex flex-wrap gap-2 justify-end mt-3"></div>
+        <div id="heredados-pendientes" class="hidden mt-3"></div>
       </div>
 
       <section id="view-directo" class="space-y-6">
@@ -600,6 +601,24 @@
         }
         acciones.innerHTML = botones.join('');
       }
+      renderHeredadosPendientes(key);
+    }
+    // Vista previa de lo que se traspasará: concepto, importe, centro y origen de cada registro heredado.
+    function renderHeredadosPendientes(key){
+      const cont = document.getElementById('heredados-pendientes');
+      if (!cont) return;
+      const pendiente = estadoCargaMeses === 'listo' && esMesReal(key) && FR.hayLegadoPendiente(docMes(key), legadoMes(key));
+      cont.classList.toggle('hidden', !pendiente);
+      if (!pendiente) { cont.innerHTML = ''; return; }
+      const l = legadoMes(key);
+      const filas = [['gastos', 'Gasto general'], ['otrosIngresos', 'Otro ingreso']].flatMap(([col, tipo]) => (l[col] || []).map((g, i) => ({ tipo, g, origen: `Sistema anterior · ${col === 'gastos' ? 'gastos' : 'otros ingresos'} de ${etiquetaMes(key)} · nº ${i + 1}` })));
+      const total = col => FR.redondear((l[col] || []).reduce((t, g) => t + (Number.isFinite(FR.normalizarImporte(g.importe)) ? FR.normalizarImporte(g.importe) : 0), 0));
+      cont.innerHTML = `<div class="bg-amber-500/5 border border-amber-500/30 rounded-xl p-3 text-[11px]">
+        <div class="font-bold text-amber-200 mb-1">Registros heredados pendientes de traspasar (${filas.length})</div>
+        <p class="text-slate-400 mb-2">Ya cuentan en el resumen de este mes. «Traspasar registros heredados» los copia una sola vez al registro real; los originales del sistema anterior no se eliminan.</p>
+        <div class="overflow-x-auto"><table class="w-full min-w-[560px]"><thead class="text-slate-500 uppercase text-[9px]"><tr><th class="text-left py-1">Tipo</th><th class="text-left">Concepto</th><th class="text-left">Categoría</th><th class="text-left">Centro</th><th class="text-right">Importe</th><th class="text-left pl-3">Origen</th></tr></thead>
+        <tbody class="divide-y divide-slate-800/60">${filas.map(({ tipo, g, origen }) => `<tr><td class="py-1 text-slate-300">${tipo}</td><td class="text-white">${escapeHTML(g.concepto || '—')}</td><td class="text-slate-300">${escapeHTML(g.categoria || '—')}</td><td class="text-slate-300">${g.centroId ? escapeHTML(nombreCentro(g.centroId)) : '<span class="text-slate-500">No corresponde</span>'}</td><td class="text-right font-mono text-white">${dinero(FR.normalizarImporte(g.importe) || 0)}</td><td class="pl-3 text-slate-400">${escapeHTML(origen)}</td></tr>`).join('')}</tbody></table></div>
+        <div class="text-right text-slate-400 mt-1">Gastos ${dinero(total('gastos'))} · otros ingresos ${dinero(total('otrosIngresos'))}</div></div>`;
     }
 
     function getCentros(opts={}){
@@ -1347,7 +1366,10 @@
       const cont = document.getElementById('centros-resumen');
       const sel = document.getElementById('centros-selector');
       const real = c.modelo === 'registro_real';
-      const centrosOrden = Object.values(c.centros).filter(x => x.id !== 'sin_centro' || x.trainers.length > 0);
+      // Cobros o gastos sin centro (o de un centro ya inexistente): fila propia, nunca desaparecen del desglose.
+      const centrosCalc = { ...c.centros };
+      if (real) [...Object.keys(c.real?.cobros?.porCentro || {}), ...Object.keys(c.real?.gastosCentros?.porCentro || {})].forEach(id => { if (!centrosCalc[id]) centrosCalc[id] = { id, nombre: nombreCentro(id), trainers: [], clientes: 0, facturacion: 0, facturacionAgenda: 0, ingresoBesoulEspecial: 0, ingresosActividades: 0 }; });
+      const centrosOrden = Object.values(centrosCalc).filter(x => x.id !== 'sin_centro' || x.trainers.length > 0 || (real && (c.real?.cobros?.porCentro?.[x.id] || c.real?.gastosCentros?.porCentro?.[x.id])));
       if (centroSeleccionadoFinanzas !== 'todos' && !centrosOrden.some(x => x.id === centroSeleccionadoFinanzas)) centroSeleccionadoFinanzas = 'todos';
       const pill = (id, label) => `<button type="button" onclick="seleccionarCentroFinanzas('${escapeHTML(id)}')" class="px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wide border transition ${centroSeleccionadoFinanzas === id ? 'bg-cyan-500 text-slate-950 border-cyan-500' : 'bg-slate-950 text-slate-300 border-slate-700 hover:border-cyan-500/50'}">${escapeHTML(label)}</button>`;
       sel.innerHTML = [pill('todos', 'Todos')].concat(centrosOrden.map(x => pill(x.id, x.nombre))).join('');
@@ -1420,17 +1442,22 @@
       const nominaPendiente = !nominas.length && costeLaboralPrevisto > 0;
       const incentivoPendiente = !incentivos.length && incentivoCalculado.importe > 0;
       const costeLaboralEfectivo = costeLaboral || (nominaPendiente ? costeLaboralPrevisto : 0);
-      const resultado = FR.redondear(facturacionBesoul - costeLaboral - incentivo - otrosGastos - atribucionCentro);
+      // Rentabilidad del empleado = facturación − coste laboral (− incentivos registrados). Nunca hay canon.
+      // Los costes compartidos atribuidos (gastos con su trainerKey y % de gastos del centro) son ANALÍTICOS:
+      // ya cuentan una sola vez en los gastos de BESOUL; aquí se muestran aparte, sin restarse dos veces.
+      const costesAnaliticos = FR.redondear(otrosGastos + atribucionCentro);
+      const resultado = FR.redondear(facturacionBesoul - costeLaboral - incentivo);
       return {
         key: row.key, nombre: row.nombre, mes: mesKey, facturacionBesoul, facturacionClientes: row.facturacion || 0,
         clientes: row.clientes || 0, fichasActivas: row.fichasActivas || 0,
         sesiones: (row.sesionesBonosSueltas || 0) + (row.sesionesMensualesAgendadas || 0),
         costeLaboral, costeLaboralPrevisto, nominaPendiente, nominasRegistradas: nominas.length,
         incentivo, incentivoCalculado, incentivoPendiente, incentivosRegistrados: incentivos.length,
-        otrosGastos, pctCentro, gastosRealesCentro, atribucionCentro,
-        resultadoAntesIncentivos: FR.redondear(facturacionBesoul - costeLaboralEfectivo - otrosGastos - atribucionCentro),
+        otrosGastos, pctCentro, gastosRealesCentro, atribucionCentro, costesAnaliticos,
+        resultadoAntesIncentivos: FR.redondear(facturacionBesoul - costeLaboralEfectivo),
         resultado,
-        resultadoPrevisto: FR.redondear(resultado - (nominaPendiente ? costeLaboralPrevisto : 0) - (incentivoPendiente ? incentivoCalculado.importe : 0))
+        resultadoPrevisto: FR.redondear(resultado - (nominaPendiente ? costeLaboralPrevisto : 0) - (incentivoPendiente ? incentivoCalculado.importe : 0)),
+        resultadoAnalitico: FR.redondear(resultado - (nominaPendiente ? costeLaboralPrevisto : 0) - (incentivoPendiente ? incentivoCalculado.importe : 0) - costesAnaliticos)
       };
     }
     function fechaPorDefectoMes(mes){ const hoy = new Date(); const iso = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}-${String(hoy.getDate()).padStart(2,'0')}`; return iso.slice(0,7) === mes ? iso : `${mes}-01`; }
@@ -1472,16 +1499,16 @@
           if (inc.fueraDeCriterio.length) avisos.push(`${inc.fueraDeCriterio.length} ficha(s) fuera del criterio provisional (${[...new Set(inc.fueraDeCriterio.map(x => x.motivo))].map(escapeHTML).join(', ')}): pendiente de confirmar si cuentan.`);
           return `<div class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3">
             <div class="flex justify-between gap-3"><div><h3 class="text-sm font-black text-white">${escapeHTML(a.nombre)}</h3><p class="text-[10px] text-slate-500">${escapeHTML(a.key)} · ${escapeHTML(MODELOS_ECONOMICOS.empleado)} · ${escapeHTML(nombreCentro(row.centroId))}</p></div>
-            <div class="text-right"><div class="text-[10px] text-slate-500 uppercase font-bold">Resultado antes de incentivos</div><div class="text-lg font-black ${a.resultadoAntesIncentivos >= 0 ? 'text-emerald-400' : 'text-red-400'}">${dinero(a.resultadoAntesIncentivos)}</div><div class="text-[10px] text-slate-400">Registrado: ${dinero(a.resultado)}${(a.nominaPendiente || a.incentivoPendiente) ? ` · previsto con lo pendiente: ${dinero(a.resultadoPrevisto)}` : ''}</div></div></div>
+            <div class="text-right"><div class="text-[10px] text-slate-500 uppercase font-bold">Resultado antes de incentivos</div><div class="text-lg font-black ${a.resultadoAntesIncentivos >= 0 ? 'text-emerald-400' : 'text-red-400'}">${dinero(a.resultadoAntesIncentivos)}</div><div class="text-[10px] text-slate-400">${dinero(a.facturacionBesoul)} facturación − ${dinero(a.costeLaboral || (a.nominaPendiente ? a.costeLaboralPrevisto : 0))} coste laboral · sin canon</div><div class="text-[10px] text-slate-400">Registrado: ${dinero(a.resultado)}${(a.nominaPendiente || a.incentivoPendiente) ? ` · previsto con lo pendiente: ${dinero(a.resultadoPrevisto)}` : ''}</div></div></div>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-center text-[11px]">
               ${celda('Facturación (100 % BESOUL)', dinero(a.facturacionBesoul), a.facturacionClientes !== a.facturacionBesoul ? `Facturación a clientes ${dinero(a.facturacionClientes)} · la parte del centro de las actividades no es de BESOUL` : 'Ingreso del modelo especial', 'text-emerald-400')}
               ${celda('Clientes · sesiones', `${numero(a.clientes)} · ${numero(a.sesiones)}`, `${numero(a.fichasActivas)} ficha(s) activa(s)`)}
               <div class="bg-slate-950 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">Coste laboral (nómina)</span><b class="text-red-300">-${dinero(a.costeLaboral || (a.nominaPendiente ? a.costeLaboralPrevisto : 0))}</b>${a.nominaPendiente ? `<small class="block text-[9px] text-amber-300">Referencia ${dinero(a.costeLaboralPrevisto)} · pendiente de registrar en Gastos generales</small>${boton(a.key, 'nomina', 'Registrar nómina del mes')}` : `<small class="block text-[9px] text-slate-500">Registrado en Gastos generales</small>`}</div>
               <div class="bg-slate-950 rounded p-2"><span class="block text-slate-500 uppercase text-[9px]">Incentivos</span><b class="text-red-300">-${dinero(a.incentivo)}</b>${inc.modelo ? `<small class="block text-[9px] text-slate-500">Calculado: ${inc.individuales.length} × ${inc.modelo.porIndividual} € + ${inc.grupos.length} × ${inc.modelo.porGrupo} € = ${dinero(inc.importe)} (criterio provisional)</small>` : '<small class="block text-[9px] text-slate-500">Pendiente de activación</small>'}${a.incentivoPendiente ? boton(a.key, 'incentivo', 'Registrar incentivo del mes') : ''}</div>
-              ${celda('Otros gastos atribuidos', `-${dinero(a.otrosGastos)}`, 'Gastos generales con este empleado asignado', 'text-red-300')}
-              ${celda('Gastos del centro atribuidos', `-${dinero(a.atribucionCentro)}`, a.pctCentro ? `${a.pctCentro} % de ${dinero(a.gastosRealesCentro)} (gastos reales de ${escapeHTML(nombreCentro(row.centroId))}) · análisis, no es un gasto adicional` : 'Sin atribución configurada', 'text-red-300')}
-              ${celda('Resultado registrado', dinero(a.resultado), 'Facturación − nómina − incentivos − otros − atribución', a.resultado >= 0 ? 'text-emerald-400' : 'text-red-400')}
-              ${celda('Resultado previsto', dinero(a.resultadoPrevisto), 'Incluye lo pendiente de registrar', a.resultadoPrevisto >= 0 ? 'text-emerald-400' : 'text-red-400')}
+              ${celda('Coste analítico · gastos asignados', `-${dinero(a.otrosGastos)}`, 'Gastos generales con este empleado asignado · ya cuentan una vez en BESOUL', 'text-amber-300')}
+              ${celda('Coste analítico · centro', `-${dinero(a.atribucionCentro)}`, a.pctCentro ? `${a.pctCentro} % de ${dinero(a.gastosRealesCentro)} (gastos reales de ${escapeHTML(nombreCentro(row.centroId))}) · análisis, no es un gasto adicional` : 'Sin atribución configurada', 'text-red-300')}
+              ${celda('Resultado previsto', dinero(a.resultadoPrevisto), 'Facturación − coste laboral − incentivos (registrados o pendientes)', a.resultadoPrevisto >= 0 ? 'text-emerald-400' : 'text-red-400')}
+              ${celda('Resultado analítico', dinero(a.resultadoAnalitico), `Resultado previsto − costes analíticos (${dinero(a.costesAnaliticos)}) · solo análisis: no cambia el resultado global de BESOUL`, a.resultadoAnalitico >= 0 ? 'text-emerald-400' : 'text-red-400')}
             </div>
             ${avisos.length ? `<ul class="text-[11px] text-amber-200 bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 space-y-1">${avisos.map(t => `<li>⚠️ ${t}</li>`).join('')}</ul>` : ''}
           </div>`;
@@ -1529,7 +1556,7 @@
       const f = filtroDe(col);
       let filas = [];
       mesesDelFiltro(col).forEach(m => { filas = filas.concat(registrosVista(col, m, { incluirAnulados: f.verAnulados })); });
-      if (f.centro) filas = filas.filter(r => (r.centroId || '') === f.centro);
+      if (f.centro) filas = filas.filter(r => ((r.centroId && r.centroId !== 'sin_centro') ? r.centroId : 'sin_centro') === f.centro);
       if (f.trainer) filas = filas.filter(r => (r.trainerKey || '') === f.trainer);
       return filas;
     }
@@ -1538,11 +1565,17 @@
     function entrenadoresParaCobro(mes){
       return perfilesUsuarios.filter(esPerfilOperativo).filter(p => settingsTrainerParaMes(trainerKeyPerfil(p), mes).sistemaPago !== 'empleado').sort((a,b) => nombrePerfil(a).localeCompare(nombrePerfil(b),'es'));
     }
+    // «10/10 admin@…: centro Sin centro → Inacua; importe 150 → 160». Los centros se muestran por nombre.
+    function textoHistorialCambios(r){
+      const val = (k, v) => k === 'centroId' ? (v && v !== 'sin_centro' ? nombreCentro(v) : 'Sin centro') : (k === 'trainerKey' ? (v ? nombreTrainerKey(v) : '—') : (v === '' || v === null || v === undefined ? '—' : String(v)));
+      const nombres = { centroId:'centro', centroNombre:null, trainerNombre:null, trainerKey:'entrenador' };
+      return (r.historialCambios || []).map(h => `${String(h.en || '').slice(0, 10)} ${h.por || ''}: ` + Object.entries(h.campos || {}).filter(([k]) => nombres[k] !== null).map(([k, c]) => `${nombres[k] || k} ${val(k, c.de)} → ${val(k, c.a)}`).join('; ')).join(' | ');
+    }
     function textoValorRegistro(col, campo, r){
       const v = r[campo.k];
       if (campo.tipo === 'importe') return dinero(v);
       if (campo.tipo === 'entrenador' || campo.tipo === 'empleado') return v ? (r.trainerNombre || nombreTrainerKey(v)) : '';
-      if (campo.tipo === 'centro') return v ? (r.centroNombre || nombreCentro(v)) : '';
+      if (campo.tipo === 'centro') return v && v !== 'sin_centro' ? (r.centroNombre || nombreCentro(v)) : (col === 'ingresosEntrenadores' ? 'Sin centro asignado' : '');
       if (campo.tipo === 'select') return campo.opciones[v] || (v ?? '');
       return v ?? '';
     }
@@ -1658,7 +1691,7 @@
       const filtrosHTML = `<div class="grid grid-cols-2 md:grid-cols-6 gap-2 text-xs items-end">
           <label class="text-slate-400">Año<select class="${campo} mt-1" onchange="filtroSet('${col}','anio',this.value)">${anios.map(y => `<option value="${y}" ${f.anio === y ? 'selected' : ''}>${y}</option>`).join('')}</select></label>
           <label class="text-slate-400">Mes<select class="${campo} mt-1" onchange="filtroSet('${col}','periodo',this.value)"><option value="todo" ${f.todoAnio ? 'selected' : ''}>Todo el año</option>${meses.map(m => `<option value="${m}" ${!f.todoAnio && mesActual.slice(5,7) === m ? 'selected' : ''}>${nombreMesCorto(m)}</option>`).join('')}</select></label>
-          ${cfg.filtroCentro ? `<label class="text-slate-400">Centro<select class="${campo} mt-1" onchange="filtroSet('${col}','centro',this.value)"><option value="">Todos</option>${Object.values(getCentros({ incluirInactivos:true })).map(c => `<option value="${escapeHTML(c.id)}" ${f.centro === c.id ? 'selected' : ''}>${escapeHTML(c.nombre)}</option>`).join('')}</select></label>` : ''}
+          ${cfg.filtroCentro ? `<label class="text-slate-400">Centro<select class="${campo} mt-1" onchange="filtroSet('${col}','centro',this.value)"><option value="">Todos</option>${Object.values(getCentros({ incluirInactivos:true })).map(c => `<option value="${escapeHTML(c.id)}" ${f.centro === c.id ? 'selected' : ''}>${escapeHTML(c.nombre)}</option>`).join('')}<option value="sin_centro" ${f.centro === 'sin_centro' ? 'selected' : ''}>Sin centro asignado</option></select></label>` : ''}
           ${cfg.filtroEntrenador ? `<label class="text-slate-400">Entrenador<select class="${campo} mt-1" onchange="filtroSet('${col}','trainer',this.value)"><option value="">Todos</option>${[...new Set(entrenadoresParaCobro(mesActual).map(trainerKeyPerfil).concat(filas.map(r => r.trainerKey).filter(Boolean)))].sort((a,b) => nombreTrainerKey(a).localeCompare(nombreTrainerKey(b),'es')).map(k => `<option value="${escapeHTML(k)}" ${f.trainer === k ? 'selected' : ''}>${escapeHTML(nombreTrainerKey(k))}</option>`).join('')}</select></label>` : ''}
           <label class="flex items-center gap-2 text-slate-300 pb-2"><input type="checkbox" ${f.verAnulados ? 'checked' : ''} onchange="filtroSet('${col}','verAnulados',this.checked)" class="accent-amber-500"> Ver eliminados</label>
           <div class="flex gap-2 justify-end pb-1"><button onclick="exportarRegistros('${col}','xlsx')" class="bg-slate-950 text-emerald-300 border border-emerald-500/30 rounded-lg px-3 py-2 font-bold">Excel</button><button onclick="exportarRegistros('${col}','csv')" class="bg-slate-950 text-slate-200 border border-slate-700 rounded-lg px-3 py-2 font-bold">CSV</button></div>
@@ -1684,7 +1717,7 @@
       const columnasTabla = [{ k:'mes', t:'Mes' }].concat(cfg.campos);
       const filasHTML = filas.map(r => {
         const editable = !r.soloLectura && r.anulado !== true && mesEditable(r.mes);
-        const etiquetas = [r.origen === 'heredado' ? '<span class="text-[9px] bg-slate-800 text-slate-300 rounded px-1.5 py-0.5">Heredado</span>' : '', r.anulado ? `<span class="text-[9px] bg-red-500/10 text-red-300 rounded px-1.5 py-0.5" title="${escapeHTML(r.motivoAnulacion || '')}">Eliminado · ${escapeHTML(r.anuladoPor || '')}</span>` : ''].join(' ');
+        const etiquetas = [r.origen === 'heredado' ? '<span class="text-[9px] bg-slate-800 text-slate-300 rounded px-1.5 py-0.5">Heredado</span>' : '', r.anulado ? `<span class="text-[9px] bg-red-500/10 text-red-300 rounded px-1.5 py-0.5" title="${escapeHTML(r.motivoAnulacion || '')}">Eliminado · ${escapeHTML(r.anuladoPor || '')}</span>` : '', (r.historialCambios || []).length ? `<span class="text-[9px] bg-cyan-500/10 text-cyan-300 rounded px-1.5 py-0.5 cursor-help" title="${escapeHTML(textoHistorialCambios(r))}">Modificado ${r.historialCambios.length}×</span>` : ''].join(' ');
         return `<tr class="${r.anulado ? 'opacity-50 line-through' : ''}">${columnasTabla.map(c => `<td class="py-2 pr-2 ${c.tipo === 'importe' ? 'text-right font-mono text-white' : 'text-slate-300'}">${c.k === 'mes' ? `${escapeHTML(etiquetaMes(r.mes))}<div class="text-[9px] ${claseEstadoMes(r.mes)}">${escapeHTML(textoEstadoMes(r.mes))}</div>` : escapeHTML(textoValorRegistro(col, c, r))}</td>`).join('')}
           <td class="py-2 text-right whitespace-nowrap">${etiquetas} ${editable ? `<button onclick="editarRegistroForm('${col}','${r.mes}','${escapeHTML(r.id)}')" class="text-cyan-300 font-bold ml-1">Editar</button><button onclick="anularRegistro('${col}','${r.mes}','${escapeHTML(r.id)}')" class="text-red-300 font-bold ml-2">Eliminar</button>` : ''}</td></tr>`;
       }).join('');
@@ -1713,7 +1746,7 @@
       return [{ clave:'mes', titulo:'Mes', tipo:'texto' }, { clave:'id', titulo:'ID del registro', tipo:'texto' }]
         .concat(cfg.campos.map(c => ({ titulo: c.t.replace(/ \(€\)$/, ''), tipo: c.tipo === 'importe' ? 'importe' : 'texto', valor: r => c.tipo === 'importe' ? FR.redondear(r[c.k]) : textoValorRegistro(col, c, r) })))
         .concat(col === 'ingresosEntrenadores' ? [{ clave:'trainerKey', titulo:'TrainerKey', tipo:'texto' }, { clave:'centroId', titulo:'ID centro', tipo:'texto' }] : (col === 'gastosCentros' ? [{ clave:'centroId', titulo:'ID centro', tipo:'texto' }] : []))
-        .concat([{ titulo:'Origen', tipo:'texto', valor: r => r.origen === 'heredado' ? 'Heredado del sistema anterior' : 'Registro manual' }, { titulo:'Situación', tipo:'texto', valor: r => r.anulado ? 'Eliminado (anulado)' : 'Vigente' }, { clave:'creadoPor', titulo:'Registrado por', tipo:'texto' }, { clave:'creadoEn', titulo:'Registrado el', tipo:'texto' }, { clave:'modificadoPor', titulo:'Modificado por', tipo:'texto' }, { clave:'modificadoEn', titulo:'Modificado el', tipo:'texto' }]);
+        .concat([{ titulo:'Origen', tipo:'texto', valor: r => r.origen === 'heredado' ? 'Heredado del sistema anterior' : 'Registro manual' }, { titulo:'Situación', tipo:'texto', valor: r => r.anulado ? 'Eliminado (anulado)' : 'Vigente' }, { clave:'creadoPor', titulo:'Registrado por', tipo:'texto' }, { clave:'creadoEn', titulo:'Registrado el', tipo:'texto' }, { clave:'modificadoPor', titulo:'Modificado por', tipo:'texto' }, { clave:'modificadoEn', titulo:'Modificado el', tipo:'texto' }, { titulo:'Historial de cambios', tipo:'texto', valor: r => textoHistorialCambios(r) }]);
     }
     function exportarRegistros(col, formato){
       const f = filtroDe(col), filas = filasRegistros(col), cfg = TIPOS_REGISTRO[col];
@@ -1774,10 +1807,15 @@
       const c = construirCalculoActual(mes), k = c.kpis;
       return `${k.tipo === 'real' ? 'Ingresos reales' : 'Ingresos (teóricos)'}: ${dinero(k.ingresos)}\n${k.tipo === 'real' ? 'Gastos reales' : 'Cánones + gastos (teóricos)'}: ${dinero(k.gastos)}\nResultado: ${dinero(k.resultado)}`;
     }
+    const traspasosEnCurso = new Set();
     function importarLegadoMes(){
       const mes = mesTrabajoKey(), l = legadoMes(mes);
-      if (!confirm(`Traspasar al registro de ${etiquetaMes(mes)} ${l.gastos.length} gasto(s) y ${l.otrosIngresos.length} otro(s) ingreso(s) guardados con el sistema anterior?\n\nSe copian una sola vez (marcados «heredado») y a partir de ahí se editan aquí. Los originales no se borran ni se modifican. Los totales del mes no cambian.`)) return;
-      operarMes(mes, { tipo:'importarLegado', legado: l });
+      // Doble pulsación: mientras el traspaso está en marcha, o si ya se hizo, no se repite.
+      if (traspasosEnCurso.has(mes)) { alert('El traspaso de este mes ya está en marcha.'); return; }
+      if (!FR.hayLegadoPendiente(docMes(mes), l)) { alert(`Los registros heredados de ${etiquetaMes(mes)} ya están traspasados.`); return; }
+      if (!confirm(`Traspasar al registro de ${etiquetaMes(mes)} ${l.gastos.length} gasto(s) y ${l.otrosIngresos.length} otro(s) ingreso(s) guardados con el sistema anterior?\n\n${[...l.gastos.map(g => `· Gasto: ${g.concepto || '—'} · ${dinero(FR.normalizarImporte(g.importe) || 0)}${g.centroId ? ` · ${nombreCentro(g.centroId)}` : ''}`), ...l.otrosIngresos.map(g => `· Otro ingreso: ${g.concepto || '—'} · ${dinero(FR.normalizarImporte(g.importe) || 0)}`)].join('\n')}\n\nSe copian una sola vez (marcados «heredado») y a partir de ahí se editan aquí. Los originales no se borran ni se modifican. Los totales del mes no cambian.`)) return;
+      traspasosEnCurso.add(mes);
+      return Promise.resolve(operarMes(mes, { tipo:'importarLegado', legado: l })).finally(() => traspasosEnCurso.delete(mes));
     }
     function marcarMesRevisado(){
       const mes = mesTrabajoKey();

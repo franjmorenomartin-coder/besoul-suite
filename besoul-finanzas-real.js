@@ -263,9 +263,12 @@
         const datos = limpiarRegistro(op.coleccion, op.datos || {});
         const v = validarRegistro(op.coleccion, { ...actual, ...datos }, docNorm.mes, c);
         if (v.errores.length) throw error('registro-no-valido', v.errores.join(' '));
-        Object.keys(datos).forEach(k => { if (JSON.stringify(datos[k]) !== JSON.stringify(actual[k])) cambios.push({ ruta: [op.coleccion, op.id, k], valor: datos[k] }); });
+        const traza = {};
+        Object.keys(datos).forEach(k => { if (JSON.stringify(datos[k]) !== JSON.stringify(actual[k])) { cambios.push({ ruta: [op.coleccion, op.id, k], valor: datos[k] }); traza[k] = { de: actual[k] ?? '', a: datos[k] ?? '' }; } });
         if (!cambios.length) return { cambios, sinCambios: true };
-        cambios.push({ ruta: [op.coleccion, op.id, 'modificadoEn'], valor: ahora }, { ruta: [op.coleccion, op.id, 'modificadoPor'], valor: actor });
+        // Trazabilidad: qué cambió (de → a), quién y cuándo. Se conservan los 20 últimos cambios del registro.
+        const historial = (Array.isArray(actual.historialCambios) ? actual.historialCambios : []).concat([{ en: ahora, por: actor, campos: traza }]).slice(-20);
+        cambios.push({ ruta: [op.coleccion, op.id, 'modificadoEn'], valor: ahora }, { ruta: [op.coleccion, op.id, 'modificadoPor'], valor: actor }, { ruta: [op.coleccion, op.id, 'historialCambios'], valor: historial });
         return { cambios };
       }
       case 'anular': {

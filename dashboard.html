@@ -1286,7 +1286,10 @@ function pintarTablas(res){
   }
 }
 function pintarTablasReales(res, r, totalFact){
-  const centros = Object.values(res.current.centros || {}).filter(c=>c.id !== 'sin_centro' && ((c.trainers||[]).length || c.facturacion || r.cobros?.porCentro?.[c.id] || r.gastosCentros?.porCentro?.[c.id]));
+  // Los registros sin centro (o de un centro que ya no existe) se muestran en su propia fila: nunca desaparecen del desglose.
+  const centrosCalc = { ...(res.current.centros || {}) };
+  [...Object.keys(r.cobros?.porCentro || {}), ...Object.keys(r.gastosCentros?.porCentro || {})].forEach(id => { if (!centrosCalc[id]) centrosCalc[id] = { id, nombre: nombreCentro(id), trainers: [], clientes: 0, facturacion: 0 }; });
+  const centros = Object.values(centrosCalc).filter(c=>(c.trainers||[]).length || c.facturacion || r.cobros?.porCentro?.[c.id] || r.gastosCentros?.porCentro?.[c.id]);
   const ingresosCentro = c => FR.redondear((r.cobros?.porCentro?.[c.id] || 0) + (c.ingresoBesoulEspecial || 0));
   const gastosCentro = c => r.gastosCentros?.porCentro?.[c.id] || 0;
   document.getElementById('thead-centros').innerHTML = '<tr><th class="py-2">Centro</th><th>PT</th><th>Clientes</th><th>Fact. estadística</th><th>% Fact.</th><th>Cobrado (real)</th><th>Modelos especiales</th><th>Gastos centro (real)</th><th>Resultado centro</th></tr>';
@@ -1377,7 +1380,7 @@ function aplicarDashboard(){
 }
 function poblarFiltros(){
   const center=document.getElementById('filter-center'); const trainer=document.getElementById('filter-trainer');
-  center.innerHTML = '<option value="">Todos los centros</option>' + Object.values(getCentros()).map(c=>`<option value="${c.id}">${escapeHTML(c.nombre)}</option>`).join('');
+  center.innerHTML = '<option value="">Todos los centros</option>' + Object.values(getCentros()).map(c=>`<option value="${c.id}">${escapeHTML(c.nombre)}</option>`).join('') + '<option value="sin_centro">Sin centro asignado</option>';
   const perfiles=perfilesUsuarios.filter(esPerfilOperativo).sort((a,b)=>nombrePerfil(a).localeCompare(nombrePerfil(b),'es'));
   trainer.innerHTML = '<option value="">Todos los entrenadores</option>' + perfiles.map(p=>`<option value="${escapeHTML(trainerKeyPerfil(p))}">${escapeHTML(nombrePerfil(p))}</option>`).join('');
 }

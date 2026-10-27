@@ -129,7 +129,15 @@ async function pruebasModulo() {
   const capt = [];
   const fsCapt = { collection: c => fs1.collection(c), runTransaction: fn => fs1.runTransaction(tx => fn({ get: r => tx.get(r), set: (a, b) => { capt.push({ set: Object.keys(b) }); tx.set(a, b); }, update: (a, ...args) => { capt.push({ update: args.filter((x, i) => i % 2 === 0).map(p => p.segmentos.join('.')) }); tx.update(a, ...args); } })) };
   await FR.ejecutarOperacion({ firestore: fsCapt, FieldValue, FieldPath, mes: '2026-10', op: { tipo: 'editar', coleccion: 'ingresosEntrenadores', id: idEu, datos: { observaciones: 'nota' } }, ctx: { actor: 'admin@test' } });
-  check('edición = escritura dirigida (sin reescribir el documento)', capt[0].update.sort(), ['actualizadoEn', 'actualizadoPor', `ingresosEntrenadores.${idEu}.modificadoEn`, `ingresosEntrenadores.${idEu}.modificadoPor`, `ingresosEntrenadores.${idEu}.observaciones`, 'rev'].sort());
+  check('edición = escritura dirigida (sin reescribir el documento)', capt[0].update.sort(), ['actualizadoEn', 'actualizadoPor', `ingresosEntrenadores.${idEu}.modificadoEn`, `ingresosEntrenadores.${idEu}.modificadoPor`, `ingresosEntrenadores.${idEu}.historialCambios`, `ingresosEntrenadores.${idEu}.observaciones`, 'rev'].sort());
+  // Corregir el centro de un cobro sin centro: queda la traza (de → a, quién y cuándo).
+  const idSin = FR.registros(doc('2026-12'), 'ingresosEntrenadores')[0].id;
+  check('mes cerrado: no se puede corregir el centro', await lanza(() => op('2026-12', { tipo: 'editar', coleccion: 'ingresosEntrenadores', id: idSin, datos: { centroId: 'inacua' } })), 'mes-cerrado');
+  await op('2026-12', { tipo: 'reabrir', motivo: 'Asignar centro al cobro' });
+  await op('2026-12', { tipo: 'editar', coleccion: 'ingresosEntrenadores', id: idSin, datos: { centroId: 'inacua', centroNombre: 'Inacua' } });
+  const rSin = doc('2026-12').ingresosEntrenadores[idSin];
+  check('centro corregido con traza de cambios', [rSin.centroId, rSin.historialCambios.length, rSin.historialCambios[0].por, rSin.historialCambios[0].campos.centroId], ['inacua', 1, 'admin@test', { de: '', a: 'inacua' }]);
+  check('tras corregirlo cuenta en su centro', res('2026-12').cobros.porCentro, { inacua: 80 });
 }
 
 // ======================================================================= 2. exportación
@@ -365,14 +373,30 @@ async function pruebasPaginas() {
   check('nómina de Igor registrada una vez en gastos generales', gastos.filter(g => g.categoria === 'Sueldos').map(g => [g.importe, g.trainerKey]), [[970.9, 'igor']]);
   const a2 = api.analisisEmpleado(api.calculo.trainers.find(x => x.key === 'igor'), '2026-10');
   check('rentabilidad de Igor con la nómina registrada', [a2.costeLaboral, a2.resultado, a2.nominaPendiente], [970.9, r2(462 - 970.9), false]);
+  // Costes compartidos atribuidos a Igor: analíticos, aparte, sin duplicarse en el resultado global.
+  const resGlobalAntes = api.calculo.kpis.resultado;
+  api.db.trainerSettings.igor.pctGastosCentroAtribuido = 50;
+  api.mes = '2026-10';
+  const fi = FR.normalizarDocMes(store.datos['besoulFinanzasMeses/2026-10'], '2026-10');
+  await FR.ejecutarOperacion({ firestore: store, FieldValue, FieldPath, mes: '2026-10', op: { tipo: 'crear', coleccion: 'gastosCentros', datos: { centroId: 'inacua', fecha: '2026-10-01', concepto: 'Alquiler sala', importe: 100 } }, ctx: { actor: 'admin@test' } }); sync();
+  const a3 = api.analisisEmpleado(api.calculo.trainers.find(x => x.key === 'igor'), '2026-10');
+  check('costes analíticos de Igor aparte: antes de incentivos = facturación − nómina', [a3.atribucionCentro, a3.costesAnaliticos, a3.resultadoAntesIncentivos, a3.resultadoAnalitico], [50, 50, r2(462 - 970.9), r2(462 - 970.9 - 50)]);
+  check('el gasto del centro cuenta una sola vez en el resultado global', r2(api.calculo.kpis.resultado), r2(resGlobalAntes - 100));
+  await FR.ejecutarOperacion({ firestore: store, FieldValue, FieldPath, mes: '2026-10', op: { tipo: 'anular', coleccion: 'gastosCentros', id: FR.registros(FR.normalizarDocMes(store.datos['besoulFinanzasMeses/2026-10'], '2026-10'), 'gastosCentros')[0].id, motivo: 'prueba' }, ctx: { actor: 'admin@test' } }); sync();
+  delete api.db.trainerSettings.igor.pctGastosCentroAtribuido; void fi;
 
   // Revisar con heredados pendientes: pide traspasar.
   registro.alertas.length = 0;
   api.marcarMesRevisado(); await api.espera();
   check('revisar exige traspasar heredados', registro.alertas.some(x => x.includes('traspasa los registros heredados')), true);
   const totalAntes = api.calculo.kpis.resultado;
-  api.importarLegadoMes(); await api.espera(); sync();
+  const nEscrAntes = store.escrituras;
+  const t1 = api.importarLegadoMes(); api.importarLegadoMes(); await t1; await api.espera(); sync();
+  check('doble pulsación del traspaso: una sola escritura y aviso', [store.escrituras - nEscrAntes, registro.alertas.some(x => x.includes('ya está en marcha'))], [1, true]);
   check('traspaso de heredados no cambia el resultado', api.calculo.kpis.resultado, totalAntes);
+  registro.alertas.length = 0; api.importarLegadoMes(); await api.espera();
+  check('tercera pulsación: ya traspasados, sin escribir', [registro.alertas.some(x => x.includes('ya están traspasados')), store.escrituras - nEscrAntes], [true, 1]);
+  check('los originales del sistema anterior siguen intactos', api.db.gastos['2026-10'].length, 1);
   api.marcarMesRevisado(); await api.espera(); sync();
   check('mes revisado', api.estadoMes('2026-10'), 'revisado');
   api.cerrarMesActual(); await api.espera(); sync();
@@ -442,6 +466,29 @@ async function pruebasPaginas() {
   const dash2 = cargarDashboard(htmlD, { ...copia(esc), agendaData: { ...copia(esc.agendaData), clientes: { ...copia(esc.agendaData.clientes), igor: [] } }, dbFinanzas: copia(api.db), meses: mesesCerr });
   const dc = dash2.aplicarFiltroFinanzasMes(dash2.obtenerMesData('2026-10'), '', '');
   check('Dashboard: mes cerrado = fotografía (no recalcula aunque la Agenda cambie)', [dc.estadoMes, r2(dc.resultado)], ['cerrado', snapOct.resumen.resultado]);
+  // Dashboard: un cobro sin centro aparece en la tabla por centros como «Sin centro asignado».
+  {
+    const st = crearFirestore();
+    await FR.ejecutarOperacion({ firestore: st, FieldValue, FieldPath, mes: '2027-01', op: { tipo: 'crear', coleccion: 'ingresosEntrenadores', datos: { trainerKey: 'eu', centroId: '', fecha: '2027-01-05', importe: 75, estado: 'confirmado' } }, ctx: { actor: 'admin@test' } });
+    const els = {};
+    const principal = scriptPrincipal(htmlD, 'function construirCalculoMes');
+    const d3 = new Function('__e', 'console', 'window', 'document', 'localStorage', 'BesoulFinanzasReal', 'BesoulDatos', `${principal}
+      dbFinanzas = normalizarFinanzas(__e.dbFinanzas); agendaData = __e.agendaData; perfilesUsuarios = __e.perfiles; mesesFinanzas = __e.meses;
+      return { obtenerMesData, pintarTablasReales };`)({ ...copia(esc), meses: { '2027-01': copia(st.datos['besoulFinanzasMeses/2027-01']) } }, silencio, { addEventListener() {} }, { getElementById: id => (els[id] = els[id] || elementoFalso()) }, { getItem: () => null, setItem() {} }, FR, Datos);
+    const data = d3.obtenerMesData('2027-01');
+    d3.pintarTablasReales({ current: data }, data.real, data.total?.facturacion || 0);
+    check('Dashboard: fila «Sin centro asignado» con el cobro sin centro', [/Sin centro asignado/.test(els['tabla-centros'].innerHTML), /75,00/.test(els['tabla-centros'].innerHTML)], [true, true]);
+  }
+  {
+    const st = crearFirestore();
+    await FR.ejecutarOperacion({ firestore: st, FieldValue, FieldPath, mes: '2027-01', op: { tipo: 'crear', coleccion: 'ingresosEntrenadores', datos: { trainerKey: 'eu', centroId: '', fecha: '2027-01-05', importe: 75, estado: 'confirmado' } }, ctx: { actor: 'admin@test' } });
+    const { api: f3, elementos } = cargarFinanzas(htmlF, { ...copia(esc), mes: '2027-01', firestore: st, meses: { '2027-01': copia(st.datos['besoulFinanzasMeses/2027-01']) } });
+    f3.pintarTodo();
+    check('Finanzas: fila «Sin centro asignado» en la tabla por centros', [/Sin centro asignado/.test(elementos['centros-resumen'].innerHTML), /75,00/.test(elementos['centros-resumen'].innerHTML)], [true, true]);
+    f3.filtroSet('ingresosEntrenadores', 'centro', 'sin_centro');
+    check('Finanzas: filtro de cobros por «Sin centro asignado»', f3.filasRegistros('ingresosEntrenadores').map(r => r.importe), [75]);
+  }
+  check('Dashboard: selector de centro con «Sin centro asignado»', htmlD.includes('<option value="sin_centro">Sin centro asignado</option>'), true);
   check('Dashboard: no escribe en Firestore', /\.(set|update|add|delete)\(/.test(scriptPrincipal(htmlD, 'function construirCalculoMes').replace(/classList\.(add|remove)\(/g, '')) && !/collection\([^)]*\)\.doc\([^)]*\)\.(set|update)\(/.test(htmlD), false);
 }
 
@@ -551,6 +598,8 @@ async function pruebasRespaldo(ruta) {
     console.log(`   Igor octubre: facturación ${r2(igor.facturacion)} · ingreso BESOUL ${r2(igor.ingresoBesoulEspecial)} · antes de incentivos ${an.resultadoAntesIncentivos}`);
     check('Igor: ingreso BESOUL = su facturación (sin la parte de centro de actividades)', r2(igor.ingresoBesoulEspecial), r2(igor.facturacion - (igor.actividadCentroShare || 0)));
     check('Igor: resultado antes de incentivos = facturación − 970,90 (sin canon de 200 €)', an.resultadoAntesIncentivos, r2(igor.ingresoBesoulEspecial - 970.9));
+    check('Igor: 1.929,99 − 970,90 = 959,09', [r2(igor.ingresoBesoulEspecial), an.costeLaboralPrevisto, an.resultadoAntesIncentivos, an.costesAnaliticos], [1929.99, 970.9, 959.09, 0]);
+    check('Igor: ningún canon reaparece (ni en el cálculo ni en el análisis)', ['canonCentroShare', 'canonAtribuido'].some(k => k in igor || k in an), false);
     check('Igor: su facturación a clientes no cambia al ser empleado', r2(igor.facturacion), r2(octRef.trainers.find(t => t.key === 'igor').facturacion));
   } else check('Igor presente en octubre', false, true);
   // Andrés: fichas intactas y su facturación anterior a octubre igual.
